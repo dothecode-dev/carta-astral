@@ -23,3 +23,10 @@ def test_resolve_dst_ambiguous_fall_back():
     r = resolve_dst(datetime.date(2021, 11, 7), datetime.time(1, 30), "America/New_York")
     assert r.ambiguous_resolved is True
     assert r.is_dst is True  # primera ocurrencia = aún en DST
+
+
+def test_resolve_dst_nonexistent_spring_forward():
+    # US Eastern 2021-03-14 02:30 does not exist (clocks jump 02:00 -> 03:00)
+    r = resolve_dst(datetime.date(2021, 3, 14), datetime.time(2, 30), "America/New_York")
+    assert r.ambiguous_resolved is False
+    assert r.is_dst is True  # adopt posterior offset (EDT)

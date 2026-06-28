@@ -24,6 +24,11 @@ class DstResolution:
     ambiguous_resolved: bool
 
 
+def _is_dst(dt: datetime.datetime) -> bool:
+    d = dt.dst()
+    return d is not None and d != datetime.timedelta(0)
+
+
 def resolve_dst(date: datetime.date, time: datetime.time, tz_str: str) -> DstResolution:
     tz = ZoneInfo(tz_str)
     naive = datetime.datetime.combine(date, time)
@@ -31,9 +36,14 @@ def resolve_dst(date: datetime.date, time: datetime.time, tz_str: str) -> DstRes
     dt1 = naive.replace(tzinfo=tz, fold=1)
     off0 = dt0.utcoffset()
     off1 = dt1.utcoffset()
-    if off0 != off1:
-        # hora ambigua: existe en dos offsets. Elegimos la primera ocurrencia (fold=0).
-        # is_dst = True si fold=0 corresponde al offset DST (dst() distinto de cero).
-        is_dst = dt0.dst() != datetime.timedelta(0)
-        return DstResolution(is_dst=is_dst, ambiguous_resolved=True)
-    return DstResolution(is_dst=None, ambiguous_resolved=False)
+    if off0 == off1:
+        # hora normal: un único offset. kerykeion infiere DST.
+        return DstResolution(is_dst=None, ambiguous_resolved=False)
+    assert off0 is not None and off1 is not None
+    if off0 > off1:
+        # fall-back: hora ambigua (ocurre dos veces). Elegimos la primera
+        # ocurrencia (fold=0), que aún está en el offset DST que termina.
+        return DstResolution(is_dst=_is_dst(dt0), ambiguous_resolved=True)
+    # off0 < off1: spring-forward, hora inexistente. Adoptamos el offset
+    # posterior al salto (fold=1). No fue ambigua, sino que no existió.
+    return DstResolution(is_dst=_is_dst(dt1), ambiguous_resolved=False)
