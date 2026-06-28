@@ -7,6 +7,7 @@ from kerykeion import AstrologicalSubject
 from core.models import Angle, ChartData, DegradationFlags, House, Placement, BirthInput
 from core.timeconv import resolve_dst, resolve_tz
 
+# espeja el enum interno de kerykeion; sólo usamos los 5 de _HOUSE_CODE
 _HouseLiteral = Literal[
     "A", "B", "C", "D", "F", "H", "I", "i", "K", "L", "M",
     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y",
@@ -25,6 +26,11 @@ def build_chart(birth: BirthInput) -> ChartData:
     if not birth.time_known or birth.time is None:
         raise NotImplementedError("hora desconocida se implementa en Task 7")
 
+    try:
+        house_code = _HOUSE_CODE[birth.house_system]
+    except KeyError:
+        raise ValueError(f"house_system no soportado: {birth.house_system!r}") from None
+
     tz_str = resolve_tz(birth.lat, birth.lng)
     dst = resolve_dst(birth.date, birth.time, tz_str)
 
@@ -33,7 +39,7 @@ def build_chart(birth: BirthInput) -> ChartData:
         year=birth.date.year, month=birth.date.month, day=birth.date.day,
         hour=birth.time.hour, minute=birth.time.minute,
         lng=birth.lng, lat=birth.lat, tz_str=tz_str, online=False,
-        houses_system_identifier=cast(_HouseLiteral, _HOUSE_CODE[birth.house_system]),
+        houses_system_identifier=cast(_HouseLiteral, house_code),
         zodiac_type=("Sidereal" if birth.zodiac == "Sidereal" else "Tropical"),
         is_dst=dst.is_dst,
     )
