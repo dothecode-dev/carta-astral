@@ -26,8 +26,14 @@ def build_chart(birth: BirthInput) -> ChartData:
     if not birth.time_known or birth.time is None:
         raise NotImplementedError("hora desconocida se implementa en Task 7")
 
+    fallback = False
+    house_system = birth.house_system
+    if abs(birth.lat) > 66 and house_system in ("Placidus", "Koch", "Porphyry"):
+        house_system = "Whole Sign"
+        fallback = True
+
     try:
-        house_code = _HOUSE_CODE[birth.house_system]
+        house_code = _HOUSE_CODE[house_system]
     except KeyError:
         raise ValueError(f"house_system no soportado: {birth.house_system!r}") from None
 
@@ -57,7 +63,8 @@ def build_chart(birth: BirthInput) -> ChartData:
 
     return ChartData(
         placements=placements, houses=houses, angles=angles, aspects=[],
-        zodiac=birth.zodiac, house_system=birth.house_system, time_known=True,
-        flags=DegradationFlags(dst_ambiguous_resolved=dst.ambiguous_resolved),
+        zodiac=birth.zodiac, house_system=house_system, time_known=True,
+        flags=DegradationFlags(dst_ambiguous_resolved=dst.ambiguous_resolved,
+                               house_system_fallback=fallback),
         julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,
     )
