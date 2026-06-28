@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from kerykeion import AstrologicalSubject
+from kerykeion import AstrologicalSubject, NatalAspects
 
-from core.models import Angle, ChartData, DegradationFlags, House, Placement, BirthInput
+from core.models import Angle, Aspect, ChartData, DegradationFlags, House, Placement, BirthInput
 from core.timeconv import resolve_dst, resolve_tz
 
 # espeja el enum interno de kerykeion; sólo usamos los 5 de _HOUSE_CODE
@@ -20,6 +20,14 @@ _HOUSE_ATTRS = ["first_house", "second_house", "third_house", "fourth_house",
                 "fifth_house", "sixth_house", "seventh_house", "eighth_house",
                 "ninth_house", "tenth_house", "eleventh_house", "twelfth_house"]
 _ANGLE_ATTRS = ["ascendant", "medium_coeli", "descendant", "imum_coeli"]
+
+
+def _aspects_for(subj: AstrologicalSubject) -> list[Aspect]:
+    return [
+        Aspect(p1=a.p1_name, p2=a.p2_name, aspect=a.aspect,
+               orbit=a.orbit, movement=a.aspect_movement)
+        for a in NatalAspects(subj).relevant_aspects
+    ]
 
 
 def build_chart(birth: BirthInput) -> ChartData:
@@ -43,6 +51,7 @@ def build_chart(birth: BirthInput) -> ChartData:
             julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,
         )
 
+    precision_degraded = birth.date.year < 1880
     fallback = False
     house_system = birth.house_system
     if abs(birth.lat) > 66 and house_system in ("Placidus", "Koch", "Porphyry"):
@@ -79,9 +88,10 @@ def build_chart(birth: BirthInput) -> ChartData:
               for g in (getattr(model, a) for a in _ANGLE_ATTRS)]
 
     return ChartData(
-        placements=placements, houses=houses, angles=angles, aspects=[],
+        placements=placements, houses=houses, angles=angles, aspects=_aspects_for(subj),
         zodiac=birth.zodiac, house_system=house_system, time_known=True,
         flags=DegradationFlags(dst_ambiguous_resolved=dst.ambiguous_resolved,
-                               house_system_fallback=fallback),
+                               house_system_fallback=fallback,
+                               precision_degraded=precision_degraded),
         julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,
     )

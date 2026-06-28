@@ -52,3 +52,24 @@ def test_polar_latitude_falls_back_to_whole_sign():
     cd = build_chart(bi)
     assert cd.flags.house_system_fallback is True
     assert cd.house_system == "Whole Sign"
+
+
+def test_build_chart_populates_aspects(olivos):
+    cd = build_chart(olivos)
+    assert len(cd.aspects) > 0
+    a = cd.aspects[0]
+    assert a.p1 and a.p2 and a.aspect
+    assert a.movement in ("Applying", "Separating")
+
+
+def test_pre_1880_marks_precision_degraded():
+    bi = BirthInput(
+        name="Old", date=datetime.date(1850, 3, 21), time=datetime.time(10, 0),
+        time_known=True, lat=48.85, lng=2.35,
+    )
+    cd = build_chart(bi)
+    assert cd.flags.precision_degraded is True
+
+
+def test_modern_date_not_degraded(olivos):
+    assert build_chart(olivos).flags.precision_degraded is False
