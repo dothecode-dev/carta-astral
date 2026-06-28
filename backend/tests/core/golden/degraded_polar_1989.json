@@ -95,6 +95,22 @@
       "abs_pos": 326.3257078554424,
       "house": "Fifth_House",
       "retrograde": true
+    },
+    {
+      "name": "Mean_Lilith",
+      "sign": "Lib",
+      "position": 17.33695910363579,
+      "abs_pos": 197.3369591036358,
+      "house": "First_House",
+      "retrograde": false
+    },
+    {
+      "name": "True_South_Lunar_Node",
+      "sign": "Leo",
+      "position": 26.325707855442374,
+      "abs_pos": 146.32570785544237,
+      "house": "Eleventh_House",
+      "retrograde": true
     }
   ],
   "houses": [

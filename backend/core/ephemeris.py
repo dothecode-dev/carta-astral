@@ -15,7 +15,8 @@ _HouseLiteral = Literal[
 
 _HOUSE_CODE = {"Placidus": "P", "Whole Sign": "W", "Koch": "K", "Porphyry": "O", "Equal": "A"}
 _PLANET_ATTRS = ["sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn",
-                 "uranus", "neptune", "pluto", "chiron", "true_north_lunar_node"]
+                 "uranus", "neptune", "pluto", "chiron", "true_north_lunar_node",
+                 "mean_lilith", "true_south_lunar_node"]
 _HOUSE_ATTRS = ["first_house", "second_house", "third_house", "fourth_house",
                 "fifth_house", "sixth_house", "seventh_house", "eighth_house",
                 "ninth_house", "tenth_house", "eleventh_house", "twelfth_house"]

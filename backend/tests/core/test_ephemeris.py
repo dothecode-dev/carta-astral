@@ -83,3 +83,13 @@ def test_pre_1880_no_time_marks_precision_degraded():
     cd = build_chart(bi)
     assert cd.flags.precision_degraded is True
     assert cd.houses is None  # still a no-time chart
+
+
+def test_aspects_reference_known_bodies(olivos):
+    cd = build_chart(olivos)
+    names = {p.name for p in cd.placements}
+    if cd.angles:
+        names |= {a.name for a in cd.angles}
+    for asp in cd.aspects:
+        assert asp.p1 in names, f"aspect p1 {asp.p1!r} not in chart bodies"
+        assert asp.p2 in names, f"aspect p2 {asp.p2!r} not in chart bodies"

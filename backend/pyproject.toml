@@ -40,3 +40,9 @@ name = "core no depende de django/requests/anthropic/interpret"
 type = "forbidden"
 source_modules = ["core"]
 forbidden_modules = ["django", "requests", "anthropic", "interpret"]
+
+[[tool.importlinter.contracts]]
+name = "core.models no importa kerykeion"
+type = "forbidden"
+source_modules = ["core.models"]
+forbidden_modules = ["kerykeion"]

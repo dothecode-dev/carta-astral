@@ -95,6 +95,22 @@
       "abs_pos": 61.74364182315495,
       "house": "Tenth_House",
       "retrograde": false
+    },
+    {
+      "name": "Mean_Lilith",
+      "sign": "Gem",
+      "position": 12.390049728921682,
+      "abs_pos": 72.39004972892168,
+      "house": "Tenth_House",
+      "retrograde": false
+    },
+    {
+      "name": "True_South_Lunar_Node",
+      "sign": "Sag",
+      "position": 1.7436418231549453,
+      "abs_pos": 241.74364182315495,
+      "house": "Fourth_House",
+      "retrograde": false
     }
   ],
   "houses": [

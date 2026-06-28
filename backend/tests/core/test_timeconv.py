@@ -1,6 +1,6 @@
 import datetime
 import pytest
-from core.timeconv import resolve_tz, resolve_dst, DstResolution
+from core.timeconv import resolve_tz, resolve_dst
 from core.exceptions import GeocodeTimezoneError
 
 
