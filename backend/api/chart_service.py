@@ -1,5 +1,7 @@
 import datetime
 
+from django.db import transaction
+
 from core.ephemeris import build_chart
 from core.models import BirthInput
 from core.timeconv import resolve_tz
@@ -21,9 +23,10 @@ def create_chart(payload: dict) -> Chart:
     lng = float(payload["lng"])
     house_system = payload.get("house_system", "Placidus")
     zodiac = payload.get("zodiac", "Tropical")
+    name = payload.get("name")
 
     birth_input = BirthInput(
-        name=payload.get("name"), date=date, time=time, time_known=time_known,
+        name=name, date=date, time=time, time_known=time_known,
         lat=lat, lng=lng, house_system=house_system, zodiac=zodiac,
     )
     chart_data = build_chart(birth_input)
@@ -33,11 +36,12 @@ def create_chart(payload: dict) -> Chart:
     if time_known:
         datetime_utc = datetime.datetime.fromisoformat(chart_data.utc_iso)
 
-    birth_data = BirthData.objects.create(
-        name=payload.get("name"), date=date, time=time, time_known=time_known,
-        lat=lat, lng=lng, tz_name=tz_name, datetime_utc=datetime_utc,
-    )
-    return Chart.objects.create(
-        birth_data=birth_data, house_system=chart_data.house_system, zodiac=zodiac,
-        data=serialize_chart_data(chart_data), engine_version=engine_version(),
-    )
+    with transaction.atomic():
+        birth_data = BirthData.objects.create(
+            name=name, date=date, time=time, time_known=time_known,
+            lat=lat, lng=lng, tz_name=tz_name, datetime_utc=datetime_utc,
+        )
+        return Chart.objects.create(
+            birth_data=birth_data, house_system=chart_data.house_system, zodiac=zodiac,
+            data=serialize_chart_data(chart_data), engine_version=engine_version(),
+        )

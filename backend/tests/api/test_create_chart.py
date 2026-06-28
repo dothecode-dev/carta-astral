@@ -1,4 +1,3 @@
-import datetime
 import pytest
 from api.chart_service import create_chart
 from api.models import BirthData, Chart
@@ -17,3 +16,13 @@ def test_create_chart_persists_birthdata_and_chart():
     assert chart.data["placements"]  # non-empty
     assert "kerykeion" in chart.engine_version
     assert chart.birth_data.datetime_utc is not None
+
+
+def test_create_chart_time_unknown_has_no_datetime_utc():
+    chart = create_chart({
+        "date": "1989-07-14", "time": None, "time_known": False,
+        "lat": -34.5, "lng": -58.4,
+    })
+    assert chart.birth_data.datetime_utc is None
+    assert chart.birth_data.time_known is False
+    assert chart.data["houses"] is None
