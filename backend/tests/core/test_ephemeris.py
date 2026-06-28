@@ -73,3 +73,13 @@ def test_pre_1880_marks_precision_degraded():
 
 def test_modern_date_not_degraded(olivos):
     assert build_chart(olivos).flags.precision_degraded is False
+
+
+def test_pre_1880_no_time_marks_precision_degraded():
+    bi = BirthInput(
+        name="OldNoTime", date=datetime.date(1850, 3, 21), time=None,
+        time_known=False, lat=48.85, lng=2.35,
+    )
+    cd = build_chart(bi)
+    assert cd.flags.precision_degraded is True
+    assert cd.houses is None  # still a no-time chart

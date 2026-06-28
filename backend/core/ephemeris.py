@@ -31,6 +31,7 @@ def _aspects_for(subj: AstrologicalSubject) -> list[Aspect]:
 
 
 def build_chart(birth: BirthInput) -> ChartData:
+    precision_degraded = birth.date.year < 1880
     if not birth.time_known or birth.time is None:
         subj = AstrologicalSubject(
             name=birth.name or "Chart",
@@ -47,11 +48,11 @@ def build_chart(birth: BirthInput) -> ChartData:
         return ChartData(
             placements=placements, houses=None, angles=None, aspects=[],
             zodiac=birth.zodiac, house_system=birth.house_system, time_known=False,
-            flags=DegradationFlags(moon_approximate=True),
+            flags=DegradationFlags(moon_approximate=True,
+                                   precision_degraded=precision_degraded),
             julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,
         )
 
-    precision_degraded = birth.date.year < 1880
     fallback = False
     house_system = birth.house_system
     if abs(birth.lat) > 66 and house_system in ("Placidus", "Koch", "Porphyry"):
