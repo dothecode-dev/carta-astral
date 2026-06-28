@@ -26,3 +26,13 @@ def test_create_chart_time_unknown_has_no_datetime_utc():
     assert chart.birth_data.datetime_utc is None
     assert chart.birth_data.time_known is False
     assert chart.data["houses"] is None
+
+
+def test_polar_chart_persists_whole_sign_fallback():
+    # Tromsø, Norway (lat > 66, clearly on land so resolve_tz returns a real IANA zone)
+    chart = create_chart({
+        "date": "1989-07-14", "time": "12:00", "time_known": True,
+        "lat": 69.65, "lng": 18.96, "house_system": "Placidus",
+    })
+    assert chart.house_system == "Whole Sign"
+    assert chart.data["flags"]["house_system_fallback"] is True

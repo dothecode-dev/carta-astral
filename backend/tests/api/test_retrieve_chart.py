@@ -14,6 +14,9 @@ def test_post_creates_chart_returns_201():
     assert resp.status_code == 201
     assert resp.data["id"]
     assert resp.data["data"]["placements"]
+    assert resp.data["house_system"]
+    assert resp.data["zodiac"]
+    assert "kerykeion" in resp.data["engine_version"]
 
 
 def test_get_returns_existing_chart():

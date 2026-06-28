@@ -32,16 +32,14 @@ def create_chart(payload: dict) -> Chart:
     chart_data = build_chart(birth_input)
     tz_name = resolve_tz(lat, lng)
 
-    datetime_utc = None
-    if time_known:
-        datetime_utc = datetime.datetime.fromisoformat(chart_data.utc_iso)
+    datetime_utc = datetime.datetime.fromisoformat(chart_data.utc_iso) if chart_data.time_known else None
 
     with transaction.atomic():
         birth_data = BirthData.objects.create(
-            name=name, date=date, time=time, time_known=time_known,
+            name=name, date=date, time=time, time_known=chart_data.time_known,
             lat=lat, lng=lng, tz_name=tz_name, datetime_utc=datetime_utc,
         )
         return Chart.objects.create(
-            birth_data=birth_data, house_system=chart_data.house_system, zodiac=zodiac,
+            birth_data=birth_data, house_system=chart_data.house_system, zodiac=chart_data.zodiac,
             data=serialize_chart_data(chart_data), engine_version=engine_version(),
         )
