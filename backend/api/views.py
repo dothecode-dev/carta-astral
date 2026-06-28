@@ -19,7 +19,12 @@ def _chart_repr(chart: Chart) -> dict:
 
 class ChartCreateView(APIView):
     def post(self, request):
-        chart = create_chart(request.data)
+        from core.exceptions import CoreError
+
+        try:
+            chart = create_chart(request.data)
+        except (KeyError, ValueError, CoreError) as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(_chart_repr(chart), status=status.HTTP_201_CREATED)
 
 
