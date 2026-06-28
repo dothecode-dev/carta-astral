@@ -1,0 +1,624 @@
+{
+  "placements": [
+    {
+      "name": "Sun",
+      "sign": "Cap",
+      "position": 10.30451076489345,
+      "abs_pos": 280.30451076489345,
+      "house": "Fourth_House",
+      "retrograde": false
+    },
+    {
+      "name": "Moon",
+      "sign": "Aqu",
+      "position": 26.557376013483236,
+      "abs_pos": 326.55737601348324,
+      "house": "Fifth_House",
+      "retrograde": false
+    },
+    {
+      "name": "Mercury",
+      "sign": "Cap",
+      "position": 25.79543169333641,
+      "abs_pos": 295.7954316933364,
+      "house": "Fourth_House",
+      "retrograde": true
+    },
+    {
+      "name": "Venus",
+      "sign": "Aqu",
+      "position": 6.281722007337919,
+      "abs_pos": 306.2817220073379,
+      "house": "Fourth_House",
+      "retrograde": true
+    },
+    {
+      "name": "Mars",
+      "sign": "Sag",
+      "position": 9.648275989768678,
+      "abs_pos": 249.64827598976868,
+      "house": "Third_House",
+      "retrograde": false
+    },
+    {
+      "name": "Jupiter",
+      "sign": "Can",
+      "position": 5.21603190571652,
+      "abs_pos": 95.21603190571652,
+      "house": "Ninth_House",
+      "retrograde": true
+    },
+    {
+      "name": "Saturn",
+      "sign": "Cap",
+      "position": 15.598397867579195,
+      "abs_pos": 285.5983978675792,
+      "house": "Fourth_House",
+      "retrograde": false
+    },
+    {
+      "name": "Uranus",
+      "sign": "Cap",
+      "position": 5.75546074649867,
+      "abs_pos": 275.75546074649867,
+      "house": "Third_House",
+      "retrograde": false
+    },
+    {
+      "name": "Neptune",
+      "sign": "Cap",
+      "position": 12.019163153547424,
+      "abs_pos": 282.0191631535474,
+      "house": "Fourth_House",
+      "retrograde": false
+    },
+    {
+      "name": "Pluto",
+      "sign": "Sco",
+      "position": 17.079446708392112,
+      "abs_pos": 227.0794467083921,
+      "house": "Second_House",
+      "retrograde": false
+    },
+    {
+      "name": "Chiron",
+      "sign": "Can",
+      "position": 13.8474818996459,
+      "abs_pos": 103.8474818996459,
+      "house": "Tenth_House",
+      "retrograde": true
+    },
+    {
+      "name": "True_North_Lunar_Node",
+      "sign": "Aqu",
+      "position": 16.858794338273185,
+      "abs_pos": 316.8587943382732,
+      "house": "Fifth_House",
+      "retrograde": false
+    }
+  ],
+  "houses": [
+    {
+      "name": "First_House",
+      "sign": "Lib",
+      "abs_pos": 187.2402358564611
+    },
+    {
+      "name": "Second_House",
+      "sign": "Sco",
+      "abs_pos": 211.96376107242767
+    },
+    {
+      "name": "Third_House",
+      "sign": "Sag",
+      "abs_pos": 242.84905811899787
+    },
+    {
+      "name": "Fourth_House",
+      "sign": "Cap",
+      "abs_pos": 279.4351455479027
+    },
+    {
+      "name": "Fifth_House",
+      "sign": "Aqu",
+      "abs_pos": 315.00892255876073
+    },
+    {
+      "name": "Sixth_House",
+      "sign": "Pis",
+      "abs_pos": 344.25491821730503
+    },
+    {
+      "name": "Seventh_House",
+      "sign": "Ari",
+      "abs_pos": 7.24023585646114
+    },
+    {
+      "name": "Eighth_House",
+      "sign": "Tau",
+      "abs_pos": 31.9637610724277
+    },
+    {
+      "name": "Ninth_House",
+      "sign": "Gem",
+      "abs_pos": 62.849058118997846
+    },
+    {
+      "name": "Tenth_House",
+      "sign": "Can",
+      "abs_pos": 99.43514554790274
+    },
+    {
+      "name": "Eleventh_House",
+      "sign": "Leo",
+      "abs_pos": 135.00892255876073
+    },
+    {
+      "name": "Twelfth_House",
+      "sign": "Vir",
+      "abs_pos": 164.25491821730503
+    }
+  ],
+  "angles": [
+    {
+      "name": "Ascendant",
+      "sign": "Lib",
+      "abs_pos": 187.2402358564611
+    },
+    {
+      "name": "Medium_Coeli",
+      "sign": "Can",
+      "abs_pos": 99.43514554790274
+    },
+    {
+      "name": "Descendant",
+      "sign": "Ari",
+      "abs_pos": 7.24023585646114
+    },
+    {
+      "name": "Imum_Coeli",
+      "sign": "Cap",
+      "abs_pos": 279.4351455479027
+    }
+  ],
+  "aspects": [
+    {
+      "p1": "Sun",
+      "p2": "Jupiter",
+      "aspect": "opposition",
+      "orbit": 5.088478859176917,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Saturn",
+      "aspect": "conjunction",
+      "orbit": 5.293887102685744,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Uranus",
+      "aspect": "conjunction",
+      "orbit": 4.54905001839478,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Neptune",
+      "aspect": "conjunction",
+      "orbit": 1.714652388653974,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Chiron",
+      "aspect": "opposition",
+      "orbit": 3.542971134752463,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Ascendant",
+      "aspect": "square",
+      "orbit": 3.0642749084323384,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Medium_Coeli",
+      "aspect": "opposition",
+      "orbit": 0.8693652169907296,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Descendant",
+      "aspect": "square",
+      "orbit": 3.06427490843231,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Imum_Coeli",
+      "aspect": "conjunction",
+      "orbit": 0.8693652169907296,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Sun",
+      "p2": "Mean_Lilith",
+      "aspect": "sextile",
+      "orbit": 3.896525648544923,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Moon",
+      "p2": "True_North_Lunar_Node",
+      "aspect": "conjunction",
+      "orbit": 9.69858167521005,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Moon",
+      "p2": "True_South_Lunar_Node",
+      "aspect": "opposition",
+      "orbit": 9.69858167521005,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Mercury",
+      "p2": "Descendant",
+      "aspect": "quintile",
+      "orbit": 0.5551958368752707,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Venus",
+      "p2": "Mars",
+      "aspect": "sextile",
+      "orbit": 3.3665539824307587,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Venus",
+      "p2": "Ascendant",
+      "aspect": "trine",
+      "orbit": 0.958513849123193,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Venus",
+      "p2": "Descendant",
+      "aspect": "sextile",
+      "orbit": 0.9585138491232215,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Venus",
+      "p2": "Mean_Lilith",
+      "aspect": "square",
+      "orbit": 0.12626310901060833,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Mars",
+      "p2": "Ascendant",
+      "aspect": "sextile",
+      "orbit": 2.4080401333075656,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Mars",
+      "p2": "Descendant",
+      "aspect": "trine",
+      "orbit": 2.408040133307537,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Mars",
+      "p2": "True_South_Lunar_Node",
+      "aspect": "trine",
+      "orbit": 7.2105183485045075,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Jupiter",
+      "p2": "Uranus",
+      "aspect": "opposition",
+      "orbit": 0.5394288407821364,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Jupiter",
+      "p2": "Neptune",
+      "aspect": "opposition",
+      "orbit": 6.8031312478308905,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Jupiter",
+      "p2": "Chiron",
+      "aspect": "conjunction",
+      "orbit": 8.63144999392938,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Jupiter",
+      "p2": "Ascendant",
+      "aspect": "square",
+      "orbit": 2.0242039507446066,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Jupiter",
+      "p2": "Medium_Coeli",
+      "aspect": "conjunction",
+      "orbit": 4.219113642186244,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Jupiter",
+      "p2": "Descendant",
+      "aspect": "square",
+      "orbit": 2.024203950744621,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Jupiter",
+      "p2": "Imum_Coeli",
+      "aspect": "opposition",
+      "orbit": 4.219113642186187,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Jupiter",
+      "p2": "Mean_Lilith",
+      "aspect": "trine",
+      "orbit": 1.1919532106319934,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Saturn",
+      "p2": "Uranus",
+      "aspect": "conjunction",
+      "orbit": 9.842937121080524,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Saturn",
+      "p2": "Neptune",
+      "aspect": "conjunction",
+      "orbit": 3.57923471403177,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Saturn",
+      "p2": "Pluto",
+      "aspect": "sextile",
+      "orbit": 1.4810488408129174,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Saturn",
+      "p2": "Chiron",
+      "aspect": "opposition",
+      "orbit": 1.750915967933281,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Saturn",
+      "p2": "Medium_Coeli",
+      "aspect": "opposition",
+      "orbit": 6.163252319676474,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Saturn",
+      "p2": "Imum_Coeli",
+      "aspect": "conjunction",
+      "orbit": 6.163252319676474,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Uranus",
+      "p2": "Neptune",
+      "aspect": "conjunction",
+      "orbit": 6.263702407048754,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Uranus",
+      "p2": "Chiron",
+      "aspect": "opposition",
+      "orbit": 8.092021153147243,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Uranus",
+      "p2": "Ascendant",
+      "aspect": "square",
+      "orbit": 1.4847751099624418,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Uranus",
+      "p2": "Medium_Coeli",
+      "aspect": "opposition",
+      "orbit": 3.6796848014040506,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Uranus",
+      "p2": "Descendant",
+      "aspect": "square",
+      "orbit": 1.4847751099624702,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Uranus",
+      "p2": "Imum_Coeli",
+      "aspect": "conjunction",
+      "orbit": 3.6796848014040506,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Uranus",
+      "p2": "Mean_Lilith",
+      "aspect": "sextile",
+      "orbit": 0.6525243698498571,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Neptune",
+      "p2": "Pluto",
+      "aspect": "sextile",
+      "orbit": 5.060283554844688,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Neptune",
+      "p2": "Chiron",
+      "aspect": "opposition",
+      "orbit": 1.828318746098489,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Neptune",
+      "p2": "Ascendant",
+      "aspect": "square",
+      "orbit": 4.778927297086312,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Neptune",
+      "p2": "Medium_Coeli",
+      "aspect": "opposition",
+      "orbit": 2.5840176056447035,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Neptune",
+      "p2": "Descendant",
+      "aspect": "square",
+      "orbit": 4.778927297086284,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Neptune",
+      "p2": "Imum_Coeli",
+      "aspect": "conjunction",
+      "orbit": 2.5840176056447035,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Neptune",
+      "p2": "Mean_Lilith",
+      "aspect": "sextile",
+      "orbit": 5.611178037198897,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Pluto",
+      "p2": "True_North_Lunar_Node",
+      "aspect": "square",
+      "orbit": 0.22065237011895533,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Pluto",
+      "p2": "Chiron",
+      "aspect": "trine",
+      "orbit": 3.2319648087462127,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Pluto",
+      "p2": "Medium_Coeli",
+      "aspect": "trine",
+      "orbit": 7.644301160489377,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Pluto",
+      "p2": "True_South_Lunar_Node",
+      "aspect": "square",
+      "orbit": 0.2206523701189269,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Chiron",
+      "p2": "Medium_Coeli",
+      "aspect": "conjunction",
+      "orbit": 4.412336351743164,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Chiron",
+      "p2": "Imum_Coeli",
+      "aspect": "opposition",
+      "orbit": 4.412336351743193,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Chiron",
+      "p2": "Mean_Lilith",
+      "aspect": "trine",
+      "orbit": 7.439496783297386,
+      "movement": "Applying"
+    },
+    {
+      "p1": "Ascendant",
+      "p2": "Medium_Coeli",
+      "aspect": "square",
+      "orbit": 2.194909691441623,
+      "movement": "Static"
+    },
+    {
+      "p1": "Ascendant",
+      "p2": "Imum_Coeli",
+      "aspect": "square",
+      "orbit": 2.1949096914415804,
+      "movement": "Static"
+    },
+    {
+      "p1": "Medium_Coeli",
+      "p2": "Descendant",
+      "aspect": "square",
+      "orbit": 2.1949096914415946,
+      "movement": "Static"
+    },
+    {
+      "p1": "Medium_Coeli",
+      "p2": "Mean_Lilith",
+      "aspect": "trine",
+      "orbit": 3.0271604315541936,
+      "movement": "Separating"
+    },
+    {
+      "p1": "Descendant",
+      "p2": "Imum_Coeli",
+      "aspect": "square",
+      "orbit": 2.1949096914415804,
+      "movement": "Static"
+    },
+    {
+      "p1": "Imum_Coeli",
+      "p2": "Mean_Lilith",
+      "aspect": "sextile",
+      "orbit": 3.0271604315541936,
+      "movement": "Separating"
+    }
+  ],
+  "zodiac": "Tropical",
+  "house_system": "Placidus",
+  "time_known": true,
+  "flags": {
+    "house_system_fallback": false,
+    "moon_approximate": false,
+    "precision_degraded": false,
+    "dst_ambiguous_resolved": false
+  },
+  "julian_day": 2447892.5,
+  "utc_iso": "1990-01-01T00:00:00+00:00"
+}

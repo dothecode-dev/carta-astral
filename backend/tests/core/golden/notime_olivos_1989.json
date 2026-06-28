@@ -1,0 +1,114 @@
+{
+  "placements": [
+    {
+      "name": "Sun",
+      "sign": "Can",
+      "position": 22.019958397844604,
+      "abs_pos": 112.0199583978446,
+      "house": null,
+      "retrograde": false
+    },
+    {
+      "name": "Moon",
+      "sign": "Sag",
+      "position": 0.7664168327785319,
+      "abs_pos": 240.76641683277853,
+      "house": null,
+      "retrograde": false
+    },
+    {
+      "name": "Mercury",
+      "sign": "Can",
+      "position": 17.439327228187437,
+      "abs_pos": 107.43932722818744,
+      "house": null,
+      "retrograde": false
+    },
+    {
+      "name": "Venus",
+      "sign": "Leo",
+      "position": 18.44358980826931,
+      "abs_pos": 138.4435898082693,
+      "house": null,
+      "retrograde": false
+    },
+    {
+      "name": "Mars",
+      "sign": "Leo",
+      "position": 17.40234746483253,
+      "abs_pos": 137.40234746483253,
+      "house": null,
+      "retrograde": false
+    },
+    {
+      "name": "Jupiter",
+      "sign": "Gem",
+      "position": 26.49862924314668,
+      "abs_pos": 86.49862924314668,
+      "house": null,
+      "retrograde": false
+    },
+    {
+      "name": "Saturn",
+      "sign": "Cap",
+      "position": 9.747776236457014,
+      "abs_pos": 279.747776236457,
+      "house": null,
+      "retrograde": true
+    },
+    {
+      "name": "Uranus",
+      "sign": "Cap",
+      "position": 2.56695716994858,
+      "abs_pos": 272.5669571699486,
+      "house": null,
+      "retrograde": true
+    },
+    {
+      "name": "Neptune",
+      "sign": "Cap",
+      "position": 10.691916849596964,
+      "abs_pos": 280.69191684959696,
+      "house": null,
+      "retrograde": true
+    },
+    {
+      "name": "Pluto",
+      "sign": "Sco",
+      "position": 12.38723666091542,
+      "abs_pos": 222.38723666091542,
+      "house": null,
+      "retrograde": true
+    },
+    {
+      "name": "Chiron",
+      "sign": "Can",
+      "position": 10.16037520012894,
+      "abs_pos": 100.16037520012894,
+      "house": null,
+      "retrograde": false
+    },
+    {
+      "name": "True_North_Lunar_Node",
+      "sign": "Aqu",
+      "position": 26.319268255298027,
+      "abs_pos": 326.319268255298,
+      "house": null,
+      "retrograde": true
+    }
+  ],
+  "houses": null,
+  "angles": null,
+  "aspects": [],
+  "zodiac": "Tropical",
+  "house_system": "Placidus",
+  "time_known": false,
+  "flags": {
+    "house_system_fallback": false,
+    "moon_approximate": true,
+    "precision_degraded": false,
+    "dst_ambiguous_resolved": false
+  },
+  "julian_day": 2447722.0,
+  "utc_iso": "1989-07-14T12:00:00+00:00"
+}
