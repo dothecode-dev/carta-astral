@@ -1,0 +1,10 @@
+[project]
+name = "carta-astral-backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "kerykeion>=5.12",
+    "timezonefinder>=8.2.4",
+]
