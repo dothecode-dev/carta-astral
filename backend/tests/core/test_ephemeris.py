@@ -29,6 +29,21 @@ def test_build_chart_has_houses_and_angles_when_time_known(olivos):
     assert cd.julian_day == pytest.approx(2447722.6146, abs=1e-3)
 
 
+def test_time_unknown_omits_houses_and_angles():
+    bi = BirthInput(
+        name="NoTime", date=datetime.date(1989, 7, 14), time=None,
+        time_known=False, lat=-34.5, lng=-58.4,
+    )
+    cd = build_chart(bi)
+    assert cd.houses is None
+    assert cd.angles is None
+    assert cd.time_known is False
+    assert cd.flags.moon_approximate is True
+    assert all(p.house is None for p in cd.placements)
+    # el Sol igual se calcula
+    assert any(p.name == "Sun" for p in cd.placements)
+
+
 def test_polar_latitude_falls_back_to_whole_sign():
     bi = BirthInput(
         name="Polar", date=datetime.date(1989, 7, 14), time=datetime.time(12, 0),

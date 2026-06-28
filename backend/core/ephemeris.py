@@ -24,7 +24,24 @@ _ANGLE_ATTRS = ["ascendant", "medium_coeli", "descendant", "imum_coeli"]
 
 def build_chart(birth: BirthInput) -> ChartData:
     if not birth.time_known or birth.time is None:
-        raise NotImplementedError("hora desconocida se implementa en Task 7")
+        subj = AstrologicalSubject(
+            name=birth.name or "Chart",
+            year=birth.date.year, month=birth.date.month, day=birth.date.day,
+            hour=12, minute=0, lng=birth.lng, lat=birth.lat, tz_str="UTC", online=False,
+            zodiac_type=("Sidereal" if birth.zodiac == "Sidereal" else "Tropical"),
+        )
+        model = subj.model()
+        placements = [
+            Placement(name=p.name, sign=p.sign, position=p.position, abs_pos=p.abs_pos,
+                      house=None, retrograde=bool(getattr(p, "retrograde", False)))
+            for p in (getattr(model, a) for a in _PLANET_ATTRS)
+        ]
+        return ChartData(
+            placements=placements, houses=None, angles=None, aspects=[],
+            zodiac=birth.zodiac, house_system=birth.house_system, time_known=False,
+            flags=DegradationFlags(moon_approximate=True),
+            julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,
+        )
 
     fallback = False
     house_system = birth.house_system
