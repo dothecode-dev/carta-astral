@@ -5,7 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "dj-database-url>=3.1.2",
+    "django>=6.0.6",
+    "djangorestframework>=3.17.1",
     "kerykeion>=5.12",
+    "psycopg[binary]>=3.3.4",
     "timezonefinder>=8.2.4",
 ]
 
@@ -14,10 +18,12 @@ dev = [
     "import-linter>=2.12",
     "mypy>=2.1.0",
     "pytest>=9.1.1",
+    "pytest-django>=4.12.0",
     "ruff>=0.15.20",
 ]
 
 [tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
 pythonpath = ["."]
 testpaths = ["tests"]
 filterwarnings = [
@@ -41,7 +47,7 @@ include_external_packages = true
 name = "core no depende de django/requests/anthropic/interpret"
 type = "forbidden"
 source_modules = ["core"]
-forbidden_modules = ["django", "requests", "anthropic", "interpret"]
+forbidden_modules = ["django", "requests", "anthropic", "interpret", "api"]
 
 [[tool.importlinter.contracts]]
 name = "core.models no importa kerykeion"
