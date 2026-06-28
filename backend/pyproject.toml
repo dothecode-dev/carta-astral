@@ -26,6 +26,8 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 100
+# spike_kerykeion.py es un script de exploración (evidencia del spike), no código de producción
+extend-exclude = ["spike_kerykeion.py"]
 
 [tool.mypy]
 strict = true
