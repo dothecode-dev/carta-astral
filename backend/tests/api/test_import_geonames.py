@@ -1,6 +1,7 @@
 import pytest
 from django.core.management import CommandError, call_command
 
+from api.geocode import search
 from api.models import GeoName, GeoNameToken
 
 pytestmark = pytest.mark.django_db
@@ -84,6 +85,21 @@ def test_import_is_idempotent(sample_files):
     call_command("import_geonames", file=str(geo), admin1_file=str(adm))
     assert GeoName.objects.count() == 5
     assert GeoNameToken.objects.filter(geoname__geonameid=3838583).count() == 4
+
+
+def test_import_applies_exonyms(sample_files):
+    geo, adm = sample_files
+    call_command("import_geonames", file=str(geo), admin1_file=str(adm))
+    # 'munich' es exónimo curado de München (gid 2867714, presente en el sample).
+    assert search("munich")[0]["name"] == "München"
+
+
+def test_exonym_pointing_to_absent_city_is_skipped(sample_files, tmp_path):
+    # Si el geonameid del exónimo no está en el dataset cargado, no debe romper.
+    geo, adm = sample_files
+    call_command("import_geonames", file=str(geo), admin1_file=str(adm))
+    # 'londres'→London no está en el sample; no debe haber crash ni match.
+    assert search("londres") == []
 
 
 def test_import_missing_file_raises_cleanly(tmp_path):

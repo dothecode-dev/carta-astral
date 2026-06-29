@@ -9,6 +9,7 @@ Tests / offline: ``./manage.py import_geonames --file cities.txt --admin1-file a
 
 import csv
 import io
+import json
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -22,6 +23,9 @@ from api.text_norm import tokenize
 GEONAMES_BASE = "https://download.geonames.org/export/dump/"
 ADMIN1_FILE = "admin1CodesASCII.txt"
 MIN_COLS = 18  # cities500 trae 19; el timezone está en la col 17
+# Exónimos curados ES/EN/PT (exónimo normalizado -> geonameid). Ampliable;
+# los geonameids deben validarse contra el dataset real (ver progress.md).
+EXONYMS_PATH = Path(__file__).resolve().parents[2] / "data" / "exonyms.json"
 
 
 class Command(BaseCommand):
@@ -35,8 +39,14 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         lines = self._read_geonames(opts)
         admin1 = self._read_admin1(opts)
-        n_cities, n_tokens = self._load(lines, admin1)
+        exonyms = self._read_exonyms()
+        n_cities, n_tokens = self._load(lines, admin1, exonyms)
         self.stdout.write(self.style.SUCCESS(f"importadas {n_cities} ciudades, {n_tokens} tokens"))
+
+    def _read_exonyms(self) -> dict[str, int]:
+        if not EXONYMS_PATH.exists():
+            return {}
+        return json.loads(EXONYMS_PATH.read_text(encoding="utf-8"))
 
     # --- lectura de fuentes ---
 
@@ -82,7 +92,7 @@ class Command(BaseCommand):
     # --- carga ---
 
     @transaction.atomic
-    def _load(self, lines: list[str], admin1: dict[str, str]) -> tuple[int, int]:
+    def _load(self, lines: list[str], admin1: dict[str, str], exonyms: dict[str, int]) -> tuple[int, int]:
         GeoNameToken.objects.all().delete()
         GeoName.objects.all().delete()
 
@@ -111,6 +121,17 @@ class Command(BaseCommand):
         for g in cities:  # bulk_create asignó los pk
             for tok in tokenize(g.name):
                 tokens.append(GeoNameToken(geoname=g, token=tok))
+
+        # Alias de exónimos: tokens extra apuntando a la ciudad de grafía local.
+        # Se ignoran los exónimos cuyo geonameid no esté en el dataset cargado.
+        by_gid = {g.geonameid: g for g in cities}
+        for exonym, gid in exonyms.items():
+            g = by_gid.get(gid)
+            if g is None:
+                continue
+            for tok in tokenize(exonym):
+                tokens.append(GeoNameToken(geoname=g, token=tok))
+
         GeoNameToken.objects.bulk_create(tokens, batch_size=5000)
 
         return len(cities), len(tokens)
