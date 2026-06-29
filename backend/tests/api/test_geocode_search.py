@@ -75,7 +75,7 @@ def test_no_match_returns_empty():
 
 def test_respects_limit():
     for i in range(15):
-        make_city(f"Santa Ciudad", population=i, gid=9_000_000 + i)
+        make_city("Santa Ciudad", population=i, gid=9_000_000 + i)
     assert len(search("santa", limit=10)) == 10
 
 
