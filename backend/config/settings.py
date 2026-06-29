@@ -10,7 +10,9 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
 import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -86,7 +88,29 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_THROTTLE_RATES": {
+        "interpretation": os.environ.get("INTERPRETATION_RATE", "20/day"),
+    },
 }
+
+# --- api-interpret (control de costo) ---
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# Tope global diario de generaciones NUEVAS (cache miss). Las cacheadas no cuentan.
+INTERPRETATION_DAILY_CAP = int(os.environ.get("INTERPRETATION_DAILY_CAP", "500"))
+
+# Cache compartido entre workers: el throttle, el tope global y el lock viven
+# acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache
+# (USE_DB_CACHE=1 + `manage.py createcachetable`). LocMem en prod NO limita:
+# cada worker tiene su propio contador y los muros de costo no funcionan.
+if os.environ.get("USE_DB_CACHE"):
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "django_cache",
+        }
+    }
+else:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
 
 # Password validation
