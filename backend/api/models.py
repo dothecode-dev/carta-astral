@@ -41,6 +41,20 @@ class GeoName(models.Model):
     population = models.BigIntegerField(default=0)
 
 
+class Interpretation(models.Model):
+    """Interpretación LLM cacheada de una carta. Clave de cache: (chart, lang,
+    prompt_version) — cambiar prompt_version genera registros nuevos."""
+
+    chart = models.ForeignKey(Chart, on_delete=models.CASCADE, related_name="interpretations")
+    lang = models.CharField(max_length=2)
+    prompt_version = models.CharField(max_length=20)
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("chart", "lang", "prompt_version")
+
+
 class GeoNameToken(models.Model):
     """Palabra normalizada de un GeoName (incluye alias de exónimos). Permite
     búsqueda por término en vez de prefijo del nombre completo."""
