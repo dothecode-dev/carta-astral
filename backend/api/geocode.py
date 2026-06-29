@@ -4,6 +4,9 @@ Contrato del diseño: toda la lógica de geocode vive acá para poder cambiar de
 proveedor (GeoNames) sin tocar views ni el resto. La view solo orquesta.
 """
 
+from core.exceptions import GeocodeTimezoneError
+from core.timeconv import resolve_tz
+
 from api.models import GeoName
 from api.text_norm import tokenize
 
@@ -42,7 +45,19 @@ def _candidate(g: GeoName) -> dict:
         "name": g.name,
         "lat": g.lat,
         "lng": g.lng,
+        "tz_name": _resolve_tz_name(g),
         "country_code": g.country_code,
         "admin1": g.admin1 or None,
         "population": g.population,
     }
+
+
+def _resolve_tz_name(g: GeoName) -> str | None:
+    """Deriva el tz desde lat/lng con la MISMA función que usa /api/charts/,
+    para que lo mostrado coincida con lo calculado. Si el core no resuelve
+    (ej. coords sin tz terrestre), cae al tz crudo de GeoNames, y si tampoco
+    hay, a None."""
+    try:
+        return resolve_tz(g.lat, g.lng)
+    except GeocodeTimezoneError:
+        return g.tz_geonames or None
