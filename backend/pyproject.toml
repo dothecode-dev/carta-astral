@@ -42,7 +42,7 @@ strict = true
 files = ["core"]
 
 [tool.importlinter]
-root_package = "core"
+root_packages = ["core", "interpret"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -56,3 +56,9 @@ name = "core.models no importa kerykeion"
 type = "forbidden"
 source_modules = ["core.models"]
 forbidden_modules = ["kerykeion"]
+
+[[tool.importlinter.contracts]]
+name = "interpret no depende de django/api/requests"
+type = "forbidden"
+source_modules = ["interpret"]
+forbidden_modules = ["django", "api", "requests"]
