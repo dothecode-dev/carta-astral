@@ -29,18 +29,35 @@ def _chart():
     return Chart.objects.create(birth_data=bd, data={"time_known": True}, engine_version="test")
 
 
+class _Stream:
+    def __init__(self, resp=None, raises=None):
+        self._resp = resp
+        self._raises = raises
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get_final_message(self):
+        if self._raises:
+            raise self._raises
+
+        class R:
+            content = [type("B", (), {"type": "text", "text": "una interpretación"})()]
+            stop_reason = "end_turn"
+
+        return R()
+
+
 class _FakeClient:
     calls = 0
 
     class _M:
-        def create(self, **kw):
+        def stream(self, **kw):
             _FakeClient.calls += 1
-
-            class R:
-                content = [type("B", (), {"type": "text", "text": "una interpretación"})()]
-                stop_reason = "end_turn"
-
-            return R()
+            return _Stream()
 
     @property
     def messages(self):
@@ -49,10 +66,10 @@ class _FakeClient:
 
 class _Boom:
     class _M:
-        def create(self, **kw):
+        def stream(self, **kw):
             import anthropic
 
-            raise anthropic.AnthropicError("boom")
+            return _Stream(raises=anthropic.AnthropicError("boom"))
 
     @property
     def messages(self):

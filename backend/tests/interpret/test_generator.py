@@ -18,6 +18,23 @@ class _Resp:
         self.stop_reason = stop_reason
 
 
+class _StreamCtx:
+    def __init__(self, resp, raises):
+        self._resp = resp
+        self._raises = raises
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get_final_message(self):
+        if self._raises:
+            raise self._raises
+        return self._resp
+
+
 class FakeClient:
     def __init__(self, resp=None, raises=None):
         self._resp = resp or _Resp()
@@ -28,11 +45,9 @@ class FakeClient:
         def __init__(self, outer):
             self.outer = outer
 
-        def create(self, **kwargs):
+        def stream(self, **kwargs):
             self.outer.calls.append(kwargs)
-            if self.outer._raises:
-                raise self.outer._raises
-            return self.outer._resp
+            return _StreamCtx(self.outer._resp, self.outer._raises)
 
     @property
     def messages(self):

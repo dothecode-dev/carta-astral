@@ -27,13 +27,17 @@ def _user_content(chart_data: dict) -> str:
 
 def build_interpretation(chart_data: dict, lang: str, prompt_version: str, client) -> str:
     system = SYSTEM_PROMPTS[lang]
+    # Streaming interno (no al cliente): el read-timeout pasa a ser por-chunk, lo
+    # que evita el corte único de una generación no-streaming larga. La respuesta
+    # se devuelve completa igual vía get_final_message().
     try:
-        resp = client.messages.create(
+        with client.messages.stream(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": _user_content(chart_data)}],
-        )
+        ) as stream:
+            resp = stream.get_final_message()
     except anthropic.AnthropicError as exc:  # timeout, API, conexión, etc.
         raise InterpretationError(f"error del LLM: {exc}") from exc
 
