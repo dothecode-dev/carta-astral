@@ -1,0 +1,107 @@
+import datetime
+
+import pytest
+from django.core.cache import cache
+from rest_framework.test import APIClient
+
+from api import interpretation_service as svc
+from api.models import BirthData, Chart, Interpretation
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    cache.clear()
+    yield
+    cache.clear()
+
+
+def _chart():
+    bd = BirthData.objects.create(
+        date=datetime.date(1989, 7, 14),
+        time=datetime.time(23, 45),
+        time_known=True,
+        lat=-34.5,
+        lng=-58.4,
+        tz_name="America/Argentina/Buenos_Aires",
+    )
+    return Chart.objects.create(birth_data=bd, data={"time_known": True}, engine_version="test")
+
+
+class _FakeClient:
+    class _M:
+        def create(self, **kw):
+            class R:
+                content = [type("B", (), {"type": "text", "text": "tu carta dice..."})()]
+                stop_reason = "end_turn"
+
+            return R()
+
+    @property
+    def messages(self):
+        return _FakeClient._M()
+
+
+class _Boom:
+    class _M:
+        def create(self, **kw):
+            import anthropic
+
+            raise anthropic.AnthropicError("boom")
+
+    @property
+    def messages(self):
+        return _Boom._M()
+
+
+@pytest.fixture
+def fake_client(monkeypatch, settings):
+    settings.INTERPRETATION_DAILY_CAP = 100
+    monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
+
+
+def test_post_returns_interpretation(fake_client):
+    c = _chart()
+    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {"lang": "es"}, format="json")
+    assert resp.status_code == 200
+    assert set(resp.data) == {"text", "lang", "prompt_version", "disclaimer", "created_at"}
+    assert resp.data["text"] == "tu carta dice..."
+    assert resp.data["disclaimer"] == svc.DISCLAIMERS["es"]
+
+
+def test_default_lang_es(fake_client):
+    c = _chart()
+    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {}, format="json")
+    assert resp.status_code == 200
+    assert resp.data["lang"] == "es"
+
+
+def test_invalid_lang_400(fake_client):
+    c = _chart()
+    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {"lang": "fr"}, format="json")
+    assert resp.status_code == 400
+    assert "error" in resp.data
+
+
+def test_missing_chart_404(fake_client):
+    resp = APIClient().post("/api/charts/999999/interpretation/", {"lang": "es"}, format="json")
+    assert resp.status_code == 404
+
+
+def test_llm_error_503(monkeypatch, settings):
+    settings.INTERPRETATION_DAILY_CAP = 100
+    monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
+    c = _chart()
+    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {"lang": "es"}, format="json")
+    assert resp.status_code == 503
+    assert "error" in resp.data
+    assert Interpretation.objects.count() == 0
+
+
+def test_cap_reached_503(monkeypatch, settings):
+    settings.INTERPRETATION_DAILY_CAP = 0
+    monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
+    c = _chart()
+    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {"lang": "es"}, format="json")
+    assert resp.status_code == 503
