@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from core.exceptions import CoreError
 
+from api import geocode
 from api.chart_service import create_chart
 from api.models import Chart
 
@@ -37,3 +38,14 @@ class ChartDetailView(APIView):
     def get(self, request, pk):
         chart = get_object_or_404(Chart, pk=pk)
         return Response(_chart_repr(chart))
+
+
+class GeocodeView(APIView):
+    def post(self, request):
+        q = request.data.get("q", "")
+        try:
+            results = geocode.search(q)
+        except ValueError as exc:
+            logger.warning("geocode query rejected: %s", exc)
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"results": results})
