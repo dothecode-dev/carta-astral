@@ -116,8 +116,8 @@ DATABASES = {
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
-    "DEFAULT_AUTHENTICATION_CLASSES": ["api.auth.InstallationTokenAuthentication"],
-    "DEFAULT_PERMISSION_CLASSES": ["api.permissions.HasInstallation"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["api.auth.AccountTokenAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["api.permissions.HasAccount"],
     "DEFAULT_THROTTLE_RATES": {
         "interpretation": os.environ.get("INTERPRETATION_RATE", "20/day"),
         "install": os.environ.get("INSTALL_RATE", "30/day"),

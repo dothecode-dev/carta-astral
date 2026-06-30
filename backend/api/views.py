@@ -1,6 +1,5 @@
 import logging
 
-from django.conf import settings
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -15,12 +14,10 @@ from api import geocode
 from api.accounts import resolve_account
 from api.auth import (
     AccountTokenAuthentication,
-    InstallationTokenAuthentication,
     create_session,
 )
 from api.deletion import delete_account
 from api.chart_service import create_chart
-from api.identity import new_token
 from api.interpretation_service import (
     DISCLAIMERS,
     CapReached,
@@ -28,39 +25,13 @@ from api.interpretation_service import (
     get_or_create_interpretation,
 )
 from api.ledger import credits_available as account_credits_available
-from api.models import Chart, Installation, Interpretation
-from api.permissions import HasAccount, HasInstallation
+from api.models import Chart
+from api.permissions import HasAccount
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
 logger = logging.getLogger(__name__)
 
 _INTERPRETATION_LANGS = ("es", "en", "pt")
-
-
-class InstallationCreateView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "install"
-
-    def post(self, request):
-        clear, token_hash = new_token()
-        Installation.objects.create(token_hash=token_hash)
-        return Response(
-            {"token": clear, "credits_available": settings.INSTALL_FREE_CREDITS},
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class InstallationMeView(APIView):
-    authentication_classes = [InstallationTokenAuthentication]
-    permission_classes = [HasInstallation]
-
-    def get(self, request):
-        inst = request.auth
-        used = Interpretation.objects.filter(installation=inst).count()
-        avail = settings.INSTALL_FREE_CREDITS + inst.purchased_credits - used
-        return Response({"credits_available": avail})
 
 
 class AccountView(APIView):

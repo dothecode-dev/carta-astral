@@ -7,14 +7,10 @@ from api.views import (
     ChartDetailView,
     GeocodeView,
     GoogleAuthView,
-    InstallationCreateView,
-    InstallationMeView,
     InterpretationView,
 )
 
 urlpatterns = [
-    path("installations/", InstallationCreateView.as_view()),
-    path("installations/me/", InstallationMeView.as_view()),
     path("account/", AccountView.as_view()),
     path("charts/", ChartCollectionView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),

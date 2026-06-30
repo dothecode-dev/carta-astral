@@ -14,8 +14,9 @@ def test_geocode_requires_token():
     assert APIClient().post("/api/geocode/", {"q": "x"}, format="json").status_code == 401
 
 
-def test_registration_is_open():
-    assert APIClient().post("/api/installations/").status_code == 201
+def test_geocode_accepts_account_token(account_client):
+    resp = account_client.post("/api/geocode/", {"q": "x"}, format="json")
+    assert resp.status_code not in (401, 403)
 
 
 def test_interpretation_requires_token():
