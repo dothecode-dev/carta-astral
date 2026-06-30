@@ -25,7 +25,7 @@ _INTERPRETATION_LANGS = ("es", "en", "pt")
 
 def _chart_repr(chart: Chart) -> dict:
     return {
-        "id": chart.id,
+        "id": str(chart.uuid),
         "house_system": chart.house_system,
         "zodiac": chart.zodiac,
         "data": chart.data,
@@ -44,8 +44,8 @@ class ChartCreateView(APIView):
 
 
 class ChartDetailView(APIView):
-    def get(self, request, pk):
-        chart = get_object_or_404(Chart, pk=pk)
+    def get(self, request, uuid):
+        chart = get_object_or_404(Chart, uuid=uuid)
         return Response(_chart_repr(chart))
 
 
@@ -64,14 +64,14 @@ class InterpretationView(APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "interpretation"
 
-    def post(self, request, pk):
+    def post(self, request, uuid):
         lang = request.data.get("lang", "es")
         if lang not in _INTERPRETATION_LANGS:
             return Response(
                 {"error": f"lang debe ser uno de {_INTERPRETATION_LANGS}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        chart = get_object_or_404(Chart, pk=pk)
+        chart = get_object_or_404(Chart, uuid=uuid)
         try:
             interp = get_or_create_interpretation(chart, lang)
         except CapReached:

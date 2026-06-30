@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 
@@ -14,6 +16,7 @@ class BirthData(models.Model):
 
 
 class Chart(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     birth_data = models.ForeignKey(BirthData, on_delete=models.CASCADE, related_name="charts")
     house_system = models.CharField(max_length=20, default="Placidus")
     zodiac = models.CharField(max_length=20, default="Tropical")

@@ -9,7 +9,7 @@ from api.views import (
 
 urlpatterns = [
     path("charts/", ChartCreateView.as_view()),
-    path("charts/<int:pk>/", ChartDetailView.as_view()),
-    path("charts/<int:pk>/interpretation/", InterpretationView.as_view()),
+    path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
+    path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
     path("geocode/", GeocodeView.as_view()),
 ]
