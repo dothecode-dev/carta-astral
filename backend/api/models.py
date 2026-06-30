@@ -72,3 +72,21 @@ class GeoNameToken(models.Model):
                 opclasses=["varchar_pattern_ops"],
             ),
         ]
+
+
+class Installation(models.Model):
+    """Identidad anónima por instalación de la app. El token se guarda hasheado."""
+
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    purchased_credits = models.PositiveIntegerField(default=0)
+    platform = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # para DRF: la instalación actúa como "actor" autenticado
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
