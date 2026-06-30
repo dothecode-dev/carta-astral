@@ -13,6 +13,7 @@ from django.core.cache import cache
 from django.db import IntegrityError
 from django.utils import timezone
 
+from api.exceptions import CapReached, QuotaExceeded
 from api.models import Interpretation
 from interpret.exceptions import InterpretationError
 from interpret.generator import build_interpretation
@@ -30,14 +31,6 @@ DISCLAIMERS = {
     "pt": "Esta interpretação foi gerada automaticamente para fins de "
     "entretenimento; não é aconselhamento e não tem valor preditivo comprovado.",
 }
-
-
-class CapReached(Exception):
-    """Se alcanzó el tope global diario de generaciones nuevas."""
-
-
-class QuotaExceeded(Exception):
-    """La instalación no tiene créditos disponibles para una generación nueva."""
 
 
 def credits_available(installation) -> int:
