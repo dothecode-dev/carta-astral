@@ -121,6 +121,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "interpretation": os.environ.get("INTERPRETATION_RATE", "20/day"),
         "install": os.environ.get("INSTALL_RATE", "30/day"),
+        "auth": os.environ.get("AUTH_RATE", "30/day"),
+        "chart": os.environ.get("CHART_RATE", "60/day"),
     },
 }
 
@@ -130,6 +132,16 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 INTERPRETATION_DAILY_CAP = int(os.environ.get("INTERPRETATION_DAILY_CAP", "500"))
 # Free-tier: 1 carta gratis por instalación; después, modo pago (IAP, frente con la app).
 INSTALL_FREE_CREDITS = int(os.environ.get("INSTALL_FREE_CREDITS", "1"))
+
+# --- SSO / cuentas ---
+APPLE_AUD = os.environ.get("APPLE_AUD", "")  # bundle id de la app iOS; vacío => auth Apple 503 (fail-closed)
+GOOGLE_AUD = os.environ.get("GOOGLE_AUD", "")  # OAuth client id; vacío => auth Google 503
+APPLE_ISS = os.environ.get("APPLE_ISS", "https://appleid.apple.com")
+GOOGLE_ISS = os.environ.get("GOOGLE_ISS", "https://accounts.google.com")
+APPLE_JWKS_URL = os.environ.get("APPLE_JWKS_URL", "https://appleid.apple.com/auth/keys")
+GOOGLE_JWKS_URL = os.environ.get("GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs")
+JWKS_TTL_SECONDS = int(os.environ.get("JWKS_TTL_SECONDS", str(12 * 3600)))
+SESSION_TTL_DAYS = int(os.environ.get("SESSION_TTL_DAYS", "90"))
 
 # Cache compartido entre workers: el throttle, el tope global y el lock viven
 # acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache
