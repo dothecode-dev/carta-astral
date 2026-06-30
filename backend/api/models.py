@@ -120,3 +120,14 @@ class Account(models.Model):
     @property
     def is_anonymous(self) -> bool:
         return False
+
+
+class ProviderIdentity(models.Model):
+    PROVIDERS = (("apple", "apple"), ("google", "google"))
+    provider = models.CharField(max_length=10, choices=PROVIDERS)
+    sub = models.CharField(max_length=255)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="identities")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("provider", "sub")
