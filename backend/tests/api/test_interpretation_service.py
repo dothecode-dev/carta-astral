@@ -110,6 +110,7 @@ def test_hit_serves_without_llm(fake_client, settings):
 
 def test_daily_cap_blocks_new_generation(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 1
+    settings.INSTALL_FREE_CREDITS = 5  # ambas generaciones son free, para aislar el cap
     inst = _inst()
     svc.get_or_create_interpretation(_chart(), "es", inst)
     with pytest.raises(svc.CapReached):

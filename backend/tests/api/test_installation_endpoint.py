@@ -11,6 +11,6 @@ def test_register_creates_installation_and_returns_token():
     resp = APIClient().post("/api/installations/")
     assert resp.status_code == 201
     body = resp.json()
-    assert body["credits_available"] == 3
+    assert body["credits_available"] == 1
     token = body["token"]
     assert Installation.objects.filter(token_hash=hash_token(token)).exists()

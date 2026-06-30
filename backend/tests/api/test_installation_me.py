@@ -14,7 +14,7 @@ def test_me_returns_available_credits():
     c.credentials(HTTP_AUTHORIZATION=f"Bearer {clear}")
     resp = c.get("/api/installations/me/")
     assert resp.status_code == 200
-    assert resp.json()["credits_available"] == 5  # 3 free + 2 purchased
+    assert resp.json()["credits_available"] == 3  # 1 free + 2 purchased
 
 
 def test_me_requires_token():
