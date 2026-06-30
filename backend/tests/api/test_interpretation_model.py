@@ -32,17 +32,3 @@ def test_interpretation_unique_per_chart_lang_version():
     Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="a")
     with pytest.raises(IntegrityError):
         Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="b")
-
-
-def test_interpretation_can_belong_to_installation():
-    from api.identity import new_token
-    from api.models import Installation
-    _, h = new_token()
-    inst = Installation.objects.create(token_hash=h)
-    chart = _chart()  # helper ya existente en el archivo
-    from api.models import Interpretation
-    obj = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version="v1", text="x", installation=inst
-    )
-    assert obj.installation_id == inst.id
-    assert inst.interpretations.count() == 1

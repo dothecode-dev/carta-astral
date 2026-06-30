@@ -53,10 +53,6 @@ class Interpretation(models.Model):
     prompt_version) — cambiar prompt_version genera registros nuevos."""
 
     chart = models.ForeignKey(Chart, on_delete=models.CASCADE, related_name="interpretations")
-    installation = models.ForeignKey(
-        "Installation", on_delete=models.SET_NULL,
-        null=True, blank=True, related_name="interpretations",
-    )
     account = models.ForeignKey(
         "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="interpretations",
     )
@@ -116,24 +112,6 @@ class GeoNameToken(models.Model):
         ]
 
 
-class Installation(models.Model):
-    """Identidad anónima por instalación de la app. El token se guarda hasheado."""
-
-    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
-    purchased_credits = models.PositiveIntegerField(default=0)
-    platform = models.CharField(max_length=20, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    # para DRF: la instalación actúa como "actor" autenticado
-    @property
-    def is_authenticated(self) -> bool:
-        return True
-
-    @property
-    def is_anonymous(self) -> bool:
-        return False
-
-
 def _default_free_balance():
     return settings.INSTALL_FREE_CREDITS
 
@@ -157,7 +135,7 @@ class Account(models.Model):
 
 
 class Device(models.Model):
-    """Dispositivo (degradación de Installation). Para push/telemetría futura.
+    """Dispositivo vinculado a una cuenta. Para push/telemetría futura.
     No participa de auth ni de cuota."""
 
     account = models.ForeignKey(
