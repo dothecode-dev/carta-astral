@@ -12,7 +12,11 @@ from core.exceptions import CoreError
 from interpret.exceptions import InterpretationError
 
 from api import geocode
-from api.auth import InstallationTokenAuthentication
+from api.accounts import resolve_account
+from api.auth import (
+    InstallationTokenAuthentication,
+    create_session,
+)
 from api.chart_service import create_chart
 from api.identity import new_token
 from api.interpretation_service import (
@@ -22,8 +26,10 @@ from api.interpretation_service import (
     credits_available,
     get_or_create_interpretation,
 )
+from api.ledger import credits_available as account_credits_available
 from api.models import Chart, Installation
 from api.permissions import HasInstallation
+from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
 logger = logging.getLogger(__name__)
 
@@ -129,3 +135,42 @@ class InterpretationView(APIView):
                 "created_at": interp.created_at.isoformat(),
             }
         )
+
+
+class _BaseAuthView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+    validator = None  # set por subclase
+
+    def post(self, request):
+        id_token = request.data.get("id_token")
+        if not id_token:
+            return Response({"error": "id_token requerido"}, status=status.HTTP_400_BAD_REQUEST)
+        nonce = request.data.get("nonce")
+        try:
+            vid = self.validator(id_token, nonce=nonce)
+        except SSONotConfigured as exc:
+            logger.error("SSO no configurado: %s", exc)
+            return Response({"error": "login no disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except SSOError as exc:
+            logger.warning("id_token inválido: %s", exc)
+            return Response({"error": "token inválido"}, status=status.HTTP_401_UNAUTHORIZED)
+        account = resolve_account(vid)
+        token = create_session(account)
+        return Response({
+            "token": token,
+            "credits_available": account_credits_available(account),
+            "account_id": account.id,
+        })
+
+
+class AppleAuthView(_BaseAuthView):
+    def validator(self, id_token, nonce=None):
+        return validate_apple(id_token, nonce=nonce)
+
+
+class GoogleAuthView(_BaseAuthView):
+    def validator(self, id_token, nonce=None):
+        return validate_google(id_token, nonce=nonce)
