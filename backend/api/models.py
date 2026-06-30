@@ -156,6 +156,18 @@ class Account(models.Model):
         return False
 
 
+class Device(models.Model):
+    """Dispositivo (degradación de Installation). Para push/telemetría futura.
+    No participa de auth ni de cuota."""
+
+    account = models.ForeignKey(
+        Account, on_delete=models.SET_NULL, null=True, blank=True, related_name="devices",
+    )
+    platform = models.CharField(max_length=20, blank=True)
+    push_token = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ProviderIdentity(models.Model):
     PROVIDERS = (("apple", "apple"), ("google", "google"))
     provider = models.CharField(max_length=10, choices=PROVIDERS)
