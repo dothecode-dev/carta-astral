@@ -18,6 +18,7 @@ from api.auth import (
     InstallationTokenAuthentication,
     create_session,
 )
+from api.deletion import delete_account
 from api.chart_service import create_chart
 from api.identity import new_token
 from api.interpretation_service import (
@@ -62,7 +63,7 @@ class InstallationMeView(APIView):
         return Response({"credits_available": avail})
 
 
-class AccountMeView(APIView):
+class AccountView(APIView):
     authentication_classes = [AccountTokenAuthentication]
     permission_classes = [HasAccount]
 
@@ -71,6 +72,10 @@ class AccountMeView(APIView):
             "credits_available": account_credits_available(request.user),
             "account_id": request.user.id,
         })
+
+    def delete(self, request):
+        delete_account(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 def _chart_repr(chart: Chart) -> dict:

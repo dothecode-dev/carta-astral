@@ -11,7 +11,7 @@ def test_account_me_returns_credits():
     token = create_session(acc)
     c = APIClient()
     c.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
-    resp = c.get("/api/account/me")
+    resp = c.get("/api/account/")
     assert resp.status_code == 200
     assert resp.data["credits_available"] == 1
     assert resp.data["account_id"] == acc.id
