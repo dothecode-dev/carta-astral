@@ -49,6 +49,10 @@ class Interpretation(models.Model):
     prompt_version) — cambiar prompt_version genera registros nuevos."""
 
     chart = models.ForeignKey(Chart, on_delete=models.CASCADE, related_name="interpretations")
+    installation = models.ForeignKey(
+        "Installation", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="interpretations",
+    )
     lang = models.CharField(max_length=2)
     prompt_version = models.CharField(max_length=20)
     text = models.TextField()
