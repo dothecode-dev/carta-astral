@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 
-from api.models import Installation
+from api.models import Account, Installation
 
 
 class HasInstallation(BasePermission):
@@ -8,3 +8,10 @@ class HasInstallation(BasePermission):
 
     def has_permission(self, request, view):
         return isinstance(request.auth, Installation)
+
+
+class HasAccount(BasePermission):
+    message = "se requiere autenticación con cuenta"
+
+    def has_permission(self, request, view):
+        return isinstance(request.auth, Account)
