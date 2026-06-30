@@ -17,6 +17,7 @@ from api.identity import new_token
 from api.interpretation_service import (
     DISCLAIMERS,
     CapReached,
+    QuotaExceeded,
     get_or_create_interpretation,
 )
 from api.models import Chart, Installation
@@ -91,7 +92,12 @@ class InterpretationView(APIView):
             )
         chart = get_object_or_404(Chart, uuid=uuid)
         try:
-            interp = get_or_create_interpretation(chart, lang)
+            interp = get_or_create_interpretation(chart, lang, request.auth)
+        except QuotaExceeded:
+            return Response(
+                {"error": "sin créditos disponibles"},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
         except CapReached:
             return Response(
                 {"error": "límite diario de interpretaciones alcanzado, probá más tarde"},

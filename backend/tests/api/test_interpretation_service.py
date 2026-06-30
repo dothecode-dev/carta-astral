@@ -4,10 +4,16 @@ import pytest
 from django.core.cache import cache
 
 from api import interpretation_service as svc
-from api.models import BirthData, Chart, Interpretation
+from api.identity import new_token
+from api.models import BirthData, Chart, Installation, Interpretation
 from interpret.exceptions import InterpretationError
 
 pytestmark = pytest.mark.django_db
+
+
+def _inst():
+    _, h = new_token()
+    return Installation.objects.create(token_hash=h)
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +92,7 @@ def fake_client(monkeypatch):
 def test_miss_generates_and_persists(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    interp = svc.get_or_create_interpretation(c, "es")
+    interp = svc.get_or_create_interpretation(c, "es", _inst())
     assert interp.text == "una interpretación"
     assert Interpretation.objects.count() == 1
     assert fake_client.calls == 1
@@ -95,25 +101,28 @@ def test_miss_generates_and_persists(fake_client, settings):
 def test_hit_serves_without_llm(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    svc.get_or_create_interpretation(c, "es")
-    svc.get_or_create_interpretation(c, "es")
+    inst = _inst()
+    svc.get_or_create_interpretation(c, "es", inst)
+    svc.get_or_create_interpretation(c, "es", inst)
     assert fake_client.calls == 1
     assert Interpretation.objects.count() == 1
 
 
 def test_daily_cap_blocks_new_generation(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 1
-    svc.get_or_create_interpretation(_chart(), "es")
+    inst = _inst()
+    svc.get_or_create_interpretation(_chart(), "es", inst)
     with pytest.raises(svc.CapReached):
-        svc.get_or_create_interpretation(_chart(), "es")
+        svc.get_or_create_interpretation(_chart(), "es", inst)
     assert fake_client.calls == 1
 
 
 def test_cap_does_not_block_cache_hits(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 1
     c = _chart()
-    svc.get_or_create_interpretation(c, "es")
-    again = svc.get_or_create_interpretation(c, "es")
+    inst = _inst()
+    svc.get_or_create_interpretation(c, "es", inst)
+    again = svc.get_or_create_interpretation(c, "es", inst)
     assert again.text == "una interpretación"
     assert fake_client.calls == 1
 
@@ -123,7 +132,7 @@ def test_lock_held_raises_without_llm(fake_client, settings):
     c = _chart()
     cache.add(f"interp:lock:{c.id}:es:v1", "1", timeout=30)
     with pytest.raises(InterpretationError):
-        svc.get_or_create_interpretation(c, "es")
+        svc.get_or_create_interpretation(c, "es", _inst())
     assert fake_client.calls == 0
 
 
@@ -132,5 +141,5 @@ def test_llm_error_does_not_persist(monkeypatch, settings):
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
     c = _chart()
     with pytest.raises(InterpretationError):
-        svc.get_or_create_interpretation(c, "es")
+        svc.get_or_create_interpretation(c, "es", _inst())
     assert Interpretation.objects.count() == 0

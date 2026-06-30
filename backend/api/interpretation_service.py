@@ -36,6 +36,15 @@ class CapReached(Exception):
     """Se alcanzó el tope global diario de generaciones nuevas."""
 
 
+class QuotaExceeded(Exception):
+    """La instalación no tiene créditos disponibles para una generación nueva."""
+
+
+def credits_available(installation) -> int:
+    used = Interpretation.objects.filter(installation=installation).count()
+    return settings.INSTALL_FREE_CREDITS + installation.purchased_credits - used
+
+
 def _build_client():
     return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=25.0)
 
@@ -54,15 +63,19 @@ def _existing(chart, lang):
     ).first()
 
 
-def get_or_create_interpretation(chart, lang: str) -> Interpretation:
-    hit = _existing(chart, lang)
+def get_or_create_interpretation(chart, lang: str, installation) -> Interpretation:
+    hit = _existing(chart, lang)            # §5.1 cache/DB hit: no cuenta
     if hit is not None:
         return hit
 
+    used = Interpretation.objects.filter(installation=installation).count()
+    available = settings.INSTALL_FREE_CREDITS + installation.purchased_credits - used
+    if available <= 0:                      # §5.2 sin cuota
+        raise QuotaExceeded()
+    is_free = used < settings.INSTALL_FREE_CREDITS  # tramo cubierto por free-tier
+
     lock_key = f"interp:lock:{chart.id}:{lang}:{PROMPT_VERSION}"
     if not cache.add(lock_key, "1", timeout=LOCK_TTL):
-        # otra request está generando esta misma carta: re-chequear y, si no
-        # está aún, pedir reintento (evita doble pago al LLM).
         hit = _existing(chart, lang)
         if hit is not None:
             return hit
@@ -71,21 +84,23 @@ def get_or_create_interpretation(chart, lang: str) -> Interpretation:
     try:
         cap = settings.INTERPRETATION_DAILY_CAP
         cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
-        if cache.get(cap_key, 0) >= cap:
+        if is_free and cache.get(cap_key, 0) >= cap:   # §5.3 cap sólo al free
             logger.warning("interpretation daily cap reached (cap=%s)", cap)
             raise CapReached()
 
         text = build_interpretation(chart.data, lang, PROMPT_VERSION, _build_client())
 
         try:
-            obj = Interpretation.objects.create(
-                chart=chart, lang=lang, prompt_version=PROMPT_VERSION, text=text
+            obj = Interpretation.objects.create(   # §5.5 insertar = cobrar
+                chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
+                text=text, installation=installation,
             )
         except IntegrityError:
             return _existing(chart, lang)
 
-        cache.add(cap_key, 0, timeout=_seconds_until_midnight())
-        cache.incr(cap_key)
+        if is_free:
+            cache.add(cap_key, 0, timeout=_seconds_until_midnight())
+            cache.incr(cap_key)
         return obj
     finally:
         cache.delete(lock_key)
