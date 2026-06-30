@@ -4,3 +4,5 @@ __pycache__/
 .superpowers/
 *.sqlite3
 staticfiles/
+# docs/ es privado: specs con modelo de negocio + análisis de seguridad. Repo público.
+docs/
