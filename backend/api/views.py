@@ -14,6 +14,7 @@ from interpret.exceptions import InterpretationError
 from api import geocode
 from api.accounts import resolve_account
 from api.auth import (
+    AccountTokenAuthentication,
     InstallationTokenAuthentication,
     create_session,
 )
@@ -28,7 +29,7 @@ from api.interpretation_service import (
 )
 from api.ledger import credits_available as account_credits_available
 from api.models import Chart, Installation
-from api.permissions import HasInstallation
+from api.permissions import HasAccount, HasInstallation
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,17 @@ class InstallationMeView(APIView):
 
     def get(self, request):
         return Response({"credits_available": credits_available(request.auth)})
+
+
+class AccountMeView(APIView):
+    authentication_classes = [AccountTokenAuthentication]
+    permission_classes = [HasAccount]
+
+    def get(self, request):
+        return Response({
+            "credits_available": account_credits_available(request.user),
+            "account_id": request.user.id,
+        })
 
 
 def _chart_repr(chart: Chart) -> dict:
