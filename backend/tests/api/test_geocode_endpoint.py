@@ -1,5 +1,4 @@
 import pytest
-from rest_framework.test import APIClient
 
 from api.models import GeoName, GeoNameToken
 from api.text_norm import tokenize
@@ -23,29 +22,29 @@ def make_city(name, **kw):
     return g
 
 
-def test_post_returns_candidates():
+def test_post_returns_candidates(auth_client):
     make_city("Córdoba", population=1_430_023)
-    resp = APIClient().post("/api/geocode/", {"q": "cordoba"}, format="json")
+    resp = auth_client.post("/api/geocode/", {"q": "cordoba"}, format="json")
     assert resp.status_code == 200
     assert resp.data["results"][0]["name"] == "Córdoba"
     keys = set(resp.data["results"][0])
     assert keys == {"place_query", "name", "lat", "lng", "tz_name", "country_code", "admin1", "population"}
 
 
-def test_post_no_match_returns_empty_list():
+def test_post_no_match_returns_empty_list(auth_client):
     make_city("Córdoba")
-    resp = APIClient().post("/api/geocode/", {"q": "tokyo"}, format="json")
+    resp = auth_client.post("/api/geocode/", {"q": "tokyo"}, format="json")
     assert resp.status_code == 200
     assert resp.data["results"] == []
 
 
-def test_post_short_query_returns_400():
-    resp = APIClient().post("/api/geocode/", {"q": "a"}, format="json")
+def test_post_short_query_returns_400(auth_client):
+    resp = auth_client.post("/api/geocode/", {"q": "a"}, format="json")
     assert resp.status_code == 400
     assert "error" in resp.data
 
 
-def test_post_missing_q_returns_400():
-    resp = APIClient().post("/api/geocode/", {}, format="json")
+def test_post_missing_q_returns_400(auth_client):
+    resp = auth_client.post("/api/geocode/", {}, format="json")
     assert resp.status_code == 400
     assert "error" in resp.data

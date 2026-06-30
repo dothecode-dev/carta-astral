@@ -1,8 +1,8 @@
 import datetime
+import uuid
 
 import pytest
 from django.core.cache import cache
-from rest_framework.test import APIClient
 
 from api import interpretation_service as svc
 from api.models import BirthData, Chart, Interpretation
@@ -78,47 +78,49 @@ def fake_client(monkeypatch, settings):
     monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
 
 
-def test_post_returns_interpretation(fake_client):
+def test_post_returns_interpretation(auth_client, fake_client):
     c = _chart()
-    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {"lang": "es"}, format="json")
+    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 200
     assert set(resp.data) == {"text", "lang", "prompt_version", "disclaimer", "created_at"}
     assert resp.data["text"] == "tu carta dice..."
     assert resp.data["disclaimer"] == svc.DISCLAIMERS["es"]
 
 
-def test_default_lang_es(fake_client):
+def test_default_lang_es(auth_client, fake_client):
     c = _chart()
-    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {}, format="json")
+    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {}, format="json")
     assert resp.status_code == 200
     assert resp.data["lang"] == "es"
 
 
-def test_invalid_lang_400(fake_client):
+def test_invalid_lang_400(auth_client, fake_client):
     c = _chart()
-    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {"lang": "fr"}, format="json")
+    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "fr"}, format="json")
     assert resp.status_code == 400
     assert "error" in resp.data
 
 
-def test_missing_chart_404(fake_client):
-    resp = APIClient().post("/api/charts/999999/interpretation/", {"lang": "es"}, format="json")
+def test_missing_chart_404(auth_client, fake_client):
+    resp = auth_client.post(
+        f"/api/charts/{uuid.uuid4()}/interpretation/", {"lang": "es"}, format="json"
+    )
     assert resp.status_code == 404
 
 
-def test_llm_error_503(monkeypatch, settings):
+def test_llm_error_503(auth_client, monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
     c = _chart()
-    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {"lang": "es"}, format="json")
+    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 503
     assert "error" in resp.data
     assert Interpretation.objects.count() == 0
 
 
-def test_cap_reached_503(monkeypatch, settings):
+def test_cap_reached_503(auth_client, monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 0
     monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
     c = _chart()
-    resp = APIClient().post(f"/api/charts/{c.id}/interpretation/", {"lang": "es"}, format="json")
+    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 503
