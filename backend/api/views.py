@@ -12,15 +12,18 @@ from core.exceptions import CoreError
 from interpret.exceptions import InterpretationError
 
 from api import geocode
+from api.auth import InstallationTokenAuthentication
 from api.chart_service import create_chart
 from api.identity import new_token
 from api.interpretation_service import (
     DISCLAIMERS,
     CapReached,
     QuotaExceeded,
+    credits_available,
     get_or_create_interpretation,
 )
 from api.models import Chart, Installation
+from api.permissions import HasInstallation
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,14 @@ class InstallationCreateView(APIView):
             {"token": clear, "credits_available": settings.INSTALL_FREE_CREDITS},
             status=status.HTTP_201_CREATED,
         )
+
+
+class InstallationMeView(APIView):
+    authentication_classes = [InstallationTokenAuthentication]
+    permission_classes = [HasInstallation]
+
+    def get(self, request):
+        return Response({"credits_available": credits_available(request.auth)})
 
 
 def _chart_repr(chart: Chart) -> dict:
