@@ -3,7 +3,7 @@ from django.urls import path
 from api.views import (
     AccountMeView,
     AppleAuthView,
-    ChartCreateView,
+    ChartCollectionView,
     ChartDetailView,
     GeocodeView,
     GoogleAuthView,
@@ -16,7 +16,7 @@ urlpatterns = [
     path("installations/", InstallationCreateView.as_view()),
     path("installations/me/", InstallationMeView.as_view()),
     path("account/me", AccountMeView.as_view()),
-    path("charts/", ChartCreateView.as_view()),
+    path("charts/", ChartCollectionView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
     path("geocode/", GeocodeView.as_view()),

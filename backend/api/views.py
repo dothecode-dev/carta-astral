@@ -83,10 +83,25 @@ def _chart_repr(chart: Chart) -> dict:
     }
 
 
-class ChartCreateView(APIView):
+class ChartCollectionView(APIView):
+    authentication_classes = [AccountTokenAuthentication]
+    permission_classes = [HasAccount]
+    throttle_scope = "chart"
+
+    def get_throttles(self):
+        # El throttle de creación (scope "chart") aplica SÓLO al POST: crear una
+        # carta calcula efemérides (CPU). El GET de listado no gasta ese cupo.
+        if self.request.method == "POST":
+            return [ScopedRateThrottle()]
+        return []
+
+    def get(self, request):
+        charts = Chart.objects.filter(account=request.user).order_by("-created_at")
+        return Response({"results": [_chart_repr(c) for c in charts]})
+
     def post(self, request):
         try:
-            chart = create_chart(request.data)
+            chart = create_chart(request.data, request.user)
         except (KeyError, ValueError, CoreError) as exc:
             logger.warning("chart creation rejected: %s", exc, exc_info=True)
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -94,8 +109,11 @@ class ChartCreateView(APIView):
 
 
 class ChartDetailView(APIView):
+    authentication_classes = [AccountTokenAuthentication]
+    permission_classes = [HasAccount]
+
     def get(self, request, uuid):
-        chart = get_object_or_404(Chart, uuid=uuid)
+        chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
         return Response(_chart_repr(chart))
 
 

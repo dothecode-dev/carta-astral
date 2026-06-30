@@ -11,7 +11,7 @@ from api.serializers import serialize_chart_data
 from api.versioning import engine_version
 
 
-def create_chart(payload: dict) -> Chart:
+def create_chart(payload: dict, account) -> Chart:
     date = datetime.date.fromisoformat(payload["date"])
     time_known = bool(payload.get("time_known", payload.get("time") is not None))
     time = (
@@ -42,4 +42,5 @@ def create_chart(payload: dict) -> Chart:
         return Chart.objects.create(
             birth_data=birth_data, house_system=chart_data.house_system, zodiac=chart_data.zodiac,
             data=serialize_chart_data(chart_data), engine_version=engine_version(),
+            account=account,
         )
