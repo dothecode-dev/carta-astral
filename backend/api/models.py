@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -90,6 +91,28 @@ class Installation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     # para DRF: la instalación actúa como "actor" autenticado
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
+
+
+def _default_free_balance():
+    return settings.INSTALL_FREE_CREDITS
+
+
+class Account(models.Model):
+    """Cuenta real del usuario (identidad SSO). Sostiene créditos y cartas."""
+
+    email = models.EmailField(blank=True, default="")
+    email_verified = models.BooleanField(default=False)
+    free_balance = models.PositiveIntegerField(default=_default_free_balance)
+    paid_balance = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
     @property
     def is_authenticated(self) -> bool:
         return True
