@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,13 +23,41 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$-4_@!44ff*g(ppt70mbj9czrqiy^7i4w$@3m29yr_!%yvf$cp'
+# DEBUG=1 para desarrollo; en prod se deja sin setear (False).
+DEBUG = os.environ.get("DEBUG", "0") == "1"
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# SECRET_KEY desde env en prod. El fallback inseguro SOLO existe con DEBUG=1;
+# sin DEBUG y sin SECRET_KEY, fail-fast (no arrancar con una key conocida).
+SECRET_KEY = os.environ.get("SECRET_KEY") or (
+    "django-insecure-$-4_@!44ff*g(ppt70mbj9czrqiy^7i4w$@3m29yr_!%yvf$cp" if DEBUG else ""
+)
+if not SECRET_KEY:
+    raise ImproperlyConfigured("SECRET_KEY env var es obligatoria cuando DEBUG está apagado")
 
-ALLOWED_HOSTS = []
+# Lista separada por comas, p.ej. "api.midominio.com,carta-astral.midominio.com".
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
+# Necesario para el admin (POST de login) sobre HTTPS detrás del proxy de Coolify.
+# Lista separada por comas con esquema, p.ej. "https://api.midominio.com".
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
+]
+
+# Coolify/Traefik terminan TLS y reenvían con X-Forwarded-Proto. Sin esto, Django
+# cree que toda request es http y rompe redirects/cookies seguras detrás del proxy.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Hardening sólo en prod (DEBUG off). El redirect HTTP->HTTPS lo hace Coolify/Traefik,
+# NO Django (SECURE_SSL_REDIRECT), porque el healthcheck interno pega por HTTP sin el
+# header X-Forwarded-Proto y un redirect lo haría fallar.
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 año
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # conservador: no fuerza HSTS en otros subdominios
 
 
 # Application definition
@@ -46,6 +75,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -148,3 +178,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# WhiteNoise sirve el static del admin sin necesidad de Nginx/CDN. Manifest +
+# compresión: requiere `collectstatic` (se corre en el build de la imagen).
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
