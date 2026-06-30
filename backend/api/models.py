@@ -18,6 +18,9 @@ class BirthData(models.Model):
 
 class Chart(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="charts",
+    )
     birth_data = models.ForeignKey(BirthData, on_delete=models.CASCADE, related_name="charts")
     house_system = models.CharField(max_length=20, default="Placidus")
     zodiac = models.CharField(max_length=20, default="Tropical")
@@ -54,6 +57,9 @@ class Interpretation(models.Model):
         "Installation", on_delete=models.SET_NULL,
         null=True, blank=True, related_name="interpretations",
     )
+    account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="interpretations",
+    )
     lang = models.CharField(max_length=2)
     prompt_version = models.CharField(max_length=20)
     text = models.TextField()
@@ -61,6 +67,34 @@ class Interpretation(models.Model):
 
     class Meta:
         unique_together = ("chart", "lang", "prompt_version")
+
+
+class CreditTransaction(models.Model):
+    """Ledger append-only de créditos. Fuente de verdad financiera; el balance
+    de Account se reconcilia con la suma de amount por lote."""
+
+    KINDS = (
+        ("free_grant", "free_grant"), ("purchase", "purchase"),
+        ("consumption", "consumption"), ("refund", "refund"), ("adjustment", "adjustment"),
+    )
+    LOTS = (("free", "free"), ("paid", "paid"))
+    account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="credit_txns",
+    )
+    kind = models.CharField(max_length=20, choices=KINDS)
+    lot = models.CharField(max_length=4, choices=LOTS)
+    amount = models.IntegerField()  # signed: + ingresa, - consume
+    interpretation = models.ForeignKey(
+        Interpretation, on_delete=models.SET_NULL, null=True, blank=True, related_name="credit_txns",
+    )
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.kind} {self.amount} (acc={self.account_id})"
 
 
 class GeoNameToken(models.Model):
