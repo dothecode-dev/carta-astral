@@ -1,0 +1,18 @@
+# Entorno y caches locales (no van a la imagen).
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# La DB local (con el dataset GeoNames importado) pesa y no debe viajar.
+*.sqlite3
+db.sqlite3
+
+# El static se genera en el build con collectstatic.
+staticfiles/
+
+# Script de exploración, no es código de prod.
+spike_kerykeion.py
