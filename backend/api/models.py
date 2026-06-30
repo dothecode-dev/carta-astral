@@ -139,3 +139,12 @@ class Session(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField()
+
+
+class SubTombstone(models.Model):
+    """Recuerda cuánto free-tier consumió una identidad SSO borrada, para que
+    re-crear la cuenta no regale otra gratis. Hash anónimo, sin PII."""
+
+    sub_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    free_credits_consumed = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
