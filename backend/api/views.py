@@ -117,7 +117,7 @@ class InterpretationView(APIView):
                 {"error": f"lang debe ser uno de {_INTERPRETATION_LANGS}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        chart = get_object_or_404(Chart, uuid=uuid)
+        chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
         try:
             interp = get_or_create_interpretation(chart, lang, request.user)
         except QuotaExceeded:

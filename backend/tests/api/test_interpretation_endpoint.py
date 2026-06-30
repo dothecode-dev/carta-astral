@@ -17,7 +17,7 @@ def _clear_cache():
     cache.clear()
 
 
-def _chart():
+def _chart(account=None):
     bd = BirthData.objects.create(
         date=datetime.date(1989, 7, 14),
         time=datetime.time(23, 45),
@@ -26,7 +26,7 @@ def _chart():
         lng=-58.4,
         tz_name="America/Argentina/Buenos_Aires",
     )
-    return Chart.objects.create(birth_data=bd, data={"time_known": True}, engine_version="test")
+    return Chart.objects.create(birth_data=bd, data={"time_known": True}, engine_version="test", account=account)
 
 
 class _Stream:
@@ -79,7 +79,7 @@ def fake_client(monkeypatch, settings):
 
 
 def test_post_returns_interpretation(account_client, fake_client):
-    c = _chart()
+    c = _chart(account=account_client.account)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 200
     assert set(resp.data) == {"text", "lang", "prompt_version", "disclaimer", "created_at"}
@@ -88,14 +88,14 @@ def test_post_returns_interpretation(account_client, fake_client):
 
 
 def test_default_lang_es(account_client, fake_client):
-    c = _chart()
+    c = _chart(account=account_client.account)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {}, format="json")
     assert resp.status_code == 200
     assert resp.data["lang"] == "es"
 
 
 def test_invalid_lang_400(account_client, fake_client):
-    c = _chart()
+    c = _chart(account=account_client.account)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "fr"}, format="json")
     assert resp.status_code == 400
     assert "error" in resp.data
@@ -111,7 +111,7 @@ def test_missing_chart_404(account_client, fake_client):
 def test_llm_error_503(account_client, monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
-    c = _chart()
+    c = _chart(account=account_client.account)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 503
     assert "error" in resp.data
@@ -121,7 +121,7 @@ def test_llm_error_503(account_client, monkeypatch, settings):
 def test_cap_reached_503(account_client, monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 0
     monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
-    c = _chart()
+    c = _chart(account=account_client.account)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 503
 
@@ -139,7 +139,7 @@ def test_paid_generation_bypasses_cap_via_endpoint(make_account, monkeypatch, se
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
-    c = _chart()
+    c = _chart(account=acc)
     resp = client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 200
 
@@ -157,7 +157,7 @@ def test_no_credits_returns_402(make_account, monkeypatch):
     client_built = []
     monkeypatch.setattr(svc, "_build_client", lambda: client_built.append(1) or _FakeClient())
 
-    c = _chart()
+    c = _chart(account=acc)
     resp = client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
 
     assert resp.status_code == 402

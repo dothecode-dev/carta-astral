@@ -10,7 +10,7 @@ import logging
 import anthropic
 from django.conf import settings
 from django.core.cache import cache
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from api import ledger
@@ -84,10 +84,11 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
 
         def _factory():
             try:
-                return Interpretation.objects.create(
-                    chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
-                    text=text, account=account,
-                )
+                with transaction.atomic():
+                    return Interpretation.objects.create(
+                        chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
+                        text=text, account=account,
+                    )
             except IntegrityError:
                 return _existing(chart, lang)
 

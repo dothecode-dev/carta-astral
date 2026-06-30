@@ -14,6 +14,32 @@ PAYLOAD = {"date": "1990-05-20", "time": "10:30", "lat": -34.6, "lng": -58.4}
 
 
 @pytest.mark.django_db
+def test_interpretation_scoped_to_account(monkeypatch, settings):
+    """Account B cannot interpret account A's chart — must get 404 (multi-tenancy isolation)."""
+    import api.interpretation_service as svc
+
+    settings.INTERPRETATION_DAILY_CAP = 100
+    # Prevent actual LLM call; if the scoping bug exists B would reach this and get 200.
+    monkeypatch.setattr(svc, "build_interpretation", lambda *a, **kw: "fake text")
+
+    a = Account.objects.create()
+    b = Account.objects.create()
+
+    # A creates a chart (chart.account = a)
+    resp = _client(a).post("/api/charts/", PAYLOAD, format="json")
+    assert resp.status_code == 201
+    a_uuid = resp.data["id"]
+
+    # B tries to interpret A's chart — must be 404, not a cross-account read
+    resp = _client(b).post(
+        f"/api/charts/{a_uuid}/interpretation/",
+        {"lang": "es"},
+        format="json",
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
 def test_chart_visible_only_to_owner():
     a = Account.objects.create()
     b = Account.objects.create()
