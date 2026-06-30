@@ -24,11 +24,10 @@ from api.interpretation_service import (
     DISCLAIMERS,
     CapReached,
     QuotaExceeded,
-    credits_available,
     get_or_create_interpretation,
 )
 from api.ledger import credits_available as account_credits_available
-from api.models import Chart, Installation
+from api.models import Chart, Installation, Interpretation
 from api.permissions import HasAccount, HasInstallation
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
@@ -57,7 +56,10 @@ class InstallationMeView(APIView):
     permission_classes = [HasInstallation]
 
     def get(self, request):
-        return Response({"credits_available": credits_available(request.auth)})
+        inst = request.auth
+        used = Interpretation.objects.filter(installation=inst).count()
+        avail = settings.INSTALL_FREE_CREDITS + inst.purchased_credits - used
+        return Response({"credits_available": avail})
 
 
 class AccountMeView(APIView):
@@ -109,6 +111,8 @@ class GeocodeView(APIView):
 
 
 class InterpretationView(APIView):
+    authentication_classes = [AccountTokenAuthentication]
+    permission_classes = [HasAccount]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "interpretation"
 
@@ -121,7 +125,7 @@ class InterpretationView(APIView):
             )
         chart = get_object_or_404(Chart, uuid=uuid)
         try:
-            interp = get_or_create_interpretation(chart, lang, request.auth)
+            interp = get_or_create_interpretation(chart, lang, request.user)
         except QuotaExceeded:
             return Response(
                 {"error": "sin créditos disponibles"},

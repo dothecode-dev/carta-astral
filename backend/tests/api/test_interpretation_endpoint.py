@@ -78,63 +78,87 @@ def fake_client(monkeypatch, settings):
     monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
 
 
-def test_post_returns_interpretation(auth_client, fake_client):
+def test_post_returns_interpretation(account_client, fake_client):
     c = _chart()
-    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 200
     assert set(resp.data) == {"text", "lang", "prompt_version", "disclaimer", "created_at"}
     assert resp.data["text"] == "tu carta dice..."
     assert resp.data["disclaimer"] == svc.DISCLAIMERS["es"]
 
 
-def test_default_lang_es(auth_client, fake_client):
+def test_default_lang_es(account_client, fake_client):
     c = _chart()
-    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {}, format="json")
+    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {}, format="json")
     assert resp.status_code == 200
     assert resp.data["lang"] == "es"
 
 
-def test_invalid_lang_400(auth_client, fake_client):
+def test_invalid_lang_400(account_client, fake_client):
     c = _chart()
-    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "fr"}, format="json")
+    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "fr"}, format="json")
     assert resp.status_code == 400
     assert "error" in resp.data
 
 
-def test_missing_chart_404(auth_client, fake_client):
-    resp = auth_client.post(
+def test_missing_chart_404(account_client, fake_client):
+    resp = account_client.post(
         f"/api/charts/{uuid.uuid4()}/interpretation/", {"lang": "es"}, format="json"
     )
     assert resp.status_code == 404
 
 
-def test_llm_error_503(auth_client, monkeypatch, settings):
+def test_llm_error_503(account_client, monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
     c = _chart()
-    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 503
     assert "error" in resp.data
     assert Interpretation.objects.count() == 0
 
 
-def test_cap_reached_503(auth_client, monkeypatch, settings):
+def test_cap_reached_503(account_client, monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 0
     monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
     c = _chart()
-    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 503
 
 
-def test_no_credits_returns_402(auth_client, monkeypatch, settings):
+def test_paid_generation_bypasses_cap_via_endpoint(make_account, monkeypatch, settings):
+    """RF9 via HTTP: paid credit bypasses INTERPRETATION_DAILY_CAP=0 and returns 200."""
+    from rest_framework.test import APIClient
+    from api.auth import create_session
+
+    settings.INTERPRETATION_DAILY_CAP = 0
+    monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
+
+    acc = make_account(free_balance=0, paid_balance=1)
+    token = create_session(acc)
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    c = _chart()
+    resp = client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    assert resp.status_code == 200
+
+
+def test_no_credits_returns_402(make_account, monkeypatch):
     """Zero available credits returns 402, no Interpretation is created, Claude is not called."""
-    settings.INSTALL_FREE_CREDITS = 0  # auth_client has purchased_credits=0 → 0 available
+    from rest_framework.test import APIClient
+    from api.auth import create_session
+
+    acc = make_account(free_balance=0, paid_balance=0)
+    token = create_session(acc)
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
     client_built = []
     monkeypatch.setattr(svc, "_build_client", lambda: client_built.append(1) or _FakeClient())
 
     c = _chart()
-    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
 
     assert resp.status_code == 402
     assert Interpretation.objects.count() == 0

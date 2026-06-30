@@ -3,20 +3,20 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from api import interpretation_service as svc
-from api.identity import new_token
 from api.interpretation_service import (
     QuotaExceeded,
     credits_available,
     get_or_create_interpretation,
 )
-from api.models import BirthData, Chart, Installation
+from api.models import Account, BirthData, Chart, Interpretation
 
 pytestmark = pytest.mark.django_db
 
 
-def _inst():
-    _, h = new_token()
-    return Installation.objects.create(token_hash=h)
+def _account(free_balance=None, paid_balance=0):
+    from django.conf import settings
+    fb = settings.INSTALL_FREE_CREDITS if free_balance is None else free_balance
+    return Account.objects.create(free_balance=fb, paid_balance=paid_balance)
 
 
 def _chart():
@@ -29,39 +29,35 @@ def _chart():
 
 def test_available_starts_at_free_credits(settings):
     settings.INSTALL_FREE_CREDITS = 3
-    assert credits_available(_inst()) == 3
+    assert credits_available(_account()) == 3
 
 
-def test_quota_exceeded_blocks_new_generation(settings, monkeypatch):
+def test_quota_exceeded_blocks_new_generation(settings):
     settings.INSTALL_FREE_CREDITS = 0
-    inst = _inst()
+    acc = _account()  # free_balance=0, paid_balance=0
     with pytest.raises(QuotaExceeded):
-        get_or_create_interpretation(_chart(), "es", inst)
+        get_or_create_interpretation(_chart(), "es", acc)
 
 
 def test_cache_hit_served_with_zero_credits(settings):
     settings.INSTALL_FREE_CREDITS = 0
-    inst = _inst()
+    acc = _account()  # free_balance=0, paid_balance=0
     chart = _chart()
-    from api.models import Interpretation
     from interpret.prompts import PROMPT_VERSION
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="cached", installation=inst
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="cached", account=acc
     )
     # 0 créditos pero ya existe: se sirve sin error
-    out = get_or_create_interpretation(chart, "es", inst)
+    out = get_or_create_interpretation(chart, "es", acc)
     assert out.text == "cached"
 
 
-def test_paid_generation_bypasses_daily_cap(settings, monkeypatch):
+def test_paid_generation_bypasses_daily_cap(monkeypatch, settings):
     """RF9: a paid generation bypasses the global daily cap and does not increment it."""
-    from api.models import Interpretation
+    settings.INSTALL_FREE_CREDITS = 0
+    settings.INTERPRETATION_DAILY_CAP = 0  # cap at its limit for free generations
 
-    settings.INSTALL_FREE_CREDITS = 0       # every generation is paid (used >= 0 == free_credits)
-    settings.INTERPRETATION_DAILY_CAP = 0   # cap is at its limit for free generations
-
-    _, h = new_token()
-    inst = Installation.objects.create(token_hash=h, purchased_credits=5)
+    acc = Account.objects.create(free_balance=0, paid_balance=1)
     chart = _chart()
 
     class _Stream:
@@ -85,7 +81,7 @@ def test_paid_generation_bypasses_daily_cap(settings, monkeypatch):
     cache.clear()
 
     before = cache.get(cap_key)
-    interp = get_or_create_interpretation(chart, "es", inst)
+    interp = get_or_create_interpretation(chart, "es", acc)
     after = cache.get(cap_key)
 
     assert isinstance(interp, Interpretation)
