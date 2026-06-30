@@ -1,7 +1,9 @@
 import logging
 
+from django.conf import settings
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -11,16 +13,32 @@ from interpret.exceptions import InterpretationError
 
 from api import geocode
 from api.chart_service import create_chart
+from api.identity import new_token
 from api.interpretation_service import (
     DISCLAIMERS,
     CapReached,
     get_or_create_interpretation,
 )
-from api.models import Chart
+from api.models import Chart, Installation
 
 logger = logging.getLogger(__name__)
 
 _INTERPRETATION_LANGS = ("es", "en", "pt")
+
+
+class InstallationCreateView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "install"
+
+    def post(self, request):
+        clear, token_hash = new_token()
+        Installation.objects.create(token_hash=token_hash)
+        return Response(
+            {"token": clear, "credits_available": settings.INSTALL_FREE_CREDITS},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 def _chart_repr(chart: Chart) -> dict:

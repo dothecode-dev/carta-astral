@@ -120,6 +120,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_THROTTLE_RATES": {
         "interpretation": os.environ.get("INTERPRETATION_RATE", "20/day"),
+        "install": os.environ.get("INSTALL_RATE", "30/day"),
     },
 }
 
@@ -127,6 +128,7 @@ REST_FRAMEWORK = {
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 # Tope global diario de generaciones NUEVAS (cache miss). Las cacheadas no cuentan.
 INTERPRETATION_DAILY_CAP = int(os.environ.get("INTERPRETATION_DAILY_CAP", "500"))
+INSTALL_FREE_CREDITS = int(os.environ.get("INSTALL_FREE_CREDITS", "3"))
 
 # Cache compartido entre workers: el throttle, el tope global y el lock viven
 # acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache

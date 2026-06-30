@@ -4,10 +4,12 @@ from api.views import (
     ChartCreateView,
     ChartDetailView,
     GeocodeView,
+    InstallationCreateView,
     InterpretationView,
 )
 
 urlpatterns = [
+    path("installations/", InstallationCreateView.as_view()),
     path("charts/", ChartCreateView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
