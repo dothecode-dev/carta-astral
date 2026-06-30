@@ -131,3 +131,11 @@ class ProviderIdentity(models.Model):
 
     class Meta:
         unique_together = ("provider", "sub")
+
+
+class Session(models.Model):
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="sessions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField()
