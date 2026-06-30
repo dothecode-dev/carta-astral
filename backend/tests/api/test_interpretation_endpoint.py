@@ -124,3 +124,18 @@ def test_cap_reached_503(auth_client, monkeypatch, settings):
     c = _chart()
     resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 503
+
+
+def test_no_credits_returns_402(auth_client, monkeypatch, settings):
+    """Zero available credits returns 402, no Interpretation is created, Claude is not called."""
+    settings.INSTALL_FREE_CREDITS = 0  # auth_client has purchased_credits=0 → 0 available
+
+    client_built = []
+    monkeypatch.setattr(svc, "_build_client", lambda: client_built.append(1) or _FakeClient())
+
+    c = _chart()
+    resp = auth_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+
+    assert resp.status_code == 402
+    assert Interpretation.objects.count() == 0
+    assert client_built == []  # _build_client (and thus Claude) was never called

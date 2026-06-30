@@ -1,5 +1,8 @@
 import pytest
+from django.core.cache import cache
+from django.utils import timezone
 
+from api import interpretation_service as svc
 from api.identity import new_token
 from api.interpretation_service import (
     QuotaExceeded,
@@ -48,3 +51,43 @@ def test_cache_hit_served_with_zero_credits(settings):
     # 0 créditos pero ya existe: se sirve sin error
     out = get_or_create_interpretation(chart, "es", inst)
     assert out.text == "cached"
+
+
+def test_paid_generation_bypasses_daily_cap(settings, monkeypatch):
+    """RF9: a paid generation bypasses the global daily cap and does not increment it."""
+    from api.models import Interpretation
+
+    settings.INSTALL_FREE_CREDITS = 0       # every generation is paid (used >= 0 == free_credits)
+    settings.INTERPRETATION_DAILY_CAP = 0   # cap is at its limit for free generations
+
+    _, h = new_token()
+    inst = Installation.objects.create(token_hash=h, purchased_credits=5)
+    chart = _chart()
+
+    class _Stream:
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def get_final_message(self):
+            class R:
+                content = [type("B", (), {"type": "text", "text": "paid interp"})()]
+                stop_reason = "end_turn"
+            return R()
+
+    class _FakeClient:
+        class _M:
+            def stream(self, **kw): return _Stream()
+        @property
+        def messages(self): return _FakeClient._M()
+
+    monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
+
+    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
+    cache.clear()
+
+    before = cache.get(cap_key)
+    interp = get_or_create_interpretation(chart, "es", inst)
+    after = cache.get(cap_key)
+
+    assert isinstance(interp, Interpretation)
+    assert before is None
+    assert after is None  # paid generation never touches the cap counter
