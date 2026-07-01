@@ -76,3 +76,20 @@ def test_unknown_product_acked(cfg, make_account):
     assert r.status_code == 200
     acc.refresh_from_db()
     assert acc.paid_balance == 0
+
+
+@pytest.mark.django_db
+def test_empty_secret_rejects(settings, make_account):
+    settings.REVENUECAT_WEBHOOK_AUTH = ""
+    settings.REVENUECAT_PRODUCT_CREDITS = {"credits_10": 10}
+    acc = make_account()
+    r = APIClient().post(URL, _event(app_user_id=str(acc.id)), format="json",
+                         HTTP_AUTHORIZATION="")
+    assert r.status_code == 401
+
+
+@pytest.mark.django_db
+def test_non_numeric_app_user_id_acked(cfg):
+    r = APIClient().post(URL, _event(app_user_id="$RCAnonymousID:abc123"),
+                         format="json", HTTP_AUTHORIZATION="secret-abc")
+    assert r.status_code == 200
