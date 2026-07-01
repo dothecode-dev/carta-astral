@@ -5,6 +5,7 @@ Account para serializar consumos concurrentes de la misma cuenta (cierra el
 doble gasto). Toda mutación de balance deja su CreditTransaction.
 """
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 
 from api.exceptions import QuotaExceeded
@@ -50,6 +51,31 @@ def grant_paid(account, n: int, note: str = "") -> None:
             account=acc, kind="purchase", lot="paid", amount=n, note=note,
         )
     account.paid_balance = acc.paid_balance
+
+
+def refund_credits(account, n: int, external_id: str, note: str = "") -> bool:
+    """Revierte n créditos (clawback; saldo puede quedar negativo) de forma
+    idempotente. Incrementa refund_count y marca la cuenta al cruzar el umbral.
+    Devuelve True si aplicó, False si ya estaba procesado."""
+    with transaction.atomic():
+        acc = Account.objects.select_for_update().get(pk=account.pk)
+        try:
+            with transaction.atomic():
+                CreditTransaction.objects.create(
+                    account=acc, kind="refund", lot="paid",
+                    amount=-n, external_id=external_id, note=note,
+                )
+        except IntegrityError:
+            return False
+        acc.paid_balance -= n
+        acc.refund_count += 1
+        if acc.refund_count >= settings.REFUND_FLAG_THRESHOLD:
+            acc.flagged = True
+        acc.save(update_fields=["paid_balance", "refund_count", "flagged"])
+    account.paid_balance = acc.paid_balance
+    account.refund_count = acc.refund_count
+    account.flagged = acc.flagged
+    return True
 
 
 def credit_purchase(account, n: int, external_id: str, note: str = "") -> bool:

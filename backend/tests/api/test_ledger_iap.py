@@ -48,3 +48,38 @@ def test_credit_purchase_is_idempotent(make_account):
     acc.refresh_from_db()
     assert acc.paid_balance == 10  # no duplicó
     assert acc.credit_txns.filter(external_id="evt_A").count() == 1
+
+
+@pytest.mark.django_db
+def test_refund_can_drive_balance_negative(make_account):
+    from api import ledger
+    acc = make_account(paid_balance=1)
+    assert ledger.refund_credits(acc, 5, external_id="rf_1") is True
+    acc.refresh_from_db()
+    assert acc.paid_balance == -4  # clawback total, saldo negativo permitido
+    assert acc.credit_txns.filter(kind="refund", amount=-5, external_id="rf_1").count() == 1
+    assert acc.refund_count == 1
+
+
+@pytest.mark.django_db
+def test_refund_is_idempotent(make_account):
+    from api import ledger
+    acc = make_account(paid_balance=10)
+    ledger.refund_credits(acc, 5, external_id="rf_1")
+    assert ledger.refund_credits(acc, 5, external_id="rf_1") is False
+    acc.refresh_from_db()
+    assert acc.paid_balance == 5
+    assert acc.refund_count == 1
+
+
+@pytest.mark.django_db
+def test_refund_sets_flag_at_threshold(make_account, settings):
+    from api import ledger
+    settings.REFUND_FLAG_THRESHOLD = 2
+    acc = make_account(paid_balance=10)
+    ledger.refund_credits(acc, 1, external_id="rf_1")
+    acc.refresh_from_db()
+    assert acc.flagged is False
+    ledger.refund_credits(acc, 1, external_id="rf_2")
+    acc.refresh_from_db()
+    assert acc.flagged is True
