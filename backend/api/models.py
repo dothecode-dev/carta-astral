@@ -83,11 +83,19 @@ class CreditTransaction(models.Model):
     interpretation = models.ForeignKey(
         Interpretation, on_delete=models.SET_NULL, null=True, blank=True, related_name="credit_txns",
     )
+    external_id = models.CharField(max_length=255, blank=True, default="")
     note = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["external_id"],
+                condition=models.Q(external_id__gt=""),
+                name="uniq_credit_txn_external_id",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.kind} {self.amount} (acc={self.account_id})"
@@ -122,7 +130,9 @@ class Account(models.Model):
     email = models.EmailField(blank=True, default="")
     email_verified = models.BooleanField(default=False)
     free_balance = models.PositiveIntegerField(default=_default_free_balance)
-    paid_balance = models.PositiveIntegerField(default=0)
+    paid_balance = models.IntegerField(default=0)  # signed: clawback de reembolso puede dejarlo negativo
+    refund_count = models.PositiveIntegerField(default=0)
+    flagged = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property

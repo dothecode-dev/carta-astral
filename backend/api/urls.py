@@ -9,6 +9,7 @@ from api.views import (
     GoogleAuthView,
     InterpretationView,
 )
+from api.webhooks import RevenueCatWebhookView
 
 urlpatterns = [
     path("account/", AccountView.as_view()),
@@ -18,4 +19,5 @@ urlpatterns = [
     path("geocode/", GeocodeView.as_view()),
     path("auth/apple", AppleAuthView.as_view()),
     path("auth/google", GoogleAuthView.as_view()),
+    path("webhooks/revenuecat", RevenueCatWebhookView.as_view()),
 ]

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -142,6 +143,14 @@ APPLE_JWKS_URL = os.environ.get("APPLE_JWKS_URL", "https://appleid.apple.com/aut
 GOOGLE_JWKS_URL = os.environ.get("GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs")
 JWKS_TTL_SECONDS = int(os.environ.get("JWKS_TTL_SECONDS", str(12 * 3600)))
 SESSION_TTL_DAYS = int(os.environ.get("SESSION_TTL_DAYS", "90"))
+
+# --- IAP / RevenueCat ---
+# Header Authorization que RevenueCat manda en cada webhook (Dashboard → Webhooks).
+REVENUECAT_WEBHOOK_AUTH = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")
+# Mapa product_id (App Store / Play) → créditos que otorga. JSON en env.
+REVENUECAT_PRODUCT_CREDITS = json.loads(os.environ.get("REVENUECAT_PRODUCT_CREDITS", "{}"))
+# Cantidad de reembolsos que marca una cuenta como abuso.
+REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 
 # Cache compartido entre workers: el throttle, el tope global y el lock viven
 # acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache
