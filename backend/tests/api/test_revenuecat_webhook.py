@@ -53,7 +53,7 @@ def test_purchase_idempotent_on_retry(cfg, make_account):
 @pytest.mark.django_db
 def test_refund_clawbacks(cfg, make_account):
     acc = make_account(paid_balance=10)
-    r = APIClient().post(URL, _event(type="CANCELLATION", id="rf_1", app_user_id=str(acc.id)),
+    r = APIClient().post(URL, _event(type="REFUND", id="rf_1", app_user_id=str(acc.id)),
                          format="json", HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200
     acc.refresh_from_db()
@@ -92,4 +92,28 @@ def test_empty_secret_rejects(settings, make_account):
 def test_non_numeric_app_user_id_acked(cfg):
     r = APIClient().post(URL, _event(app_user_id="$RCAnonymousID:abc123"),
                          format="json", HTTP_AUTHORIZATION="secret-abc")
+    assert r.status_code == 200
+
+
+@pytest.mark.django_db
+def test_missing_app_user_id_acked(cfg):
+    ev = _event()
+    del ev["event"]["app_user_id"]
+    r = APIClient().post(URL, ev, format="json", HTTP_AUTHORIZATION="secret-abc")
+    assert r.status_code == 200
+
+
+@pytest.mark.django_db
+def test_unhandled_event_type_acked(cfg, make_account):
+    acc = make_account(paid_balance=0)
+    r = APIClient().post(URL, _event(type="RENEWAL", app_user_id=str(acc.id)),
+                         format="json", HTTP_AUTHORIZATION="secret-abc")
+    assert r.status_code == 200
+    acc.refresh_from_db()
+    assert acc.paid_balance == 0
+
+
+@pytest.mark.django_db
+def test_non_dict_body_acked(cfg):
+    r = APIClient().post(URL, [1, 2, 3], format="json", HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200

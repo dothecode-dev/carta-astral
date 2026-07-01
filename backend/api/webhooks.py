@@ -4,6 +4,13 @@ Idempotente por event.id. Autentica por header compartido. Ack (200) ante
 casos ignorados (cuenta/producto/tipo desconocido) para cortar reintentos;
 solo 401 ante fallo de auth. Ver mini-spec del plan para el mapeo de eventos,
 que DEBE verificarse contra un webhook real antes de prod.
+
+CANCELLATION (RevenueCat: el usuario apaga el auto-renew, NO implica
+devolución de dinero) se excluye intencionalmente de REFUND_EVENTS para evitar
+marcar usuarios legítimos. Task 7 debe confirmar — contra un evento real de
+RevenueCat — cuál type dispara el reembolso de un CONSUMABLE; si los
+consumables llegan como CANCELLATION con cancel_reason específico, re-agregar
+ese gate aquí.
 """
 
 import logging
@@ -21,7 +28,7 @@ from api.models import Account
 logger = logging.getLogger(__name__)
 
 PURCHASE_EVENTS = {"INITIAL_PURCHASE", "NON_RENEWING_PURCHASE"}
-REFUND_EVENTS = {"CANCELLATION", "REFUND"}
+REFUND_EVENTS = {"REFUND"}
 
 
 class RevenueCatWebhookView(APIView):
@@ -35,7 +42,11 @@ class RevenueCatWebhookView(APIView):
             logger.warning("revenuecat webhook: auth inválida")
             return Response({"error": "unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        event = request.data.get("event") or {}
+        body = request.data
+        if not isinstance(body, dict):
+            logger.warning("revenuecat webhook: body no es un objeto JSON")
+            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+        event = body.get("event") or {}
         etype = event.get("type")
         event_id = event.get("id")
         app_user_id = event.get("app_user_id")

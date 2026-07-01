@@ -66,7 +66,11 @@ def refund_credits(account, n: int, external_id: str, note: str = "") -> bool:
                     amount=-n, external_id=external_id, note=note,
                 )
         except IntegrityError:
-            return False
+            # Solo es duplicado si esa external_id ya existe; cualquier otro
+            # IntegrityError se propaga (no perder un crédito por un error real).
+            if CreditTransaction.objects.filter(external_id=external_id).exists():
+                return False
+            raise
         acc.paid_balance -= n
         acc.refund_count += 1
         if acc.refund_count >= settings.REFUND_FLAG_THRESHOLD:
@@ -90,7 +94,11 @@ def credit_purchase(account, n: int, external_id: str, note: str = "") -> bool:
                     amount=n, external_id=external_id, note=note,
                 )
         except IntegrityError:
-            return False  # external_id ya visto: reintento del webhook
+            # Solo es duplicado si esa external_id ya existe; cualquier otro
+            # IntegrityError se propaga (no perder un crédito por un error real).
+            if CreditTransaction.objects.filter(external_id=external_id).exists():
+                return False
+            raise
         acc.paid_balance += n
         acc.save(update_fields=["paid_balance"])
     account.paid_balance = acc.paid_balance
