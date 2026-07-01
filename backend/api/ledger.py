@@ -5,7 +5,7 @@ Account para serializar consumos concurrentes de la misma cuenta (cierra el
 doble gasto). Toda mutación de balance deja su CreditTransaction.
 """
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from api.exceptions import QuotaExceeded
 from api.models import Account, CreditTransaction
@@ -50,3 +50,22 @@ def grant_paid(account, n: int, note: str = "") -> None:
             account=acc, kind="purchase", lot="paid", amount=n, note=note,
         )
     account.paid_balance = acc.paid_balance
+
+
+def credit_purchase(account, n: int, external_id: str, note: str = "") -> bool:
+    """Acredita n créditos pagos de forma idempotente por external_id.
+    Devuelve True si acreditó, False si ya estaba procesado."""
+    with transaction.atomic():
+        acc = Account.objects.select_for_update().get(pk=account.pk)
+        try:
+            with transaction.atomic():
+                CreditTransaction.objects.create(
+                    account=acc, kind="purchase", lot="paid",
+                    amount=n, external_id=external_id, note=note,
+                )
+        except IntegrityError:
+            return False  # external_id ya visto: reintento del webhook
+        acc.paid_balance += n
+        acc.save(update_fields=["paid_balance"])
+    account.paid_balance = acc.paid_balance
+    return True

@@ -27,3 +27,24 @@ def test_paid_balance_can_go_negative(make_account):
     acc.save(update_fields=["paid_balance"])
     acc.refresh_from_db()
     assert acc.paid_balance == -3
+
+
+@pytest.mark.django_db
+def test_credit_purchase_grants_once(make_account):
+    from api import ledger
+    acc = make_account(paid_balance=0)
+    assert ledger.credit_purchase(acc, 10, external_id="evt_A", note="pack10") is True
+    acc.refresh_from_db()
+    assert acc.paid_balance == 10
+    assert acc.credit_txns.filter(kind="purchase", amount=10, external_id="evt_A").count() == 1
+
+
+@pytest.mark.django_db
+def test_credit_purchase_is_idempotent(make_account):
+    from api import ledger
+    acc = make_account(paid_balance=0)
+    ledger.credit_purchase(acc, 10, external_id="evt_A")
+    assert ledger.credit_purchase(acc, 10, external_id="evt_A") is False  # reintento del webhook
+    acc.refresh_from_db()
+    assert acc.paid_balance == 10  # no duplicó
+    assert acc.credit_txns.filter(external_id="evt_A").count() == 1
