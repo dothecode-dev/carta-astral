@@ -59,6 +59,9 @@ class Interpretation(models.Model):
     lang = models.CharField(max_length=2)
     prompt_version = models.CharField(max_length=20)
     text = models.TextField()
+    # sha256 del input del LLM (chart.data canónico + lang + prompt_version).
+    # Permite reutilizar el texto entre cartas idénticas sin llamar a la API.
+    content_key = models.CharField(max_length=64, blank=True, default="", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
