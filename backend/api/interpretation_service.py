@@ -27,12 +27,15 @@ logger = logging.getLogger(__name__)
 LOCK_TTL = 30
 
 DISCLAIMERS = {
-    "es": "Esta interpretación fue generada automáticamente con fines de "
-    "entretenimiento; no es un consejo y no tiene valor predictivo demostrado.",
-    "en": "This interpretation was generated automatically for entertainment "
-    "purposes; it is not advice and has no demonstrated predictive value.",
-    "pt": "Esta interpretação foi gerada automaticamente para fins de "
-    "entretenimento; não é aconselhamento e não tem valor preditivo comprovado.",
+    "es": "Esta interpretación fue generada con inteligencia artificial con fines "
+    "de entretenimiento; no es consejo médico, legal ni financiero y no tiene "
+    "valor predictivo demostrado.",
+    "en": "This interpretation was generated with artificial intelligence for "
+    "entertainment purposes; it is not medical, legal or financial advice and "
+    "has no demonstrated predictive value.",
+    "pt": "Esta interpretação foi gerada com inteligência artificial para fins "
+    "de entretenimento; não é conselho médico, legal ou financeiro e não tem "
+    "valor preditivo comprovado.",
 }
 
 
