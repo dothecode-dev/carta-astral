@@ -227,3 +227,62 @@ def test_missing_api_key_raises_interpretation_error(settings):
     with pytest.raises(InterpretationError):
         svc.get_or_create_interpretation(_chart(), "es", _account())
     assert Interpretation.objects.count() == 0
+
+
+# --- una interpretación por carta; otros idiomas = traducción gratis ---
+
+
+@pytest.fixture
+def fake_translator(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        svc, "translate_interpretation",
+        lambda text, lang, client: calls.append((text, lang)) or f"[{lang}] {text}",
+    )
+    return calls
+
+
+def test_second_lang_translates_without_new_generation_nor_charge(fake_client, fake_translator, settings):
+    settings.INTERPRETATION_DAILY_CAP = 100
+    c = _chart()
+    acc = _account(free_balance=1)
+    svc.get_or_create_interpretation(c, "es", acc)  # cobra el único crédito
+    second = svc.get_or_create_interpretation(c, "en", acc)
+    assert fake_client.calls == 1  # una sola generación real
+    assert fake_translator == [("una interpretación", "en")]
+    assert second.lang == "en"
+    assert second.text == "[en] una interpretación"
+    acc.refresh_from_db()
+    assert svc.credits_available(acc) == 0  # no cobró el segundo idioma
+
+
+def test_translation_available_with_zero_credits(fake_client, fake_translator, settings):
+    settings.INTERPRETATION_DAILY_CAP = 100
+    c = _chart()
+    acc = _account(free_balance=1)
+    svc.get_or_create_interpretation(c, "es", acc)  # gasta el último crédito
+    # ya sin saldo, el cambio de idioma sigue funcionando (la carta ya se pagó)
+    out = svc.get_or_create_interpretation(c, "pt", acc)
+    assert out.text == "[pt] una interpretación"
+
+
+def test_translation_does_not_consume_daily_cap(fake_client, fake_translator, settings):
+    settings.INTERPRETATION_DAILY_CAP = 1
+    settings.INSTALL_FREE_CREDITS = 5
+    c = _chart()
+    svc.get_or_create_interpretation(c, "es", _account())
+    svc.get_or_create_interpretation(c, "en", _account(free_balance=1))
+    with pytest.raises(svc.CapReached):
+        svc.get_or_create_interpretation(
+            _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", _account()
+        )
+
+
+def test_interpretation_langs_helper(fake_client, fake_translator, settings):
+    settings.INTERPRETATION_DAILY_CAP = 100
+    c = _chart()
+    acc = _account()
+    assert svc.interpretation_langs(c) == []
+    svc.get_or_create_interpretation(c, "es", acc)
+    svc.get_or_create_interpretation(c, "en", acc)
+    assert sorted(svc.interpretation_langs(c)) == ["en", "es"]

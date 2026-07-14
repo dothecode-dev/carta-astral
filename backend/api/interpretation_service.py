@@ -19,7 +19,7 @@ from api import ledger
 from api.exceptions import CapReached, QuotaExceeded
 from api.models import Interpretation
 from interpret.exceptions import InterpretationError
-from interpret.generator import build_interpretation
+from interpret.generator import build_interpretation, translate_interpretation
 from interpret.prompts import PROMPT_VERSION
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,14 @@ def _existing(chart, lang):
     ).first()
 
 
+def interpretation_langs(chart) -> list[str]:
+    """Idiomas en los que esta carta ya tiene lectura (prompt actual)."""
+    return list(
+        Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION)
+        .values_list("lang", flat=True)
+    )
+
+
 def content_key(chart_data: dict, lang: str, prompt_version: str) -> str:
     """Hash canónico del input del LLM. Dos cartas con el mismo JSON astrológico
     (mismo instante UTC, lugar, house system, engine) comparten lectura."""
@@ -76,7 +84,16 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
     if hit is not None:
         return hit
 
-    if ledger.credits_available(account) <= 0:
+    # El crédito se cobra UNA vez por carta: la primera lectura, en el idioma
+    # que sea. Los demás idiomas son traducciones de esa lectura, gratis.
+    sibling = (
+        Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION)
+        .exclude(lang=lang)
+        .first()
+    )
+    will_charge = sibling is None
+
+    if will_charge and ledger.credits_available(account) <= 0:
         raise QuotaExceeded()
 
     lock_key = f"interp:lock:{chart.id}:{lang}:{PROMPT_VERSION}"
@@ -89,11 +106,15 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
     try:
         key = content_key(chart.data, lang, PROMPT_VERSION)
         # Dedup entre cartas: mismo input del LLM → se reutiliza el texto sin
-        # llamar a la API. El crédito se cobra igual (para el usuario es una
-        # lectura nueva); solo el costo LLM y el cap aplican a llamadas reales.
+        # llamar a la API. El crédito de la carta se cobra igual; solo el costo
+        # LLM y el cap aplican a generaciones reales.
         donor = Interpretation.objects.filter(content_key=key).first()
+        llm_generated = False
         if donor is not None:
             text = donor.text
+        elif sibling is not None:
+            # Traducción con modelo barato; fuera del cap (no es generación).
+            text = translate_interpretation(sibling.text, lang, _build_client())
         else:
             # Determine lot BEFORE charging to apply the cap only to free generations.
             will_be_free = account.free_balance > 0
@@ -104,6 +125,7 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
                 raise CapReached()
 
             text = build_interpretation(chart.data, lang, PROMPT_VERSION, _build_client())
+            llm_generated = True
 
         def _factory():
             try:
@@ -115,8 +137,11 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
             except IntegrityError:
                 return _existing(chart, lang)
 
+        if not will_charge:
+            return _factory()
+
         obj, lot = ledger.charge(account, _factory)
-        if lot == "free" and donor is None:
+        if lot == "free" and llm_generated:
             cache.add(cap_key, 0, timeout=_seconds_until_midnight())
             cache.incr(cap_key)
         return obj

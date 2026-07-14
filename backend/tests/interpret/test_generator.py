@@ -112,3 +112,17 @@ def test_user_content_matches_lang():
     content_pt = client_pt.calls[0]["messages"][0]["content"]
     assert "Interprete este mapa astral" in content_pt
     assert "ascendente" in content_pt.lower()  # nota de degradación en pt
+
+
+def test_translate_uses_cheap_model_and_target_lang():
+    from interpret.generator import translate_interpretation
+    from interpret.prompts import TRANSLATE_MODEL
+
+    client = FakeClient()
+    out = translate_interpretation("## Título\nUn texto astrológico.", "en", client)
+    call = client.calls[0]
+    assert call["model"] == TRANSLATE_MODEL
+    assert TRANSLATE_MODEL != MODEL  # traducir no paga precio de Sonnet
+    assert "English" in call["system"][0]["text"]
+    assert "## Título" in call["messages"][0]["content"]
+    assert out == "Sos una persona..."

@@ -8,6 +8,10 @@ PROMPT_VERSION = "v1"
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 1500
 
+# Traducción de lecturas ya generadas: tarea fácil, modelo barato.
+TRANSLATE_MODEL = "claude-haiku-4-5-20251001"
+TRANSLATE_MAX_TOKENS = 2000
+
 _BASE_ES = (
     "Sos un astrólogo que escribe interpretaciones de cartas natales claras, "
     "cálidas y bien escritas para el público general. Tejé los planetas, signos, "

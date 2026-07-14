@@ -9,7 +9,13 @@ import json
 import anthropic
 
 from interpret.exceptions import InterpretationError
-from interpret.prompts import MAX_TOKENS, MODEL, SYSTEM_PROMPTS
+from interpret.prompts import (
+    MAX_TOKENS,
+    MODEL,
+    SYSTEM_PROMPTS,
+    TRANSLATE_MAX_TOKENS,
+    TRANSLATE_MODEL,
+)
 
 # Instrucción y nota de degradación en el idioma pedido: si el user message
 # va en español, el modelo responde en español aunque el system diga otra cosa.
@@ -37,17 +43,16 @@ def _user_content(chart_data: dict, lang: str) -> str:
     return content
 
 
-def build_interpretation(chart_data: dict, lang: str, prompt_version: str, client) -> str:
-    system = SYSTEM_PROMPTS[lang]
+def _stream_text(client, model: str, system: list, user_content: str, max_tokens: int) -> str:
     # Streaming interno (no al cliente): el read-timeout pasa a ser por-chunk, lo
     # que evita el corte único de una generación no-streaming larga. La respuesta
     # se devuelve completa igual vía get_final_message().
     try:
         with client.messages.stream(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": _user_content(chart_data, lang)}],
+            model=model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user_content}],
         ) as stream:
             resp = stream.get_final_message()
     except anthropic.AnthropicError as exc:  # timeout, API, conexión, etc.
@@ -59,3 +64,31 @@ def build_interpretation(chart_data: dict, lang: str, prompt_version: str, clien
     if not text:
         raise InterpretationError("respuesta vacía del LLM")
     return text
+
+
+def build_interpretation(chart_data: dict, lang: str, prompt_version: str, client) -> str:
+    system = [
+        {"type": "text", "text": SYSTEM_PROMPTS[lang], "cache_control": {"type": "ephemeral"}}
+    ]
+    return _stream_text(client, MODEL, system, _user_content(chart_data, lang), MAX_TOKENS)
+
+
+_TRANSLATE_TARGETS = {
+    "es": "español rioplatense (con voseo)",
+    "en": "English",
+    "pt": "português brasileiro",
+}
+
+_TRANSLATE_SYSTEM = (
+    "Sos un traductor profesional. Traducí el texto del usuario al {target}. "
+    "Es una interpretación astrológica en markdown liviano: conservá los títulos "
+    "(#, ##), los párrafos y el tono cálido y directo. Devolvé SOLO la traducción, "
+    "sin comentarios ni encabezados extra."
+)
+
+
+def translate_interpretation(text: str, target_lang: str, client) -> str:
+    """Traduce una lectura ya generada. Modelo barato: el contenido ya está
+    escrito, solo cambia el idioma."""
+    system = [{"type": "text", "text": _TRANSLATE_SYSTEM.format(target=_TRANSLATE_TARGETS[target_lang])}]
+    return _stream_text(client, TRANSLATE_MODEL, system, text, TRANSLATE_MAX_TOKENS)

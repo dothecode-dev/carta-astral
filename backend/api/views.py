@@ -24,6 +24,7 @@ from api.interpretation_service import (
     QuotaExceeded,
     get_or_create_interpretation,
 )
+from interpret.prompts import PROMPT_VERSION
 from api.ledger import credits_available as account_credits_available
 from api.models import Chart
 from api.permissions import HasAccount
@@ -51,12 +52,17 @@ class AccountView(APIView):
 
 def _chart_repr(chart: Chart) -> dict:
     birth = chart.birth_data
+    # Con prefetch_related("interpretations") esto no agrega queries por carta.
+    langs = sorted(
+        {i.lang for i in chart.interpretations.all() if i.prompt_version == PROMPT_VERSION}
+    )
     return {
         "id": str(chart.uuid),
         "house_system": chart.house_system,
         "zodiac": chart.zodiac,
         "data": chart.data,
         "engine_version": chart.engine_version,
+        "interpretation_langs": langs,
         "birth": {
             "name": birth.name,
             "date": birth.date.isoformat(),
@@ -83,7 +89,12 @@ class ChartCollectionView(APIView):
         return []
 
     def get(self, request):
-        charts = Chart.objects.filter(account=request.user).select_related("birth_data").order_by("-created_at")
+        charts = (
+            Chart.objects.filter(account=request.user)
+            .select_related("birth_data")
+            .prefetch_related("interpretations")
+            .order_by("-created_at")
+        )
         return Response({"results": [_chart_repr(c) for c in charts]})
 
     def post(self, request):

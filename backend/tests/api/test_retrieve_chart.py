@@ -53,3 +53,20 @@ def test_chart_repr_includes_birth_block(account_client):
         "tz_name": "America/Argentina/Buenos_Aires",
         "place_label": "Florida, Buenos Aires, AR",
     }
+
+
+def test_chart_repr_lists_interpretation_langs(account_client):
+    from api.models import Chart, Interpretation
+    from interpret.prompts import PROMPT_VERSION
+
+    resp = account_client.post("/api/charts/", {
+        "name": "L", "date": "1990-01-01", "time": "12:00",
+        "time_known": True, "lat": -34.5, "lng": -58.4,
+    }, format="json")
+    assert resp.json()["interpretation_langs"] == []
+    chart = Chart.objects.get(uuid=resp.json()["id"])
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="x", content_key="k",
+    )
+    detail = account_client.get(f"/api/charts/{chart.uuid}/")
+    assert detail.json()["interpretation_langs"] == ["es"]
