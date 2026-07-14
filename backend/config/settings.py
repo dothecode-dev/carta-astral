@@ -38,7 +38,9 @@ if not SECRET_KEY:
 # Lista separada por comas, p.ej. "api.midominio.com,carta-astral.midominio.com".
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 if DEBUG and not ALLOWED_HOSTS:
-    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+    # En desarrollo el teléfono y la web de la app le pegan por la IP LAN de
+    # la Mac (cambia por DHCP); cualquier host es aceptable con DEBUG.
+    ALLOWED_HOSTS = ["*"]
 
 # Necesario para el admin (POST de login) sobre HTTPS detrás del proxy de Coolify.
 # Lista separada por comas con esquema, p.ej. "https://api.midominio.com".

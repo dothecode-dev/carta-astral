@@ -96,3 +96,19 @@ def test_anthropic_error_wrapped():
     client = FakeClient(raises=anthropic.AnthropicError("boom"))
     with pytest.raises(InterpretationError):
         build_interpretation(CHART, "es", "v1", client)
+
+
+def test_user_content_matches_lang():
+    # El texto salía en castellano aunque lang=en: la instrucción del user
+    # message estaba fija en español y le ganaba al system prompt.
+    client = FakeClient()
+    build_interpretation(CHART, "en", "v1", client)
+    user_content = client.calls[0]["messages"][0]["content"]
+    assert "Interpret this natal chart" in user_content
+    assert "Interpretá" not in user_content
+
+    client_pt = FakeClient()
+    build_interpretation(CHART_NO_TIME, "pt", "v1", client_pt)
+    content_pt = client_pt.calls[0]["messages"][0]["content"]
+    assert "Interprete este mapa astral" in content_pt
+    assert "ascendente" in content_pt.lower()  # nota de degradación en pt
