@@ -39,3 +39,22 @@ def test_polar_chart_persists_whole_sign_fallback():
     }, acc)
     assert chart.house_system == "Whole Sign"
     assert chart.data["flags"]["house_system_fallback"] is True
+
+
+def test_create_chart_stores_place_label():
+    acc = Account.objects.create()
+    chart = create_chart({
+        "name": "Ceci", "date": "1976-05-31", "time": "19:30",
+        "time_known": True, "lat": -34.516, "lng": -58.5,
+        "place_label": "Florida, Buenos Aires, AR",
+    }, acc)
+    assert chart.birth_data.place_label == "Florida, Buenos Aires, AR"
+
+
+def test_create_chart_place_label_is_optional():
+    acc = Account.objects.create()
+    chart = create_chart({
+        "date": "1989-07-14", "time": "23:45", "time_known": True,
+        "lat": -34.5, "lng": -58.4,
+    }, acc)
+    assert chart.birth_data.place_label == ""

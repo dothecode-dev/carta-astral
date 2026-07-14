@@ -38,6 +38,7 @@ def create_chart(payload: dict, account) -> Chart:
         birth_data = BirthData.objects.create(
             name=name, date=date, time=time, time_known=chart_data.time_known,
             lat=lat, lng=lng, tz_name=tz_name, datetime_utc=datetime_utc,
+            place_label=str(payload.get("place_label", ""))[:200],
         )
         return Chart.objects.create(
             birth_data=birth_data, house_system=chart_data.house_system, zodiac=chart_data.zodiac,

@@ -33,3 +33,23 @@ def test_get_returns_existing_chart(account_client):
 def test_get_missing_chart_returns_404(account_client):
     resp = account_client.get(f"/api/charts/{uuid.uuid4()}/")
     assert resp.status_code == 404
+
+
+def test_chart_repr_includes_birth_block(account_client):
+    resp = account_client.post("/api/charts/", {
+        "name": "Ceci", "date": "1976-05-31", "time": "19:30",
+        "time_known": True, "lat": -34.516, "lng": -58.5,
+        "place_label": "Florida, Buenos Aires, AR",
+    }, format="json")
+    assert resp.status_code == 201
+    birth = resp.json()["birth"]
+    assert birth == {
+        "name": "Ceci",
+        "date": "1976-05-31",
+        "time": "19:30",
+        "time_known": True,
+        "lat": -34.516,
+        "lng": -58.5,
+        "tz_name": "America/Argentina/Buenos_Aires",
+        "place_label": "Florida, Buenos Aires, AR",
+    }

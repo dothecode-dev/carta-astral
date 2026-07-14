@@ -6,6 +6,9 @@ from django.db import models
 
 class BirthData(models.Model):
     name = models.CharField(max_length=200, null=True, blank=True)
+    # Etiqueta legible del lugar tal como la eligió el usuario en el geocoder
+    # ("Florida, Buenos Aires, AR"). Solo display; el cálculo usa lat/lng.
+    place_label = models.CharField(max_length=200, blank=True, default="")
     date = models.DateField()
     time = models.TimeField(null=True, blank=True)
     time_known = models.BooleanField(default=True)

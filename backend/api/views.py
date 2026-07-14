@@ -50,12 +50,23 @@ class AccountView(APIView):
 
 
 def _chart_repr(chart: Chart) -> dict:
+    birth = chart.birth_data
     return {
         "id": str(chart.uuid),
         "house_system": chart.house_system,
         "zodiac": chart.zodiac,
         "data": chart.data,
         "engine_version": chart.engine_version,
+        "birth": {
+            "name": birth.name,
+            "date": birth.date.isoformat(),
+            "time": birth.time.strftime("%H:%M") if birth.time else None,
+            "time_known": birth.time_known,
+            "lat": birth.lat,
+            "lng": birth.lng,
+            "tz_name": birth.tz_name,
+            "place_label": birth.place_label,
+        },
     }
 
 
@@ -72,7 +83,7 @@ class ChartCollectionView(APIView):
         return []
 
     def get(self, request):
-        charts = Chart.objects.filter(account=request.user).order_by("-created_at")
+        charts = Chart.objects.filter(account=request.user).select_related("birth_data").order_by("-created_at")
         return Response({"results": [_chart_repr(c) for c in charts]})
 
     def post(self, request):
