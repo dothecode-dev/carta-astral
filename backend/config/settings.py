@@ -85,6 +85,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+if DEBUG:
+    # CORS abierto SOLO en desarrollo, para la build web local de la app.
+    MIDDLEWARE.insert(0, 'config.middleware.DevCorsMiddleware')
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
