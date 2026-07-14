@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Secrets locales (API keys de desarrollo)
+.env
