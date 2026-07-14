@@ -44,6 +44,9 @@ def credits_available(account) -> int:
 
 
 def _build_client():
+    if not settings.ANTHROPIC_API_KEY:
+        # Sin key el SDK lanza TypeError (500 crudo); mejor un 503 prolijo.
+        raise InterpretationError("ANTHROPIC_API_KEY no configurada")
     return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=25.0)
 
 

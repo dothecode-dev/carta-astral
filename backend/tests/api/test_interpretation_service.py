@@ -219,3 +219,11 @@ def test_llm_error_does_not_persist(monkeypatch, settings):
     with pytest.raises(InterpretationError):
         svc.get_or_create_interpretation(c, "es", _account())
     assert Interpretation.objects.count() == 0
+
+
+def test_missing_api_key_raises_interpretation_error(settings):
+    settings.INTERPRETATION_DAILY_CAP = 100
+    settings.ANTHROPIC_API_KEY = ""
+    with pytest.raises(InterpretationError):
+        svc.get_or_create_interpretation(_chart(), "es", _account())
+    assert Interpretation.objects.count() == 0
