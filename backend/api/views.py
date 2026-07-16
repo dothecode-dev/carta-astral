@@ -16,7 +16,7 @@ from api.auth import (
     AccountTokenAuthentication,
     create_session,
 )
-from api.deletion import delete_account
+from api.deletion import delete_account, delete_charts
 from api.chart_service import create_chart
 from api.interpretation_service import (
     DISCLAIMERS,
@@ -104,6 +104,10 @@ class ChartCollectionView(APIView):
             logger.warning("chart creation rejected: %s", exc, exc_info=True)
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(_chart_repr(chart), status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        delete_charts(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ChartDetailView(APIView):
