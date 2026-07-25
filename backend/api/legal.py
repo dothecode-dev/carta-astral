@@ -53,6 +53,7 @@ _PRIVACY = {
 <li>Calcular tu carta astral y mostrarla en la app.</li>
 <li>Generar la lectura interpretativa: los datos astronómicos de la carta se procesan con <strong>Anthropic</strong> (el proveedor de IA) para redactar el texto. No se usan para entrenar modelos.</li>
 <li>Administrar tu saldo de créditos.</li>
+<li><strong>Detectar fallas y entender el uso de la app.</strong> Usamos <strong>Sentry</strong> (reportes de errores) y <strong>PostHog</strong> (analítica de producto). Registran acciones como iniciar sesión, crear una carta, generar una lectura o compartirla, junto con el identificador interno de tu cuenta. <strong>Nunca les enviamos tu nombre, tu fecha, hora o lugar de nacimiento, ni el texto de tus lecturas</strong>, y tampoco tu email ni tu dirección IP.</li>
 </ul>
 <p>No vendemos tus datos, no mostramos publicidad y no hacemos perfiles con fines de marketing.</p>
 
@@ -85,6 +86,7 @@ _PRIVACY = {
 <li>To compute your natal chart and show it in the app.</li>
 <li>To generate the written reading: the chart's astronomical data is processed by <strong>Anthropic</strong> (our AI provider) to produce the text. It is not used to train models.</li>
 <li>To manage your credit balance.</li>
+<li><strong>To detect failures and understand how the app is used.</strong> We use <strong>Sentry</strong> (error reporting) and <strong>PostHog</strong> (product analytics). They record actions such as signing in, creating a chart, generating a reading or sharing it, along with your internal account identifier. <strong>We never send them your name, your birth date, time or place, or the text of your readings</strong>, nor your email or IP address.</li>
 </ul>
 <p>We don't sell your data, show ads, or build marketing profiles.</p>
 
@@ -117,6 +119,7 @@ _PRIVACY = {
 <li>Calcular seu mapa astral e mostrá-lo no app.</li>
 <li>Gerar a leitura interpretativa: os dados astronômicos do mapa são processados pela <strong>Anthropic</strong> (provedora de IA) para redigir o texto. Não são usados para treinar modelos.</li>
 <li>Administrar seu saldo de créditos.</li>
+<li><strong>Detectar falhas e entender o uso do app.</strong> Usamos <strong>Sentry</strong> (relatórios de erro) e <strong>PostHog</strong> (analítica de produto). Eles registram ações como entrar, criar um mapa, gerar uma leitura ou compartilhá-la, junto com o identificador interno da sua conta. <strong>Nunca enviamos a eles seu nome, sua data, hora ou local de nascimento, nem o texto das suas leituras</strong>, tampouco seu email ou endereço IP.</li>
 </ul>
 <p>Não vendemos seus dados, não mostramos publicidade e não criamos perfis de marketing.</p>
 
