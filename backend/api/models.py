@@ -168,6 +168,10 @@ class ProviderIdentity(models.Model):
     sub = models.CharField(max_length=255)
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="identities")
     created_at = models.DateTimeField(auto_now_add=True)
+    # Sólo Apple: refresh_token del server API, necesario para revocar en el
+    # borrado de cuenta (guideline 5.1.1(v)). Inútil sin el client_secret, que
+    # se firma con la key .p8 que vive en env, no en la DB.
+    refresh_token = models.TextField(blank=True, default="")
 
     class Meta:
         unique_together = ("provider", "sub")

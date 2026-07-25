@@ -25,8 +25,9 @@ from api.interpretation_service import (
     get_or_create_interpretation,
 )
 from interpret.prompts import PROMPT_VERSION
+from api import apple
 from api.ledger import credits_available as account_credits_available
-from api.models import Chart
+from api.models import Chart, ProviderIdentity
 from api.permissions import HasAccount
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
@@ -194,6 +195,7 @@ class _BaseAuthView(APIView):
             logger.warning("id_token inválido: %s", exc)
             return Response({"error": "token inválido"}, status=status.HTTP_401_UNAUTHORIZED)
         account = resolve_account(vid)
+        self.after_login(request, vid)
         token = create_session(account)
         return Response({
             "token": token,
@@ -201,10 +203,31 @@ class _BaseAuthView(APIView):
             "account_id": account.id,
         })
 
+    def after_login(self, request, vid):
+        """Hook post-resolución de cuenta. Por defecto no hace nada."""
+
 
 class AppleAuthView(_BaseAuthView):
     def validator(self, id_token, nonce=None):
         return validate_apple(id_token, nonce=nonce)
+
+    def after_login(self, request, vid):
+        """Canjea el authorization_code por el refresh_token que pide el revoke.
+
+        Best-effort: si Apple falla, el usuario entra igual. Un login roto es
+        peor que un revoke que después no se puede hacer (queda logueado).
+        """
+        code = request.data.get("authorization_code")
+        if not code or not apple.is_configured():
+            return
+        try:
+            refresh_token = apple.exchange_code(code)
+        except Exception as exc:  # AppleError / AppleNotConfigured
+            logger.warning("apple: canje de authorization_code falló: %s", exc)
+            return
+        ProviderIdentity.objects.filter(provider="apple", sub=vid.sub).update(
+            refresh_token=refresh_token
+        )
 
 
 class GoogleAuthView(_BaseAuthView):
