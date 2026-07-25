@@ -6,3 +6,9 @@ __pycache__/
 staticfiles/
 # docs/ es privado: specs con modelo de negocio + análisis de seguridad. Repo público.
 docs/
+# claves privadas (Sign in with Apple .p8, keystores): NUNCA versionadas
+*.p8
+*.pem
+*.keystore
+*.jks
+LEEME-*.txt
