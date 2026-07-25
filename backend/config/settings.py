@@ -150,6 +150,13 @@ GOOGLE_JWKS_URL = os.environ.get("GOOGLE_JWKS_URL", "https://www.googleapis.com/
 JWKS_TTL_SECONDS = int(os.environ.get("JWKS_TTL_SECONDS", str(12 * 3600)))
 SESSION_TTL_DAYS = int(os.environ.get("SESSION_TTL_DAYS", "90"))
 
+# Credenciales del Apple ID server API (canje de authorization_code + revoke del
+# borrado de cuenta, guideline 5.1.1(v)). Fail-OPEN a propósito: sin ellas el
+# login y el borrado siguen andando, sólo se saltea el revoke (con log de error).
+APPLE_TEAM_ID = os.environ.get("APPLE_TEAM_ID", "")  # Apple Developer → Membership
+APPLE_KEY_ID = os.environ.get("APPLE_KEY_ID", "")  # Key ID de la key "Sign in with Apple"
+APPLE_PRIVATE_KEY = os.environ.get("APPLE_PRIVATE_KEY", "")  # contenido PEM del .p8
+
 # --- IAP / RevenueCat ---
 # Header Authorization que RevenueCat manda en cada webhook (Dashboard → Webhooks).
 REVENUECAT_WEBHOOK_AUTH = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")
