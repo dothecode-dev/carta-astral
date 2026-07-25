@@ -58,6 +58,7 @@ _PRIVACY = {
 
 <h2>Borrado de tus datos</h2>
 <p>Podés borrar tus cartas o tu cuenta completa desde la app (Cuenta → Borrar mis datos). El borrado de cuenta es definitivo: elimina tus datos personales, cartas, lecturas y créditos. Conservamos únicamente un <strong>hash irreversible</strong> del identificador de tu proveedor de login — no permite identificarte ni recuperar tus datos; sólo evita que una cuenta nueva vuelva a recibir el crédito gratuito de bienvenida.</p>
+<p>Si entraste con Apple, al borrar la cuenta también revocamos el permiso de <em>Sign in with Apple</em> ante Apple, de modo que ASTRA deja de estar vinculada a tu Apple ID.</p>
 
 <h2>Seguridad y retención</h2>
 <p>Los datos viajan cifrados (TLS) y los tokens de sesión se guardan hasheados. Conservamos tus datos mientras tu cuenta exista.</p>
@@ -89,6 +90,7 @@ _PRIVACY = {
 
 <h2>Deleting your data</h2>
 <p>You can delete your charts or your entire account from the app (Account → Delete my data). Account deletion is permanent: it removes your personal data, charts, readings and credits. We keep only an <strong>irreversible hash</strong> of your login provider identifier — it cannot identify you or recover your data; it only prevents a new account from receiving the free welcome credit again.</p>
+<p>If you signed in with Apple, deleting your account also revokes the <em>Sign in with Apple</em> grant with Apple, so ASTRA is no longer linked to your Apple ID.</p>
 
 <h2>Security and retention</h2>
 <p>Data travels encrypted (TLS) and session tokens are stored hashed. We keep your data for as long as your account exists.</p>
@@ -120,6 +122,7 @@ _PRIVACY = {
 
 <h2>Apagar seus dados</h2>
 <p>Você pode apagar seus mapas ou a conta inteira pelo app (Conta → Apagar meus dados). A exclusão da conta é definitiva: remove seus dados pessoais, mapas, leituras e créditos. Guardamos apenas um <strong>hash irreversível</strong> do identificador do seu provedor de login — ele não permite identificar você nem recuperar seus dados; só evita que uma conta nova receba de novo o crédito gratuito de boas-vindas.</p>
+<p>Se você entrou com a Apple, ao apagar a conta também revogamos a permissão de <em>Sign in with Apple</em> junto à Apple, de modo que o ASTRA deixa de estar vinculado ao seu Apple ID.</p>
 
 <h2>Segurança e retenção</h2>
 <p>Os dados trafegam cifrados (TLS) e os tokens de sessão são guardados com hash. Mantemos seus dados enquanto sua conta existir.</p>
