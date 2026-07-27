@@ -1,0 +1,68 @@
+# Red de seguridad del repo. Hasta ahora los gates (pytest, ruff, lint-imports)
+# sólo corrían si alguien se acordaba a mano: el 27-jul un bug de cobro llegó a
+# producción y se detectó usando la app, no con los 283 tests que ya existían.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: backend (pytest + ruff + lint-imports)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      # La MISMA imagen que producción (Coolify). Importa de verdad: la
+      # UniqueConstraint parcial que sostiene la idempotencia del webhook de
+      # pagos tiene semántica distinta en SQLite, y los tests de concurrencia
+      # directamente no corren ahí (SQLite ignora SELECT ... FOR UPDATE).
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: carta_test
+          POSTGRES_USER: carta
+          POSTGRES_PASSWORD: carta
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U carta"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      DEBUG: "1"
+      DATABASE_URL: postgres://carta:carta@localhost:5432/carta_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Instalar dependencias
+        run: uv sync --frozen
+
+      # Separados a propósito: en el log se distingue qué falló sin leer el
+      # detalle. Cada uno es un gate independiente.
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Contratos de arquitectura (lint-imports)
+        run: uv run lint-imports
+
+      - name: Tipos (mypy sobre core/)
+        run: uv run mypy
+
+      # Si alguien cambia un modelo y no genera la migración, el deploy de
+      # Coolify se rompe al arrancar, no acá. Mejor que se rompa acá.
+      - name: No faltan migraciones
+        run: uv run python manage.py makemigrations --check --dry-run
