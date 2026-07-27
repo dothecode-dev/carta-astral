@@ -176,6 +176,16 @@ if os.environ.get("USE_DB_CACHE"):
             "LOCATION": "django_cache",
         }
     }
+elif not DEBUG:
+    # Fail-fast, no degradación silenciosa: con LocMem cada worker de gunicorn
+    # tiene SU PROPIO contador, así que el tope global de gasto, el throttle y
+    # el lock de interpretación dejan de limitar sin que nada avise. Es un
+    # agujero de costo, y prefiere no arrancar antes que arrancar sin muros.
+    raise ImproperlyConfigured(
+        "En producción hace falta caché compartida: seteá USE_DB_CACHE=1 "
+        "(y corré `manage.py createcachetable`). Con LocMem el cap de costo, "
+        "el throttle y el lock de interpretación no limitan nada."
+    )
 else:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
