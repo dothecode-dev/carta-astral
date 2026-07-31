@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- El glifo del Sol con un planeta en la órbita. Fondo sólido y no
+       transparente: en una pestaña clara el dorado solo no se distingue. -->
+  <rect width="32" height="32" rx="7" fill="#150715" />
+  <circle cx="16" cy="16" r="10" fill="none" stroke="#D5C046" stroke-width="1.6" />
+  <circle cx="16" cy="16" r="3.8" fill="#D5C046" />
+  <circle cx="23.1" cy="8.9" r="3.6" fill="#150715" />
+  <circle cx="23.1" cy="8.9" r="2.3" fill="#D5C046" />
+</svg>

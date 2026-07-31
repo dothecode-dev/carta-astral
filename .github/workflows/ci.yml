@@ -66,3 +66,34 @@ jobs:
       # Coolify se rompe al arrancar, no acá. Mejor que se rompa acá.
       - name: No faltan migraciones
         run: uv run python manage.py makemigrations --check --dry-run
+
+  web:
+    name: web (lint + tipos + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Igual que el backend: gates separados para que el log diga qué falló.
+      - name: Lint (eslint)
+        run: npx eslint .
+
+      - name: Tipos (tsc)
+        run: npx tsc --noEmit
+
+      # El build es el gate que importa: es lo que corre el Dockerfile en
+      # Coolify, y acá falla en un PR en vez de en el deploy.
+      - name: Build
+        run: npm run build
