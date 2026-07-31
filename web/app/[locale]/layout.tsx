@@ -40,6 +40,10 @@ export function generateStaticParams() {
 // llegar a ejecutar nada.
 export const dynamicParams = false;
 
+// Google exige URLs absolutas en canonical y hreflang; con metadataBase, Next
+// resuelve las relativas de abajo contra este origen.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://astra.dothecode.com";
+
 export async function generateMetadata({
   params,
 }: {
@@ -48,11 +52,20 @@ export async function generateMetadata({
   const { locale } = await params;
   const dict = getDict(isLocale(locale) ? locale : DEFAULT_LOCALE);
   return {
+    metadataBase: new URL(SITE_URL),
     title: dict.meta.title,
     description: dict.meta.description,
     alternates: {
       canonical: `/${locale}`,
       languages: Object.fromEntries(LOCALES.map((code) => [code, `/${code}`])),
+    },
+    openGraph: {
+      type: "website",
+      siteName: "ASTRA",
+      locale,
+      title: dict.meta.title,
+      description: dict.meta.description,
+      url: `/${locale}`,
     },
   };
 }
