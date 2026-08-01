@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { BODIES, formatDegree, positions, signOf } from "@/lib/ephemeris";
+import { BODIES, formatDegree, positions, signOf, type Positions } from "@/lib/ephemeris";
 import { INTL_LOCALE, PLANET_NAMES, type Locale } from "@/lib/i18n";
 
 type Row = { glyph: string; name: string; degree: string; sign: string };
@@ -13,10 +13,12 @@ export function EphemerisRail({
   locale,
   eyebrow,
   note,
+  initial,
 }: {
   locale: Locale;
   eyebrow: string;
   note: string;
+  initial: Positions | null;
 }) {
   const [clock, setClock] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
@@ -34,7 +36,9 @@ export function EphemerisRail({
       const now = new Date();
       setClock(format.format(now).replace(",", " ·"));
       if (!withPositions) return;
-      const pos = positions(now);
+      // Las del servidor salen de Swiss Ephemeris; el cálculo local es el
+      // respaldo si el backend no contestó.
+      const pos = initial ?? positions(now);
       setRows(
         BODIES.slice(0, 7).map((body, i) => {
           const lon = pos[body.key];
@@ -55,7 +59,7 @@ export function EphemerisRail({
       refresh(ticks % 30 === 0);
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [locale]);
+  }, [locale, initial]);
 
   return (
     <aside className="rail">

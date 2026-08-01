@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Literal, cast
 
 from kerykeion import AstrologicalSubject, NatalAspects
@@ -28,6 +29,35 @@ def _aspects_for(subj: AstrologicalSubject) -> list[Aspect]:
         Aspect(p1=a.p1_name, p2=a.p2_name, aspect=a.aspect,
                orbit=a.orbit, movement=a.aspect_movement)
         for a in NatalAspects(subj).relevant_aspects
+    ]
+
+
+_SKY_ATTRS = ["sun", "moon", "mercury", "venus", "mars",
+              "jupiter", "saturn", "uranus", "neptune", "pluto"]
+
+
+def sky_now(moment: datetime, lat: float = 0.0, lng: float = 0.0) -> list[Placement]:
+    """Posiciones de los cuerpos del sistema solar para un instante dado.
+
+    No es una carta: sin lugar de nacimiento no hay Ascendente ni casas, así que
+    los placements vienen con `house=None`.
+
+    `lat` y `lng` existen sólo para poder demostrar en un test que no cambian el
+    resultado: las longitudes son geocéntricas, es decir medidas desde el centro
+    de la Tierra, y son las mismas para cualquier observador en el mismo
+    instante. Lo que sí depende del lugar son los ángulos y las casas.
+    """
+    utc = moment.astimezone(timezone.utc)
+    subj = AstrologicalSubject(
+        name="Sky", year=utc.year, month=utc.month, day=utc.day,
+        hour=utc.hour, minute=utc.minute, lng=lng, lat=lat,
+        tz_str="UTC", online=False,
+    )
+    model = subj.model()
+    return [
+        Placement(name=p.name, sign=p.sign, position=p.position, abs_pos=p.abs_pos,
+                  house=None, retrograde=bool(getattr(p, "retrograde", False)))
+        for p in (getattr(model, a) for a in _SKY_ATTRS)
     ]
 
 

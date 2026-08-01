@@ -130,6 +130,8 @@ REST_FRAMEWORK = {
         "install": os.environ.get("INSTALL_RATE", "30/day"),
         "auth": os.environ.get("AUTH_RATE", "30/day"),
         "chart": os.environ.get("CHART_RATE", "60/day"),
+        # Público y cacheado: el techo es contra el abuso, no contra el uso.
+        "sky": os.environ.get("SKY_RATE", "240/hour"),
     },
 }
 

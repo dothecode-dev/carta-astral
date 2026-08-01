@@ -21,9 +21,9 @@ function token(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export function SkyWheel({ alt }: { alt: string }) {
+export function SkyWheel({ alt, initial }: { alt: string; initial: Positions | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const posRef = useRef<Positions | null>(null);
+  const posRef = useRef<Positions | null>(initial);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,7 +31,9 @@ export function SkyWheel({ alt }: { alt: string }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    posRef.current = positions(new Date());
+    // Con datos del servidor se usan tal cual (Swiss Ephemeris); si no llegaron,
+    // se calculan acá con elementos orbitales.
+    posRef.current = initial ?? positions(new Date());
 
     function draw() {
       const pos = posRef.current;
@@ -169,10 +171,12 @@ export function SkyWheel({ alt }: { alt: string }) {
     media.addEventListener("change", draw);
 
     // El cielo se mueve: media hora de página abierta ya corre la Luna un grado.
+    // Se recalcula localmente para no pedirle nada más al backend por dejar la
+    // pestaña abierta; la diferencia con el dato original no llega al píxel.
     const timer = window.setInterval(() => {
       posRef.current = positions(new Date());
       draw();
-    }, 30_000);
+    }, 30 * 60_000);
 
     return () => {
       window.removeEventListener("resize", onResize);
@@ -180,7 +184,7 @@ export function SkyWheel({ alt }: { alt: string }) {
       media.removeEventListener("change", draw);
       window.clearInterval(timer);
     };
-  }, []);
+  }, [initial]);
 
   return (
     <div className="wheelHolder">
