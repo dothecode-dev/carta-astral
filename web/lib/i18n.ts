@@ -18,9 +18,16 @@ export const INTL_LOCALE: Record<Locale, string> = {
 
 /** Nombres de los cuerpos celestes. Los glifos no se traducen: son notación. */
 export const PLANET_NAMES: Record<Locale, string[]> = {
-  es: ["Sol", "Luna", "Mercurio", "Venus", "Marte", "Júpiter", "Saturno"],
-  en: ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"],
-  pt: ["Sol", "Lua", "Mercúrio", "Vênus", "Marte", "Júpiter", "Saturno"],
+  es: ["Sol", "Luna", "Mercurio", "Venus", "Marte", "Júpiter", "Saturno", "Urano", "Neptuno", "Plutón"],
+  en: ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"],
+  pt: ["Sol", "Lua", "Mercúrio", "Vênus", "Marte", "Júpiter", "Saturno", "Urano", "Netuno", "Plutão"],
+};
+
+/** El backend nombra los cuerpos en inglés; la tabla los muestra traducidos. */
+export const PLANET_NAME_BY_KEY: Record<Locale, Record<string, string>> = {
+  es: Object.fromEntries(PLANET_NAMES.en.map((k, i) => [k, PLANET_NAMES.es[i]])),
+  en: Object.fromEntries(PLANET_NAMES.en.map((k) => [k, k])),
+  pt: Object.fromEntries(PLANET_NAMES.en.map((k, i) => [k, PLANET_NAMES.pt[i]])),
 };
 
 export type Dict = {

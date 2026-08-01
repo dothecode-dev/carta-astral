@@ -51,7 +51,7 @@ export default async function LegalPage({
 
   return (
     <>
-      <Nav locale={locale} dict={dict} />
+      <Nav locale={locale} dict={dict} path={`/legal/${doc}`} />
       <main className="docFrame">
         <LegalDocument
           doc={content[doc]}

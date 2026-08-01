@@ -47,7 +47,7 @@ export default async function Home({
                 <a className="btn btnPrimary" href="#descargar">
                   {dict.hero.cta}
                 </a>
-                <a className="btn btnGhost" href="#">
+                <a className="btn btnGhost" href={`/${locale}/ejemplo`}>
                   {dict.hero.ctaSecondary}
                 </a>
               </div>
