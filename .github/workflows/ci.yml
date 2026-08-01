@@ -93,6 +93,12 @@ jobs:
       - name: Tipos (tsc)
         run: npx tsc --noEmit
 
+      # Los legales dejaron de vivir en Django, donde test_legal_pages.py
+      # verificaba su contenido. Este gate ocupa ese lugar: falla si el texto
+      # pierde una mención que la política promete o que las tiendas exigen.
+      - name: Documentos legales completos
+        run: npm run check:legal
+
       # El build es el gate que importa: es lo que corre el Dockerfile en
       # Coolify, y acá falla en un PR en vez de en el deploy.
       - name: Build

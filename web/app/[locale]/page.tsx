@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { EphemerisRail } from "@/components/EphemerisRail";
+import { LEGAL_CONTACT } from "@/content/legal";
 import { Nav } from "@/components/Nav";
 import { SkyWheel } from "@/components/SkyWheel";
 import { getDict, isLocale } from "@/lib/i18n";
@@ -92,7 +93,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                   </li>
                 ))}
               </ul>
-              <a className="promiseLink" href="#">
+              <a className="promiseLink" href={`/${locale}/legal/privacy`}>
                 {dict.privacy.link}
               </a>
             </div>
@@ -203,9 +204,9 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           <footer className="foot">
             <span>{dict.foot.brand}</span>
             <nav className="footLinks">
-              <a href="#">{dict.foot.privacy}</a>
-              <a href="#">{dict.foot.terms}</a>
-              <a href="#">{dict.foot.contact}</a>
+              <a href={`/${locale}/legal/privacy`}>{dict.foot.privacy}</a>
+              <a href={`/${locale}/legal/terms`}>{dict.foot.terms}</a>
+              <a href={`mailto:${LEGAL_CONTACT}`}>{dict.foot.contact}</a>
             </nav>
           </footer>
         </main>

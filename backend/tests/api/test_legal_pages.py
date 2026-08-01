@@ -1,48 +1,50 @@
+"""Las páginas legales se mudaron a la web; acá sólo queda la redirección.
+
+El contenido de los documentos (que mencionen el hash del borrado, Anthropic,
+RevenueCat y el disclaimer de no-consejo) lo verifica `web/scripts/check-legal.mjs`,
+que corre como gate en el mismo CI.
+"""
+
 import pytest
 from rest_framework.test import APIClient
 
-
-@pytest.mark.django_db
-def test_privacy_publica_sin_auth():
-    resp = APIClient().get("/legal/privacy")
-    assert resp.status_code == 200
-    assert b"info@dothecode.com" in resp.content
+WEB = "https://astra.dothecode.com"
 
 
 @pytest.mark.django_db
-def test_terms_publica_sin_auth():
-    resp = APIClient().get("/legal/terms")
-    assert resp.status_code == 200
+@pytest.mark.parametrize("doc", ["privacy", "terms"])
+def test_redirige_a_la_web_sin_auth(doc):
+    resp = APIClient().get(f"/legal/{doc}")
+    assert resp.status_code == 302
+    assert resp.headers["Location"] == f"{WEB}/es/legal/{doc}"
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize(
-    ("lang", "marker"),
-    [("es", "Política de privacidad"), ("en", "Privacy Policy"), ("pt", "Política de privacidade")],
-)
-def test_privacy_en_tres_idiomas(lang, marker):
+@pytest.mark.parametrize("lang", ["es", "en", "pt"])
+def test_conserva_el_idioma_pedido(lang):
     resp = APIClient().get(f"/legal/privacy?lang={lang}")
-    assert resp.status_code == 200
-    assert marker in resp.content.decode()
+    assert resp.headers["Location"] == f"{WEB}/{lang}/legal/privacy"
 
 
 @pytest.mark.django_db
 def test_lang_invalida_cae_a_espanol():
+    # Las versiones instaladas de la app mandan el idioma en la query; si llega
+    # algo que la web no tiene como ruta, redirigir ahí sería un 404.
     resp = APIClient().get("/legal/terms?lang=de")
-    assert resp.status_code == 200
-    assert "Términos" in resp.content.decode()
+    assert resp.headers["Location"] == f"{WEB}/es/legal/terms"
 
 
 @pytest.mark.django_db
-def test_terms_declara_no_consejo_y_creditos():
-    body = APIClient().get("/legal/terms?lang=es").content.decode()
-    assert "consejo" in body  # disclaimer IA no-consejo
-    assert "crédito" in body.lower()
+def test_base_url_configurable_por_entorno(settings, monkeypatch):
+    # El dominio es provisional: cuando cambie, se cambia por env y no por deploy.
+    monkeypatch.setenv("WEB_BASE_URL", "https://ejemplo.test")
+    import importlib
 
+    from api import legal
 
-@pytest.mark.django_db
-def test_privacy_declara_tombstone_y_procesadores():
-    body = APIClient().get("/legal/privacy?lang=es").content.decode()
-    assert "hash" in body.lower()  # tombstone del borrado
-    assert "Anthropic" in body
-    assert "RevenueCat" in body
+    importlib.reload(legal)
+    try:
+        assert legal.WEB_BASE_URL == "https://ejemplo.test"
+    finally:
+        monkeypatch.delenv("WEB_BASE_URL")
+        importlib.reload(legal)
