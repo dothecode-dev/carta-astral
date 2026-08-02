@@ -90,6 +90,12 @@ jobs:
       - name: Lint (eslint)
         run: npx eslint .
 
+      # Hasta el 02-08 la web no tenía un solo test: lint, tipos y build no
+      # ejecutan una línea de lógica, y el fallo de concurrencia de ese día se
+      # arregló sin poder probar el arreglo salvo a mano.
+      - name: Tests (vitest)
+        run: npm test
+
       - name: Tipos (tsc)
         run: npx tsc --noEmit
 

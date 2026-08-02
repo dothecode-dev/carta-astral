@@ -15,8 +15,8 @@ import type { Dict, Locale } from "@/lib/i18n";
 const STEP_MS = 9000;
 /** Cada cuánto se pregunta si la lectura ya está, mientras otra petición la escribe. */
 const POLL_MS = 5000;
-/** Techo de esa espera: pasado esto, algo salió mal de verdad. */
-const POLL_LIMIT_MS = 120000;
+/** Techo de esa espera, en consultas: dos minutos. Después, algo salió mal de verdad. */
+const POLL_TRIES = 24;
 
 const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
@@ -55,8 +55,7 @@ export function ChartActions({
    * en camino—, así que se pregunta cada tanto hasta que existe.
    */
   async function waitForReading(): Promise<boolean> {
-    const until = performance.now() + POLL_LIMIT_MS;
-    while (performance.now() < until) {
+    for (let intento = 0; intento < POLL_TRIES; intento++) {
       await sleep(POLL_MS);
       const res = await fetch(`/api/charts/${chartId}/interpretation?lang=${locale}`);
       if (res.ok) return true;

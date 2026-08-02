@@ -65,8 +65,9 @@ test-back: ## Gates del backend: pytest, ruff, contratos, tipos
 	cd backend && .venv/bin/lint-imports
 	cd backend && .venv/bin/mypy
 
-test-web: ## Gates de la web: eslint, tipos, legales, build
+test-web: ## Gates de la web: eslint, tests, tipos, legales, build
 	cd web && npx eslint .
+	cd web && npm test
 	cd web && npx tsc --noEmit
 	cd web && npm run check:legal
 	cd web && npm run build
