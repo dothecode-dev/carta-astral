@@ -10,6 +10,16 @@
 BACK_PORT ?= 8000
 WEB_PORT  ?= 3000
 
+# Cache en la base, como producción, sólo para el servidor de desarrollo. Con el
+# cache en memoria del default, el lock que impide generar dos veces la misma
+# lectura no existe entre procesos: el 02-08 eso hizo que un fallo de
+# concurrencia sólo se pudiera reproducir contra el servidor de verdad. El
+# throttle y el tope diario, igual.
+#
+# No va exportada al Makefile entero: pytest crea su propia base y ahí la tabla
+# de cache no existe.
+DEV_ENV = DEBUG=1 USE_DB_CACHE=1
+
 .DEFAULT_GOAL := help
 .PHONY: help dev back web stop install test test-back test-web sky
 
@@ -23,14 +33,16 @@ dev: stop ## Levanta backend y web juntos (Ctrl-C corta los dos)
 	@echo ""
 	@trap 'kill 0' EXIT INT TERM; \
 		(cd backend && set -a && [ -f .env ] && . ./.env; set +a; \
-			DEBUG=1 .venv/bin/python manage.py migrate --noinput >/dev/null && \
-			DEBUG=1 .venv/bin/python manage.py runserver $(BACK_PORT)) & \
+			$(DEV_ENV) .venv/bin/python manage.py migrate --noinput >/dev/null && \
+			$(DEV_ENV) .venv/bin/python manage.py createcachetable >/dev/null && \
+			$(DEV_ENV) .venv/bin/python manage.py runserver $(BACK_PORT)) & \
 		(cd web && npm run dev -- --port $(WEB_PORT)) & \
 		wait
 
 back: ## Sólo el backend
 	cd backend && set -a && [ -f .env ] && . ./.env; set +a; \
-		DEBUG=1 .venv/bin/python manage.py runserver $(BACK_PORT)
+		$(DEV_ENV) .venv/bin/python manage.py createcachetable >/dev/null && \
+		$(DEV_ENV) .venv/bin/python manage.py runserver $(BACK_PORT)
 
 web: ## Sólo la web
 	cd web && npm run dev -- --port $(WEB_PORT)
