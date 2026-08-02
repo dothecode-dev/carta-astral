@@ -27,6 +27,7 @@ export function Nav({
         </Link>
 
         <div className="navLinks">
+          <Link href={`/${locale}/nueva`}>{dict.newChart.navNew}</Link>
           <Link href={`/${locale}/ejemplo`}>{dict.nav.example}</Link>
           <Link href={`/${locale}`}>{dict.nav.notes}</Link>
           <Link href={`/${locale}#descargar`}>{dict.nav.download}</Link>

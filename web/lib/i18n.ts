@@ -87,6 +87,29 @@ export type Dict = {
     cancel: string;
     working: string;
   };
+  newChart: {
+    navNew: string;
+    title: string;
+    lede: string;
+    name: string;
+    namePlaceholder: string;
+    nameHint: string;
+    date: string;
+    time: string;
+    timeUnknown: string;
+    timeUnknownHint: string;
+    place: string;
+    placePlaceholder: string;
+    searching: string;
+    noPlaces: string;
+    changePlace: string;
+    submit: string;
+    submitting: string;
+    needPlace: string;
+    needDate: string;
+    failed: string;
+    noCredits: string;
+  };
 };
 
 const es: Dict = {
@@ -219,6 +242,29 @@ const es: Dict = {
     note: "Android e iOS. La primera carta no cuesta nada.",
     appleSmall: "Descargar en el",
     playSmall: "Disponible en",
+  },
+  newChart: {
+    navNew: "Nueva carta",
+    title: "Calculá tu carta.",
+    lede: "Con la fecha, la hora y el lugar donde naciste.",
+    name: "Nombre",
+    namePlaceholder: "Para reconocerla después",
+    nameHint: "Opcional. No se usa para calcular nada.",
+    date: "Fecha de nacimiento",
+    time: "Hora",
+    timeUnknown: "No sé la hora",
+    timeUnknownHint: "Sin hora no hay Ascendente, ni casas, ni aspectos, y la Luna queda aproximada.",
+    place: "Lugar de nacimiento",
+    placePlaceholder: "Ciudad o localidad",
+    searching: "Buscando…",
+    noPlaces: "No encontramos ese lugar. Probá con la ciudad más cercana.",
+    changePlace: "Cambiar",
+    submit: "Calcular mi carta",
+    submitting: "Calculando…",
+    needPlace: "Elegí el lugar de nacimiento.",
+    needDate: "Falta la fecha de nacimiento.",
+    failed: "No pudimos calcular la carta. Revisá los datos y probá de nuevo.",
+    noCredits: "Te quedaste sin créditos.",
   },
   foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto" },
   auth: {
@@ -384,6 +430,29 @@ const en: Dict = {
     appleSmall: "Download on the",
     playSmall: "Get it on",
   },
+  newChart: {
+    navNew: "New chart",
+    title: "Compute your chart.",
+    lede: "With the date, time and place where you were born.",
+    name: "Name",
+    namePlaceholder: "To recognise it later",
+    nameHint: "Optional. It isn't used to compute anything.",
+    date: "Date of birth",
+    time: "Time",
+    timeUnknown: "I don't know the time",
+    timeUnknownHint: "Without a time there's no Ascendant, no houses, no aspects, and the Moon is approximate.",
+    place: "Place of birth",
+    placePlaceholder: "City or town",
+    searching: "Searching…",
+    noPlaces: "We couldn't find that place. Try the nearest city.",
+    changePlace: "Change",
+    submit: "Compute my chart",
+    submitting: "Computing…",
+    needPlace: "Choose the place of birth.",
+    needDate: "The date of birth is missing.",
+    failed: "We couldn't compute the chart. Check the details and try again.",
+    noCredits: "You've run out of credits.",
+  },
   foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact" },
   auth: {
     navEnter: "Sign in",
@@ -547,6 +616,29 @@ const pt: Dict = {
     note: "Android e iOS. O primeiro mapa não custa nada.",
     appleSmall: "Baixar na",
     playSmall: "Disponível no",
+  },
+  newChart: {
+    navNew: "Novo mapa",
+    title: "Calcule seu mapa.",
+    lede: "Com a data, a hora e o lugar onde você nasceu.",
+    name: "Nome",
+    namePlaceholder: "Para reconhecê-lo depois",
+    nameHint: "Opcional. Não é usado para calcular nada.",
+    date: "Data de nascimento",
+    time: "Hora",
+    timeUnknown: "Não sei a hora",
+    timeUnknownHint: "Sem hora não há Ascendente, nem casas, nem aspectos, e a Lua fica aproximada.",
+    place: "Local de nascimento",
+    placePlaceholder: "Cidade ou município",
+    searching: "Buscando…",
+    noPlaces: "Não encontramos esse lugar. Tente a cidade mais próxima.",
+    changePlace: "Trocar",
+    submit: "Calcular meu mapa",
+    submitting: "Calculando…",
+    needPlace: "Escolha o local de nascimento.",
+    needDate: "Falta a data de nascimento.",
+    failed: "Não conseguimos calcular o mapa. Revise os dados e tente de novo.",
+    noCredits: "Você ficou sem créditos.",
   },
   foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato" },
   auth: {

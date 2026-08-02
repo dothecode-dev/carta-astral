@@ -50,7 +50,7 @@ export function AccountCharts({
     return (
       <div className="emptyCharts">
         <p className="emptyChartsText">{dict.auth.chartsEmpty}</p>
-        <Link className="btn btnPrimary" href={`/${locale}#descargar`}>
+        <Link className="btn btnPrimary" href={`/${locale}/nueva`}>
           {dict.auth.chartsEmptyCta}
         </Link>
       </div>

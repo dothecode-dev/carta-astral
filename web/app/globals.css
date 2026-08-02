@@ -488,6 +488,182 @@ body {
   display: flex;
 }
 
+/* --- Formulario ----------------------------------------------------------
+   Los campos son datos: mismo registro mono que la efeméride y la tabla de la
+   carta, para que se lea como parte del instrumento y no como un trámite. */
+.formFrame {
+  max-width: 560px;
+}
+
+.formHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.formTitle {
+  font-size: var(--step-3);
+}
+
+.formLede {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.form .btn {
+  align-self: flex-start;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.fieldLabel {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.input {
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 0.7rem 0.85rem;
+  width: 100%;
+}
+
+.input:focus-visible {
+  border-color: var(--accent);
+}
+
+.input:disabled {
+  opacity: 0.5;
+}
+
+.fieldNote {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.checkboxField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.checkboxLabel input {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+}
+
+/* --- Elegir el lugar ----------------------------------------------------- */
+.placeList {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.placeOption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.placeList li:last-child .placeOption {
+  border-bottom: none;
+}
+
+.placeOption:hover {
+  background: var(--surface);
+}
+
+.placeTz {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+}
+
+.placeChosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 0.7rem 0.85rem;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.formError {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 480px) {
+  .fieldRow {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* --- Grilla ------------------------------------------------------------- */
 .frame {
   display: grid;
