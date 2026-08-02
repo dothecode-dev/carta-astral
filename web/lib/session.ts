@@ -75,5 +75,11 @@ export async function callApi<T>(
     throw new ApiError(res.status, `${path} devolvió ${res.status}`);
   }
 
+  // Los borrados responden 204 sin cuerpo: intentar parsearlo haría fallar una
+  // operación que salió bien.
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return null as T;
+  }
+
   return res.json() as Promise<T>;
 }

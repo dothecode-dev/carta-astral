@@ -23,6 +23,7 @@ dev: stop ## Levanta backend y web juntos (Ctrl-C corta los dos)
 	@echo ""
 	@trap 'kill 0' EXIT INT TERM; \
 		(cd backend && set -a && [ -f .env ] && . ./.env; set +a; \
+			DEBUG=1 .venv/bin/python manage.py migrate --noinput >/dev/null && \
 			DEBUG=1 .venv/bin/python manage.py runserver $(BACK_PORT)) & \
 		(cd web && npm run dev -- --port $(WEB_PORT)) & \
 		wait

@@ -11,6 +11,10 @@
   --hairline: rgba(178, 173, 138, 0.28);
   --hairline-strong: rgba(178, 173, 138, 0.55);
   --dotted: #dccb54;
+  /* El rojo de la app (carta-astral-app/src/theme/tokens.ts). Hasta ahora la
+     web no tenía ninguna acción destructiva y no hacía falta. */
+  --danger: #cd1561;
+  --danger-soft: rgba(205, 21, 97, 0.14);
 
   /* Todo el contenido de la columna comparte borde: un solo ancho, el de la
      columna. Antes esto era 62ch, y como ch se mide sobre el font-size de cada
@@ -35,6 +39,8 @@
     --hairline: rgba(27, 12, 30, 0.16);
     --hairline-strong: rgba(27, 12, 30, 0.34);
     --dotted: #9a8718;
+    --danger: #b01050;
+    --danger-soft: rgba(176, 16, 80, 0.1);
   }
 }
 
@@ -47,6 +53,8 @@
   --hairline: rgba(178, 173, 138, 0.28);
   --hairline-strong: rgba(178, 173, 138, 0.55);
   --dotted: #dccb54;
+  --danger: #cd1561;
+  --danger-soft: rgba(205, 21, 97, 0.14);
 }
 
 :root[data-theme="light"] {
@@ -58,6 +66,8 @@
   --hairline: rgba(27, 12, 30, 0.16);
   --hairline-strong: rgba(27, 12, 30, 0.34);
   --dotted: #9a8718;
+  --danger: #b01050;
+  --danger-soft: rgba(176, 16, 80, 0.1);
 }
 
 * {
@@ -304,6 +314,178 @@ body {
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-soft);
+}
+
+/* --- Panel de cuenta ------------------------------------------------------
+   Una sola columna con secciones separadas por aire, no tarjetas sueltas: el
+   saldo es lo único que pesa, y lo destructivo vive lejos de lo cotidiano. */
+.accountFrame {
+  max-width: 720px;
+  gap: clamp(2.5rem, 6vw, 3.5rem);
+}
+
+.accountHead {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: clamp(1.75rem, 4vw, 2.5rem);
+}
+
+.balanceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.buyBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.buyBlock .btn[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.buyNote {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  max-width: 28ch;
+  text-align: right;
+}
+
+.accountSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.accountLinks {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  font-size: 0.9375rem;
+}
+
+.accountLinks a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 2px;
+}
+
+.accountLinks a:hover {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+/* --- Cartas guardadas ---------------------------------------------------- */
+.chartLine {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.chartPlace {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.chartLangs {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  margin-top: 0.2rem;
+}
+
+.emptyCharts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: 4px;
+  padding: clamp(1.5rem, 4vw, 2rem);
+}
+
+.emptyChartsText {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* --- Borrar mis datos ----------------------------------------------------
+   Separado del resto con su propio borde: lo irreversible no se mezcla con lo
+   cotidiano, y el rojo aparece recién al confirmar. */
+.danger {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  border: 1px solid var(--danger-soft);
+  border-radius: 4px;
+  padding: clamp(1.5rem, 4vw, 2rem);
+}
+
+.dangerEyebrow {
+  color: var(--danger);
+}
+
+.dangerBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.dangerHeading {
+  margin: 0;
+  font-size: var(--step-1);
+  font-weight: 400;
+}
+
+.dangerBody {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  max-width: 52ch;
+}
+
+.dangerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dangerHint {
+  margin: 0;
+  width: 100%;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+.btnDanger {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btnDanger:hover {
+  opacity: 0.85;
+}
+
+.accountFoot {
+  display: flex;
 }
 
 /* --- Grilla ------------------------------------------------------------- */

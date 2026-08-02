@@ -68,6 +68,24 @@ export type Dict = {
     credits: string;
     account: string;
     signOut: string;
+    buyCredits: string;
+    buyInApp: string;
+    chartsTitle: string;
+    chartsEmpty: string;
+    chartsEmptyCta: string;
+    unnamedChart: string;
+    readIn: string;
+    settings: string;
+    dangerTitle: string;
+    deleteChartsTitle: string;
+    deleteChartsBody: string;
+    deleteChartsConfirm: string;
+    deleteAccountTitle: string;
+    deleteAccountBody: string;
+    deleteAccountConfirm: string;
+    confirmHint: string;
+    cancel: string;
+    working: string;
   };
 };
 
@@ -214,6 +232,24 @@ const es: Dict = {
     credits: "créditos",
     account: "Tu cuenta",
     signOut: "Salir",
+    buyCredits: "Sumar créditos",
+    buyInApp: "Por ahora los créditos se compran dentro de la app.",
+    chartsTitle: "Tus cartas",
+    chartsEmpty: "Todavía no calculaste ninguna.",
+    chartsEmptyCta: "Calcular mi carta",
+    unnamedChart: "Carta sin nombre",
+    readIn: "Lectura en",
+    settings: "Privacidad y términos",
+    dangerTitle: "Borrar mis datos",
+    deleteChartsTitle: "Borrar mis cartas",
+    deleteChartsBody: "Se borran todas tus cartas e interpretaciones. Tu cuenta y tus créditos quedan.",
+    deleteChartsConfirm: "Sí, borrar mis cartas",
+    deleteAccountTitle: "Borrar mi cuenta",
+    deleteAccountBody: "Se borra todo: cartas, interpretaciones, créditos y la cuenta. No se puede deshacer.",
+    deleteAccountConfirm: "Sí, borrar mi cuenta",
+    confirmHint: "Esta acción no se puede deshacer.",
+    cancel: "Cancelar",
+    working: "Borrando…",
   },
 };
 
@@ -360,6 +396,24 @@ const en: Dict = {
     credits: "credits",
     account: "Your account",
     signOut: "Sign out",
+    buyCredits: "Add credits",
+    buyInApp: "For now, credits are purchased inside the app.",
+    chartsTitle: "Your charts",
+    chartsEmpty: "You haven't computed any yet.",
+    chartsEmptyCta: "Compute my chart",
+    unnamedChart: "Unnamed chart",
+    readIn: "Reading in",
+    settings: "Privacy and terms",
+    dangerTitle: "Delete my data",
+    deleteChartsTitle: "Delete my charts",
+    deleteChartsBody: "All your charts and readings are deleted. Your account and your credits stay.",
+    deleteChartsConfirm: "Yes, delete my charts",
+    deleteAccountTitle: "Delete my account",
+    deleteAccountBody: "Everything goes: charts, readings, credits and the account. It can't be undone.",
+    deleteAccountConfirm: "Yes, delete my account",
+    confirmHint: "This action can't be undone.",
+    cancel: "Cancel",
+    working: "Deleting…",
   },
 };
 
@@ -506,6 +560,24 @@ const pt: Dict = {
     credits: "créditos",
     account: "Sua conta",
     signOut: "Sair",
+    buyCredits: "Adicionar créditos",
+    buyInApp: "Por enquanto os créditos são comprados dentro do app.",
+    chartsTitle: "Seus mapas",
+    chartsEmpty: "Você ainda não calculou nenhum.",
+    chartsEmptyCta: "Calcular meu mapa",
+    unnamedChart: "Mapa sem nome",
+    readIn: "Leitura em",
+    settings: "Privacidade e termos",
+    dangerTitle: "Apagar meus dados",
+    deleteChartsTitle: "Apagar meus mapas",
+    deleteChartsBody: "Todos os seus mapas e leituras são apagados. Sua conta e seus créditos ficam.",
+    deleteChartsConfirm: "Sim, apagar meus mapas",
+    deleteAccountTitle: "Apagar minha conta",
+    deleteAccountBody: "Apaga tudo: mapas, leituras, créditos e a conta. Não dá para desfazer.",
+    deleteAccountConfirm: "Sim, apagar minha conta",
+    confirmHint: "Esta ação não pode ser desfeita.",
+    cancel: "Cancelar",
+    working: "Apagando…",
   },
 };
 
