@@ -502,6 +502,62 @@ body {
   color: var(--accent);
 }
 
+.foldouts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.foldout {
+  border-top: 1px solid var(--hairline);
+  padding-top: 0.75rem;
+}
+
+.foldoutHead {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.foldoutHead::-webkit-details-marker {
+  display: none;
+}
+
+.foldoutHead::before {
+  content: "+";
+  color: var(--accent);
+  font-size: 0.875rem;
+}
+
+.foldout[open] .foldoutHead::before {
+  content: "−";
+}
+
+.foldoutHead:hover {
+  color: var(--ink);
+}
+
+.foldoutCount {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+.foldout .chartTable {
+  margin-top: 0.75rem;
+  max-width: var(--measure);
+}
+
+.aspectGlyph {
+  color: var(--accent);
+}
+
 .chartActions {
   display: flex;
   flex-direction: column;

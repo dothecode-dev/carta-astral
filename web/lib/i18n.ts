@@ -24,6 +24,21 @@ export const PLANET_NAMES: Record<Locale, string[]> = {
 };
 
 /** El backend nombra los cuerpos en inglés; la tabla los muestra traducidos. */
+/** El motor nombra los aspectos en inglés; la tabla los muestra traducidos. */
+export const ASPECT_NAMES: Record<Locale, Record<string, string>> = {
+  es: { conjunction: "Conjunción", opposition: "Oposición", trine: "Trígono",
+        square: "Cuadratura", sextile: "Sextil", quintile: "Quintil" },
+  en: { conjunction: "Conjunction", opposition: "Opposition", trine: "Trine",
+        square: "Square", sextile: "Sextile", quintile: "Quintile" },
+  pt: { conjunction: "Conjunção", opposition: "Oposição", trine: "Trígono",
+        square: "Quadratura", sextile: "Sextil", quintile: "Quintil" },
+};
+
+/** Los mismos glifos que usa la app (src/astro/glyphs.ts). */
+export const ASPECT_GLYPHS: Record<string, string> = {
+  conjunction: "☌", opposition: "☍", trine: "△", square: "□", sextile: "✶",
+};
+
 export const PLANET_NAME_BY_KEY: Record<Locale, Record<string, string>> = {
   es: Object.fromEntries(PLANET_NAMES.en.map((k, i) => [k, PLANET_NAMES.es[i]])),
   en: Object.fromEntries(PLANET_NAMES.en.map((k) => [k, k])),
@@ -99,6 +114,12 @@ export type Dict = {
     noCredits: string;
     failed: string;
     columns: { body: string; position: string; house: string };
+    houses: string;
+    aspects: string;
+    aspectColumns: { pair: string; aspect: string; orb: string };
+    interpretFreeLang: string;
+    show: string;
+    hide: string;
   };
   newChart: {
     navNew: string;
@@ -269,6 +290,12 @@ const es: Dict = {
     noCredits: "Te quedaste sin créditos.",
     failed: "No pudimos generar la lectura. Probá de nuevo en un rato.",
     columns: { body: "Cuerpo", position: "Posición", house: "Casa" },
+    houses: "Casas",
+    aspects: "Aspectos",
+    aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
+    interpretFreeLang: "Sin costo: ya la leíste en otro idioma.",
+    show: "Ver",
+    hide: "Ocultar",
   },
   newChart: {
     navNew: "Nueva carta",
@@ -470,6 +497,12 @@ const en: Dict = {
     noCredits: "You've run out of credits.",
     failed: "We couldn't generate the reading. Try again in a while.",
     columns: { body: "Body", position: "Position", house: "House" },
+    houses: "Houses",
+    aspects: "Aspects",
+    aspectColumns: { pair: "Between", aspect: "Aspect", orb: "Orb" },
+    interpretFreeLang: "No cost: you already read it in another language.",
+    show: "Show",
+    hide: "Hide",
   },
   newChart: {
     navNew: "New chart",
@@ -671,6 +704,12 @@ const pt: Dict = {
     noCredits: "Você ficou sem créditos.",
     failed: "Não conseguimos gerar a leitura. Tente de novo daqui a pouco.",
     columns: { body: "Corpo", position: "Posição", house: "Casa" },
+    houses: "Casas",
+    aspects: "Aspectos",
+    aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
+    interpretFreeLang: "Sem custo: você já leu em outro idioma.",
+    show: "Ver",
+    hide: "Ocultar",
   },
   newChart: {
     navNew: "Novo mapa",

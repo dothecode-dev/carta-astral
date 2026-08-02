@@ -25,6 +25,9 @@ export function ChartActions({
   const [error, setError] = useState<string | null>(null);
 
   const yaLeida = langs.includes(locale);
+  // Si ya existe en otro idioma, traducirla no cuesta: el backend no vuelve a
+  // cobrar. Decir "usa 1 crédito" ahí sería mentir, y es lo que hace la app.
+  const enOtroIdioma = !yaLeida && langs.length > 0;
 
   async function interpret() {
     setBusy(true);
@@ -60,7 +63,9 @@ export function ChartActions({
       <button type="button" className="btn btnPrimary" onClick={interpret} disabled={busy}>
         {busy ? dict.chart.interpreting : dict.chart.interpret}
       </button>
-      <p className="fieldNote">{dict.chart.interpretCost}</p>
+      <p className="fieldNote">
+        {enOtroIdioma ? dict.chart.interpretFreeLang : dict.chart.interpretCost}
+      </p>
       {error && (
         <p className="formError" role="alert">
           {error}

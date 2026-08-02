@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ChartActions } from "@/components/ChartActions";
+import { ChartTables } from "@/components/ChartTables";
 import { Nav } from "@/components/Nav";
 import { NatalWheel } from "@/components/NatalWheel";
 import { type ApiChart, toWheel } from "@/lib/chart";
@@ -126,6 +127,8 @@ export default async function ChartPage({
             </div>
           </div>
         </div>
+
+        <ChartTables chart={chart} locale={locale} dict={dict} />
 
         <ChartActions
           locale={locale}
