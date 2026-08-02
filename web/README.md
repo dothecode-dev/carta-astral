@@ -60,3 +60,10 @@ healthcheck `/healthz`.
   guías de marca obligatorias.
 - La rueda se calcula en el cliente. Cuando el backend exponga el endpoint
   público de efemérides, pasa a Swiss Ephemeris.
+
+## Despliegue automático
+
+Coolify despliega cada aplicación con lo que cambia en su carpeta, filtrando por
+Watch Paths. El patrón va con **doble** asterisco (`web/**`): con uno solo no
+matchea rutas anidadas y los push se descartan en silencio con
+"Changed files do not match watch paths".
