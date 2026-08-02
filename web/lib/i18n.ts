@@ -39,10 +39,37 @@ export const ASPECT_GLYPHS: Record<string, string> = {
   conjunction: "☌", opposition: "☍", trine: "△", square: "□", sextile: "✶",
 };
 
+/**
+ * Los cuerpos que la carta lista pero la rueda no dibuja.
+ *
+ * El backend los devuelve con el nombre del motor y salían así en la tabla:
+ * "True South Lunar Node" en medio de una carta en español.
+ */
+const EXTRA_BODIES: Record<Locale, Record<string, string>> = {
+  es: {
+    Chiron: "Quirón",
+    Mean_Lilith: "Lilith media",
+    True_North_Lunar_Node: "Nodo Norte",
+    True_South_Lunar_Node: "Nodo Sur",
+  },
+  en: {
+    Chiron: "Chiron",
+    Mean_Lilith: "Mean Lilith",
+    True_North_Lunar_Node: "North Node",
+    True_South_Lunar_Node: "South Node",
+  },
+  pt: {
+    Chiron: "Quíron",
+    Mean_Lilith: "Lilith média",
+    True_North_Lunar_Node: "Nodo Norte",
+    True_South_Lunar_Node: "Nodo Sul",
+  },
+};
+
 export const PLANET_NAME_BY_KEY: Record<Locale, Record<string, string>> = {
-  es: Object.fromEntries(PLANET_NAMES.en.map((k, i) => [k, PLANET_NAMES.es[i]])),
-  en: Object.fromEntries(PLANET_NAMES.en.map((k) => [k, k])),
-  pt: Object.fromEntries(PLANET_NAMES.en.map((k, i) => [k, PLANET_NAMES.pt[i]])),
+  es: { ...Object.fromEntries(PLANET_NAMES.en.map((k, i) => [k, PLANET_NAMES.es[i]])), ...EXTRA_BODIES.es },
+  en: { ...Object.fromEntries(PLANET_NAMES.en.map((k) => [k, k])), ...EXTRA_BODIES.en },
+  pt: { ...Object.fromEntries(PLANET_NAMES.en.map((k, i) => [k, PLANET_NAMES.pt[i]])), ...EXTRA_BODIES.pt },
 };
 
 export type Dict = {
