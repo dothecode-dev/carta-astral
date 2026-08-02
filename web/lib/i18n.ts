@@ -120,6 +120,10 @@ export type Dict = {
     interpretFreeLang: string;
     show: string;
     hide: string;
+    waitTitle: string;
+    waitBody: string;
+    waitSteps: [string, string, string];
+    reading: string;
   };
   newChart: {
     navNew: string;
@@ -296,6 +300,10 @@ const es: Dict = {
     interpretFreeLang: "Sin costo: ya la leíste en otro idioma.",
     show: "Ver",
     hide: "Ocultar",
+    waitTitle: "Leyendo tu cielo",
+    waitBody: "Estamos escribiendo tu interpretación. Tarda medio minuto: los planetas no se apuran.",
+    waitSteps: ["Posiciones calculadas", "Analizando aspectos", "Escribiendo tu lectura"],
+    reading: "Tu lectura",
   },
   newChart: {
     navNew: "Nueva carta",
@@ -503,6 +511,10 @@ const en: Dict = {
     interpretFreeLang: "No cost: you already read it in another language.",
     show: "Show",
     hide: "Hide",
+    waitTitle: "Reading your sky",
+    waitBody: "We're writing your interpretation. It takes half a minute: planets don't rush.",
+    waitSteps: ["Positions computed", "Analyzing aspects", "Writing your reading"],
+    reading: "Your reading",
   },
   newChart: {
     navNew: "New chart",
@@ -710,6 +722,10 @@ const pt: Dict = {
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     show: "Ver",
     hide: "Ocultar",
+    waitTitle: "Lendo o seu céu",
+    waitBody: "Estamos escrevendo sua interpretação. Leva meio minuto: os planetas não têm pressa.",
+    waitSteps: ["Posições calculadas", "Analisando aspectos", "Escrevendo sua leitura"],
+    reading: "Sua leitura",
   },
   newChart: {
     navNew: "Novo mapa",

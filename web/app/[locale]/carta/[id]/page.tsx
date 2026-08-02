@@ -57,6 +57,17 @@ export default async function ChartPage({
     throw error;
   }
 
+  // La lectura ya escrita, si la hay. El GET no genera ni cobra: cuando todavía
+  // no existe devuelve 404 y la página muestra el botón.
+  let reading: { text: string; disclaimer: string } | null = null;
+  if (chart.interpretation_langs.includes(locale)) {
+    try {
+      reading = await callApi(`/api/charts/${id}/interpretation/?lang=${locale}`);
+    } catch {
+      // Si falla, la carta se muestra igual y el botón vuelve a estar.
+    }
+  }
+
   const wheel = toWheel(chart);
   const fecha = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
     dateStyle: "long",
@@ -137,6 +148,18 @@ export default async function ChartPage({
           langs={chart.interpretation_langs}
           dict={dict}
         />
+
+        {reading && (
+          <section className="reading">
+            <p className="eyebrow">{dict.chart.reading}</p>
+            {reading.text.split(/\n{2,}/).map((parrafo, i) => (
+              <p key={i} className="readingParagraph">
+                {parrafo.trim()}
+              </p>
+            ))}
+            <p className="disclaimer">{reading.disclaimer}</p>
+          </section>
+        )}
 
         <Footer locale={locale} dict={dict} />
       </main>

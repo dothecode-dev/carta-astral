@@ -1,13 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { SolarSystem } from "@/components/SolarSystem";
 import type { Dict, Locale } from "@/lib/i18n";
 
-// El botón que gasta el crédito. Se deshabilita mientras espera: generar una
-// lectura tarda, y dos clicks serían dos pedidos —el backend deduplica por
-// contenido, pero no hay razón para mandarle el segundo—.
+// El botón que gasta el crédito, y la espera mientras se escribe la lectura.
+//
+// La espera es la misma coreografía que la app: el sistema solar girando y tres
+// pasos que se encienden. La generación real tarda unos 25-30 segundos; los
+// pasos no miden nada, acompañan.
+
+const STEP_MS = 9000;
 
 export function ChartActions({
   locale,
@@ -22,6 +27,7 @@ export function ChartActions({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const yaLeida = langs.includes(locale);
@@ -29,7 +35,14 @@ export function ChartActions({
   // cobrar. Decir "usa 1 crédito" ahí sería mentir, y es lo que hace la app.
   const enOtroIdioma = !yaLeida && langs.length > 0;
 
+  useEffect(() => {
+    if (!busy || step >= dict.chart.waitSteps.length - 1) return;
+    const timer = window.setTimeout(() => setStep((s) => s + 1), STEP_MS);
+    return () => window.clearTimeout(timer);
+  }, [busy, step, dict.chart.waitSteps.length]);
+
   async function interpret() {
+    setStep(0);
     setBusy(true);
     setError(null);
 
@@ -45,23 +58,40 @@ export function ChartActions({
       return;
     }
 
-    router.push(`/${locale}/carta/${chartId}/lectura`);
+    // La lectura queda debajo de la carta, en esta misma página.
+    router.refresh();
   }
 
-  if (yaLeida) {
+  if (busy) {
     return (
-      <div className="chartActions">
-        <a className="btn btnPrimary" href={`/${locale}/carta/${chartId}/lectura`}>
-          {dict.chart.readAgain}
-        </a>
-      </div>
+      <section className="waiting">
+        <SolarSystem size={200} speed={2.5} />
+        <div className="waitingCopy">
+          <h2 className="display waitingTitle">{dict.chart.waitTitle}</h2>
+          <p className="waitingBody">{dict.chart.waitBody}</p>
+        </div>
+        <ol className="waitingSteps">
+          {dict.chart.waitSteps.map((texto, i) => {
+            if (i > step) return <li key={texto} className="waitingStep" aria-hidden="true" />;
+            const hecho = i < step;
+            return (
+              <li key={texto} className={`waitingStep ${hecho ? "waitingDone" : "waitingNow"}`}>
+                <span aria-hidden="true">{hecho ? "●" : "○"}</span>
+                {texto}
+              </li>
+            );
+          })}
+        </ol>
+      </section>
     );
   }
 
+  if (yaLeida) return null;
+
   return (
     <div className="chartActions">
-      <button type="button" className="btn btnPrimary" onClick={interpret} disabled={busy}>
-        {busy ? dict.chart.interpreting : dict.chart.interpret}
+      <button type="button" className="btn btnPrimary" onClick={interpret}>
+        {dict.chart.interpret}
       </button>
       <p className="fieldNote">
         {enOtroIdioma ? dict.chart.interpretFreeLang : dict.chart.interpretCost}
