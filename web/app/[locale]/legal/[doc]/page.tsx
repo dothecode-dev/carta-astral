@@ -6,6 +6,7 @@ import { Nav } from "@/components/Nav";
 import { LEGAL, LEGAL_CONTACT, LEGAL_DOCS, LEGAL_UPDATED, type LegalDocKey } from "@/content/legal";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
+import { Footer } from "@/components/Footer";
 
 function isDoc(value: string): value is LegalDocKey {
   return (LEGAL_DOCS as readonly string[]).includes(value);
@@ -58,15 +59,7 @@ export default async function LegalPage({
           updated={LEGAL_UPDATED}
           contact={LEGAL_CONTACT}
         />
-
-        <footer className="foot">
-          <span>{dict.foot.brand}</span>
-          <nav className="footLinks">
-            <a href={`/${locale}/legal/privacy`}>{dict.foot.privacy}</a>
-            <a href={`/${locale}/legal/terms`}>{dict.foot.terms}</a>
-            <a href={`mailto:${LEGAL_CONTACT}`}>{dict.foot.contact}</a>
-          </nav>
-        </footer>
+        <Footer locale={locale} dict={dict} />
       </main>
     </>
   );

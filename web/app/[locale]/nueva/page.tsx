@@ -5,6 +5,7 @@ import { Nav } from "@/components/Nav";
 import { NewChartForm } from "@/components/NewChartForm";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { getSessionToken } from "@/lib/session";
+import { Footer } from "@/components/Footer";
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -43,6 +44,8 @@ export default async function NewChartPage({
         </section>
 
         <NewChartForm locale={locale} dict={dict} />
+
+        <Footer locale={locale} dict={dict} />
       </main>
     </>
   );

@@ -6,6 +6,7 @@ import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { Nav } from "@/components/Nav";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { getSessionToken } from "@/lib/session";
+import { Footer } from "@/components/Footer";
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -63,6 +64,8 @@ export default async function SignInPage({
             <Link href={`/${locale}/legal/privacy`}>{dict.foot.privacy}</Link>
           </p>
         </section>
+
+        <Footer locale={locale} dict={dict} />
       </main>
     </>
   );

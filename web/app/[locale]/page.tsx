@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 
 import { EphemerisRail } from "@/components/EphemerisRail";
-import { LEGAL_CONTACT } from "@/content/legal";
 import { Nav } from "@/components/Nav";
 import { SkyWheel } from "@/components/SkyWheel";
 import { getDict, isLocale } from "@/lib/i18n";
 import { fetchSky } from "@/lib/sky";
+import { Footer } from "@/components/Footer";
 
 export default async function Home({
   params,
@@ -245,15 +245,7 @@ export default async function Home({
               </a>
             </div>
           </section>
-
-          <footer className="foot">
-            <span>{dict.foot.brand}</span>
-            <nav className="footLinks">
-              <a href={`/${locale}/legal/privacy`}>{dict.foot.privacy}</a>
-              <a href={`/${locale}/legal/terms`}>{dict.foot.terms}</a>
-              <a href={`mailto:${LEGAL_CONTACT}`}>{dict.foot.contact}</a>
-            </nav>
-          </footer>
+          <Footer locale={locale} dict={dict} />
         </main>
       </div>
     </>

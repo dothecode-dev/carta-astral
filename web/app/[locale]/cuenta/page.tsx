@@ -8,6 +8,7 @@ import { Nav } from "@/components/Nav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { ApiError, callApi, getSessionToken } from "@/lib/session";
+import { Footer } from "@/components/Footer";
 
 /** Lo que devuelve /api/account/: no hay email ni nombre. */
 type AccountResponse = {
@@ -96,6 +97,8 @@ export default async function AccountPage({
         <div className="accountFoot">
           <SignOutButton locale={locale} label={dict.auth.signOut} />
         </div>
+
+        <Footer locale={locale} dict={dict} />
       </main>
     </>
   );

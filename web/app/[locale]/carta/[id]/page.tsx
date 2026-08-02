@@ -10,6 +10,7 @@ import { type ApiChart, toWheel } from "@/lib/chart";
 import { signOf } from "@/lib/ephemeris";
 import { INTL_LOCALE, PLANET_NAME_BY_KEY, getDict, isLocale } from "@/lib/i18n";
 import { ApiError, callApi, getSessionToken } from "@/lib/session";
+import { Footer } from "@/components/Footer";
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 const GLYPH: Record<string, string> = {
@@ -136,6 +137,8 @@ export default async function ChartPage({
           langs={chart.interpretation_langs}
           dict={dict}
         />
+
+        <Footer locale={locale} dict={dict} />
       </main>
     </>
   );

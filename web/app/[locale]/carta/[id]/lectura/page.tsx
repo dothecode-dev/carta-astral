@@ -6,6 +6,7 @@ import { Nav } from "@/components/Nav";
 import { type ApiChart } from "@/lib/chart";
 import { INTL_LOCALE, getDict, isLocale } from "@/lib/i18n";
 import { ApiError, callApi, getSessionToken } from "@/lib/session";
+import { Footer } from "@/components/Footer";
 
 type Reading = {
   text: string;
@@ -80,6 +81,8 @@ export default async function ReadingPage({
         </article>
 
         <p className="disclaimer">{reading.disclaimer}</p>
+
+        <Footer locale={locale} dict={dict} />
       </main>
     </>
   );

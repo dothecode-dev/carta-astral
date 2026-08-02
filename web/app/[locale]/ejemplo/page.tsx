@@ -4,11 +4,11 @@ import { notFound } from "next/navigation";
 
 import { Nav } from "@/components/Nav";
 import { NatalWheel } from "@/components/NatalWheel";
-import { LEGAL_CONTACT } from "@/content/legal";
 import { SAMPLE_BIRTH, SAMPLE_CHART } from "@/content/sample-chart";
 import { SAMPLE_READING } from "@/content/sample-reading";
 import { LOCALES, PLANET_NAME_BY_KEY, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
+import { Footer } from "@/components/Footer";
 
 const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
@@ -156,15 +156,7 @@ export default async function SampleChartPage({
         </div>
 
         <p className="disclaimer">{reading.disclaimer}</p>
-
-        <footer className="foot">
-          <span>{dict.foot.brand}</span>
-          <nav className="footLinks">
-            <Link href={`/${locale}/legal/privacy`}>{dict.foot.privacy}</Link>
-            <Link href={`/${locale}/legal/terms`}>{dict.foot.terms}</Link>
-            <a href={`mailto:${LEGAL_CONTACT}`}>{dict.foot.contact}</a>
-          </nav>
-        </footer>
+        <Footer locale={locale} dict={dict} />
       </main>
     </>
   );
