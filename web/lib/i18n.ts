@@ -87,6 +87,19 @@ export type Dict = {
     cancel: string;
     working: string;
   };
+  chart: {
+    back: string;
+    noWheel: string;
+    noWheelBody: string;
+    incomplete: string;
+    interpret: string;
+    interpretCost: string;
+    interpreting: string;
+    readAgain: string;
+    noCredits: string;
+    failed: string;
+    columns: { body: string; position: string; house: string };
+  };
   newChart: {
     navNew: string;
     title: string;
@@ -243,6 +256,19 @@ const es: Dict = {
     note: "Android e iOS. La primera carta no cuesta nada.",
     appleSmall: "Descargar en el",
     playSmall: "Disponible en",
+  },
+  chart: {
+    back: "← Tus cartas",
+    noWheel: "Esta carta no tiene rueda.",
+    noWheelBody: "Se cargó sin hora de nacimiento, así que no hay Ascendente ni casas para orientarla. Las posiciones planetarias sí están.",
+    incomplete: "Falta algún cuerpo: su efeméride no cubre esa fecha.",
+    interpret: "Leer mi carta",
+    interpretCost: "Usa 1 crédito. Después podés leerla en otros idiomas sin costo.",
+    interpreting: "Escribiendo tu lectura…",
+    readAgain: "Ver la lectura",
+    noCredits: "Te quedaste sin créditos.",
+    failed: "No pudimos generar la lectura. Probá de nuevo en un rato.",
+    columns: { body: "Cuerpo", position: "Posición", house: "Casa" },
   },
   newChart: {
     navNew: "Nueva carta",
@@ -432,6 +458,19 @@ const en: Dict = {
     appleSmall: "Download on the",
     playSmall: "Get it on",
   },
+  chart: {
+    back: "← Your charts",
+    noWheel: "This chart has no wheel.",
+    noWheelBody: "It was entered without a birth time, so there's no Ascendant or houses to orient it. The planetary positions are there.",
+    incomplete: "A body is missing: its ephemeris doesn't cover that date.",
+    interpret: "Read my chart",
+    interpretCost: "Uses 1 credit. After that you can read it in other languages at no cost.",
+    interpreting: "Writing your reading…",
+    readAgain: "See the reading",
+    noCredits: "You've run out of credits.",
+    failed: "We couldn't generate the reading. Try again in a while.",
+    columns: { body: "Body", position: "Position", house: "House" },
+  },
   newChart: {
     navNew: "New chart",
     title: "Compute your chart.",
@@ -619,6 +658,19 @@ const pt: Dict = {
     note: "Android e iOS. O primeiro mapa não custa nada.",
     appleSmall: "Baixar na",
     playSmall: "Disponível no",
+  },
+  chart: {
+    back: "← Seus mapas",
+    noWheel: "Este mapa não tem roda.",
+    noWheelBody: "Foi criado sem hora de nascimento, então não há Ascendente nem casas para orientá-la. As posições planetárias estão.",
+    incomplete: "Falta algum corpo: a efeméride dele não cobre essa data.",
+    interpret: "Ler meu mapa",
+    interpretCost: "Usa 1 crédito. Depois você pode lê-lo em outros idiomas sem custo.",
+    interpreting: "Escrevendo sua leitura…",
+    readAgain: "Ver a leitura",
+    noCredits: "Você ficou sem créditos.",
+    failed: "Não conseguimos gerar a leitura. Tente de novo daqui a pouco.",
+    columns: { body: "Corpo", position: "Posição", house: "Casa" },
   },
   newChart: {
     navNew: "Novo mapa",

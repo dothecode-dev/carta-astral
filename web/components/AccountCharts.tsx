@@ -60,8 +60,7 @@ export function AccountCharts({
   return (
     <div className="notes">
       {charts.map((chart) => (
-        // Hasta que exista la página de una carta, lleva a la de ejemplo.
-        <Link className="note" href={`/${locale}/ejemplo`} key={chart.id}>
+        <Link className="note" href={`/${locale}/carta/${chart.id}`} key={chart.id}>
           <span className="noteMeta">{birthLine(chart, locale)}</span>
           <span className="chartLine">
             <h3 className="noteTitle">{chart.birth.name || dict.auth.unnamedChart}</h3>

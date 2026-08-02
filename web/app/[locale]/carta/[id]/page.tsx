@@ -1,0 +1,139 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+
+import { ChartActions } from "@/components/ChartActions";
+import { Nav } from "@/components/Nav";
+import { NatalWheel } from "@/components/NatalWheel";
+import { type ApiChart, toWheel } from "@/lib/chart";
+import { signOf } from "@/lib/ephemeris";
+import { INTL_LOCALE, PLANET_NAME_BY_KEY, getDict, isLocale } from "@/lib/i18n";
+import { ApiError, callApi, getSessionToken } from "@/lib/session";
+
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+const GLYPH: Record<string, string> = {
+  Sun: "☉", Moon: "☽", Mercury: "☿", Venus: "♀", Mars: "♂",
+  Jupiter: "♃", Saturn: "♄", Uranus: "♅", Neptune: "♆", Pluto: "♇",
+  Chiron: "⚷", True_North_Lunar_Node: "☊", True_South_Lunar_Node: "☋", Mean_Lilith: "⚸",
+};
+const HOUSE_INDEX: Record<string, number> = {
+  First_House: 1, Second_House: 2, Third_House: 3, Fourth_House: 4,
+  Fifth_House: 5, Sixth_House: 6, Seventh_House: 7, Eighth_House: 8,
+  Ninth_House: 9, Tenth_House: 10, Eleventh_House: 11, Twelfth_House: 12,
+};
+
+function degreeLabel(lon: number): string {
+  const inSign = lon % 30;
+  const deg = Math.floor(inSign);
+  const min = Math.floor((inSign - deg) * 60);
+  return `${String(deg).padStart(2, "0")}°${String(min).padStart(2, "0")}′`;
+}
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
+
+export default async function ChartPage({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>;
+}) {
+  const { locale, id } = await params;
+  if (!isLocale(locale)) notFound();
+  if (!(await getSessionToken())) redirect(`/${locale}/entrar`);
+
+  const dict = getDict(locale);
+  const names = PLANET_NAME_BY_KEY[locale];
+
+  let chart: ApiChart;
+  try {
+    chart = await callApi<ApiChart>(`/api/charts/${id}/`);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      if (error.status === 401) redirect(`/${locale}/entrar`);
+      // La carta no existe, o es de otra cuenta: para quien mira es lo mismo.
+      if (error.status === 404) notFound();
+    }
+    throw error;
+  }
+
+  const wheel = toWheel(chart);
+  const fecha = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    dateStyle: "long",
+    timeZone: "UTC",
+  }).format(new Date(`${chart.birth.date}T12:00:00Z`));
+
+  return (
+    <>
+      <Nav locale={locale} dict={dict} path="/cuenta" signedIn showExample={false} />
+
+      <main className="docFrame chartFrame">
+        <Link className="backLink" href={`/${locale}/cuenta`}>
+          {dict.chart.back}
+        </Link>
+
+        <section className="chartHead">
+          <h1 className="display chartName">{chart.birth.name || dict.auth.unnamedChart}</h1>
+          <div className="birth">
+            <span>
+              {fecha}
+              {chart.birth.time ? ` · ${chart.birth.time}` : ""}
+            </span>
+            <span>{chart.birth.place_label}</span>
+          </div>
+          {chart.data.flags.bodies_missing && (
+            <p className="fieldNote">{dict.chart.incomplete}</p>
+          )}
+        </section>
+
+        <div className="chartBody">
+          {wheel ? (
+            <NatalWheel chart={wheel} alt={dict.chart.back} />
+          ) : (
+            <div className="emptyCharts">
+              <p className="emptyChartsText">
+                <strong>{dict.chart.noWheel}</strong>
+              </p>
+              <p className="emptyChartsText">{dict.chart.noWheelBody}</p>
+            </div>
+          )}
+
+          <div className="tableBlock">
+            <div className="tableWrap">
+              <table className="chartTable">
+                <thead>
+                  <tr>
+                    <th colSpan={2}>{dict.chart.columns.body}</th>
+                    <th>{dict.chart.columns.position}</th>
+                    <th className="cellRight">{dict.chart.columns.house}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {chart.data.placements.map((p) => (
+                    <tr key={p.name}>
+                      <td className="cellGlyph">{GLYPH[p.name] ?? "·"}</td>
+                      <td className="cellBody">{names[p.name] ?? p.name.replace(/_/g, " ")}</td>
+                      <td>
+                        {degreeLabel(p.abs_pos)} {signOf(p.abs_pos)}
+                      </td>
+                      <td className="cellRight">
+                        {p.house ? ROMAN[HOUSE_INDEX[p.house] - 1] : "—"}
+                      </td>
+                      <td className="cellRetro">{p.retrograde ? "℞" : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <ChartActions
+          locale={locale}
+          chartId={chart.id}
+          langs={chart.interpretation_langs}
+          dict={dict}
+        />
+      </main>
+    </>
+  );
+}

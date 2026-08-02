@@ -137,6 +137,32 @@ class InterpretationView(APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "interpretation"
 
+    def get(self, request, uuid):
+        """La lectura ya escrita, si existe. No genera ni cobra nada."""
+        lang = request.query_params.get("lang", "es")
+        if lang not in _INTERPRETATION_LANGS:
+            return Response(
+                {"error": f"lang debe ser uno de {_INTERPRETATION_LANGS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        interp = chart.interpretations.filter(
+            lang=lang, prompt_version=PROMPT_VERSION
+        ).first()
+        if interp is None:
+            # Incluye el caso de una lectura escrita con un prompt viejo: ya no
+            # es la que el sistema generaría hoy.
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {
+                "text": interp.text,
+                "lang": interp.lang,
+                "prompt_version": interp.prompt_version,
+                "disclaimer": DISCLAIMERS[interp.lang],
+                "created_at": interp.created_at.isoformat(),
+            }
+        )
+
     def post(self, request, uuid):
         lang = request.data.get("lang", "es")
         if lang not in _INTERPRETATION_LANGS:

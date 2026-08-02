@@ -55,8 +55,9 @@ export function NewChartForm({ locale, dict }: { locale: string; dict: Dict }) {
       return;
     }
 
-    // La carta ya existe: se ve en la cuenta, junto a las demás.
-    router.replace(`/${locale}/cuenta`);
+    // Directo a la carta recién calculada, que es lo que se vino a ver.
+    const chart: { id?: string } = await res.json();
+    router.replace(chart.id ? `/${locale}/carta/${chart.id}` : `/${locale}/cuenta`);
     router.refresh();
   }
 
