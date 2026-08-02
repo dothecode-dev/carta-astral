@@ -39,6 +39,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** El cuerpo crudo que devolvió el backend. Se registra, no se reenvía. */
+    readonly body = "",
   ) {
     super(message);
   }
@@ -70,9 +72,11 @@ export async function callApi<T>(
   });
 
   if (!res.ok) {
-    // El cuerpo del error del backend puede traer detalle útil, pero no se
-    // reenvía tal cual al navegador: se traduce en cada ruta.
-    throw new ApiError(res.status, `${path} devolvió ${res.status}`);
+    // El cuerpo del error del backend trae el motivo. No se reenvía tal cual al
+    // navegador —cada ruta lo traduce—, pero sin guardarlo acá el fallo llega a
+    // los logs como un 502 pelado y no hay forma de saber qué pasó.
+    const detail = await res.text().catch(() => "");
+    throw new ApiError(res.status, `${path} devolvió ${res.status}`, detail.slice(0, 500));
   }
 
   // Los borrados responden 204 sin cuerpo: intentar parsearlo haría fallar una

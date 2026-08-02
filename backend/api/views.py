@@ -21,6 +21,7 @@ from api.chart_service import create_chart
 from api.interpretation_service import (
     DISCLAIMERS,
     CapReached,
+    GenerationInProgress,
     QuotaExceeded,
     get_or_create_interpretation,
 )
@@ -182,6 +183,13 @@ class InterpretationView(APIView):
             return Response(
                 {"error": "límite diario de interpretaciones alcanzado, probá más tarde"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except GenerationInProgress:
+            # No es una falla: hay otra petición escribiendo esta misma lectura.
+            # 409 para que el cliente espere y la pida, en vez de mostrar error.
+            return Response(
+                {"error": "generación en curso"},
+                status=status.HTTP_409_CONFLICT,
             )
         except InterpretationError as exc:
             logger.warning("interpretation generation failed: %s", exc, exc_info=True)

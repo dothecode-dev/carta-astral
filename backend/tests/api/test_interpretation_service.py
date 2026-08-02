@@ -135,7 +135,9 @@ def test_lock_held_raises_without_llm(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
     cache.add(f"interp:lock:{c.id}:es:v1", "1", timeout=30)
-    with pytest.raises(InterpretationError):
+    # Distinguible de una falla real: la lectura se está escribiendo, y quien
+    # la pidió tiene que esperar en vez de ver un error.
+    with pytest.raises(svc.GenerationInProgress):
         svc.get_or_create_interpretation(c, "es", _account())
     assert fake_client.calls == 0
 

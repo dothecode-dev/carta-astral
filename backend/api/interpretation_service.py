@@ -16,7 +16,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from api import ledger
-from api.exceptions import CapReached, QuotaExceeded
+from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
 from api.models import Interpretation
 from interpret.exceptions import InterpretationError
 from interpret.generator import build_interpretation, translate_interpretation
@@ -101,7 +101,7 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
         hit = _existing(chart, lang)
         if hit is not None:
             return hit
-        raise InterpretationError("generación en curso, reintentá en unos segundos")
+        raise GenerationInProgress("generación en curso, reintentá en unos segundos")
 
     try:
         key = content_key(chart.data, lang, PROMPT_VERSION)

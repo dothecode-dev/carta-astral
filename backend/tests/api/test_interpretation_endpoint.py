@@ -118,6 +118,20 @@ def test_llm_error_503(account_client, monkeypatch, settings):
     assert Interpretation.objects.count() == 0
 
 
+def test_generation_in_progress_409(account_client, fake_client):
+    """Con el lock tomado el cliente tiene que esperar, no ver un error.
+
+    Pasó en producción: dos POST a la vez para la misma carta, el segundo caía
+    en el mismo 503 que un fallo del modelo y la web mostraba "no pudimos
+    generar la lectura" cuando en realidad se estaba escribiendo.
+    """
+    c = _chart(account=account_client.account)
+    cache.add(f"interp:lock:{c.id}:es:{svc.PROMPT_VERSION}", "1", timeout=30)
+    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    assert resp.status_code == 409
+    assert Interpretation.objects.count() == 0
+
+
 def test_cap_reached_503(account_client, monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 0
     monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
