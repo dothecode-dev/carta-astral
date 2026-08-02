@@ -56,7 +56,7 @@ export default async function AccountPage({
 
   return (
     <>
-      <Nav locale={locale} dict={dict} path="/cuenta" signedIn />
+      <Nav locale={locale} dict={dict} path="/cuenta" signedIn showExample={charts.length === 0} />
 
       <main className="docFrame accountFrame">
         <section className="accountHead">

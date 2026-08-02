@@ -28,6 +28,8 @@ export function NewChartForm({ locale, dict }: { locale: string; dict: Dict }) {
     if (sending) return;
 
     if (!date) return setError(t.needDate);
+    const year = Number(date.slice(0, 4));
+    if (year < 1800 || new Date(date) > new Date()) return setError(t.badDate);
     if (!place) return setError(t.needPlace);
     setError(null);
     setSending(true);

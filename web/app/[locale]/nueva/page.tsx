@@ -34,7 +34,7 @@ export default async function NewChartPage({
 
   return (
     <>
-      <Nav locale={locale} dict={dict} path="/nueva" signedIn />
+      <Nav locale={locale} dict={dict} path="/nueva" signedIn showExample={false} />
 
       <main className="docFrame formFrame">
         <section className="formHead">

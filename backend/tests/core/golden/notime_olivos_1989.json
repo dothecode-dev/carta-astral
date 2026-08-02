@@ -123,7 +123,8 @@
     "house_system_fallback": false,
     "moon_approximate": true,
     "precision_degraded": false,
-    "dst_ambiguous_resolved": false
+    "dst_ambiguous_resolved": false,
+    "bodies_missing": false
   },
   "julian_day": 2447722.0,
   "utc_iso": "1989-07-14T12:00:00+00:00"

@@ -107,6 +107,7 @@ export type Dict = {
     submitting: string;
     needPlace: string;
     needDate: string;
+    badDate: string;
     failed: string;
     noCredits: string;
   };
@@ -263,6 +264,7 @@ const es: Dict = {
     submitting: "Calculando…",
     needPlace: "Elegí el lugar de nacimiento.",
     needDate: "Falta la fecha de nacimiento.",
+    badDate: "Revisá la fecha: tiene que ser posterior a 1800 y no puede estar en el futuro.",
     failed: "No pudimos calcular la carta. Revisá los datos y probá de nuevo.",
     noCredits: "Te quedaste sin créditos.",
   },
@@ -450,6 +452,7 @@ const en: Dict = {
     submitting: "Computing…",
     needPlace: "Choose the place of birth.",
     needDate: "The date of birth is missing.",
+    badDate: "Check the date: it has to be after 1800 and can't be in the future.",
     failed: "We couldn't compute the chart. Check the details and try again.",
     noCredits: "You've run out of credits.",
   },
@@ -637,6 +640,7 @@ const pt: Dict = {
     submitting: "Calculando…",
     needPlace: "Escolha o local de nascimento.",
     needDate: "Falta a data de nascimento.",
+    badDate: "Revise a data: precisa ser posterior a 1800 e não pode estar no futuro.",
     failed: "Não conseguimos calcular o mapa. Revise os dados e tente de novo.",
     noCredits: "Você ficou sem créditos.",
   },

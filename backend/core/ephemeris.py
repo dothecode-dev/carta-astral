@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from kerykeion import AstrologicalSubject, NatalAspects
 
@@ -34,6 +34,27 @@ def _aspects_for(subj: AstrologicalSubject) -> list[Aspect]:
 
 _SKY_ATTRS = ["sun", "moon", "mercury", "venus", "mars",
               "jupiter", "saturn", "uranus", "neptune", "pluto"]
+
+
+def _placements_from(model: Any, attrs: list[str], with_house: bool) -> tuple[list[Placement], bool]:
+    """Los cuerpos que se pudieron calcular, y si faltó alguno.
+
+    Kerykeion devuelve None para los que su efeméride no cubre —loguea el error
+    y sigue—, así que leerles un atributo tira AttributeError. Se omiten y se
+    avisa, en vez de tirar abajo la carta entera por un cuerpo secundario.
+    """
+    placements, missing = [], False
+    for attr in attrs:
+        p = getattr(model, attr, None)
+        if p is None:
+            missing = True
+            continue
+        placements.append(
+            Placement(name=p.name, sign=p.sign, position=p.position, abs_pos=p.abs_pos,
+                      house=p.house if with_house else None,
+                      retrograde=bool(getattr(p, "retrograde", False)))
+        )
+    return placements, missing
 
 
 def sky_now(moment: datetime, lat: float = 0.0, lng: float = 0.0) -> list[Placement]:
@@ -71,16 +92,13 @@ def build_chart(birth: BirthInput) -> ChartData:
             zodiac_type=("Sidereal" if birth.zodiac == "Sidereal" else "Tropical"),
         )
         model = subj.model()
-        placements = [
-            Placement(name=p.name, sign=p.sign, position=p.position, abs_pos=p.abs_pos,
-                      house=None, retrograde=bool(getattr(p, "retrograde", False)))
-            for p in (getattr(model, a) for a in _PLANET_ATTRS)
-        ]
+        placements, missing = _placements_from(model, _PLANET_ATTRS, with_house=False)
         return ChartData(
             placements=placements, houses=None, angles=None, aspects=[],
             zodiac=birth.zodiac, house_system=birth.house_system, time_known=False,
             flags=DegradationFlags(moon_approximate=True,
-                                   precision_degraded=precision_degraded),
+                                   precision_degraded=precision_degraded or missing,
+                                   bodies_missing=missing),
             julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,
         )
 
@@ -109,11 +127,7 @@ def build_chart(birth: BirthInput) -> ChartData:
     )
     model = subj.model()
 
-    placements = [
-        Placement(name=p.name, sign=p.sign, position=p.position, abs_pos=p.abs_pos,
-                  house=p.house, retrograde=bool(getattr(p, "retrograde", False)))
-        for p in (getattr(model, a) for a in _PLANET_ATTRS)
-    ]
+    placements, missing = _placements_from(model, _PLANET_ATTRS, with_house=True)
     houses = [House(name=h.name, sign=h.sign, abs_pos=h.abs_pos)
               for h in (getattr(model, a) for a in _HOUSE_ATTRS)]
     angles = [Angle(name=g.name, sign=g.sign, abs_pos=g.abs_pos)
@@ -124,6 +138,7 @@ def build_chart(birth: BirthInput) -> ChartData:
         zodiac=birth.zodiac, house_system=house_system, time_known=True,
         flags=DegradationFlags(dst_ambiguous_resolved=dst.ambiguous_resolved,
                                house_system_fallback=fallback,
-                               precision_degraded=precision_degraded),
+                               precision_degraded=precision_degraded or missing,
+                               bodies_missing=missing),
         julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,
     )

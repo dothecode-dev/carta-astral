@@ -500,7 +500,8 @@
     "house_system_fallback": false,
     "moon_approximate": false,
     "precision_degraded": false,
-    "dst_ambiguous_resolved": true
+    "dst_ambiguous_resolved": true,
+    "bodies_missing": false
   },
   "julian_day": 2459525.7291666665,
   "utc_iso": "2021-11-07T05:30:00+00:00"

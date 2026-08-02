@@ -55,6 +55,9 @@ class DegradationFlags:
     moon_approximate: bool = False
     precision_degraded: bool = False
     dst_ambiguous_resolved: bool = False
+    #: Falta algún cuerpo porque su efeméride no cubre esa fecha. La de Quirón,
+    #: por ejemplo, arranca alrededor del año 675.
+    bodies_missing: bool = False
 
 
 @dataclass(frozen=True)
