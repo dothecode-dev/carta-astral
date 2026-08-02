@@ -8,8 +8,7 @@ import { LEGAL_CONTACT } from "@/content/legal";
 import { SAMPLE_BIRTH, SAMPLE_CHART } from "@/content/sample-chart";
 import { SAMPLE_READING } from "@/content/sample-reading";
 import { LOCALES, PLANET_NAME_BY_KEY, getDict, isLocale } from "@/lib/i18n";
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://astra.dothecode.com";
+import { SITE_URL } from "@/lib/config";
 
 const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];

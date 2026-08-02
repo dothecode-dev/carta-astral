@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import "../globals.css";
 import { DEFAULT_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
+import { SITE_URL } from "@/lib/config";
 
 // Fraunces lleva la voz de los títulos; Outfit el cuerpo, en continuidad con la
 // app; Space Mono todo lo que es dato (grados, fechas, precios).
@@ -39,10 +40,6 @@ export function generateStaticParams() {
 // Sólo existen /es, /en y /pt: cualquier otro valor del segmento da 404 sin
 // llegar a ejecutar nada.
 export const dynamicParams = false;
-
-// Google exige URLs absolutas en canonical y hreflang; con metadataBase, Next
-// resuelve las relativas de abajo contra este origen.
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://astra.dothecode.com";
 
 export async function generateMetadata({
   params,

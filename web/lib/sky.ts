@@ -1,4 +1,5 @@
 import type { BodyKey, Positions } from "./ephemeris";
+import { API_URL } from "./config";
 
 // El cielo lo calcula el backend con Swiss Ephemeris, el mismo motor con el que
 // se arman las cartas. El pedido se hace desde el servidor de Next, no desde el
@@ -9,9 +10,6 @@ import type { BodyKey, Positions } from "./ephemeris";
 // elementos orbitales (lib/ephemeris.ts), que para un dibujo de 400 píxeles es
 // indistinguible.
 
-// Sin prefijo NEXT_PUBLIC_ a propósito: este fetch sólo corre en el servidor,
-// así que la variable no tiene por qué viajar en el bundle del navegador.
-const API_URL = process.env.API_URL ?? "https://api.cartaastral.dothecode.com";
 
 const REVALIDATE_SECONDS = 60;
 const TIMEOUT_MS = 3000;

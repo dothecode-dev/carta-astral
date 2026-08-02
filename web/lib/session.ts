@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { API_URL } from "./config";
 
 // El token de sesión vive en una cookie httpOnly: el navegador lo manda solo en
 // cada pedido a este servidor, y ningún script de la página puede leerlo. El
@@ -10,7 +11,6 @@ export const SESSION_COOKIE = "astra_session";
 /** Igual que SESSION_TTL_DAYS del backend: que la cookie no sobreviva al token. */
 const MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
-const API_URL = process.env.API_URL ?? "https://api.cartaastral.dothecode.com";
 
 export async function getSessionToken(): Promise<string | null> {
   const store = await cookies();

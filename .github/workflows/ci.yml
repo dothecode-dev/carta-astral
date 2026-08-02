@@ -103,3 +103,14 @@ jobs:
       # Coolify, y acá falla en un PR en vez de en el deploy.
       - name: Build
         run: npm run build
+
+      # En el Dockerfile, `ENV VAR=$ARG` sin argumento deja la variable vacía,
+      # no ausente. El 02-08 eso rompió un deploy entero (new URL("")), y el
+      # build normal no lo detecta porque acá las variables no están definidas
+      # de la misma forma. Este paso reproduce ese caso exacto.
+      - name: Build con variables de entorno vacías
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: ""
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
+          API_URL: ""

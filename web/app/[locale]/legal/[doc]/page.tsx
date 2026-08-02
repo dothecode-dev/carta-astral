@@ -5,8 +5,7 @@ import { LegalDocument } from "@/components/LegalDocument";
 import { Nav } from "@/components/Nav";
 import { LEGAL, LEGAL_CONTACT, LEGAL_DOCS, LEGAL_UPDATED, type LegalDocKey } from "@/content/legal";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://astra.dothecode.com";
+import { SITE_URL } from "@/lib/config";
 
 function isDoc(value: string): value is LegalDocKey {
   return (LEGAL_DOCS as readonly string[]).includes(value);
