@@ -31,7 +31,7 @@ export function Nav({
           <Link href={`/${locale}`}>{dict.nav.notes}</Link>
           <Link href={`/${locale}#descargar`}>{dict.nav.download}</Link>
           <Link className="navEnter" href={`/${locale}${signedIn ? "/cuenta" : "/entrar"}`}>
-            {dict.auth.navEnter}
+            {signedIn ? dict.auth.account : dict.auth.navEnter}
           </Link>
         </div>
 

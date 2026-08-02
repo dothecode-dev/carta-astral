@@ -48,7 +48,7 @@ export default async function AccountPage({
 
   return (
     <>
-      <Nav locale={locale} dict={dict} path="/cuenta" />
+      <Nav locale={locale} dict={dict} path="/cuenta" signedIn />
 
       <main className="docFrame authFrame">
         <section className="authCard">

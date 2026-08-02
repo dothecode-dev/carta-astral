@@ -441,6 +441,11 @@ body {
 }
 
 .btn {
+  /* Nace de <a>, pero también se usa en <button>, donde el navegador pone su
+     propio fondo gris y su propia tipografía si no se los saca. */
+  font-family: inherit;
+  background: none;
+  cursor: pointer;
   font-size: 0.9375rem;
   letter-spacing: 0.01em;
   text-decoration: none;
