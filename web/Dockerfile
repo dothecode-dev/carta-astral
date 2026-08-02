@@ -9,6 +9,15 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+
+# Las variables NEXT_PUBLIC_* se incrustan al compilar, no al arrancar: si no
+# llegan acá, el bundle sale sin ellas y el login no encuentra su credencial.
+# En Coolify hay que marcarlas como variables de build.
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+
 RUN npm run build
 
 # --- Runtime ---------------------------------------------------------------

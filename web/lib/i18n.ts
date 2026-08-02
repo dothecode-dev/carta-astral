@@ -57,6 +57,18 @@ export type Dict = {
   faq: { eyebrow: string; title: string; items: { q: string; a: string }[] };
   download: { eyebrow: string; title: string; note: string; appleSmall: string; playSmall: string };
   foot: { brand: string; privacy: string; terms: string; contact: string };
+  auth: {
+    navEnter: string;
+    title: string;
+    lede: string;
+    loading: string;
+    blocked: string;
+    failed: string;
+    legal: string;
+    credits: string;
+    account: string;
+    signOut: string;
+  };
 };
 
 const es: Dict = {
@@ -191,6 +203,18 @@ const es: Dict = {
     playSmall: "Disponible en",
   },
   foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto" },
+  auth: {
+    navEnter: "Entrar",
+    title: "Entrá a tu cuenta.",
+    lede: "La misma cuenta que en la app: tus cartas y tus créditos son los mismos.",
+    loading: "Cargando…",
+    blocked: "No pudimos cargar el acceso de Google. Suele pasar con bloqueadores de rastreadores: desactivalo para este sitio y recargá.",
+    failed: "No pudimos iniciar sesión. Probá de nuevo.",
+    legal: "Al entrar aceptás los términos y la política de privacidad.",
+    credits: "créditos",
+    account: "Tu cuenta",
+    signOut: "Salir",
+  },
 };
 
 const en: Dict = {
@@ -325,6 +349,18 @@ const en: Dict = {
     playSmall: "Get it on",
   },
   foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact" },
+  auth: {
+    navEnter: "Sign in",
+    title: "Sign in to your account.",
+    lede: "The same account as in the app: your charts and your credits are the same.",
+    loading: "Loading…",
+    blocked: "We couldn't load Google sign-in. This usually comes from a tracker blocker: allow this site and reload.",
+    failed: "We couldn't sign you in. Try again.",
+    legal: "By signing in you accept the terms and the privacy policy.",
+    credits: "credits",
+    account: "Your account",
+    signOut: "Sign out",
+  },
 };
 
 const pt: Dict = {
@@ -459,6 +495,18 @@ const pt: Dict = {
     playSmall: "Disponível no",
   },
   foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato" },
+  auth: {
+    navEnter: "Entrar",
+    title: "Entre na sua conta.",
+    lede: "A mesma conta do app: seus mapas e seus créditos são os mesmos.",
+    loading: "Carregando…",
+    blocked: "Não conseguimos carregar o acesso do Google. Costuma ser um bloqueador de rastreadores: libere este site e recarregue.",
+    failed: "Não conseguimos entrar. Tente de novo.",
+    legal: "Ao entrar você aceita os termos e a política de privacidade.",
+    credits: "créditos",
+    account: "Sua conta",
+    signOut: "Sair",
+  },
 };
 
 export const DICTS: Record<Locale, Dict> = { es, en, pt };

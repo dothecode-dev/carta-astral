@@ -38,9 +38,10 @@ def _coerce_verified(value) -> bool:
 class _JwksValidator:
     """Verifica firma RS256 contra el JWKS del proveedor, e iss/aud/exp/nonce."""
 
-    def __init__(self, jwks_url: str, issuer: str, audience: str):
+    def __init__(self, jwks_url: str, issuer: str, audience: list[str]):
         self.jwks_url = jwks_url
         self.issuer = issuer
+        # PyJWT acepta una lista: el token vale si su aud es cualquiera de ellas.
         self.audience = audience
 
     def _signing_key(self, id_token: str):
@@ -66,15 +67,27 @@ class _JwksValidator:
         return claims
 
 
+def audiences_for(provider: str) -> list[str]:
+    """Las credenciales configuradas para un proveedor.
+
+    Cada plataforma tiene la suya y todas son válidas para la misma cuenta:
+    Google exige un client id por plataforma (Android, iOS, Web) y Apple usa el
+    bundle id de la app y un Services ID para el sitio. Se configuran en una sola
+    variable, separadas por coma.
+    """
+    raw = settings.APPLE_AUD if provider == "apple" else settings.GOOGLE_AUD
+    return [aud.strip() for aud in raw.split(",") if aud.strip()]
+
+
 def _build_apple_validator():
-    return _JwksValidator(settings.APPLE_JWKS_URL, settings.APPLE_ISS, settings.APPLE_AUD)
+    return _JwksValidator(settings.APPLE_JWKS_URL, settings.APPLE_ISS, audiences_for("apple"))
 
 
 def _build_google_validator():
-    return _JwksValidator(settings.GOOGLE_JWKS_URL, settings.GOOGLE_ISS, settings.GOOGLE_AUD)
+    return _JwksValidator(settings.GOOGLE_JWKS_URL, settings.GOOGLE_ISS, audiences_for("google"))
 
 
-def _validate(provider: str, aud: str, build_validator, id_token: str, nonce):
+def _validate(provider: str, aud: list[str], build_validator, id_token: str, nonce):
     if not aud:
         raise SSONotConfigured(f"{provider.upper()}_AUD no configurado")
     claims = build_validator()(id_token, nonce)
@@ -87,8 +100,8 @@ def _validate(provider: str, aud: str, build_validator, id_token: str, nonce):
 
 
 def validate_apple(id_token: str, nonce=None) -> VerifiedIdentity:
-    return _validate("apple", settings.APPLE_AUD, _build_apple_validator, id_token, nonce)
+    return _validate("apple", audiences_for("apple"), _build_apple_validator, id_token, nonce)
 
 
 def validate_google(id_token: str, nonce=None) -> VerifiedIdentity:
-    return _validate("google", settings.GOOGLE_AUD, _build_google_validator, id_token, nonce)
+    return _validate("google", audiences_for("google"), _build_google_validator, id_token, nonce)

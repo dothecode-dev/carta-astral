@@ -22,12 +22,14 @@ dev: stop ## Levanta backend y web juntos (Ctrl-C corta los dos)
 	@echo "  web     → http://localhost:$(WEB_PORT)"
 	@echo ""
 	@trap 'kill 0' EXIT INT TERM; \
-		(cd backend && DEBUG=1 .venv/bin/python manage.py runserver $(BACK_PORT)) & \
+		(cd backend && set -a && [ -f .env ] && . ./.env; set +a; \
+			DEBUG=1 .venv/bin/python manage.py runserver $(BACK_PORT)) & \
 		(cd web && npm run dev -- --port $(WEB_PORT)) & \
 		wait
 
 back: ## Sólo el backend
-	cd backend && DEBUG=1 .venv/bin/python manage.py runserver $(BACK_PORT)
+	cd backend && set -a && [ -f .env ] && . ./.env; set +a; \
+		DEBUG=1 .venv/bin/python manage.py runserver $(BACK_PORT)
 
 web: ## Sólo la web
 	cd web && npm run dev -- --port $(WEB_PORT)

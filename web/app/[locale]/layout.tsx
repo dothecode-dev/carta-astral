@@ -81,11 +81,25 @@ export default async function LocaleLayout({
   if (!isLocale(locale)) notFound();
 
   return (
-    <html lang={locale} className={`${display.variable} ${body.variable} ${mono.variable}`}>
-      <body>
+    // El script de abajo escribe data-theme antes de que React hidrate, así que
+    // el atributo del servidor y el del DOM no coinciden por diseño.
+    <html
+      lang={locale}
+      className={`${display.variable} ${body.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        {/* Corre antes del primer paint para que la página no parpadee en el
+            tema equivocado. Es la misma técnica que usa next-themes.
+
+            En desarrollo React avisa "Encountered a script tag while rendering
+            React component": es esperado y no hay forma de evitarlo sin perder
+            algo. La única alternativa real —guardar el tema en una cookie y
+            escribir data-theme desde el servidor— haría que las tres rutas
+            dejen de ser estáticas. En producción el aviso no aparece. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-        {children}
-      </body>
+      </head>
+      <body>{children}</body>
     </html>
   );
 }

@@ -1,5 +1,6 @@
 from django.urls import path
 
+from api.sessions import LogoutView
 from api.views import (
     AccountView,
     AppleAuthView,
@@ -21,5 +22,6 @@ urlpatterns = [
     path("sky/", SkyView.as_view()),
     path("auth/apple", AppleAuthView.as_view()),
     path("auth/google", GoogleAuthView.as_view()),
+    path("auth/logout", LogoutView.as_view()),
     path("webhooks/revenuecat", RevenueCatWebhookView.as_view()),
 ]

@@ -8,9 +8,12 @@ export function Nav({
   locale,
   dict,
   path = "",
+  signedIn = false,
 }: {
   locale: Locale;
   dict: Dict;
+  /** Con sesión, el acceso apunta a la cuenta en vez de al login. */
+  signedIn?: boolean;
   /** Lo que va después del idioma, para que cambiar de idioma no te saque de
    *  la página en la que estás. */
   path?: string;
@@ -27,6 +30,9 @@ export function Nav({
           <Link href={`/${locale}/ejemplo`}>{dict.nav.example}</Link>
           <Link href={`/${locale}`}>{dict.nav.notes}</Link>
           <Link href={`/${locale}#descargar`}>{dict.nav.download}</Link>
+          <Link className="navEnter" href={`/${locale}${signedIn ? "/cuenta" : "/entrar"}`}>
+            {dict.auth.navEnter}
+          </Link>
         </div>
 
         <nav className="langs" aria-label="Idioma">
@@ -36,6 +42,9 @@ export function Nav({
               href={`/${code}${path}`}
               aria-current={code === locale ? "true" : undefined}
               hrefLang={code}
+              // Es la misma página en otro idioma: mandarte al principio sería
+              // hacerte buscar de nuevo dónde estabas leyendo.
+              scroll={false}
             >
               {code.toUpperCase()}
             </Link>

@@ -12,7 +12,10 @@
   --hairline-strong: rgba(178, 173, 138, 0.55);
   --dotted: #dccb54;
 
-  --measure: 62ch;
+  /* Todo el contenido de la columna comparte borde: un solo ancho, el de la
+     columna. Antes esto era 62ch, y como ch se mide sobre el font-size de cada
+     elemento, daba cuatro anchos distintos en la misma página. */
+  --measure: 100%;
   --step-0: 1rem;
   --step-1: 1.1875rem;
   --step-2: 1.5rem;
@@ -212,6 +215,95 @@ body {
 .switch button[aria-pressed="true"] {
   background: var(--surface);
   color: var(--accent);
+}
+
+.navEnter {
+  color: var(--accent) !important;
+}
+
+/* --- Entrar y cuenta ----------------------------------------------------- */
+.authFrame {
+  max-width: 560px;
+  min-height: 60vh;
+  justify-content: center;
+}
+
+.authCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: clamp(1.75rem, 5vw, 2.75rem);
+}
+
+.authTitle {
+  font-size: var(--step-3);
+}
+
+.authLede {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.signin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+  min-height: 44px;
+}
+
+.signinNote {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  max-width: 42ch;
+}
+
+.signinError {
+  color: var(--ink);
+}
+
+.authLegal {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.authLegal a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.balance {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.balanceGlyph {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+
+.balanceNumber {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 2.5rem;
+  color: var(--ink);
+}
+
+.balanceLabel {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 /* --- Grilla ------------------------------------------------------------- */
@@ -510,6 +602,9 @@ body {
   background: var(--surface);
   border: 1px solid var(--hairline);
   border-radius: 4px;
+  /* Mismo borde derecho que las tablas y los títulos: es texto para leer, no
+     una grilla como los tres pasos o las preguntas. */
+  max-width: var(--measure);
   padding: clamp(1.75rem, 4vw, 2.75rem);
   display: flex;
   flex-direction: column;
@@ -633,6 +728,8 @@ body {
 
 .termsTable {
   font-size: 0.8125rem;
+  /* Pegada a la de precios: las dos son la misma respuesta, en dos registros. */
+  margin-top: 1.25rem;
 }
 
 .termsTable th {
@@ -688,9 +785,9 @@ body {
 
 /* --- Descarga ----------------------------------------------------------- */
 .download {
+  /* Sólo arriba: la línea de abajo duplicaba la que ya trae el pie. */
   border-top: 1px solid var(--hairline);
-  border-bottom: 1px solid var(--hairline);
-  padding: clamp(2.5rem, 6vw, 3.5rem) 0;
+  padding: clamp(2.5rem, 6vw, 3.5rem) 0 0;
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
