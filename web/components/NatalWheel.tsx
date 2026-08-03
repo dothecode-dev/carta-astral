@@ -5,14 +5,10 @@ import { useEffect, useRef } from "react";
 
 import type { SampleChart } from "@/content/sample-chart";
 import { toWheelInput } from "@/lib/chart";
+import { PLANET_GLYPHS } from "@/lib/i18n";
 
 const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-
-const GLYPH: Record<string, string> = {
-  Sun: "☉", Moon: "☽", Mercury: "☿", Venus: "♀", Mars: "♂",
-  Jupiter: "♃", Saturn: "♄", Uranus: "♅", Neptune: "♆", Pluto: "♇",
-};
 
 const ANGLE_LABEL: Record<string, string> = { Ascendant: "ASC", Medium_Coeli: "MC" };
 
@@ -139,7 +135,7 @@ export function NatalWheel({ chart, alt }: { chart: SampleChart; alt: string }) 
         line(b.tick, accent, 1);
         line(b.leader, hairline, 0.75);
         ctx.fillStyle = b.name === "Sun" ? accent : ink;
-        ctx.fillText(GLYPH[b.name] ?? "?", b.draw.x * k, b.draw.y * k);
+        ctx.fillText(PLANET_GLYPHS[b.name] ?? "?", b.draw.x * k, b.draw.y * k);
       }
     }
 

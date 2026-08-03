@@ -6,17 +6,12 @@ import { Nav } from "@/components/Nav";
 import { NatalWheel } from "@/components/NatalWheel";
 import { SAMPLE_BIRTH, SAMPLE_CHART } from "@/content/sample-chart";
 import { SAMPLE_READING } from "@/content/sample-reading";
-import { LOCALES, PLANET_NAME_BY_KEY, getDict, isLocale } from "@/lib/i18n";
+import { LOCALES, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { Footer } from "@/components/Footer";
 
 const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-const GLYPH: Record<string, string> = {
-  Sun: "☉", Moon: "☽", Mercury: "☿", Venus: "♀", Mars: "♂",
-  Jupiter: "♃", Saturn: "♄", Uranus: "♅", Neptune: "♆", Pluto: "♇",
-};
-
 const HOUSE_INDEX: Record<string, number> = {
   First_House: 1, Second_House: 2, Third_House: 3, Fourth_House: 4,
   Fifth_House: 5, Sixth_House: 6, Seventh_House: 7, Eighth_House: 8,
@@ -102,7 +97,7 @@ export default async function SampleChartPage({
                 <tbody>
                   {SAMPLE_CHART.planets.map((planet) => (
                     <tr key={planet.name}>
-                      <td className="cellGlyph">{GLYPH[planet.name]}</td>
+                      <td className="cellGlyph">{PLANET_GLYPHS[planet.name]}</td>
                       <td className="cellBody">{names[planet.name] ?? planet.name}</td>
                       <td>
                         {degreeLabel(planet.lon)} {SIGNS[Math.floor(planet.lon / 30)]}

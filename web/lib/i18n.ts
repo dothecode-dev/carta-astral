@@ -35,6 +35,17 @@ export const ASPECT_NAMES: Record<Locale, Record<string, string>> = {
 };
 
 /** Los mismos glifos que usa la app (src/astro/glyphs.ts). */
+/**
+ * Los glifos de los cuerpos. Estaba repetida en tres archivos y se
+ * desincronizo: al pasar la rueda a catorce cuerpos, la tabla de la carta de
+ * ejemplo se quedo con diez y los cuatro nuevos salieron sin simbolo.
+ */
+export const PLANET_GLYPHS: Record<string, string> = {
+  Sun: "☉", Moon: "☽", Mercury: "☿", Venus: "♀", Mars: "♂",
+  Jupiter: "♃", Saturn: "♄", Uranus: "♅", Neptune: "♆", Pluto: "♇",
+  Chiron: "⚷", True_North_Lunar_Node: "☊", True_South_Lunar_Node: "☋", Mean_Lilith: "⚸",
+};
+
 export const ASPECT_GLYPHS: Record<string, string> = {
   conjunction: "☌", opposition: "☍", trine: "△", square: "□", sextile: "✶",
 };

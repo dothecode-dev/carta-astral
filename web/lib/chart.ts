@@ -37,10 +37,18 @@ export type ApiChart = {
   };
 };
 
-/** Los diez cuerpos que dibuja la rueda, en su orden tradicional. */
+/**
+ * Los cuerpos que dibuja la rueda, en su orden tradicional.
+ *
+ * Son los catorce que calcula el motor. Hasta el 2026-08-03 eran diez: los
+ * cuatro que faltaban —Quirón, los nodos y Lilith— se calculaban, viajaban en
+ * la respuesta y se descartaban acá, así que la misma carta se veía distinta
+ * en la web que en el PDF.
+ */
 const WHEEL_BODIES = [
   "Sun", "Moon", "Mercury", "Venus", "Mars",
   "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto",
+  "Chiron", "True_North_Lunar_Node", "Mean_Lilith", "True_South_Lunar_Node",
 ];
 
 const HOUSE_ORDER = [
