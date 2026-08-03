@@ -1839,7 +1839,6 @@ body {
 
 .matrixWrap {
   display: none;
-  overflow-x: auto;
 }
 
 /* La matriz se alinea con las tablas y su titulo, no al centro: en el PDF la
@@ -1880,9 +1879,66 @@ body {
   border: 0;
 }
 
-.matrixCell abbr {
-  text-decoration: none;
-  cursor: help;
+/* La ficha del aspecto. Abre con CSS al pasar por la celda: no necesita
+   JavaScript y no depende del tooltip del navegador, que es diminuto, no se
+   puede estilar y tarda un segundo en aparecer. */
+.matrixCell {
+  position: relative;
+}
+
+.matrixTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.4rem);
+  z-index: 5;
+  width: 21rem;
+  max-width: 60vw;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 0.95rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.matrixCell:hover .matrixTip,
+.matrixCell:focus-within .matrixTip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.matrixTip b {
+  font-weight: 400;
+  font-size: 0.9375rem;
+}
+
+.matrixTipData {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* Las fichas de las dos primeras filas abrirían fuera de la pantalla. */
+.aspectMatrix tr:nth-child(-n + 3) .matrixTip {
+  bottom: auto;
+  top: calc(100% + 0.4rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matrixTip {
+    transition: none;
+  }
 }
 
 .matrixSoft {

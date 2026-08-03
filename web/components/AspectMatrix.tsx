@@ -1,6 +1,21 @@
 import { buildMatrix } from "astra-wheel";
 
-import { ASPECT_GLYPHS, ASPECT_NAMES, PLANET_GLYPHS, type Locale } from "@/lib/i18n";
+import {
+  ASPECT_ANGLE,
+  ASPECT_GLYPHS,
+  ASPECT_MEANING,
+  ASPECT_NAMES,
+  PLANET_GLYPHS,
+  PLANET_NAME_BY_KEY,
+  type Locale,
+} from "@/lib/i18n";
+
+/** Los ejes en palabras, para la ficha. */
+const AXIS_NAME: Record<Locale, Record<string, string>> = {
+  es: { Ascendant: "Ascendente", Medium_Coeli: "Medio Cielo", Descendant: "Descendente", Imum_Coeli: "Fondo del Cielo" },
+  en: { Ascendant: "Ascendant", Medium_Coeli: "Midheaven", Descendant: "Descendant", Imum_Coeli: "Imum Coeli" },
+  pt: { Ascendant: "Ascendente", Medium_Coeli: "Meio do Céu", Descendant: "Descendente", Imum_Coeli: "Fundo do Céu" },
+};
 
 /** Los ejes se rotulan con letras, no con glifo: no tienen uno de uso corriente. */
 const ANGLE_LABEL: Record<string, string> = {
@@ -34,11 +49,14 @@ export function AspectMatrix({
   aspects,
   locale,
   titulo,
+  orbeLabel,
 }: {
   bodies: string[];
   aspects: { a: string; b: string; type: string; orb: number }[];
   locale: Locale;
   titulo: string;
+  /** Cómo se llama al orbe en la ficha: "orbe", "orb". */
+  orbeLabel: string;
 }) {
   const participantes = new Set(aspects.flatMap((a) => [a.a, a.b]));
   const order = [
@@ -49,6 +67,11 @@ export function AspectMatrix({
 
   const porPar = new Map(pairs.map((p) => [`${p.a}|${p.b}`, p]));
   const nombres = ASPECT_NAMES[locale];
+  const cuerpos = PLANET_NAME_BY_KEY[locale];
+  const significados = ASPECT_MEANING[locale];
+
+  /** El nombre largo, para la ficha: en un glifo no se aprende nada. */
+  const nombrar = (n: string) => cuerpos[n] ?? AXIS_NAME[locale][n] ?? n.replace(/_/g, " ");
 
   return (
     <section className="aspects">
@@ -82,9 +105,21 @@ export function AspectMatrix({
                       : "matrixOther";
                   return (
                     <td key={col} className={`matrixCell ${clase}`}>
-                      <abbr title={`${nombres[par.type] ?? par.type} · ${par.orb.toFixed(1)}°`}>
-                        {ASPECT_GLYPHS[par.type] ?? "·"}
-                      </abbr>
+                      <span className="matrixMark">{ASPECT_GLYPHS[par.type] ?? "·"}</span>
+                      {/* La ficha explica el aspecto: quién con quién, de qué
+                          ángulo sale, cuánto se aparta y qué significa. Abre
+                          con CSS, sin JavaScript. */}
+                      <span className="matrixTip" role="note">
+                        <b>
+                          {nombrar(col)} {(nombres[par.type] ?? par.type).toLowerCase()} {nombrar(fila)}
+                        </b>
+                        <span className="matrixTipData">
+                          {ASPECT_ANGLE[par.type] != null ? `${ASPECT_ANGLE[par.type]}°` : null}
+                          {ASPECT_ANGLE[par.type] != null ? " · " : null}
+                          {orbeLabel} {par.orb.toFixed(1)}°
+                        </span>
+                        {significados[par.type] ? <span>{significados[par.type]}</span> : null}
+                      </span>
                     </td>
                   );
                 })}

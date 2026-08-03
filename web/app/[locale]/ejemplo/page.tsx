@@ -140,6 +140,7 @@ export default async function SampleChartPage({
               aspects={SAMPLE_CHART.aspects}
               locale={locale}
               titulo={dict.chart.aspects}
+            orbeLabel={dict.chart.aspectColumns.orb}
             />
           </div>
         </div>

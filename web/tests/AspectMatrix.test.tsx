@@ -14,7 +14,13 @@ const ASPECTS = [
 
 function pintar(aspects = ASPECTS, bodies = BODIES) {
   return render(
-    <AspectMatrix bodies={bodies} aspects={aspects} locale="es" titulo={dict.chart.aspects} />,
+    <AspectMatrix
+      bodies={bodies}
+      aspects={aspects}
+      locale="es"
+      titulo={dict.chart.aspects}
+      orbeLabel={dict.chart.aspectColumns.orb}
+    />,
   );
 }
 
@@ -30,15 +36,26 @@ describe("AspectMatrix", () => {
 
   it("la matriz pone un glifo por aspecto, no más", () => {
     const { container } = pintar();
-    const celdas = container.querySelectorAll(".aspectMatrix .matrixCell abbr");
+    const celdas = container.querySelectorAll(".aspectMatrix .matrixCell .matrixMark");
     expect(celdas).toHaveLength(ASPECTS.length);
   });
 
-  it("el glifo cae en el cruce de los dos cuerpos, con su orbe en el title", () => {
+  it("la ficha nombra a los dos cuerpos, el angulo, el orbe y que significa", () => {
     const { container } = pintar();
-    const trigono = container.querySelector('.aspectMatrix abbr[title*="Trígono"]')!;
-    expect(trigono.getAttribute("title")).toContain("1.2°");
-    expect(trigono.textContent).toBe("△");
+    const ficha = container.querySelector(".matrixTip")!;
+    expect(ficha.textContent).toContain("Sol");
+    expect(ficha.textContent).toContain("Luna");
+    expect(ficha.textContent).toContain("trígono");
+    expect(ficha.textContent).toContain("120°");
+    expect(ficha.textContent).toContain("1.2°");
+    // La explicacion es lo que separa una ficha de un tooltip que repite el dato.
+    expect(ficha.textContent).toContain("Fluye sin esfuerzo");
+  });
+
+  it("no usa el tooltip del navegador ni el cursor de ayuda", () => {
+    const { container } = pintar();
+    expect(container.querySelector("abbr")).toBeNull();
+    expect(container.querySelector("[title]")).toBeNull();
   });
 
   it("suma al eje los ángulos que aspectan, y no los cuerpos", () => {
@@ -55,11 +72,11 @@ describe("AspectMatrix", () => {
     // Pasa cuando la efeméride no pudo calcular un cuerpo: la celda no existe,
     // pero el componente no puede romperse por eso.
     const { container } = pintar([{ a: "Sun", b: "Ceres", type: "trine", orb: 1 }]);
-    expect(container.querySelectorAll(".aspectMatrix .matrixCell abbr")).toHaveLength(0);
+    expect(container.querySelectorAll(".aspectMatrix .matrixCell .matrixMark")).toHaveLength(0);
   });
 
   it("sin aspectos no dibuja ninguna celda ocupada", () => {
     const { container } = pintar([]);
-    expect(container.querySelectorAll(".matrixCell abbr")).toHaveLength(0);
+    expect(container.querySelectorAll(".matrixCell .matrixMark")).toHaveLength(0);
   });
 });
