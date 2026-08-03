@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ChartActions } from "@/components/ChartActions";
+import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartTables } from "@/components/ChartTables";
 import { Nav } from "@/components/Nav";
 import { NatalWheel } from "@/components/NatalWheel";
@@ -116,6 +117,23 @@ export default async function ChartPage({
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Los ejes primero, como en el PDF. DC e IC no se listan:
+                      son los opuestos exactos de AC y MC. */}
+                  {(chart.data.angles ?? [])
+                    .filter((a) => a.name === "Ascendant" || a.name === "Medium_Coeli")
+                    .map((a) => (
+                      <tr key={a.name}>
+                        <td className="cellGlyph">{a.name === "Ascendant" ? "AC" : "MC"}</td>
+                        <td className="cellBody">
+                          {dict.chart.axisNames[a.name === "Ascendant" ? "AC" : "MC"]}
+                        </td>
+                        <td>
+                          {degreeLabel(a.abs_pos)} {signOf(a.abs_pos)}
+                        </td>
+                        <td className="cellRight" />
+                        <td className="cellRetro" />
+                      </tr>
+                    ))}
                   {chart.data.placements.map((p) => (
                     <tr key={p.name}>
                       <td className="cellGlyph">{PLANET_GLYPHS[p.name] ?? "·"}</td>
@@ -135,7 +153,21 @@ export default async function ChartPage({
           </div>
         </div>
 
-        <ChartTables chart={chart} locale={locale} dict={dict} />
+        <ChartTables chart={chart} dict={dict} />
+
+        {chart.data.aspects.length > 0 && (
+          <AspectMatrix
+            bodies={chart.data.placements.map((p) => p.name)}
+            aspects={chart.data.aspects.map((a) => ({
+              a: a.p1,
+              b: a.p2,
+              type: a.aspect,
+              orb: a.orbit,
+            }))}
+            locale={locale}
+            titulo={dict.chart.aspects}
+          />
+        )}
 
         <ChartActions
           locale={locale}
