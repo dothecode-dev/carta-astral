@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type ApiChart, toWheel } from "@/lib/chart";
+import { type ApiChart, toWheel, toWheelInput } from "@/lib/chart";
 
 // La rueda no se dibuja con lo que manda el backend sino con una traducción.
 // Si esa traducción falla en silencio, la carta se dibuja mal y nadie se entera:
@@ -106,5 +106,23 @@ describe("toWheel", () => {
       }),
     )!;
     expect(w.planets[0].house).toBe("First_House");
+  });
+});
+
+describe("toWheelInput", () => {
+  it("orienta por el Ascendente, no por la primera cuspide", () => {
+    // Whole Sign: la casa 1 arranca en 0 grados del signo, el Ascendente cae adentro.
+    const w = toWheel(chart())!;
+    const wholeSign = { ...w, houses: [330, ...w.houses.slice(1)] };
+    expect(toWheelInput(wholeSign).ascendant).toBe(w.angles.Ascendant);
+    expect(toWheelInput(wholeSign).ascendant).not.toBe(330);
+  });
+
+  it("pasa todos los cuerpos y aspectos que recibe", () => {
+    const w = toWheel(chart())!;
+    const input = toWheelInput(w);
+    expect(input.bodies).toHaveLength(w.planets.length);
+    expect(input.aspects).toHaveLength(w.aspects.length);
+    expect(input.cusps).toHaveLength(12);
   });
 });
