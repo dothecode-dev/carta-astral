@@ -1507,15 +1507,13 @@ body {
   margin-inline: auto;
 }
 
-/* Las tablas comparten eje con la rueda y no se estiran a todo el ancho: a
-   1400px, una fila de cinco datos deja medio metro de vacio entre el nombre y
-   la posicion, y deja de leerse como una linea. */
+/* Las tablas usan el ancho de la columna, el mismo que la lectura: la unica
+   pieza que se sale de ese eje es la rueda, que va centrada. Tres anchos
+   distintos en la misma pagina se ven como tres decisiones sin relacion. */
 .tableBlock {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  width: min(100%, 760px);
-  margin-inline: auto;
 }
 
 .tableWrap {
@@ -1837,8 +1835,6 @@ body {
    muestra la lista, que además dice el orbe. */
 .aspects {
   margin-top: 1.5rem;
-  width: min(100%, 760px);
-  margin-inline: auto;
 }
 
 .matrixWrap {
@@ -1855,6 +1851,9 @@ body {
 }
 
 .aspectMatrix {
+  /* Ocupa el ancho de la columna, como las tablas: con 19 columnas quedan
+     celdas de unos 50px, que se leen mejor que las de 1.7rem de antes. */
+  width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1862,19 +1861,18 @@ body {
 
 .aspectMatrix th,
 .aspectMatrix td {
-  width: 1.45rem;
-  height: 1.45rem;
+  height: 2.4rem;
   padding: 0;
   text-align: center;
   vertical-align: middle;
   border: 1px solid var(--hairline);
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   font-weight: 400;
 }
 
 .matrixHead {
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .matrixCorner,
