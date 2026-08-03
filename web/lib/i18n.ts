@@ -154,6 +154,7 @@ export type Dict = {
     columns: { body: string; position: string; house: string };
     houses: string;
     aspects: string;
+    axisNames: { AC: string; MC: string };
     aspectColumns: { pair: string; aspect: string; orb: string };
     interpretFreeLang: string;
     show: string;
@@ -334,6 +335,7 @@ const es: Dict = {
     columns: { body: "Cuerpo", position: "Posición", house: "Casa" },
     houses: "Casas",
     aspects: "Aspectos",
+    axisNames: { AC: "Ascendente", MC: "Medio Cielo" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
     interpretFreeLang: "Sin costo: ya la leíste en otro idioma.",
     show: "Ver",
@@ -545,6 +547,7 @@ const en: Dict = {
     columns: { body: "Body", position: "Position", house: "House" },
     houses: "Houses",
     aspects: "Aspects",
+    axisNames: { AC: "Ascendant", MC: "Midheaven" },
     aspectColumns: { pair: "Between", aspect: "Aspect", orb: "Orb" },
     interpretFreeLang: "No cost: you already read it in another language.",
     show: "Show",
@@ -756,6 +759,7 @@ const pt: Dict = {
     columns: { body: "Corpo", position: "Posição", house: "Casa" },
     houses: "Casas",
     aspects: "Aspectos",
+    axisNames: { AC: "Ascendente", MC: "Meio do Céu" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     show: "Ver",

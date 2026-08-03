@@ -1827,3 +1827,80 @@ body {
     padding-left: 0;
   }
 }
+
+/* La matriz de aspectos: el grid triangular de las cartas impresas.
+   Dieciocho columnas no entran en un teléfono, así que por debajo de 900px se
+   muestra la lista, que además dice el orbe. */
+.aspects {
+  margin-top: 1.5rem;
+}
+
+.matrixWrap {
+  display: none;
+  overflow-x: auto;
+}
+
+/* En pantalla angosta el titulo sobra: lo dice el desplegable. */
+.aspectsTitle {
+  display: none;
+}
+
+.aspectMatrix {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.aspectMatrix th,
+.aspectMatrix td {
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+  border: 1px solid var(--hairline);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.matrixHead {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.matrixCorner,
+.matrixVoid {
+  border: 0;
+}
+
+.matrixCell abbr {
+  text-decoration: none;
+  cursor: help;
+}
+
+.matrixSoft {
+  color: var(--accent);
+}
+
+.matrixHard {
+  color: var(--ink-soft);
+}
+
+.matrixOther {
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+@media (min-width: 900px) {
+  .matrixWrap {
+    display: block;
+  }
+
+  .aspectsTitle {
+    display: block;
+  }
+
+  .aspectListWrap {
+    display: none;
+  }
+}

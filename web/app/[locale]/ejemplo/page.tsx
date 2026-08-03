@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Nav } from "@/components/Nav";
+import { AspectMatrix } from "@/components/AspectMatrix";
 import { NatalWheel } from "@/components/NatalWheel";
 import { SAMPLE_BIRTH, SAMPLE_CHART } from "@/content/sample-chart";
 import { SAMPLE_READING } from "@/content/sample-reading";
@@ -95,6 +96,21 @@ export default async function SampleChartPage({
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Los ejes primero, como en el PDF. DC e IC no se listan:
+                      son los opuestos exactos de AC y MC. */}
+                  {([["AC", SAMPLE_CHART.angles.Ascendant], ["MC", SAMPLE_CHART.angles.Medium_Coeli]] as const).map(
+                    ([sigla, lon]) => (
+                      <tr key={sigla}>
+                        <td className="cellGlyph">{sigla}</td>
+                        <td className="cellBody">{dict.chart.axisNames[sigla]}</td>
+                        <td>
+                          {degreeLabel(lon)} {SIGNS[Math.floor(lon / 30)]}
+                        </td>
+                        <td className="cellRight" />
+                        <td className="cellRetro" />
+                      </tr>
+                    ),
+                  )}
                   {SAMPLE_CHART.planets.map((planet) => (
                     <tr key={planet.name}>
                       <td className="cellGlyph">{PLANET_GLYPHS[planet.name]}</td>
@@ -119,11 +135,12 @@ export default async function SampleChartPage({
               </span>
             </div>
 
-            <p className="eyebrow">{reading.legend.axes}</p>
-            <div className="legend">
-              <span>ASC {degreeLabel(SAMPLE_CHART.angles.Ascendant)} {SIGNS[Math.floor(SAMPLE_CHART.angles.Ascendant / 30)]}</span>
-              <span>MC {degreeLabel(SAMPLE_CHART.angles.Medium_Coeli)} {SIGNS[Math.floor(SAMPLE_CHART.angles.Medium_Coeli / 30)]}</span>
-            </div>
+            <AspectMatrix
+              bodies={SAMPLE_CHART.planets.map((p) => p.name)}
+              aspects={SAMPLE_CHART.aspects}
+              locale={locale}
+              titulo={dict.chart.aspects}
+            />
           </div>
         </div>
 
