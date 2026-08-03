@@ -1493,21 +1493,29 @@ body {
   font-weight: 400;
 }
 
+/* La carta se lee como el PDF: primero la rueda, grande y centrada, y debajo
+   las tablas. La rueda es lo que la persona vino a ver; ponerla en una columna
+   al costado la volvia una ilustracion al lado del texto. */
 .chartBody {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: clamp(1.5rem, 4vw, 3.5rem);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2rem, 5vw, 3.5rem);
 }
 
 .wheelHolderWide {
-  align-self: start;
+  width: min(100%, 620px);
+  margin-inline: auto;
 }
 
+/* Las tablas comparten eje con la rueda y no se estiran a todo el ancho: a
+   1400px, una fila de cinco datos deja medio metro de vacio entre el nombre y
+   la posicion, y deja de leerse como una linea. */
 .tableBlock {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
+  width: min(100%, 760px);
+  margin-inline: auto;
 }
 
 .tableWrap {
@@ -1690,11 +1698,7 @@ body {
   margin: 0;
 }
 
-@media (max-width: 860px) {
-  .chartBody {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
+
 
 /* --- Pie ---------------------------------------------------------------- */
 .foot {
@@ -1833,12 +1837,17 @@ body {
    muestra la lista, que además dice el orbe. */
 .aspects {
   margin-top: 1.5rem;
+  width: min(100%, 760px);
+  margin-inline: auto;
 }
 
 .matrixWrap {
   display: none;
   overflow-x: auto;
 }
+
+/* La matriz se alinea con las tablas y su titulo, no al centro: en el PDF la
+   unica pieza centrada es la rueda. */
 
 /* En pantalla angosta el titulo sobra: lo dice el desplegable. */
 .aspectsTitle {
