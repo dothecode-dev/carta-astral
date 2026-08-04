@@ -1,8 +1,10 @@
 import os
 
+from django.conf import settings
 from django.contrib import admin
 from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
+from django.views.static import serve
 
 from api.legal import legal_page
 from cms import api as cms_api
@@ -30,6 +32,19 @@ urlpatterns = [
     path("legal/privacy", legal_page, {"doc": "privacy"}),
     path("legal/terms", legal_page, {"doc": "terms"}),
 ]
+
+# Las imágenes del CMS se sirven con `django.views.static.serve`, no con
+# WhiteNoise: WhiteNoise indexa sus archivos una sola vez al arrancar (salvo
+# `WHITENOISE_AUTOREFRESH`, desaconsejado en producción y no acotable a un
+# solo directorio), así que una imagen subida después de ese arranque
+# quedaría sin servir hasta el próximo restart. `serve` lee del disco en
+# cada request, que es justo lo que hace falta para contenido que cambia en
+# runtime. El tráfico es bajo (un solo editor) y el proceso ya está detrás
+# del proxy de Coolify, así que el costo de no tener gzip/sendfile acá es
+# aceptable.
+urlpatterns.append(
+    path("media/<path:path>", serve, {"document_root": settings.MEDIA_ROOT})
+)
 
 if ADMIN_URL:
     urlpatterns.append(path(f"{ADMIN_URL}/", admin.site.urls))

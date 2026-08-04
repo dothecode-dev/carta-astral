@@ -40,6 +40,12 @@ COPY --from=builder /app /app
 # collectstatic corre con DEBUG off pero no necesita la key real.
 RUN SECRET_KEY=build-only-not-used python manage.py collectstatic --noinput
 
+# Las imágenes del CMS viven fuera de /app: el deploy reemplaza ese directorio
+# entero (`COPY --from=builder /app /app` de arriba). En Coolify hay que
+# montar un volumen persistente en /data/media, o cada deploy las borra.
+RUN mkdir -p /data/media
+VOLUME ["/data/media"]
+
 EXPOSE 8000
 
 ENTRYPOINT ["/app/entrypoint.sh"]

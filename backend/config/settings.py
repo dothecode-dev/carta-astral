@@ -266,6 +266,18 @@ WAGTAIL_I18N_ENABLED = True
 WAGTAIL_CONTENT_LANGUAGES = [("es", "Español"), ("en", "English"), ("pt", "Português")]
 
 
+# Sólo mapas de bits: un SVG es un documento con scripts (RF6).
+WAGTAILIMAGES_EXTENSIONS = ["gif", "jpg", "jpeg", "png", "webp"]
+
+# Media (imágenes subidas al CMS)
+# https://docs.djangoproject.com/en/6.0/topics/files/
+
+# Fuera de /app, porque el Dockerfile reemplaza ese directorio entero en cada
+# deploy (`COPY --from=builder /app /app`). En Coolify este directorio se
+# monta como volumen persistente: ver Dockerfile.
+MEDIA_ROOT = os.environ.get("MEDIA_ROOT", "/data/media")
+MEDIA_URL = "/media/"
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
