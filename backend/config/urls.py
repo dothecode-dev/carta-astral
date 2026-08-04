@@ -5,6 +5,7 @@ from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 
 from api.legal import legal_page
+from cms import api as cms_api
 
 # El admin es de SÓLO LECTURA (ver api/admin.py) y vive en una ruta que se
 # configura por entorno: sin ADMIN_URL no se monta, así que en un despliegue que
@@ -25,6 +26,7 @@ def healthz(_request: HttpRequest) -> JsonResponse:
 urlpatterns = [
     path("healthz/", healthz),
     path("api/", include("api.urls")),
+    path("cms/api/v2/", include((cms_api.api_router.get_urlpatterns(), "wagtailapi"))),
     path("legal/privacy", legal_page, {"doc": "privacy"}),
     path("legal/terms", legal_page, {"doc": "terms"}),
 ]

@@ -4,6 +4,7 @@ from datetime import date
 
 from django.db import models
 from wagtail.admin.panels import FieldPanel
+from wagtail.api import APIField
 from wagtail.fields import RichTextField
 from wagtail.models import Page
 
@@ -43,6 +44,15 @@ class NotePage(Page):
         FieldPanel("bajada"),
         FieldPanel("portada"),
         FieldPanel("cuerpo"),
+    ]
+
+    # Sin esto los campos existen en el modelo pero no viajan en la respuesta
+    # de la API: `PagesAPIViewSet` sólo serializa lo que está acá declarado.
+    api_fields = [
+        APIField("fecha"),
+        APIField("bajada"),
+        APIField("cuerpo"),
+        APIField("portada"),
     ]
 
     class Meta:
