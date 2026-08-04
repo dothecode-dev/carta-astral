@@ -87,9 +87,10 @@ INSTALLED_APPS = [
     # `wagtail.documents` va instalado: sin él, el admin ni siquiera arranca
     # (`wagtailadmin_tags.wagtail_config` reversea su API incondicionalmente,
     # y sin el módulo esa ruta no existe -> 500 en cualquier página del panel,
-    # login incluido). Riesgo aceptado por Gustavo (spec RF6, revisado
-    # 2026-08-04): un solo editor, sin más gente con acceso al panel. Lo que
-    # se conserva es la lista blanca de extensiones de imagen (Tarea 7).
+    # login incluido). Que esté instalado NO significa que se pueda subir nada:
+    # `WAGTAILDOCS_EXTENSIONS` (más abajo) bloquea toda subida de documentos,
+    # que era XSS almacenado sobre el origen del admin. La lista blanca de
+    # extensiones de imagen (Tarea 7) es aparte y también sigue en pie.
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
     "wagtail.embeds",
