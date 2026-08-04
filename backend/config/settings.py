@@ -109,8 +109,21 @@ INSTALLED_APPS = [
 ]
 
 WAGTAIL_SITE_NAME = "ASTRA"
-# Wagtail lo exige para armar URLs absolutas en el admin.
-WAGTAILADMIN_BASE_URL = os.environ.get("WAGTAILADMIN_BASE_URL", "http://localhost:8000")
+# Wagtail lo exige para armar URLs absolutas en el admin, y la API del CMS la
+# usa para armar `full_url` en las imágenes (contrato con la web: usa esa
+# clave, no `url`, para las portadas). Mismo patrón que `SECRET_KEY`: default
+# a localhost SÓLO en DEBUG; sin la env var en producción, fail-fast en vez de
+# arrancar con un default que deja las portadas de todas las notas rotas en
+# la web, sin ningún error visible.
+WAGTAILADMIN_BASE_URL = os.environ.get("WAGTAILADMIN_BASE_URL") or (
+    "http://localhost:8000" if DEBUG else ""
+)
+if not WAGTAILADMIN_BASE_URL:
+    raise ImproperlyConfigured(
+        "WAGTAILADMIN_BASE_URL env var es obligatoria cuando DEBUG está apagado: "
+        "sin ella, `full_url` en la API de imágenes apunta a localhost y las "
+        "portadas de las notas salen rotas en la web."
+    )
 
 # Un formulario de login expuesto a internet sin límite de intentos no es una
 # hipótesis de riesgo: es un problema conocido.

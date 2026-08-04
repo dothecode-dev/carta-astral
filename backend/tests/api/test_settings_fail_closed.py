@@ -37,6 +37,7 @@ PROD_MINIMO = {
     "SECRET_KEY": "no-es-la-de-prod-pero-existe",
     "ALLOWED_HOSTS": "api.ejemplo.com",
     "USE_DB_CACHE": "1",
+    "WAGTAILADMIN_BASE_URL": "https://cms.ejemplo.com",
 }
 
 
@@ -102,6 +103,31 @@ def test_el_cache_compartido_es_obligatorio_en_produccion(monkeypatch):
             ALLOWED_HOSTS="x.com",
             USE_DB_CACHE=None,
         )
+
+
+def test_sin_wagtailadmin_base_url_en_produccion_no_arranca(monkeypatch):
+    """Fail-fast: sin esta var, la API del CMS arma `full_url` apuntando a
+    localhost y las portadas de las notas salen rotas en la web, sin ningún
+    error visible (B2 de la revisión final)."""
+    with pytest.raises(ImproperlyConfigured):
+        _cargar_settings(monkeypatch, **{**PROD_MINIMO, "WAGTAILADMIN_BASE_URL": None})
+
+
+def test_wagtailadmin_base_url_viene_del_entorno_en_produccion(monkeypatch):
+    s = _cargar_settings(
+        monkeypatch, **{**PROD_MINIMO, "WAGTAILADMIN_BASE_URL": "https://cms.dothecode.dev"}
+    )
+
+    assert s.WAGTAILADMIN_BASE_URL == "https://cms.dothecode.dev"
+
+
+def test_wagtailadmin_base_url_apunta_a_localhost_en_desarrollo(monkeypatch):
+    """En DEBUG sí puede haber default a localhost: es lo correcto en dev."""
+    s = _cargar_settings(
+        monkeypatch, DEBUG="1", SECRET_KEY=None, ALLOWED_HOSTS=None, WAGTAILADMIN_BASE_URL=None
+    )
+
+    assert s.WAGTAILADMIN_BASE_URL == "http://localhost:8000"
 
 
 @pytest.fixture(autouse=True)
