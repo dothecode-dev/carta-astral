@@ -3,11 +3,28 @@
 from datetime import date
 
 from django.db import models
+from rest_framework.fields import Field
 from wagtail.admin.panels import FieldPanel
 from wagtail.api import APIField
 from wagtail.fields import RichTextField
 from wagtail.images.api.fields import ImageRenditionField
 from wagtail.models import Page
+from wagtail.rich_text import expand_db_html
+
+
+class RichTextAPIField(Field):
+    """Expande el formato interno de un `RichTextField` a HTML usable.
+
+    Wagtail guarda el cuerpo en un formato propio (`<a linktype="page"
+    id="3">`, `<embed embedtype="image" id="1" format="left" alt="T"/>`) y
+    sólo lo expande a HTML real (`<a href>`, `<img src>`) en las plantillas,
+    vía el tag `{% richtext %}`. La API v2 no lo hace sola: sin este campo,
+    `cuerpo` viajaría crudo y la primera nota con una imagen o un enlace
+    interno saldría rota en la web.
+    """
+
+    def to_representation(self, value):
+        return expand_db_html(value)
 
 
 class NoteIndexPage(Page):
@@ -75,7 +92,7 @@ class NotePage(Page):
     api_fields = [
         APIField("fecha"),
         APIField("bajada"),
-        APIField("cuerpo"),
+        APIField("cuerpo", serializer=RichTextAPIField()),
         APIField("portada"),
         APIField("portada_tarjeta", serializer=ImageRenditionField("fill-640x400")),
         APIField("portada_cabecera", serializer=ImageRenditionField("width-1600")),

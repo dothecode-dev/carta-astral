@@ -81,6 +81,38 @@ def test_los_campos_declarados_viajan_en_la_respuesta(nota_publicada):
 
 
 @pytest.mark.django_db
+def test_el_cuerpo_expande_imagen_y_enlace_interno(nota_publicada, settings, tmp_path):
+    """El caso que se le escapó a `test_los_campos_declarados_viajan_en_la_respuesta`,
+    que sólo usa un `<p>` plano.
+
+    Wagtail guarda el cuerpo en un formato interno
+    (`<a linktype="page" id="3">`, `<embed embedtype="image" id="1" .../>`):
+    sin expandirlo, la API devolvería ese crudo y la primera nota con una
+    imagen o un enlace interno saldría rota en la web. La API tiene que
+    devolver HTML ya expandido y usable (`<img src="...">`, `<a href="...">`).
+    """
+    settings.MEDIA_ROOT = str(tmp_path)
+    Image = get_image_model()
+    imagen = Image.objects.create(title="Rueda del cielo", file=get_test_image_file())
+    indice = nota_publicada.get_parent()
+
+    nota_publicada.cuerpo = (
+        f'<p>Ver el <a linktype="page" id="{indice.id}">índice</a></p>'
+        f'<embed embedtype="image" id="{imagen.id}" format="left" alt="Rueda"/>'
+    )
+    nota_publicada.save()
+
+    resp = APIClient().get("/cms/api/v2/pages/?type=cms.NotePage&fields=*")
+    cuerpo = resp.json()["items"][0]["cuerpo"]
+
+    assert "<img" in cuerpo and 'src="' in cuerpo
+    assert "<a href=" in cuerpo
+    # El formato interno no debe sobrevivir a la expansión.
+    assert "linktype=" not in cuerpo
+    assert "embedtype=" not in cuerpo
+
+
+@pytest.mark.django_db
 def test_una_nota_de_otro_idioma_no_aparece(nota_publicada):
     """RF4: cada idioma es una página aparte y la API filtra por `?locale=`.
 
