@@ -108,7 +108,7 @@ function chartCon(data: Partial<ApiChart["data"]>): ApiChart {
 
 describe("ChartTables", () => {
   it("no muestra tablas vacías", () => {
-    const { container } = render(<ChartTables chart={chartCon({})} locale="es" dict={dict} />);
+    const { container } = render(<ChartTables chart={chartCon({})} dict={dict} />);
     expect(container.querySelectorAll("details")).toHaveLength(0);
   });
 
@@ -121,7 +121,6 @@ describe("ChartTables", () => {
             { name: "Second_House", abs_pos: 45 },
           ],
         })}
-        locale="es"
         dict={dict}
       />,
     );
@@ -133,23 +132,4 @@ describe("ChartTables", () => {
     expect(within(bloque).getByText(/15°00′ ♉/)).toBeInTheDocument();
   });
 
-  it("cuenta los aspectos y los traduce", () => {
-    render(
-      <ChartTables
-        chart={chartCon({
-          aspects: [
-            { p1: "Sun", p2: "Moon", aspect: "trine", orbit: 1.24 },
-            { p1: "Mars", p2: "Saturn", aspect: "square", orbit: 3.5 },
-          ],
-        })}
-        locale="es"
-        dict={dict}
-      />,
-    );
-
-    const bloque = screen.getByText(dict.chart.aspects).closest("details")!;
-    expect(within(bloque).getByText("2")).toBeInTheDocument();
-    expect(within(bloque).getByText("Sol · Luna")).toBeInTheDocument();
-    expect(within(bloque).getByText("1.2°")).toBeInTheDocument();
-  });
 });

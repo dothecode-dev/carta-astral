@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "astra-wheel": "github:dothecode-dev/astra-wheel#a9c8f4e2a2a463184bd8c58bae1bcbd266ae6fee",
     "next": "16.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4"

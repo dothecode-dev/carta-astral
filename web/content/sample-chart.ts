@@ -96,6 +96,30 @@ export const SAMPLE_CHART: SampleChart = {
       "lon": 238.038,
       "house": "Ninth_House",
       "retro": true
+    },
+    {
+      "name": "Chiron",
+      "lon": 154.9479,
+      "house": "Sixth_House",
+      "retro": true
+    },
+    {
+      "name": "True_North_Lunar_Node",
+      "lon": 235.8838,
+      "house": "Ninth_House",
+      "retro": true
+    },
+    {
+      "name": "Mean_Lilith",
+      "lon": 27.1636,
+      "house": "Second_House",
+      "retro": false
+    },
+    {
+      "name": "True_South_Lunar_Node",
+      "lon": 55.8838,
+      "house": "Third_House",
+      "retro": true
     }
   ],
   "houses": [
@@ -150,6 +174,30 @@ export const SAMPLE_CHART: SampleChart = {
       "orb": 6.43
     },
     {
+      "a": "Sun",
+      "b": "True_North_Lunar_Node",
+      "type": "trine",
+      "orb": 4.27
+    },
+    {
+      "a": "Sun",
+      "b": "Ascendant",
+      "type": "conjunction",
+      "orb": 5.4
+    },
+    {
+      "a": "Sun",
+      "b": "Descendant",
+      "type": "opposition",
+      "orb": 5.4
+    },
+    {
+      "a": "Sun",
+      "b": "True_South_Lunar_Node",
+      "type": "sextile",
+      "orb": 4.27
+    },
+    {
       "a": "Moon",
       "b": "Uranus",
       "type": "sextile",
@@ -168,6 +216,42 @@ export const SAMPLE_CHART: SampleChart = {
       "orb": 4.91
     },
     {
+      "a": "Moon",
+      "b": "True_North_Lunar_Node",
+      "type": "trine",
+      "orb": 2.76
+    },
+    {
+      "a": "Moon",
+      "b": "Ascendant",
+      "type": "conjunction",
+      "orb": 3.89
+    },
+    {
+      "a": "Moon",
+      "b": "Medium_Coeli",
+      "type": "square",
+      "orb": 3.61
+    },
+    {
+      "a": "Moon",
+      "b": "Descendant",
+      "type": "opposition",
+      "orb": 3.89
+    },
+    {
+      "a": "Moon",
+      "b": "Imum_Coeli",
+      "type": "square",
+      "orb": 3.61
+    },
+    {
+      "a": "Moon",
+      "b": "True_South_Lunar_Node",
+      "type": "sextile",
+      "orb": 2.76
+    },
+    {
       "a": "Mercury",
       "b": "Mars",
       "type": "conjunction",
@@ -178,6 +262,42 @@ export const SAMPLE_CHART: SampleChart = {
       "b": "Pluto",
       "type": "square",
       "orb": 2.98
+    },
+    {
+      "a": "Mercury",
+      "b": "True_North_Lunar_Node",
+      "type": "square",
+      "orb": 0.82
+    },
+    {
+      "a": "Mercury",
+      "b": "Chiron",
+      "type": "opposition",
+      "orb": 9.89
+    },
+    {
+      "a": "Mercury",
+      "b": "Medium_Coeli",
+      "type": "sextile",
+      "orb": 1.67
+    },
+    {
+      "a": "Mercury",
+      "b": "Imum_Coeli",
+      "type": "trine",
+      "orb": 1.67
+    },
+    {
+      "a": "Mercury",
+      "b": "Mean_Lilith",
+      "type": "sextile",
+      "orb": 2.1
+    },
+    {
+      "a": "Mercury",
+      "b": "True_South_Lunar_Node",
+      "type": "square",
+      "orb": 0.82
     },
     {
       "a": "Venus",
@@ -192,10 +312,40 @@ export const SAMPLE_CHART: SampleChart = {
       "orb": 6.73
     },
     {
+      "a": "Venus",
+      "b": "Ascendant",
+      "type": "conjunction",
+      "orb": 7.75
+    },
+    {
+      "a": "Venus",
+      "b": "Descendant",
+      "type": "opposition",
+      "orb": 7.75
+    },
+    {
       "a": "Mars",
       "b": "Saturn",
       "type": "conjunction",
       "orb": 1.19
+    },
+    {
+      "a": "Mars",
+      "b": "Chiron",
+      "type": "opposition",
+      "orb": 1.04
+    },
+    {
+      "a": "Mars",
+      "b": "Imum_Coeli",
+      "type": "trine",
+      "orb": 7.18
+    },
+    {
+      "a": "Saturn",
+      "b": "Chiron",
+      "type": "opposition",
+      "orb": 0.15
     },
     {
       "a": "Uranus",
@@ -210,10 +360,160 @@ export const SAMPLE_CHART: SampleChart = {
       "orb": 2.69
     },
     {
+      "a": "Uranus",
+      "b": "True_North_Lunar_Node",
+      "type": "sextile",
+      "orb": 0.54
+    },
+    {
+      "a": "Uranus",
+      "b": "Ascendant",
+      "type": "sextile",
+      "orb": 1.67
+    },
+    {
+      "a": "Uranus",
+      "b": "Descendant",
+      "type": "trine",
+      "orb": 1.67
+    },
+    {
+      "a": "Uranus",
+      "b": "Mean_Lilith",
+      "type": "square",
+      "orb": 1.82
+    },
+    {
+      "a": "Uranus",
+      "b": "True_South_Lunar_Node",
+      "type": "trine",
+      "orb": 0.54
+    },
+    {
       "a": "Neptune",
       "b": "Pluto",
       "type": "sextile",
       "orb": 5.21
+    },
+    {
+      "a": "Neptune",
+      "b": "True_North_Lunar_Node",
+      "type": "sextile",
+      "orb": 3.06
+    },
+    {
+      "a": "Neptune",
+      "b": "Ascendant",
+      "type": "sextile",
+      "orb": 4.19
+    },
+    {
+      "a": "Neptune",
+      "b": "Descendant",
+      "type": "trine",
+      "orb": 4.19
+    },
+    {
+      "a": "Neptune",
+      "b": "Mean_Lilith",
+      "type": "square",
+      "orb": 4.34
+    },
+    {
+      "a": "Neptune",
+      "b": "True_South_Lunar_Node",
+      "type": "trine",
+      "orb": 3.06
+    },
+    {
+      "a": "Pluto",
+      "b": "True_North_Lunar_Node",
+      "type": "conjunction",
+      "orb": 2.15
+    },
+    {
+      "a": "Pluto",
+      "b": "Ascendant",
+      "type": "trine",
+      "orb": 1.02
+    },
+    {
+      "a": "Pluto",
+      "b": "Descendant",
+      "type": "sextile",
+      "orb": 1.02
+    },
+    {
+      "a": "Pluto",
+      "b": "True_South_Lunar_Node",
+      "type": "opposition",
+      "orb": 2.15
+    },
+    {
+      "a": "True_North_Lunar_Node",
+      "b": "Ascendant",
+      "type": "trine",
+      "orb": 1.13
+    },
+    {
+      "a": "True_North_Lunar_Node",
+      "b": "Descendant",
+      "type": "sextile",
+      "orb": 1.13
+    },
+    {
+      "a": "Chiron",
+      "b": "Mean_Lilith",
+      "type": "trine",
+      "orb": 7.78
+    },
+    {
+      "a": "Ascendant",
+      "b": "Medium_Coeli",
+      "type": "square",
+      "orb": 0.28
+    },
+    {
+      "a": "Ascendant",
+      "b": "Imum_Coeli",
+      "type": "square",
+      "orb": 0.28
+    },
+    {
+      "a": "Ascendant",
+      "b": "True_South_Lunar_Node",
+      "type": "sextile",
+      "orb": 1.13
+    },
+    {
+      "a": "Medium_Coeli",
+      "b": "Descendant",
+      "type": "square",
+      "orb": 0.28
+    },
+    {
+      "a": "Medium_Coeli",
+      "b": "Mean_Lilith",
+      "type": "trine",
+      "orb": 0.43
+    },
+    {
+      "a": "Descendant",
+      "b": "Imum_Coeli",
+      "type": "square",
+      "orb": 0.28
+    },
+    {
+      "a": "Descendant",
+      "b": "True_South_Lunar_Node",
+      "type": "trine",
+      "orb": 1.13
+    },
+    {
+      "a": "Imum_Coeli",
+      "b": "Mean_Lilith",
+      "type": "sextile",
+      "orb": 0.43
     }
   ]
 };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type ApiChart, toWheel } from "@/lib/chart";
+import { type ApiChart, toWheel, toWheelInput } from "@/lib/chart";
 
 // La rueda no se dibuja con lo que manda el backend sino con una traducción.
 // Si esa traducción falla en silencio, la carta se dibuja mal y nadie se entera:
@@ -53,7 +53,7 @@ describe("toWheel", () => {
     expect(w.houses[0]).toBe(0);
     expect(w.angles.Ascendant).toBe(0);
     expect(w.angles.Medium_Coeli).toBe(270);
-    expect(w.planets.map((p) => p.name)).toEqual(["Sun", "Moon", "Saturn"]);
+    expect(w.planets.map((p) => p.name)).toEqual(["Sun", "Moon", "Saturn", "Chiron"]);
     expect(w.planets.find((p) => p.name === "Saturn")?.retro).toBe(true);
   });
 
@@ -78,12 +78,20 @@ describe("toWheel", () => {
     expect(w.angles.Imum_Coeli).toBe(100);
   });
 
-  it("deja fuera de la rueda los cuerpos que no dibuja", () => {
+  it("dibuja los catorce cuerpos del motor, no diez", () => {
+    // Quirón, los nodos y Lilith se calculaban y se descartaban acá: la misma
+    // carta se veía distinta en la web que en el PDF. Cambiado el 2026-08-03.
     const w = toWheel(chart())!;
-    expect(w.planets.some((p) => p.name === "Chiron")).toBe(false);
-    // Y los aspectos que los involucran, o quedarían líneas hacia la nada.
-    expect(w.aspects).toHaveLength(1);
-    expect(w.aspects[0]).toMatchObject({ a: "Sun", b: "Moon", type: "trine" });
+    expect(w.planets.some((p) => p.name === "Chiron")).toBe(true);
+  });
+
+  it("deja fuera los aspectos de un cuerpo que no se dibuja", () => {
+    // Si no, quedarían líneas hacia la nada.
+    const w = toWheel(chart())!;
+    for (const a of w.aspects) {
+      expect(w.planets.some((p) => p.name === a.a)).toBe(true);
+      expect(w.planets.some((p) => p.name === a.b)).toBe(true);
+    }
   });
 
   it("no dibuja rueda sin hora de nacimiento", () => {
@@ -108,3 +116,22 @@ describe("toWheel", () => {
     expect(w.planets[0].house).toBe("First_House");
   });
 });
+
+describe("toWheelInput", () => {
+  it("orienta por el Ascendente, no por la primera cuspide", () => {
+    // Whole Sign: la casa 1 arranca en 0 grados del signo, el Ascendente cae adentro.
+    const w = toWheel(chart())!;
+    const wholeSign = { ...w, houses: [330, ...w.houses.slice(1)] };
+    expect(toWheelInput(wholeSign).ascendant).toBe(w.angles.Ascendant);
+    expect(toWheelInput(wholeSign).ascendant).not.toBe(330);
+  });
+
+  it("pasa todos los cuerpos y aspectos que recibe", () => {
+    const w = toWheel(chart())!;
+    const input = toWheelInput(w);
+    expect(input.bodies).toHaveLength(w.planets.length);
+    expect(input.aspects).toHaveLength(w.aspects.length);
+    expect(input.cusps).toHaveLength(12);
+  });
+});
+

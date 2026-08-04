@@ -34,7 +34,60 @@ export const ASPECT_NAMES: Record<Locale, Record<string, string>> = {
         square: "Quadratura", sextile: "Sextil", quintile: "Quintil" },
 };
 
+/** El angulo exacto de cada aspecto, para explicar de donde sale. */
+export const ASPECT_ANGLE: Record<string, number> = {
+  conjunction: 0, sextile: 60, quintile: 72, square: 90, trine: 120, quincunx: 150, opposition: 180,
+};
+
+/**
+ * Que significa cada aspecto, en una frase.
+ *
+ * Mucha gente llega a su carta sin saber leer una matriz de aspectos. La celda
+ * sola no ensena nada: dice que hay un sextil entre la Luna y el Ascendente y
+ * deja a la persona igual que antes.
+ */
+export const ASPECT_MEANING: Record<Locale, Record<string, string>> = {
+  es: {
+    conjunction: "Dos cuerpos en el mismo punto del cielo. No dialogan: se funden y actúan como uno solo, para bien y para mal.",
+    opposition: "Enfrentados, cada uno en una punta de la carta. Piden equilibrio, y mientras no lo encuentran se turnan para mandar.",
+    square: "Fricción entre dos cuerpos que se estorban. Es incómoda y es motor: casi todo lo que una persona construye sale de sus cuadraturas.",
+    trine: "Fluye sin esfuerzo, y por eso se nota poco. Es talento que ya está: el riesgo es no usarlo nunca porque nunca dolió.",
+    sextile: "Una ocasión, no un regalo. Funciona cuando la persona hace algo con ella; si no, pasa de largo sin avisar.",
+    quintile: "Un ángulo menor, ligado a lo creativo. Se lee con cuidado: su efecto es sutil y no todos los astrólogos lo usan.",
+    quincunx: "Dos cuerpos que no se ven entre sí y tienen que convivir igual. Se siente como un ajuste que nunca termina de cerrar.",
+  },
+  en: {
+    conjunction: "Two bodies at the same point in the sky. They don't talk: they merge and act as one, for better and for worse.",
+    opposition: "Facing each other from opposite ends of the chart. They ask for balance, and until they find it they take turns running the show.",
+    square: "Friction between two bodies that get in each other's way. It's uncomfortable and it's an engine: most of what a person builds comes out of their squares.",
+    trine: "It flows without effort, which is why it goes unnoticed. It's talent already there: the risk is never using it because it never hurt.",
+    sextile: "An opening, not a gift. It works when the person does something with it; otherwise it passes by without a word.",
+    quintile: "A minor angle, tied to the creative. Read it carefully: its effect is subtle and not every astrologer uses it.",
+    quincunx: "Two bodies that can't see each other and have to live together anyway. It feels like an adjustment that never quite settles.",
+  },
+  pt: {
+    conjunction: "Dois corpos no mesmo ponto do céu. Não dialogam: se fundem e agem como um só, para o bem e para o mal.",
+    opposition: "Frente a frente, cada um numa ponta do mapa. Pedem equilíbrio, e enquanto não o encontram se revezam no comando.",
+    square: "Atrito entre dois corpos que se atrapalham. É incômodo e é motor: quase tudo o que uma pessoa constrói sai das suas quadraturas.",
+    trine: "Flui sem esforço, e por isso quase não se nota. É talento que já está ali: o risco é nunca usá-lo porque nunca doeu.",
+    sextile: "Uma ocasião, não um presente. Funciona quando a pessoa faz algo com ela; se não, passa direto sem avisar.",
+    quintile: "Um ângulo menor, ligado ao criativo. Lê-se com cuidado: seu efeito é sutil e nem todo astrólogo o usa.",
+    quincunx: "Dois corpos que não se enxergam e precisam conviver assim mesmo. Sente-se como um ajuste que nunca fecha de todo.",
+  },
+};
+
 /** Los mismos glifos que usa la app (src/astro/glyphs.ts). */
+/**
+ * Los glifos de los cuerpos. Estaba repetida en tres archivos y se
+ * desincronizo: al pasar la rueda a catorce cuerpos, la tabla de la carta de
+ * ejemplo se quedo con diez y los cuatro nuevos salieron sin simbolo.
+ */
+export const PLANET_GLYPHS: Record<string, string> = {
+  Sun: "☉", Moon: "☽", Mercury: "☿", Venus: "♀", Mars: "♂",
+  Jupiter: "♃", Saturn: "♄", Uranus: "♅", Neptune: "♆", Pluto: "♇",
+  Chiron: "⚷", True_North_Lunar_Node: "☊", True_South_Lunar_Node: "☋", Mean_Lilith: "⚸",
+};
+
 export const ASPECT_GLYPHS: Record<string, string> = {
   conjunction: "☌", opposition: "☍", trine: "△", square: "□", sextile: "✶",
 };
@@ -143,6 +196,7 @@ export type Dict = {
     columns: { body: string; position: string; house: string };
     houses: string;
     aspects: string;
+    axisNames: { AC: string; MC: string };
     aspectColumns: { pair: string; aspect: string; orb: string };
     interpretFreeLang: string;
     show: string;
@@ -323,6 +377,7 @@ const es: Dict = {
     columns: { body: "Cuerpo", position: "Posición", house: "Casa" },
     houses: "Casas",
     aspects: "Aspectos",
+    axisNames: { AC: "Ascendente", MC: "Medio Cielo" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
     interpretFreeLang: "Sin costo: ya la leíste en otro idioma.",
     show: "Ver",
@@ -534,6 +589,7 @@ const en: Dict = {
     columns: { body: "Body", position: "Position", house: "House" },
     houses: "Houses",
     aspects: "Aspects",
+    axisNames: { AC: "Ascendant", MC: "Midheaven" },
     aspectColumns: { pair: "Between", aspect: "Aspect", orb: "Orb" },
     interpretFreeLang: "No cost: you already read it in another language.",
     show: "Show",
@@ -745,6 +801,7 @@ const pt: Dict = {
     columns: { body: "Corpo", position: "Posição", house: "Casa" },
     houses: "Casas",
     aspects: "Aspectos",
+    axisNames: { AC: "Ascendente", MC: "Meio do Céu" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     show: "Ver",

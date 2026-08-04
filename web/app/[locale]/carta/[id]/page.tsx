@@ -3,21 +3,18 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ChartActions } from "@/components/ChartActions";
+import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartTables } from "@/components/ChartTables";
 import { Nav } from "@/components/Nav";
 import { NatalWheel } from "@/components/NatalWheel";
+import { Reading } from "@/components/Reading";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import { signOf } from "@/lib/ephemeris";
-import { INTL_LOCALE, PLANET_NAME_BY_KEY, getDict, isLocale } from "@/lib/i18n";
+import { INTL_LOCALE, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
 import { ApiError, callApi, getSessionToken } from "@/lib/session";
 import { Footer } from "@/components/Footer";
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-const GLYPH: Record<string, string> = {
-  Sun: "☉", Moon: "☽", Mercury: "☿", Venus: "♀", Mars: "♂",
-  Jupiter: "♃", Saturn: "♄", Uranus: "♅", Neptune: "♆", Pluto: "♇",
-  Chiron: "⚷", True_North_Lunar_Node: "☊", True_South_Lunar_Node: "☋", Mean_Lilith: "⚸",
-};
 const HOUSE_INDEX: Record<string, number> = {
   First_House: 1, Second_House: 2, Third_House: 3, Fourth_House: 4,
   Fifth_House: 5, Sixth_House: 6, Seventh_House: 7, Eighth_House: 8,
@@ -76,7 +73,9 @@ export default async function ChartPage({
 
   return (
     <>
-      <Nav locale={locale} dict={dict} path="/cuenta" signedIn showExample={false} />
+      {/* El path va con el id: si fuera "/cuenta", cambiar de idioma sacaría de
+          la carta y llevaría a la lista. */}
+      <Nav locale={locale} dict={dict} path={`/carta/${id}`} signedIn showExample={false} />
 
       <main className="docFrame chartFrame">
         <Link className="backLink" href={`/${locale}/cuenta`}>
@@ -121,9 +120,26 @@ export default async function ChartPage({
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Los ejes primero, como en el PDF. DC e IC no se listan:
+                      son los opuestos exactos de AC y MC. */}
+                  {(chart.data.angles ?? [])
+                    .filter((a) => a.name === "Ascendant" || a.name === "Medium_Coeli")
+                    .map((a) => (
+                      <tr key={a.name}>
+                        <td className="cellGlyph">{a.name === "Ascendant" ? "AC" : "MC"}</td>
+                        <td className="cellBody">
+                          {dict.chart.axisNames[a.name === "Ascendant" ? "AC" : "MC"]}
+                        </td>
+                        <td>
+                          {degreeLabel(a.abs_pos)} {signOf(a.abs_pos)}
+                        </td>
+                        <td className="cellRight" />
+                        <td className="cellRetro" />
+                      </tr>
+                    ))}
                   {chart.data.placements.map((p) => (
                     <tr key={p.name}>
-                      <td className="cellGlyph">{GLYPH[p.name] ?? "·"}</td>
+                      <td className="cellGlyph">{PLANET_GLYPHS[p.name] ?? "·"}</td>
                       <td className="cellBody">{names[p.name] ?? p.name.replace(/_/g, " ")}</td>
                       <td>
                         {degreeLabel(p.abs_pos)} {signOf(p.abs_pos)}
@@ -140,7 +156,22 @@ export default async function ChartPage({
           </div>
         </div>
 
-        <ChartTables chart={chart} locale={locale} dict={dict} />
+        <ChartTables chart={chart} dict={dict} />
+
+        {chart.data.aspects.length > 0 && (
+          <AspectMatrix
+            bodies={chart.data.placements.map((p) => p.name)}
+            aspects={chart.data.aspects.map((a) => ({
+              a: a.p1,
+              b: a.p2,
+              type: a.aspect,
+              orb: a.orbit,
+            }))}
+            locale={locale}
+            titulo={dict.chart.aspects}
+            orbeLabel={dict.chart.aspectColumns.orb}
+          />
+        )}
 
         <ChartActions
           locale={locale}
@@ -152,11 +183,7 @@ export default async function ChartPage({
         {reading && (
           <section className="reading">
             <p className="eyebrow">{dict.chart.reading}</p>
-            {reading.text.split(/\n{2,}/).map((parrafo, i) => (
-              <p key={i} className="readingParagraph">
-                {parrafo.trim()}
-              </p>
-            ))}
+            <Reading texto={reading.text} />
             <p className="disclaimer">{reading.disclaimer}</p>
           </section>
         )}

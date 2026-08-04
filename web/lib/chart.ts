@@ -1,3 +1,5 @@
+import type { WheelInput } from "astra-wheel";
+
 import type { SampleChart } from "@/content/sample-chart";
 
 // La rueda natal se dibujó para la carta de ejemplo, que vive en el repo con un
@@ -35,10 +37,18 @@ export type ApiChart = {
   };
 };
 
-/** Los diez cuerpos que dibuja la rueda, en su orden tradicional. */
+/**
+ * Los cuerpos que dibuja la rueda, en su orden tradicional.
+ *
+ * Son los catorce que calcula el motor. Hasta el 2026-08-03 eran diez: los
+ * cuatro que faltaban —Quirón, los nodos y Lilith— se calculaban, viajaban en
+ * la respuesta y se descartaban acá, así que la misma carta se veía distinta
+ * en la web que en el PDF.
+ */
 const WHEEL_BODIES = [
   "Sun", "Moon", "Mercury", "Venus", "Mars",
   "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto",
+  "Chiron", "True_North_Lunar_Node", "Mean_Lilith", "True_South_Lunar_Node",
 ];
 
 const HOUSE_ORDER = [
@@ -46,6 +56,27 @@ const HOUSE_ORDER = [
   "Fifth_House", "Sixth_House", "Seventh_House", "Eighth_House",
   "Ninth_House", "Tenth_House", "Eleventh_House", "Twelfth_House",
 ];
+
+/**
+ * Adapta la carta al formato que entiende `astra-wheel`.
+ *
+ * La orientación sale de `angles.Ascendant`, nunca de la primera cúspide:
+ * coinciden en Placidus, pero en Whole Sign la casa 1 empieza en 0° del signo
+ * y el Ascendente cae hasta 29° adentro.
+ */
+export function toWheelInput(chart: SampleChart): WheelInput {
+  return {
+    bodies: chart.planets.map((p) => ({ name: p.name, lon: p.lon })),
+    cusps: chart.houses,
+    ascendant: chart.angles.Ascendant,
+    // Solo los dos que se rotulan en el borde. DC e IC quedan implicitos.
+    angles: [
+      { name: "Ascendant", lon: chart.angles.Ascendant },
+      { name: "Medium_Coeli", lon: chart.angles.Medium_Coeli },
+    ],
+    aspects: chart.aspects.map((a) => ({ a: a.a, b: a.b, type: a.type, orb: a.orb })),
+  };
+}
 
 /**
  * Adapta la carta del backend al formato que dibuja la rueda.

@@ -1493,17 +1493,25 @@ body {
   font-weight: 400;
 }
 
+/* La carta se lee como el PDF: primero la rueda, grande y centrada, y debajo
+   las tablas. La rueda es lo que la persona vino a ver; ponerla en una columna
+   al costado la volvia una ilustracion al lado del texto. */
 .chartBody {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: clamp(1.5rem, 4vw, 3.5rem);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2rem, 5vw, 3.5rem);
 }
 
+/* La rueda comparte ancho y eje con la lectura: la pagina tiene dos medidas,
+   la del ancho completo para los datos y esta para lo que va centrado. */
 .wheelHolderWide {
-  align-self: start;
+  width: min(100%, 62ch);
+  margin-inline: auto;
 }
 
+/* Las tablas usan el ancho de la columna, el mismo que la lectura: la unica
+   pieza que se sale de ese eje es la rueda, que va centrada. Tres anchos
+   distintos en la misma pagina se ven como tres decisiones sin relacion. */
 .tableBlock {
   display: flex;
   flex-direction: column;
@@ -1594,18 +1602,22 @@ body {
 }
 
 /* --- La lectura ---------------------------------------------------------- */
+/* La lectura se lee renglón a renglón, así que mantiene la medida corta: a
+   todo el ancho de la columna daría 119 caracteres por línea y el ojo se
+   pierde al volver del final de una línea al principio de la siguiente. Va
+   centrada, como la rueda: lo que no ocupa el ancho completo se centra. */
 .reading {
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
-  max-width: var(--measure);
+  width: min(100%, 62ch);
+  margin-inline: auto;
 }
 
 .readingParagraph {
   margin: 0;
   line-height: 1.8;
   font-size: 1.0625rem;
-  max-width: 62ch;
 }
 
 .readingOpen {
@@ -1690,11 +1702,7 @@ body {
   margin: 0;
 }
 
-@media (max-width: 860px) {
-  .chartBody {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
+
 
 /* --- Pie ---------------------------------------------------------------- */
 .foot {
@@ -1826,4 +1834,171 @@ body {
   .note:hover {
     padding-left: 0;
   }
+}
+
+/* La matriz de aspectos: el grid triangular de las cartas impresas.
+   Dieciocho columnas no entran en un teléfono, así que por debajo de 900px se
+   muestra la lista, que además dice el orbe. */
+.aspects {
+  margin-top: 1.5rem;
+}
+
+.matrixWrap {
+  display: none;
+}
+
+/* La matriz se alinea con las tablas y su titulo, no al centro: en el PDF la
+   unica pieza centrada es la rueda. */
+
+/* En pantalla angosta el titulo sobra: lo dice el desplegable. */
+.aspectsTitle {
+  display: none;
+}
+
+.aspectMatrix {
+  /* Ocupa el ancho de la columna, como las tablas: con 19 columnas quedan
+     celdas de unos 50px, que se leen mejor que las de 1.7rem de antes. */
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.aspectMatrix th,
+.aspectMatrix td {
+  height: 2.4rem;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+  border: 1px solid var(--hairline);
+  font-size: 0.9375rem;
+  font-weight: 400;
+}
+
+.matrixHead {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.matrixCorner,
+.matrixVoid {
+  border: 0;
+}
+
+/* La ficha del aspecto. Abre con CSS al pasar por la celda: no necesita
+   JavaScript y no depende del tooltip del navegador, que es diminuto, no se
+   puede estilar y tarda un segundo en aparecer. */
+.matrixCell {
+  position: relative;
+}
+
+.matrixTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.4rem);
+  z-index: 5;
+  width: 21rem;
+  max-width: 60vw;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 0.95rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.matrixCell:hover .matrixTip,
+.matrixCell:focus-within .matrixTip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.matrixTip b {
+  font-weight: 400;
+  font-size: 0.9375rem;
+}
+
+.matrixTipData {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* Las fichas de las dos primeras filas abrirían fuera de la pantalla. */
+.aspectMatrix tr:nth-child(-n + 3) .matrixTip {
+  bottom: auto;
+  top: calc(100% + 0.4rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matrixTip {
+    transition: none;
+  }
+}
+
+.matrixSoft {
+  color: var(--accent);
+}
+
+.matrixHard {
+  color: var(--ink-soft);
+}
+
+.matrixOther {
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+@media (min-width: 900px) {
+  .matrixWrap {
+    display: block;
+  }
+
+  .aspectsTitle {
+    display: block;
+  }
+
+  .aspectListWrap {
+    display: none;
+  }
+}
+
+/* Los títulos y las listas de la lectura. El markdown del modelo llegaba
+   crudo: se leía "## Una presencia" con la almohadilla a la vista. */
+.readingTitle {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  font-size: 1.375rem;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.readingList {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  line-height: 1.8;
+  font-size: 1.0625rem;
+}
+
+.readingList li::marker {
+  color: var(--accent);
+}
+
+.readingParagraph strong {
+  font-weight: 500;
+  color: var(--ink);
 }
