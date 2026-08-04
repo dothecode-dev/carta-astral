@@ -118,9 +118,15 @@ def test_un_staff_ve_las_cuentas_pero_no_los_datos_de_nacimiento(admin_montado):
         },
         acc,
     )
-    User.objects.create_superuser("staff", "s@x.com", "pw-de-test-12345")
+    staff = User.objects.create_superuser("staff", "s@x.com", "pw-de-test-12345")
     c = Client()
-    c.login(username="staff", password="pw-de-test-12345")
+    # force_login en vez de login: django-axes exige un `request` real en
+    # authenticate(), y Client.login() no lo pasa. No es una regresión de
+    # producción (el login real sí manda request) — es que login() cambió de
+    # contrato al agregar axes. force_login no pasa por las auth backends,
+    # así que no interactúa con axes; lo que este test verifica (permisos y
+    # scrubbing de datos) no depende de cómo se estableció la sesión.
+    c.force_login(staff)
 
     listado = c.get("/panel-test/api/chart/")
 
@@ -138,9 +144,10 @@ def test_el_ledger_se_ve_para_investigar_un_no_me_acreditaron(admin_montado):
     from api import ledger
 
     ledger.credit_purchase(acc, 10, external_id="evt_visible", note="revenuecat:credits_10")
-    User.objects.create_superuser("staff2", "s2@x.com", "pw-de-test-12345")
+    staff2 = User.objects.create_superuser("staff2", "s2@x.com", "pw-de-test-12345")
     c = Client()
-    c.login(username="staff2", password="pw-de-test-12345")
+    # force_login: ver comentario en test_un_staff_ve_las_cuentas_pero_no_los_datos_de_nacimiento.
+    c.force_login(staff2)
 
     r = c.get("/panel-test/api/credittransaction/")
 

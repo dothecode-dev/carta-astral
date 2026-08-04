@@ -15,10 +15,17 @@ def test_wagtail_esta_instalado():
     assert apps.is_installed("wagtail.images")
 
 
-def test_no_se_instala_el_modulo_de_documentos():
-    # Un documento servible desde el mismo host que la API es XSS almacenado
-    # sobre ese origen (RF6).
-    assert not apps.is_installed("wagtail.documents")
+def test_se_instala_el_modulo_de_documentos():
+    # Decisión revisada 2026-08-04 (spec RF6): antes iba excluido por el
+    # riesgo de XSS de un documento servible desde el mismo host que la API.
+    # Se instala igual porque, sin él, el admin de Wagtail no arranca:
+    # `wagtailadmin_tags.wagtail_config` reversea su API incondicionalmente
+    # (`wagtailadmin_api:documents:listing`), y sin el módulo esa ruta no
+    # existe -> 500 en cualquier página del panel, login incluido
+    # (reproducido, no supuesto). Riesgo aceptado por Gustavo: un solo
+    # editor, sin más gente con acceso al panel. No lo vuelvas a sacar sin
+    # resolver antes ese 500.
+    assert apps.is_installed("wagtail.documents")
 
 
 def test_el_healthcheck_sigue_sin_tocar_la_base(client):

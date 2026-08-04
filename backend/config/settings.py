@@ -74,7 +74,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "rest_framework",
     "api",
-    # --- CMS de las notas. `wagtail.documents` queda afuera a propósito (RF6). ---
+    # --- CMS de las notas. ---
+    # `wagtail.documents` va instalado: sin él, el admin ni siquiera arranca
+    # (`wagtailadmin_tags.wagtail_config` reversea su API incondicionalmente,
+    # y sin el módulo esa ruta no existe -> 500 en cualquier página del panel,
+    # login incluido). Riesgo aceptado por Gustavo (spec RF6, revisado
+    # 2026-08-04): un solo editor, sin más gente con acceso al panel. Lo que
+    # se conserva es la lista blanca de extensiones de imagen (Tarea 7).
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
     "wagtail.embeds",
@@ -82,6 +88,7 @@ INSTALLED_APPS = [
     "wagtail.users",
     "wagtail.snippets",
     "wagtail.images",
+    "wagtail.documents",
     "wagtail.search",
     "wagtail.admin",
     "wagtail",
