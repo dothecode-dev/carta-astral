@@ -129,12 +129,15 @@ export function AspectMatrix({
         </table>
       </div>
 
-      {/* Lista: sólo en pantalla angosta. Dice el orbe, que la matriz calla.
-          Va plegada porque son decenas de filas: una carta típica tiene más de
-          sesenta aspectos, y desplegadas dejan la página interminable en un
-          teléfono. Se usa <details>, que abre sin JavaScript. */}
+      {/* La lista con los orbes. Va plegada porque son decenas de filas: una
+          carta típica pasa los sesenta aspectos. En pantalla ancha acompaña a
+          la matriz —que muestra el conjunto pero calla los orbes salvo al
+          pasar el mouse, de a uno— y en angosta la reemplaza. Se usa
+          <details>, que abre sin JavaScript. */}
       <details className="foldout aspectListWrap">
-        <summary className="foldoutHead">{titulo}</summary>
+        <summary className="foldoutHead">
+          {pairs.length} {titulo.toLowerCase()}
+        </summary>
         <table className="chartTable">
           <tbody>
             {pairs.map((p) => (

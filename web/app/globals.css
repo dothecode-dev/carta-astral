@@ -1969,12 +1969,13 @@ body {
     display: block;
   }
 
-  .aspectsTitle {
-    display: block;
+  /* Con la matriz arriba, la lista respira un poco mas. */
+  .aspectListWrap {
+    margin-top: 1.25rem;
   }
 
-  .aspectListWrap {
-    display: none;
+  .aspectsTitle {
+    display: block;
   }
 }
 

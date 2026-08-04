@@ -25,10 +25,18 @@ function pintar(aspects = ASPECTS, bodies = BODIES) {
 }
 
 describe("AspectMatrix", () => {
+  it("el desplegable dice cuantos aspectos hay", () => {
+    // Con la matriz al lado, repetir "Aspectos" no aportaba; el numero si.
+    pintar();
+    expect(screen.getByRole("group").querySelector("summary")?.textContent?.trim()).toBe(
+      `${ASPECTS.length} ${dict.chart.aspects.toLowerCase()}`,
+    );
+  });
+
   it("la lista traduce el aspecto y dice el orbe", () => {
     // Es lo que la matriz calla: el orbe sólo está acá y en el title de la celda.
     pintar();
-    const lista = screen.getByText(dict.chart.aspects, { selector: "summary" }).closest("details")!;
+    const lista = screen.getByRole("group").querySelector("table")!;
     expect(within(lista).getByText("Trígono")).toBeInTheDocument();
     expect(within(lista).getByText("1.2°")).toBeInTheDocument();
     expect(within(lista).getByText("3.5°")).toBeInTheDocument();
