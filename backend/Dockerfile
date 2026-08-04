@@ -40,9 +40,12 @@ COPY --from=builder /app /app
 # collectstatic corre con DEBUG off pero no necesita la key real. USE_DB_CACHE=1
 # sólo satisface el fail-fast de `config/settings.py` (sin caché compartida no
 # arranca fuera de DEBUG); collectstatic no toca cache ni DB, así que no hace
-# falta ninguna base real acá. Nada de esto queda en la imagen final: es un
-# prefijo de ESTE `RUN`, no un `ENV`.
-RUN SECRET_KEY=build-only-not-used USE_DB_CACHE=1 python manage.py collectstatic --noinput
+# falta ninguna base real acá. WAGTAILADMIN_BASE_URL dummy por el mismo motivo:
+# collectstatic no arma ninguna URL de imagen, sólo necesita que el import de
+# settings no explote por el fail-fast de esa var. Nada de esto queda en la
+# imagen final: es un prefijo de ESTE `RUN`, no un `ENV`.
+RUN SECRET_KEY=build-only-not-used USE_DB_CACHE=1 WAGTAILADMIN_BASE_URL=http://build-only-not-used \
+    python manage.py collectstatic --noinput
 
 # Las imágenes del CMS viven fuera de /app: el deploy reemplaza ese directorio
 # entero (`COPY --from=builder /app /app` de arriba). En Coolify hay que
