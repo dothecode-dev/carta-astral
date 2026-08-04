@@ -12,6 +12,10 @@ from api.legal import legal_page
 # regalarle la puerta a los bots que la escanean.
 ADMIN_URL = os.environ.get("ADMIN_URL", "").strip("/")
 
+# El admin del CMS, igual que el de Django: sólo existe si el entorno lo pide,
+# y en una ruta que no es la que escanean los bots.
+WAGTAIL_ADMIN_URL = os.environ.get("WAGTAIL_ADMIN_URL", "").strip("/")
+
 
 def healthz(_request: HttpRequest) -> JsonResponse:
     """Liveness para Coolify: el proceso responde. No toca la DB a propósito."""
@@ -27,3 +31,8 @@ urlpatterns = [
 
 if ADMIN_URL:
     urlpatterns.append(path(f"{ADMIN_URL}/", admin.site.urls))
+
+if WAGTAIL_ADMIN_URL:
+    from wagtail.admin import urls as wagtailadmin_urls
+
+    urlpatterns.append(path(f"{WAGTAIL_ADMIN_URL}/", include(wagtailadmin_urls)))
