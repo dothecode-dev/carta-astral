@@ -109,6 +109,22 @@ INSTALLED_APPS = [
     "cms",
 ]
 
+# `manage.py check` sale limpio o no sirve para nada: cuatro warnings fijos que
+# nadie puede accionar entrenan a ignorar la salida, y el quinto —el que sí
+# importa— pasa desapercibido.
+#
+# treebeard.E001 avisa que el manager por defecto de un MP_Node no subclasea
+# `MP_NodeManager` y que eso será un error en Treebeard 6. Los cuatro que
+# aparecen acá son de Wagtail, no nuestros: `BasePageManager(models.Manager)`
+# (wagtail/models/pages.py:142) y el equivalente de Collection. Nuestros dos
+# modelos del CMS lo heredan por ser subclases de `Page` — no hay manager
+# propio que corregir, y pisar el de Wagtail sería peor que el warning.
+# Verificado contra wagtail 7.4.2 / treebeard 5.3.0, las instaladas.
+#
+# `tests/api/test_system_checks.py` falla el día que Wagtail lo arregle, para
+# que este silencio no sobreviva a su motivo.
+SILENCED_SYSTEM_CHECKS = ["treebeard.E001"]
+
 WAGTAIL_SITE_NAME = "ASTRA"
 # Wagtail lo exige para armar URLs absolutas en el admin, y la API del CMS la
 # usa para armar `full_url` en las imágenes (contrato con la web: usa esa
