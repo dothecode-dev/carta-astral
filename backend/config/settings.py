@@ -72,6 +72,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # `wagtail.search` (abajo) define su tabla de índice con `SearchVectorField`
+    # y `GinIndex` cuando la base es Postgres (lo decide `modelsearch` mirando
+    # `connection.vendor` al importarse). Sin este app, Django no falla al
+    # correr sobre SQLite (donde no aplica) pero SÍ falla el `migrate`/
+    # `makemigrations` real en producción (Postgres) con
+    # `postgres.E005: 'django.contrib.postgres' must be in INSTALLED_APPS`.
+    # Verificado en Tarea 9 corriendo el arranque contra Postgres de verdad;
+    # el desarrollo local usa SQLite por default y nunca lo disparó.
+    "django.contrib.postgres",
     "rest_framework",
     "api",
     # --- CMS de las notas. ---
