@@ -126,6 +126,10 @@ def test_un_staff_ve_las_cuentas_pero_no_los_datos_de_nacimiento(admin_montado):
     # contrato al agregar axes. force_login no pasa por las auth backends,
     # así que no interactúa con axes; lo que este test verifica (permisos y
     # scrubbing de datos) no depende de cómo se estableció la sesión.
+    #
+    # Que el login REAL sigue andando con axes en la cadena de backends —y a
+    # quién bloquea— lo cubre `tests/api/test_login_axes.py`, que le pega al
+    # formulario del admin con POST: acá no queda esa superficie sin probar.
     c.force_login(staff)
 
     listado = c.get("/panel-test/api/chart/")

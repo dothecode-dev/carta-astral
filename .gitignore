@@ -4,6 +4,8 @@ __pycache__/
 .superpowers/
 *.sqlite3
 staticfiles/
+# portadas subidas al CMS en desarrollo (en prod es el volumen /data/media)
+backend/media/
 # docs/ es privado: specs con modelo de negocio + análisis de seguridad. Repo público.
 docs/
 # claves privadas (Sign in with Apple .p8, keystores): NUNCA versionadas

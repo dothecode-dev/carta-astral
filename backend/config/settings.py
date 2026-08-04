@@ -146,6 +146,9 @@ if not WEB_BASE_URL:
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # horas
 AXES_LOCKOUT_PARAMETERS = ["ip_address"]
+# Sin esto, la IP que axes bloquea es la de Traefik para TODAS las requests, o
+# sea que el bloqueo cae sobre todo el mundo a la vez: ver `config/axes_ip.py`.
+AXES_CLIENT_IP_CALLABLE = "config.axes_ip.ip_del_cliente"
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",
     "django.contrib.auth.backends.ModelBackend",
@@ -155,6 +158,12 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # `LANGUAGE_CODE` es global y lo pide el CMS en 'es' (ver más abajo), pero
+    # el que decide el idioma de una respuesta de `/api/` es el cliente: sin
+    # este middleware, el `detail` de un 429 o un 401 sale en español para la
+    # app en inglés y en portugués. Va después de Session y antes de Common,
+    # como pide la documentación de Django.
+    'django.middleware.locale.LocaleMiddleware',
     'wagtail.contrib.redirects.middleware.RedirectMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -291,7 +300,11 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-# El contenido del CMS vive en los mismos tres idiomas que la app y la web.
+# El contenido del CMS vive en los mismos tres idiomas que la app y la web, y
+# éste es el que Wagtail toma como locale por defecto (`Locale.get_default()`).
+# OJO: el setting es global, no sólo del CMS — es el idioma de fallback de toda
+# respuesta traducible, incluidos los errores de DRF en `/api/`. Que cada
+# cliente reciba el suyo lo resuelve `LocaleMiddleware` (ver MIDDLEWARE).
 LANGUAGE_CODE = 'es'
 
 TIME_ZONE = 'UTC'
@@ -330,7 +343,13 @@ REVALIDATE_SECRET = os.environ.get("REVALIDATE_SECRET", "")
 # Fuera de /app, porque el Dockerfile reemplaza ese directorio entero en cada
 # deploy (`COPY --from=builder /app /app`). En Coolify este directorio se
 # monta como volumen persistente: ver Dockerfile.
-MEDIA_ROOT = os.environ.get("MEDIA_ROOT", "/data/media")
+#
+# En desarrollo `/data/media` no existe y es la raíz del disco: subir una
+# portada desde el panel moría con PermissionError al intentar crearlo. Mismo
+# patrón que el resto del archivo: default de desarrollo sólo con DEBUG.
+MEDIA_ROOT = os.environ.get("MEDIA_ROOT") or (
+    str(BASE_DIR / "media") if DEBUG else "/data/media"
+)
 MEDIA_URL = "/media/"
 
 # Static files (CSS, JavaScript, Images)

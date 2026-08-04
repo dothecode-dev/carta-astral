@@ -156,6 +156,27 @@ def test_web_base_url_apunta_al_dev_server_de_next_en_desarrollo(monkeypatch):
     assert s.WEB_BASE_URL == "http://localhost:3000"
 
 
+def test_media_root_en_produccion_es_el_volumen_persistente(monkeypatch):
+    s = _cargar_settings(monkeypatch, **PROD_MINIMO, MEDIA_ROOT=None)
+
+    assert s.MEDIA_ROOT == "/data/media"
+
+
+def test_media_root_en_desarrollo_no_apunta_a_la_raiz_del_disco(monkeypatch):
+    """`/data/media` no existe ni es escribible en una Mac.
+
+    Con el default anterior (sin rama de DEBUG), subir una portada desde el
+    panel en local moría con PermissionError al intentar crear el directorio
+    en la raíz del disco. Los tests no lo veían porque todos pisan MEDIA_ROOT
+    con `tmp_path`.
+    """
+    s = _cargar_settings(
+        monkeypatch, DEBUG="1", SECRET_KEY=None, ALLOWED_HOSTS=None, MEDIA_ROOT=None
+    )
+
+    assert s.MEDIA_ROOT == str(s.BASE_DIR / "media")
+
+
 @pytest.fixture(autouse=True)
 def _restaurar_settings():
     """Deja config.settings como estaba: si no, los tests que corren después
