@@ -235,13 +235,17 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+# El contenido del CMS vive en los mismos tres idiomas que la app y la web.
+LANGUAGE_CODE = 'es'
 
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
 USE_TZ = True
+
+WAGTAIL_I18N_ENABLED = True
+WAGTAIL_CONTENT_LANGUAGES = [("es", "Español"), ("en", "English"), ("pt", "Português")]
 
 
 # Static files (CSS, JavaScript, Images)
