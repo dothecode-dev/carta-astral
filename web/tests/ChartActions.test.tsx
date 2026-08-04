@@ -52,6 +52,32 @@ describe("ChartActions", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("apaga la espera cuando la lectura llega", async () => {
+    // La animación del sistema solar y los tres pasos quedaban encendidos para
+    // siempre debajo del texto ya escrito: `router.refresh()` no avisa cuándo
+    // termina y nadie apagaba el estado de espera.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(200)));
+    renderActions();
+
+    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await correr();
+
+    expect(screen.queryByText(dict.chart.waitTitle)).not.toBeInTheDocument();
+    expect(document.querySelector(".waiting")).toBeNull();
+  });
+
+  it("mientras genera, muestra la espera", async () => {
+    let resolver: (r: unknown) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise((r) => (resolver = r))));
+    renderActions();
+
+    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await correr();
+
+    expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
+    await act(async () => resolver(reply(200)));
+  });
+
   it("avisa que faltan créditos ante un 402", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402)));
     renderActions();

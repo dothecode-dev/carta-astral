@@ -55,16 +55,16 @@ export function SolarSystem({ size = 200, speed = 1 }: { size?: number; speed?: 
         <circle cx={C} cy={C} r={SUN_R} fill="#D5C046" />
 
         {PLANETS.map((p) => (
-          <g
-            key={p.color}
-            className="solarOrbit"
-            style={{
-              animationDuration: `${p.periodMs / speed}ms`,
-              transform: `rotate(${p.angle}deg)`,
-            }}
-          >
-            <circle cx={C + p.orbit} cy={C} r={p.r * 2.6} fill={`url(#halo${p.color.slice(1)})`} />
-            <circle cx={C + p.orbit} cy={C} r={p.r} fill={p.color} />
+          // El ángulo de partida va en un grupo aparte, fuera de la animación.
+          // Cuando estaba en el mismo elemento, el keyframe —que sólo declara
+          // el `to`— tomaba ese ángulo como inicio y giraba hasta 360°: el
+          // planeta que arranca en 162° recorría 198 grados y saltaba de golpe
+          // al empezar la vuelta siguiente.
+          <g key={p.color} transform={`rotate(${p.angle} ${C} ${C})`}>
+            <g className="solarOrbit" style={{ animationDuration: `${p.periodMs / speed}ms` }}>
+              <circle cx={C + p.orbit} cy={C} r={p.r * 2.6} fill={`url(#halo${p.color.slice(1)})`} />
+              <circle cx={C + p.orbit} cy={C} r={p.r} fill={p.color} />
+            </g>
           </g>
         ))}
       </svg>

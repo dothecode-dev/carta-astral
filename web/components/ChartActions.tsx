@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { SolarSystem } from "@/components/SolarSystem";
 import type { Dict, Locale } from "@/lib/i18n";
@@ -33,6 +33,10 @@ export function ChartActions({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // `router.refresh()` no avisa cuándo terminó. Envuelto en una transición,
+  // `refrescando` dice cuándo el servidor ya devolvió la lectura: sin eso la
+  // animación se quedaba encendida para siempre debajo del texto ya escrito.
+  const [refrescando, startTransition] = useTransition();
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,7 +79,8 @@ export function ChartActions({
     });
 
     if (res.status === 409 && (await waitForReading())) {
-      router.refresh();
+      startTransition(() => router.refresh());
+      setBusy(false);
       return;
     }
 
@@ -85,11 +90,13 @@ export function ChartActions({
       return;
     }
 
-    // La lectura queda debajo de la carta, en esta misma página.
-    router.refresh();
+    // La lectura queda debajo de la carta, en esta misma página. La animación
+    // sigue hasta que el refresh trae el texto, no hasta que responde el POST.
+    startTransition(() => router.refresh());
+    setBusy(false);
   }
 
-  if (busy) {
+  if (busy || refrescando) {
     return (
       <section className="waiting">
         <SolarSystem size={200} speed={2.5} />
