@@ -291,6 +291,19 @@ WAGTAIL_CONTENT_LANGUAGES = [("es", "Español"), ("en", "English"), ("pt", "Port
 # Sólo mapas de bits: un SVG es un documento con scripts (RF6).
 WAGTAILIMAGES_EXTENSIONS = ["gif", "jpg", "jpeg", "png", "webp"]
 
+# `wagtail.documents` va instalado (ver INSTALLED_APPS más arriba: sin él el
+# admin no arranca), pero el CMS es para notas de blog —texto e imágenes— y
+# no hay ningún caso de uso de documentos. Un `.html` o un `.svg` subidos por
+# ese formulario se sirven desde `/media/documents/...`, el mismo origen
+# donde vive la sesión del admin: XSS almacenado (verificado, revisión final).
+#
+# `AbstractDocument.clean()` sólo valida contra `WAGTAILDOCS_EXTENSIONS`
+# cuando la lista es truthy (`if allowed_extensions:`): una lista VACÍA no
+# activa ninguna validación y dejaría pasar cualquier archivo. Por eso la
+# lista lleva una extensión que ningún archivo real puede tener: bloquea
+# absolutamente todo, sin el agujero de la lista vacía.
+WAGTAILDOCS_EXTENSIONS = ["__ningun-documento-tiene-esta-extension__"]
+
 # La web regenera la nota cuando el CMS avisa. Sin estas dos, no se avisa.
 REVALIDATE_URL = os.environ.get("REVALIDATE_URL", "")
 REVALIDATE_SECRET = os.environ.get("REVALIDATE_SECRET", "")
