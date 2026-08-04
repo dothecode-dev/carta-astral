@@ -47,7 +47,7 @@ strict = true
 files = ["core"]
 
 [tool.importlinter]
-root_packages = ["core", "interpret"]
+root_packages = ["core", "interpret", "cms", "api"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -67,3 +67,15 @@ name = "interpret no depende de django/api/requests"
 type = "forbidden"
 source_modules = ["interpret"]
 forbidden_modules = ["django", "api", "requests"]
+
+[[tool.importlinter.contracts]]
+name = "el cms no toca la aplicacion ni al reves"
+type = "forbidden"
+source_modules = ["cms"]
+forbidden_modules = ["api"]
+
+[[tool.importlinter.contracts]]
+name = "la aplicacion no depende del cms"
+type = "forbidden"
+source_modules = ["api"]
+forbidden_modules = ["cms"]
