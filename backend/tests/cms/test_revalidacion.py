@@ -3,7 +3,8 @@
 Sin esto el CMS no cumple su función: el editor publica, no ve su nota y lo
 reporta como bug (RF10).
 """
-from unittest.mock import patch
+import logging
+from unittest.mock import Mock, patch
 
 import pytest
 from wagtail.models import Page
@@ -50,5 +51,20 @@ def test_si_el_frontend_falla_la_publicacion_igual_ocurre(nota, settings):
     settings.REVALIDATE_SECRET = "un-secreto"
     with patch("cms.signals.requests.post", side_effect=OSError("sin red")):
         nota.save_revision().publish()
+    nota.refresh_from_db()
+    assert nota.live is True
+
+
+@pytest.mark.django_db
+def test_si_la_web_responde_error_se_loguea_sin_el_secreto_y_publica_igual(nota, settings, caplog):
+    settings.REVALIDATE_URL = "https://astra.dothecode.com/api/revalidate"
+    settings.REVALIDATE_SECRET = "un-secreto"
+    respuesta = Mock(status_code=401, ok=False)
+    with patch("cms.signals.requests.post", return_value=respuesta):
+        with caplog.at_level(logging.WARNING):
+            nota.save_revision().publish()
+    assert "sol-luna-ascendente" in caplog.text
+    assert "401" in caplog.text
+    assert "un-secreto" not in caplog.text
     nota.refresh_from_db()
     assert nota.live is True

@@ -15,19 +15,28 @@ log = logging.getLogger(__name__)
 
 
 def _avisar(page) -> None:
-    url = getattr(settings, "REVALIDATE_URL", "")
+    url = settings.REVALIDATE_URL
     if not url:
         return
     try:
-        requests.post(
+        respuesta = requests.post(
             url,
             json={
-                "secret": getattr(settings, "REVALIDATE_SECRET", ""),
+                "secret": settings.REVALIDATE_SECRET,
                 "slug": page.slug,
                 "locale": page.locale.language_code,
             },
             timeout=5,
         )
+        if not respuesta.ok:
+            # Un 4xx/5xx no lanza excepción: `requests.post` sólo levanta
+            # `OSError` (red, timeout), nunca por el status code de la
+            # respuesta. Sin este chequeo, un secreto mal configurado (401)
+            # o una ruta que cambió (404) fallarían en silencio para
+            # siempre. Nunca el secreto en el mensaje.
+            log.warning(
+                "la web respondió %s al revalidar %s", respuesta.status_code, page.slug
+            )
     except OSError as e:
         # Que la web no conteste no puede impedir que la nota quede publicada:
         # el contenido ya está guardado y se verá en el próximo build.
