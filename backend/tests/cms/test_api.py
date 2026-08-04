@@ -4,6 +4,8 @@
 `AllowAny` explícito, esta API devolvería 401 a todo el mundo, incluido el
 frontend (RF3).
 """
+from pathlib import Path
+
 import pytest
 from rest_framework.test import APIClient
 from wagtail.images import get_image_model
@@ -177,14 +179,103 @@ def test_la_portada_trae_las_dos_renditions(nota_con_portada):
 
 
 @pytest.mark.django_db
-def test_imagenes_responde_sin_autenticacion(nota_con_portada):
+def test_el_endpoint_de_imagenes_no_existe(nota_con_portada):
+    """`ImagesAPIViewSet` no filtra por publicación y estaba montado con AllowAny.
+
+    Sólo excluye colecciones con `CollectionViewRestriction`, y la colección
+    Root que Wagtail crea por defecto no tiene ninguna: el endpoint listaba
+    TODAS las imágenes subidas con su `title` y su `download_url`, así que la
+    portada de una nota todavía en borrador —con el título del artículo en el
+    campo `title`— quedaba pública antes de publicar la nota. La web no lo
+    necesita: las portadas viajan resueltas dentro de la respuesta de páginas.
+    """
+    nota_con_portada.live = False
+    nota_con_portada.save()
+
     resp = APIClient().get("/cms/api/v2/images/")
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_un_bearer_vencido_no_convierte_la_api_publica_en_401(nota_publicada):
+    """El `AllowAny` sólo desactiva el permiso, no la autenticación.
+
+    `DEFAULT_AUTHENTICATION_CLASSES` del proyecto es `AccountTokenAuthentication`
+    y DRF la corre ANTES del permiso: un `Authorization` con un token vencido
+    levanta `AuthenticationFailed`, que propaga aunque el permiso sea AllowAny.
+    La web de fase 2 es un cliente logueado; si reusa su cliente HTTP con el
+    token guardado, el blog público dejaría de renderizar apenas expire.
+    """
+    resp = APIClient().get(
+        "/cms/api/v2/pages/?type=cms.NotePage", HTTP_AUTHORIZATION="Bearer token-vencido"
+    )
+
     assert resp.status_code == 200
     assert resp.json()["meta"]["total_count"] == 1
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("verbo", ["post", "put", "patch", "delete"])
-def test_imagenes_no_se_puede_escribir(verbo, nota_con_portada):
-    resp = getattr(APIClient(), verbo)("/cms/api/v2/images/")
-    assert resp.status_code == 405
+def test_una_imagen_sin_archivo_no_tumba_la_nota_entera(nota_publicada, settings, tmp_path):
+    """El escenario que advierte el Dockerfile: deploy sin el volumen montado.
+
+    Las filas de `Image` quedan en la base y los archivos no están en
+    MEDIA_ROOT. `image.get_rendition()` levanta `SourceImageIOError`, que sale
+    de `expand_db_html` y hace responder 500 a la nota COMPLETA, no sólo a esa
+    imagen. Wagtail de stock degrada a un placeholder roto; el handler propio
+    tiene que hacer lo mismo.
+    """
+    settings.MEDIA_ROOT = str(tmp_path)
+    Image = get_image_model()
+    imagen = Image.objects.create(title="Rueda", file=get_test_image_file())
+    # El deploy que se lleva /data/media: la fila sigue, el archivo no.
+    Path(imagen.file.path).unlink()
+
+    nota_publicada.cuerpo = f'<embed embedtype="image" id="{imagen.id}" format="left" alt="R"/>'
+    nota_publicada.save()
+
+    resp = APIClient().get("/cms/api/v2/pages/?type=cms.NotePage&fields=*")
+
+    assert resp.status_code == 200
+    assert "<img" in resp.json()["items"][0]["cuerpo"]
+
+
+@pytest.mark.django_db
+def test_los_enlaces_internos_de_una_nota_traducida_apuntan_a_su_idioma(
+    nota_publicada, settings
+):
+    """`copy_for_translation` copia el cuerpo tal cual, con el id de la página ES.
+
+    O sea que el `<a linktype="page" id="...">` de la nota en inglés sigue
+    apuntando a la fila española. Resolver la URL con el locale de esa fila
+    mandaba al lector inglés al artículo en español; hay que resolver contra
+    la traducción (`.localized`) en el idioma de la nota que se serializa.
+    """
+    settings.WEB_BASE_URL = "https://cartaastral.app"
+    otra = NotePage(
+        title="Mercurio retrógrado",
+        slug="mercurio-retrogrado",
+        fecha="2026-07-20",
+        bajada="No se rompe nada.",
+        cuerpo="<p>Nada.</p>",
+        live=True,
+    )
+    nota_publicada.get_parent().add_child(instance=otra)
+    nota_publicada.cuerpo = f'<p><a linktype="page" id="{otra.id}">la otra</a></p>'
+    nota_publicada.save()
+
+    locale_en = Locale.objects.get(language_code="en")
+    otra_en = otra.copy_for_translation(locale_en, copy_parents=True)
+    otra_en.slug = "mercury-retrograde"
+    otra_en.save_revision().publish()
+    nota_en = nota_publicada.copy_for_translation(locale_en)
+    nota_en.slug = "sun-moon-ascendant"
+    nota_en.save_revision().publish()
+
+    resp = APIClient().get(
+        "/cms/api/v2/pages/?type=cms.NotePage&locale=en&slug=sun-moon-ascendant&fields=*"
+    )
+    cuerpo = resp.json()["items"][0]["cuerpo"]
+
+    assert '<a href="https://cartaastral.app/en/notas/mercury-retrograde">' in cuerpo
+    assert "/es/notas/" not in cuerpo

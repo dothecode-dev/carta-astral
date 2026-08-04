@@ -3,6 +3,7 @@
 from datetime import date
 
 from django.db import models
+from django.utils import translation
 from rest_framework.fields import Field
 from wagtail.admin.panels import FieldPanel
 from wagtail.api import APIField
@@ -21,17 +22,40 @@ class RichTextAPIField(Field):
     vía el tag `{% richtext %}`. La API v2 no lo hace sola: sin este campo,
     `cuerpo` viajaría crudo y la primera nota con una imagen o un enlace
     interno saldría rota en la web.
+
+    La expansión corre con el idioma de la nota activo porque los enlaces
+    internos se resuelven con `.localized` (`cms/wagtail_hooks.py`), que mira
+    el idioma activo y no el de la página enlazada: sin esto, los enlaces de
+    una nota traducida apuntarían a la versión en español.
     """
 
-    def to_representation(self, value):
-        return expand_db_html(value)
+    def get_attribute(self, instance):
+        # La página entera, no sólo el texto: `to_representation` necesita
+        # saber en qué idioma está la nota, y el valor del campo no lo dice.
+        return (instance, super().get_attribute(instance))
+
+    def to_representation(self, data):
+        pagina, value = data
+        with translation.override(pagina.locale.language_code):
+            return expand_db_html(value)
 
 
 class NoteIndexPage(Page):
     """El listado de notas. Existe para colgar las notas de algún lado."""
 
-    max_count = 1
     subpage_types = ["cms.NotePage"]
+
+    # Uno por idioma, no uno en total. `max_count = 1` (lo que había acá) es
+    # global: `Page.can_create_at` hace `cls.objects.count() < cls.max_count`
+    # sin filtrar por locale, así que creado el índice en español el admin ya
+    # no dejaba crear el de inglés ni el de portugués —y como las notas cuelgan
+    # sólo de un índice (`NotePage.parent_page_types`), esos dos idiomas se
+    # quedaban sin ninguna nota posible.
+    @classmethod
+    def can_create_at(cls, parent):
+        if not super().can_create_at(parent):
+            return False
+        return not cls.objects.filter(locale=parent.locale).exists()
 
     bajada = models.CharField(max_length=255, blank=True)
 

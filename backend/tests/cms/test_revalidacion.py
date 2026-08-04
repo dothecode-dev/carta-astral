@@ -56,6 +56,23 @@ def test_si_el_frontend_falla_la_publicacion_igual_ocurre(nota, settings):
 
 
 @pytest.mark.django_db
+def test_publicar_el_indice_no_avisa(nota, settings):
+    """El aviso es por nota: la web revalida por slug y `notas` no es ninguna.
+
+    Los receivers se registraban sin `sender`, así que cualquier tipo de página
+    —el índice hoy, una landing mañana— disparaba un POST con un slug que la
+    web no sabe revalidar: 404 y un warning en cada publicación.
+    """
+    settings.REVALIDATE_URL = "https://astra.dothecode.com/api/revalidate"
+    indice = nota.get_parent()
+
+    with patch("cms.signals.requests.post") as post:
+        indice.save_revision().publish()
+
+    post.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_si_la_web_responde_error_se_loguea_sin_el_secreto_y_publica_igual(nota, settings, caplog):
     settings.REVALIDATE_URL = "https://astra.dothecode.com/api/revalidate"
     settings.REVALIDATE_SECRET = "un-secreto"

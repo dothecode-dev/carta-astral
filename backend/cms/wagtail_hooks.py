@@ -26,6 +26,7 @@ from django.utils.safestring import mark_safe
 from wagtail import hooks
 from wagtail.images import get_image_model
 from wagtail.images.formats import get_image_format
+from wagtail.images.shortcuts import get_rendition_or_not_found
 from wagtail.rich_text import EmbedHandler
 from wagtail.rich_text.pages import PageLinkHandler
 
@@ -41,6 +42,14 @@ def _url_de_pagina(page) -> str:
     `.specific()`).
     """
     base = settings.WEB_BASE_URL.rstrip("/")
+    # `.localized` y no `page` a secas: el cuerpo de una nota traducida con
+    # `copy_for_translation` conserva el `<a linktype="page" id="...">` con el
+    # id de la página EN ESPAÑOL, así que resolver contra `page.locale` mandaba
+    # al lector inglés al artículo en español. `.localized` devuelve la
+    # traducción al idioma activo —que `RichTextAPIField` fija al idioma de la
+    # nota que se está serializando (`cms/models.py`)— y cae a la original
+    # cuando esa traducción todavía no existe, que es el mejor destino posible.
+    page = page.localized
     locale = page.locale.language_code
     if isinstance(page, NotePage):
         return f"{base}/{locale}/notas/{page.slug}"
@@ -83,7 +92,14 @@ class NotaImageEmbedHandler(EmbedHandler):
                 tags.append('<img alt="">')
                 continue
             image_format = get_image_format(attrs["format"])
-            rendition = image.get_rendition(image_format.filter_spec)
+            # `get_rendition_or_not_found` y no `image.get_rendition`: si el
+            # archivo no está en MEDIA_ROOT (el deploy sin el volumen montado
+            # que advierte el Dockerfile), `get_rendition` levanta
+            # `SourceImageIOError` y la excepción sale de `expand_db_html` ->
+            # la nota ENTERA responde 500, no sólo esa imagen. El handler de
+            # stock que este reemplaza degradaba a un placeholder roto; acá se
+            # había perdido esa red al reimplementarlo.
+            rendition = get_rendition_or_not_found(image, image_format.filter_spec)
             html_attrs = rendition.attrs_dict.copy()
             html_attrs["src"] = rendition.full_url
             html_attrs["alt"] = escape(attrs.get("alt", ""))

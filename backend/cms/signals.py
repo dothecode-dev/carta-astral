@@ -11,6 +11,8 @@ from django.conf import settings
 from django.dispatch import receiver
 from wagtail.signals import page_published, page_unpublished
 
+from cms.models import NotePage
+
 log = logging.getLogger(__name__)
 
 
@@ -43,11 +45,14 @@ def _avisar(page) -> None:
         log.warning("no se pudo revalidar la web para %s: %s", page.slug, e)
 
 
-@receiver(page_published)
+# `sender=NotePage` y no a secas: sin acotarlo, publicar el índice —o
+# cualquier tipo de página que se agregue más adelante— también le pega a la
+# web, que revalida por slug y recibiría uno que no corresponde a ninguna nota.
+@receiver(page_published, sender=NotePage)
 def al_publicar(sender, instance, **kwargs):
     _avisar(instance)
 
 
-@receiver(page_unpublished)
+@receiver(page_unpublished, sender=NotePage)
 def al_despublicar(sender, instance, **kwargs):
     _avisar(instance)
