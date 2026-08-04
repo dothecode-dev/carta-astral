@@ -1502,8 +1502,10 @@ body {
   gap: clamp(2rem, 5vw, 3.5rem);
 }
 
+/* La rueda comparte ancho y eje con la lectura: la pagina tiene dos medidas,
+   la del ancho completo para los datos y esta para lo que va centrado. */
 .wheelHolderWide {
-  width: min(100%, 620px);
+  width: min(100%, 62ch);
   margin-inline: auto;
 }
 
@@ -1600,18 +1602,22 @@ body {
 }
 
 /* --- La lectura ---------------------------------------------------------- */
+/* La lectura se lee renglón a renglón, así que mantiene la medida corta: a
+   todo el ancho de la columna daría 119 caracteres por línea y el ojo se
+   pierde al volver del final de una línea al principio de la siguiente. Va
+   centrada, como la rueda: lo que no ocupa el ancho completo se centra. */
 .reading {
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
-  max-width: var(--measure);
+  width: min(100%, 62ch);
+  margin-inline: auto;
 }
 
 .readingParagraph {
   margin: 0;
   line-height: 1.8;
   font-size: 1.0625rem;
-  max-width: 62ch;
 }
 
 .readingOpen {
@@ -1966,4 +1972,33 @@ body {
   .aspectListWrap {
     display: none;
   }
+}
+
+/* Los títulos y las listas de la lectura. El markdown del modelo llegaba
+   crudo: se leía "## Una presencia" con la almohadilla a la vista. */
+.readingTitle {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  font-size: 1.375rem;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.readingList {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  line-height: 1.8;
+  font-size: 1.0625rem;
+}
+
+.readingList li::marker {
+  color: var(--accent);
+}
+
+.readingParagraph strong {
+  font-weight: 500;
+  color: var(--ink);
 }

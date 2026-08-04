@@ -7,6 +7,7 @@ import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartTables } from "@/components/ChartTables";
 import { Nav } from "@/components/Nav";
 import { NatalWheel } from "@/components/NatalWheel";
+import { Reading } from "@/components/Reading";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import { signOf } from "@/lib/ephemeris";
 import { INTL_LOCALE, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
@@ -180,11 +181,7 @@ export default async function ChartPage({
         {reading && (
           <section className="reading">
             <p className="eyebrow">{dict.chart.reading}</p>
-            {reading.text.split(/\n{2,}/).map((parrafo, i) => (
-              <p key={i} className="readingParagraph">
-                {parrafo.trim()}
-              </p>
-            ))}
+            <Reading texto={reading.text} />
             <p className="disclaimer">{reading.disclaimer}</p>
           </section>
         )}
