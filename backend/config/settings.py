@@ -269,6 +269,10 @@ WAGTAIL_CONTENT_LANGUAGES = [("es", "Español"), ("en", "English"), ("pt", "Port
 # Sólo mapas de bits: un SVG es un documento con scripts (RF6).
 WAGTAILIMAGES_EXTENSIONS = ["gif", "jpg", "jpeg", "png", "webp"]
 
+# La web regenera la nota cuando el CMS avisa. Sin estas dos, no se avisa.
+REVALIDATE_URL = os.environ.get("REVALIDATE_URL", "")
+REVALIDATE_SECRET = os.environ.get("REVALIDATE_SECRET", "")
+
 # Media (imágenes subidas al CMS)
 # https://docs.djangoproject.com/en/6.0/topics/files/
 
