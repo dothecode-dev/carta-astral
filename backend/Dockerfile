@@ -37,8 +37,12 @@ WORKDIR /app
 COPY --from=builder /app /app
 
 # Static del admin recolectado en build (WhiteNoise lo sirve). SECRET_KEY dummy:
-# collectstatic corre con DEBUG off pero no necesita la key real.
-RUN SECRET_KEY=build-only-not-used python manage.py collectstatic --noinput
+# collectstatic corre con DEBUG off pero no necesita la key real. USE_DB_CACHE=1
+# sólo satisface el fail-fast de `config/settings.py` (sin caché compartida no
+# arranca fuera de DEBUG); collectstatic no toca cache ni DB, así que no hace
+# falta ninguna base real acá. Nada de esto queda en la imagen final: es un
+# prefijo de ESTE `RUN`, no un `ENV`.
+RUN SECRET_KEY=build-only-not-used USE_DB_CACHE=1 python manage.py collectstatic --noinput
 
 # Las imágenes del CMS viven fuera de /app: el deploy reemplaza ese directorio
 # entero (`COPY --from=builder /app /app` de arriba). En Coolify hay que
