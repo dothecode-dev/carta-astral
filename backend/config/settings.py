@@ -125,6 +125,21 @@ if not WAGTAILADMIN_BASE_URL:
         "portadas de las notas salen rotas en la web."
     )
 
+# Dominio público de la web (Next.js), NO del backend. Este backend es
+# headless: `config/urls.py` nunca monta `wagtail.urls`, así que Wagtail no
+# tiene ninguna URL propia para una página del CMS. Los enlaces internos del
+# cuerpo de una nota (`cms/wagtail_hooks.py`, `NotaLinkHandler`) se resuelven
+# contra esta variable, con el esquema de rutas `/notas` que ya define el
+# plan del frontend (docs/2026-07-31-spec-cms-wagtail.md). Mismo patrón que
+# `WAGTAILADMIN_BASE_URL`: default sólo en DEBUG (puerto de `next dev`),
+# fail-fast en producción en vez de publicar enlaces a localhost.
+WEB_BASE_URL = os.environ.get("WEB_BASE_URL") or ("http://localhost:3000" if DEBUG else "")
+if not WEB_BASE_URL:
+    raise ImproperlyConfigured(
+        "WEB_BASE_URL env var es obligatoria cuando DEBUG está apagado: sin ella, "
+        "los enlaces internos del cuerpo de una nota resolverían contra localhost."
+    )
+
 # Un formulario de login expuesto a internet sin límite de intentos no es una
 # hipótesis de riesgo: es un problema conocido.
 AXES_FAILURE_LIMIT = 5

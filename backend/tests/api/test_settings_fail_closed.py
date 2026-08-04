@@ -38,6 +38,7 @@ PROD_MINIMO = {
     "ALLOWED_HOSTS": "api.ejemplo.com",
     "USE_DB_CACHE": "1",
     "WAGTAILADMIN_BASE_URL": "https://cms.ejemplo.com",
+    "WEB_BASE_URL": "https://web.ejemplo.com",
 }
 
 
@@ -128,6 +129,31 @@ def test_wagtailadmin_base_url_apunta_a_localhost_en_desarrollo(monkeypatch):
     )
 
     assert s.WAGTAILADMIN_BASE_URL == "http://localhost:8000"
+
+
+def test_sin_web_base_url_en_produccion_no_arranca(monkeypatch):
+    """Fail-fast: sin esta var, los enlaces internos del cuerpo de una nota
+    (RichTextAPIField, ver cms/wagtail_hooks.py) resolverían contra
+    localhost:3000 en la web publicada (B3, ronda 2 de la revisión final)."""
+    with pytest.raises(ImproperlyConfigured):
+        _cargar_settings(monkeypatch, **{**PROD_MINIMO, "WEB_BASE_URL": None})
+
+
+def test_web_base_url_viene_del_entorno_en_produccion(monkeypatch):
+    s = _cargar_settings(
+        monkeypatch, **{**PROD_MINIMO, "WEB_BASE_URL": "https://cartaastral.app"}
+    )
+
+    assert s.WEB_BASE_URL == "https://cartaastral.app"
+
+
+def test_web_base_url_apunta_al_dev_server_de_next_en_desarrollo(monkeypatch):
+    """En DEBUG sí puede haber default: es el puerto de `next dev` (web/package.json)."""
+    s = _cargar_settings(
+        monkeypatch, DEBUG="1", SECRET_KEY=None, ALLOWED_HOSTS=None, WEB_BASE_URL=None
+    )
+
+    assert s.WEB_BASE_URL == "http://localhost:3000"
 
 
 @pytest.fixture(autouse=True)
