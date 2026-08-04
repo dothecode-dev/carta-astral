@@ -6,6 +6,8 @@ frontend (RF3).
 """
 import pytest
 from rest_framework.test import APIClient
+from wagtail.images import get_image_model
+from wagtail.images.tests.utils import get_test_image_file
 from wagtail.models import Locale, Site
 
 from cms.models import NoteIndexPage, NotePage
@@ -29,6 +31,20 @@ def nota_publicada(db):
     )
     indice.add_child(instance=nota)
     return nota
+
+
+@pytest.fixture
+def nota_con_portada(nota_publicada, settings, tmp_path):
+    # `MEDIA_ROOT` apunta a un directorio temporal: generar la rendition real
+    # escribe un archivo en disco, y no queremos que caiga en el repo.
+    settings.MEDIA_ROOT = str(tmp_path)
+    Image = get_image_model()
+    imagen = Image.objects.create(
+        title="Rueda del cielo", file=get_test_image_file(size=(3200, 2000))
+    )
+    nota_publicada.portada = imagen
+    nota_publicada.save()
+    return nota_publicada
 
 
 @pytest.mark.django_db
@@ -81,3 +97,41 @@ def test_una_nota_de_otro_idioma_no_aparece(nota_publicada):
     # La copia en inglés nace en borrador (`copy_for_translation` no publica):
     # no debería aparecer todavía.
     assert resp_en.json()["meta"]["total_count"] == 0
+
+
+@pytest.mark.django_db
+def test_la_portada_trae_las_dos_renditions(nota_con_portada):
+    """El frontend necesita una URL de imagen usable, no el original sin redimensionar.
+
+    `portada` (el FK crudo) sólo trae id/meta/title: no sirve para pintar nada.
+    `portada_tarjeta` y `portada_cabecera` son la misma imagen ya redimensionada,
+    con URL, ancho y alto listos para un `<img>`.
+    """
+    resp = APIClient().get("/cms/api/v2/pages/?type=cms.NotePage&fields=*")
+    item = resp.json()["items"][0]
+
+    tarjeta = item["portada_tarjeta"]
+    assert tarjeta["width"] == 640
+    assert tarjeta["height"] == 400
+    assert tarjeta["url"]
+
+    cabecera = item["portada_cabecera"]
+    assert cabecera["width"] == 1600
+    # La fuente es 3200x2000 (relación 16:10): escalar el ancho a 1600 sin
+    # recortar da 1000 de alto.
+    assert cabecera["height"] == 1000
+    assert cabecera["url"]
+
+
+@pytest.mark.django_db
+def test_imagenes_responde_sin_autenticacion(nota_con_portada):
+    resp = APIClient().get("/cms/api/v2/images/")
+    assert resp.status_code == 200
+    assert resp.json()["meta"]["total_count"] == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("verbo", ["post", "put", "patch", "delete"])
+def test_imagenes_no_se_puede_escribir(verbo, nota_con_portada):
+    resp = getattr(APIClient(), verbo)("/cms/api/v2/images/")
+    assert resp.status_code == 405
