@@ -73,7 +73,9 @@ export default async function ChartPage({
 
   return (
     <>
-      <Nav locale={locale} dict={dict} path="/cuenta" signedIn showExample={false} />
+      {/* El path va con el id: si fuera "/cuenta", cambiar de idioma sacaría de
+          la carta y llevaría a la lista. */}
+      <Nav locale={locale} dict={dict} path={`/carta/${id}`} signedIn showExample={false} />
 
       <main className="docFrame chartFrame">
         <Link className="backLink" href={`/${locale}/cuenta`}>
