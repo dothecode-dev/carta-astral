@@ -90,14 +90,24 @@ def test_el_cuerpo_expande_imagen_y_enlace_interno(nota_publicada, settings, tmp
     sin expandirlo, la API devolvería ese crudo y la primera nota con una
     imagen o un enlace interno saldría rota en la web. La API tiene que
     devolver HTML ya expandido y usable (`<img src="...">`, `<a href="...">`).
+
+    No alcanza con verificar que la etiqueta exista (ronda 1 de la revisión
+    final): hay que verificar A DÓNDE apunta. Este backend es headless
+    (`config/urls.py` nunca monta `wagtail.urls`), así que Wagtail no tiene
+    ninguna URL propia para resolver una página; sin `cms/wagtail_hooks.py`
+    el `href` sale literalmente como el string "None". Se prueba contra un
+    enlace al índice (`NoteIndexPage`) Y contra un enlace a una nota
+    (`NotePage`): son dos tipos de página con URLs distintas.
     """
     settings.MEDIA_ROOT = str(tmp_path)
+    settings.WEB_BASE_URL = "https://cartaastral.app"
     Image = get_image_model()
     imagen = Image.objects.create(title="Rueda del cielo", file=get_test_image_file())
     indice = nota_publicada.get_parent()
 
     nota_publicada.cuerpo = (
-        f'<p>Ver el <a linktype="page" id="{indice.id}">índice</a></p>'
+        f'<p>Ver el <a linktype="page" id="{indice.id}">índice</a> '
+        f'o <a linktype="page" id="{nota_publicada.id}">esta nota</a></p>'
         f'<embed embedtype="image" id="{imagen.id}" format="left" alt="Rueda"/>'
     )
     nota_publicada.save()
@@ -105,11 +115,22 @@ def test_el_cuerpo_expande_imagen_y_enlace_interno(nota_publicada, settings, tmp
     resp = APIClient().get("/cms/api/v2/pages/?type=cms.NotePage&fields=*")
     cuerpo = resp.json()["items"][0]["cuerpo"]
 
-    assert "<img" in cuerpo and 'src="' in cuerpo
-    assert "<a href=" in cuerpo
     # El formato interno no debe sobrevivir a la expansión.
     assert "linktype=" not in cuerpo
     assert "embedtype=" not in cuerpo
+    assert "None" not in cuerpo
+
+    # El enlace a la nota vive en la web (RichTextAPIField headless), con el
+    # esquema de rutas /notas ya decidido para el frontend (spec del CMS).
+    assert f'<a href="https://cartaastral.app/es/notas/{nota_publicada.slug}">' in cuerpo
+    # El enlace al índice, sin slug: es la portada del listado en la web.
+    assert '<a href="https://cartaastral.app/es/notas">' in cuerpo
+
+    # La imagen embebida usa la URL absoluta (WAGTAILADMIN_BASE_URL), igual
+    # que portada_tarjeta/portada_cabecera: si la web vive en otro dominio,
+    # una URL relativa al backend rompe la imagen.
+    assert f'src="{settings.WAGTAILADMIN_BASE_URL}/media/' in cuerpo
+    assert 'src="/media/' not in cuerpo
 
 
 @pytest.mark.django_db
