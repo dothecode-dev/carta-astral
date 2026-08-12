@@ -269,6 +269,16 @@ REVENUECAT_PRODUCT_CREDITS = json.loads(os.environ.get("REVENUECAT_PRODUCT_CREDI
 # Cantidad de reembolsos que marca una cuenta como abuso.
 REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 
+# --- Superficie de la app móvil ---
+# La app no se retoma por ahora: lo que se termina es la web. Nada de esto se
+# borra, se apaga. El fail-closed de más arriba (401 sin REVENUECAT_WEBHOOK_AUTH,
+# 503 sin APPLE_AUD) sigue siendo la defensa real; estos flags son la decisión
+# escrita, para que el endpoint no quede expuesto por olvido de una credencial.
+# Dos flags y no uno: lo más probable es que la app vuelva por una plataforma
+# antes que por la otra, y un booleano único obligaría a partirlo entonces.
+APP_AUTH_ENABLED = os.environ.get("APP_AUTH_ENABLED", "0") == "1"
+IAP_WEBHOOK_ENABLED = os.environ.get("IAP_WEBHOOK_ENABLED", "0") == "1"
+
 # Cache compartido entre workers: el throttle, el tope global y el lock viven
 # acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache
 # (USE_DB_CACHE=1 + `manage.py createcachetable`). LocMem en prod NO limita:

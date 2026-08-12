@@ -15,6 +15,10 @@ def _event(**over):
 
 @pytest.fixture
 def cfg(settings):
+    # El webhook está apagado por defecto mientras no haya app (ver
+    # `test_modo_web.py`). Estos tests cubren su comportamiento encendido, que
+    # es el que tiene que seguir intacto para cuando la app vuelva.
+    settings.IAP_WEBHOOK_ENABLED = True
     settings.REVENUECAT_WEBHOOK_AUTH = "secret-abc"
     settings.REVENUECAT_PRODUCT_CREDITS = {"credits_10": 10}
     settings.REFUND_FLAG_THRESHOLD = 3
@@ -80,6 +84,9 @@ def test_unknown_product_acked(cfg, make_account):
 
 @pytest.mark.django_db
 def test_empty_secret_rejects(settings, make_account):
+    # Encendido a propósito: lo que se prueba acá es el fail-closed por
+    # credencial ausente, que es la defensa real y no la reemplaza el flag.
+    settings.IAP_WEBHOOK_ENABLED = True
     settings.REVENUECAT_WEBHOOK_AUTH = ""
     settings.REVENUECAT_PRODUCT_CREDITS = {"credits_10": 10}
     acc = make_account()

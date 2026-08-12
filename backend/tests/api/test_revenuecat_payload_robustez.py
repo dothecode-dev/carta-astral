@@ -16,6 +16,9 @@ AUTH = "secret-abc"
 
 @pytest.fixture
 def cfg(settings):
+    # Apagado por defecto sin app (ver `test_modo_web.py`): acá se prueba el
+    # comportamiento encendido, que no puede degradarse mientras duerme.
+    settings.IAP_WEBHOOK_ENABLED = True
     settings.REVENUECAT_WEBHOOK_AUTH = AUTH
     settings.REVENUECAT_PRODUCT_CREDITS = {"credits_10": 10}
     settings.REFUND_FLAG_THRESHOLD = 3

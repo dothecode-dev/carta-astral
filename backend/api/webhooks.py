@@ -67,6 +67,16 @@ class RevenueCatWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        if not settings.IAP_WEBHOOK_ENABLED:
+            # 503 y no 404: un 404 le dice a RevenueCat que el endpoint no
+            # existe, y tras unas cuantas respuestas así desactiva el webhook.
+            # Con Retry-After el reintento queda en pie para cuando vuelva la app.
+            return Response(
+                {"error": "unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                headers={"Retry-After": "3600"},
+            )
+
         expected = settings.REVENUECAT_WEBHOOK_AUTH
         provided = request.headers.get("Authorization", "")
         if not expected or not constant_time_compare(provided, expected):

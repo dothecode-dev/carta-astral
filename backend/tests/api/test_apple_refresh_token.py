@@ -13,6 +13,10 @@ from api.sso import VerifiedIdentity
 @pytest.fixture
 def apple_login(monkeypatch, settings):
     """Login Apple con el id_token ya validado; devuelve el poster de la app."""
+    # Sign in with Apple está apagado mientras no haya app (ver
+    # `test_modo_web.py`). Estos tests cubren el comportamiento encendido, que
+    # tiene que seguir intacto para cuando la app vuelva.
+    settings.APP_AUTH_ENABLED = True
     settings.APPLE_AUD = "com.cartaastral.app"
     import api.views as views
 

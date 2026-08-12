@@ -5,6 +5,8 @@ from api.sso import VerifiedIdentity
 
 @pytest.mark.django_db
 def test_apple_auth_creates_session(monkeypatch, settings):
+    # Apagado por defecto sin app (ver `test_modo_web.py`).
+    settings.APP_AUTH_ENABLED = True
     settings.APPLE_AUD = "com.app"
     import api.views as views
     monkeypatch.setattr(
@@ -22,6 +24,9 @@ def test_apple_auth_creates_session(monkeypatch, settings):
 
 @pytest.mark.django_db
 def test_auth_503_when_not_configured(settings):
+    # Encendido a propósito: lo que se prueba es el fail-closed por credencial
+    # ausente, que sigue siendo la defensa real y no la reemplaza el flag.
+    settings.APP_AUTH_ENABLED = True
     settings.APPLE_AUD = ""
     resp = APIClient().post("/api/auth/apple", {"id_token": "tok"}, format="json")
     assert resp.status_code == 503
