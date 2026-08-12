@@ -34,6 +34,19 @@ def admin_montado(monkeypatch, settings, tmp_path):
     hace falta recargar el módulo con el entorno modificado.
     """
     settings.MEDIA_ROOT = str(tmp_path)
+    # Tres de estos tests re-renderizan el formulario del admin para leer sus
+    # errores, y ese HTML pide `wagtailadmin/css/core.css`. El storage de
+    # producción (`CompressedManifestStaticFilesStorage`) exige el manifest que
+    # deja `collectstatic`, paso que el Dockerfile corre en build pero pytest
+    # no: sin él, el render explota con ValueError y el fallo no tiene nada que
+    # ver con lo que se está probando. Acá el asunto es que Wagtail rechace el
+    # archivo, no cómo se sirven los assets, así que el storage plano alcanza.
+    settings.STORAGES = {
+        **settings.STORAGES,
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+    }
     try:
         with monkeypatch.context() as m:
             m.setenv("WAGTAIL_ADMIN_URL", "panel-notas")
