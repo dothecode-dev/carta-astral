@@ -64,18 +64,27 @@ install: ## Instala las dependencias de los dos proyectos
 
 test: test-back test-web ## Corre todos los gates, los mismos que el CI
 
-test-back: ## Gates del backend: pytest, ruff, contratos, tipos
+test-back: ## Gates del backend: pytest, ruff, contratos, tipos, migraciones
 	cd backend && DEBUG=1 .venv/bin/python -m pytest -q
 	cd backend && .venv/bin/ruff check .
 	cd backend && .venv/bin/lint-imports
 	cd backend && .venv/bin/mypy
+	# Si alguien cambia un modelo y no genera la migración, el deploy se rompe
+	# al arrancar. Mejor que se rompa acá. Es el gate del CI que faltaba.
+	cd backend && DEBUG=1 .venv/bin/python manage.py makemigrations --check --dry-run
 
-test-web: ## Gates de la web: eslint, tests, tipos, legales, build
+test-web: ## Gates de la web: eslint, tests, tipos, legales, los dos builds
 	cd web && npx eslint .
 	cd web && npm test
 	cd web && npx tsc --noEmit
 	cd web && npm run check:legal
 	cd web && npm run build
+	# El segundo build, con las variables vacías. En el Dockerfile `ENV VAR=$$ARG`
+	# sin argumento deja la variable en "", no ausente, y el 02-08 eso rompió un
+	# deploy entero (new URL("")). El build normal no lo detecta. Faltaba acá, así
+	# que el gate nacido de ese incidente era el único que no se podía correr en
+	# local: verde en tu máquina no significaba verde en CI.
+	cd web && NEXT_PUBLIC_SITE_URL= NEXT_PUBLIC_GOOGLE_CLIENT_ID= API_URL= npm run build
 
 sky: ## Muestra el cielo que devuelve el backend local
 	@curl -s http://localhost:$(BACK_PORT)/api/sky/ | python3 -m json.tool
