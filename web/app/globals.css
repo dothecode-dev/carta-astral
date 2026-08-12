@@ -1336,6 +1336,15 @@ body {
   gap: 0.75rem;
 }
 
+.storesSoon {
+  margin-top: 0.75rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
 .store {
   display: inline-flex;
   align-items: center;
@@ -1345,12 +1354,10 @@ body {
   padding: 0.6rem 1.1rem;
   text-decoration: none;
   color: var(--ink);
-  transition: border-color 0.18s ease, background-color 0.18s ease;
-}
-
-.store:hover {
-  border-color: var(--accent);
-  background: var(--surface);
+  /* Sin apps publicadas los badges no son interactivos: no hay hover ni cursor
+     de mano, porque prometer una reacción que no llega a ningún lado es peor
+     que mostrarlos quietos. Vuelven a ser enlaces cuando las apps existan. */
+  cursor: default;
 }
 
 .store svg {
