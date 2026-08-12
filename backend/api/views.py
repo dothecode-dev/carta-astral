@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -242,6 +243,14 @@ class _BaseAuthView(APIView):
 
 
 class AppleAuthView(_BaseAuthView):
+    def post(self, request):
+        # Sign in with Apple existe sólo para la app: la web entra con Google
+        # (`GoogleSignIn.tsx` es su único componente de login). Mientras no haya
+        # app, la ruta no se anuncia. 404 y no 503 porque acá nadie reintenta.
+        if not settings.APP_AUTH_ENABLED:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return super().post(request)
+
     def validator(self, id_token, nonce=None):
         return validate_apple(id_token, nonce=nonce)
 

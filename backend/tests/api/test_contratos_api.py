@@ -83,6 +83,8 @@ def test_interpretation_langs_es_una_lista_incluso_sin_lecturas(cliente_con_cart
 def test_la_respuesta_del_login_tiene_exactamente_estas_claves(monkeypatch, settings):
     """Es lo que la app guarda como sesión: si falta account_id, no puede
     identificar a nadie ni configurar RevenueCat."""
+    # Apagado por defecto sin app (ver `test_modo_web.py`).
+    settings.APP_AUTH_ENABLED = True
     settings.APPLE_AUD = "com.cartaastral.app"
     import api.views as views
 
@@ -127,6 +129,8 @@ def test_el_webhook_responde_con_status(cfg_webhook):
 
 @pytest.fixture
 def cfg_webhook(settings):
+    # Apagado por defecto sin app (ver `test_modo_web.py`).
+    settings.IAP_WEBHOOK_ENABLED = True
     settings.REVENUECAT_WEBHOOK_AUTH = "secret-abc"
     settings.REVENUECAT_PRODUCT_CREDITS = {"credits_10": 10}
     return settings

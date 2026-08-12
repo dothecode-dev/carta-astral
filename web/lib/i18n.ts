@@ -150,7 +150,15 @@ export type Dict = {
     note: string;
   };
   faq: { eyebrow: string; title: string; items: { q: string; a: string }[] };
-  download: { eyebrow: string; title: string; note: string; appleSmall: string; playSmall: string };
+  download: {
+    eyebrow: string;
+    title: string;
+    note: string;
+    appleSmall: string;
+    playSmall: string;
+    /** Las apps se anuncian pero todavía no están publicadas. */
+    soon: string;
+  };
   foot: { brand: string; privacy: string; terms: string; contact: string };
   auth: {
     navEnter: string;
@@ -362,6 +370,7 @@ const es: Dict = {
     note: "Android e iOS. La primera carta no cuesta nada.",
     appleSmall: "Descargar en el",
     playSmall: "Disponible en",
+    soon: "Próximamente",
   },
   chart: {
     back: "← Tus cartas",
@@ -574,6 +583,7 @@ const en: Dict = {
     note: "Android and iOS. The first chart costs nothing.",
     appleSmall: "Download on the",
     playSmall: "Get it on",
+    soon: "Coming soon",
   },
   chart: {
     back: "← Your charts",
@@ -786,6 +796,7 @@ const pt: Dict = {
     note: "Android e iOS. O primeiro mapa não custa nada.",
     appleSmall: "Baixar na",
     playSmall: "Disponível no",
+    soon: "Em breve",
   },
   chart: {
     back: "← Seus mapas",
