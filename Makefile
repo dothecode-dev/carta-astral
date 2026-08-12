@@ -53,7 +53,12 @@ stop: ## Libera los puertos (mata lo que haya quedado colgado)
 
 install: ## Instala las dependencias de los dos proyectos
 	cd backend && uv sync
-	cd web && npm install
+	# `npm ci`, no `npm install`: en macOS el segundo reescribe el lock sacando
+	# las dependencias opcionales de Linux (@emnapi y compañía), que es lo que
+	# arregló 1ea577f. Cada `make install` volvía a romper el build de CI y el
+	# Dockerfile si el lock se commiteaba sin mirar. `ci` respeta el lock tal
+	# cual y falla si no coincide con package.json, que es lo que queremos.
+	cd web && npm ci
 	@test -f web/.env.local || cp web/.env.example web/.env.local
 	@echo "listo — 'make dev' para levantar todo"
 
