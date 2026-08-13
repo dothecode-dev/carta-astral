@@ -54,7 +54,12 @@ export async function generateMetadata({
     description: dict.meta.description,
     alternates: {
       canonical: `/${locale}`,
-      languages: Object.fromEntries(LOCALES.map((code) => [code, `/${code}`])),
+      languages: {
+        ...Object.fromEntries(LOCALES.map((code) => [code, `/${code}`])),
+        // A quien no le calce ninguno de los tres idiomas, Google le muestra
+        // éste. Sin declararlo elige por su cuenta, y suele elegir mal.
+        "x-default": `/${DEFAULT_LOCALE}`,
+      },
     },
     openGraph: {
       type: "website",
@@ -63,6 +68,13 @@ export async function generateMetadata({
       title: dict.meta.title,
       description: dict.meta.description,
       url: `/${locale}`,
+    },
+    // X y las apps de mensajería usan la imagen de Open Graph si no hay una
+    // propia; lo único que falta declarar es que la muestren grande.
+    twitter: {
+      card: "summary_large_image",
+      title: dict.meta.title,
+      description: dict.meta.description,
     },
   };
 }
