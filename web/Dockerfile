@@ -34,6 +34,13 @@ ENV NODE_ENV=production \
 # Sin esto el proceso corre como root dentro del contenedor.
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 
+# `curl` es para el healthcheck y nada más. Coolify no chequea la aplicación
+# desde afuera: ejecuta `curl` DENTRO del contenedor, y si no lo encuentra da el
+# contenedor por enfermo y revierte el deploy. Alpine trae `wget` en busybox,
+# pero no alcanza: el 13-08-2026 el deploy de la web falló igual con "New
+# container is not healthy" teniendo wget disponible.
+RUN apk add --no-cache curl
+
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static

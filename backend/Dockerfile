@@ -33,6 +33,16 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# `curl` es para el healthcheck y nada más. Coolify no chequea la aplicación
+# desde afuera: ejecuta `curl` DENTRO del contenedor, y si no lo encuentra da el
+# contenedor por enfermo y revierte el deploy al anterior. El 13-08-2026 eso
+# hizo fallar dos deploys seguidos con "New container is not healthy, rolling
+# back to the old container", sin que el sitio se cayera y sin ninguna pista en
+# la interfaz.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # El venv ya compilado + el código, tal cual quedaron en el builder.
 COPY --from=builder /app /app
 
