@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { Footer } from "@/components/Footer";
 import { Nav } from "@/components/Nav";
 import { SITE_URL } from "@/lib/config";
-import { getDict, isLocale, isNotesSection } from "@/lib/i18n";
+import { NOTES_SLUG, getDict, isLocale, isNotesSection } from "@/lib/i18n";
 import { fetchNote, formatNoteDate } from "@/lib/notes";
 
 // Mismo criterio que el listado: sin `generateStaticParams`. Enumerar las notas
@@ -72,7 +72,10 @@ export default async function NotePage({ params }: Params) {
 
   return (
     <>
-      <Nav locale={locale} dict={dict} />
+      {/* Al listado del otro idioma, no a esta misma nota: cada idioma tiene su
+          propia nota con su propio slug, y puede no existir todavía. Mandarte a
+          una URL que da 404 sería peor que dejarte en el listado. */}
+      <Nav locale={locale} dict={dict} path={(code) => `/${NOTES_SLUG[code]}`} />
 
       <div className="docFrame">
         <article className="doc">

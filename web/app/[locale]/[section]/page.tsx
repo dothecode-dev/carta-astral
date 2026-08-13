@@ -61,7 +61,7 @@ export default async function NotesPage({
 
   return (
     <>
-      <Nav locale={locale} dict={dict} />
+      <Nav locale={locale} dict={dict} path={(code) => `/${NOTES_SLUG[code]}`} />
 
       <div className="docFrame">
         <div className="sectionHead">

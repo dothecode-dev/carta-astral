@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Nav } from "@/components/Nav";
-import { getDict } from "@/lib/i18n";
+import { NOTES_SLUG, getDict } from "@/lib/i18n";
 
 const dict = getDict("es");
 
@@ -40,6 +40,17 @@ describe("Nav: cambiar de idioma", () => {
       { code: "ES", href: "/es" },
       { code: "EN", href: "/en" },
       { code: "PT", href: "/pt" },
+    ]);
+  });
+
+  it("traduce el segmento cuando la ruta misma cambia de idioma", () => {
+    // Las notas viven en `/notas` y en `/notes` según el idioma. Con un path
+    // fijo, el enlace a inglés apuntaba a `/en/notas`, que es 404 a propósito.
+    render(<Nav locale="es" dict={dict} path={(code) => `/${NOTES_SLUG[code]}`} />);
+    expect(idiomas()).toEqual([
+      { code: "ES", href: "/es/notas" },
+      { code: "EN", href: "/en/notes" },
+      { code: "PT", href: "/pt/notas" },
     ]);
   });
 });

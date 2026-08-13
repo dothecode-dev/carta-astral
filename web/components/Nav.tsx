@@ -20,9 +20,14 @@ export function Nav({
    *  sesión —son estáticas—, así que ahí se muestra siempre. */
   showExample?: boolean;
   /** Lo que va después del idioma, para que cambiar de idioma no te saque de
-   *  la página en la que estás. */
-  path?: string;
+   *  la página en la que estás.
+   *
+   *  Puede ser una función cuando la ruta misma cambia con el idioma: la
+   *  sección de notas es `/notas` en español y `/notes` en inglés, así que un
+   *  path fijo mandaría a `/en/notas`, que no existe. */
+  path?: string | ((code: Locale) => string);
 }) {
+  const pathPara = (code: Locale) => (typeof path === "function" ? path(code) : path);
   return (
     <nav className="nav">
       <div className="navInner">
@@ -45,7 +50,7 @@ export function Nav({
           {LOCALES.map((code) => (
             <Link
               key={code}
-              href={`/${code}${path}`}
+              href={`/${code}${pathPara(code)}`}
               aria-current={code === locale ? "true" : undefined}
               hrefLang={code}
               // Es la misma página en otro idioma: mandarte al principio sería
