@@ -9,6 +9,24 @@ export function isLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);
 }
 
+/** El segmento de la sección de notas, traducido.
+ *
+ * La palabra en la URL es una señal de idioma para los buscadores, y evita que
+ * `/en/notas` compita con `/es/notas` por la misma consulta. La ruta que lo
+ * sirve es `app/[locale]/[section]`, que sólo acepta estos pares: cualquier
+ * otro valor del segmento es 404. */
+export const NOTES_SLUG: Record<Locale, string> = {
+  es: "notas",
+  en: "notes",
+  pt: "notas",
+};
+
+/** Si `section` es la sección de notas de ese idioma. Falso para la de otro:
+ * `/en/notas` no existe, existe `/en/notes`. */
+export function isNotesSection(locale: Locale, section: string): boolean {
+  return NOTES_SLUG[locale] === section;
+}
+
 /** Locale de Intl para fechas y horas, no para el contenido. */
 export const INTL_LOCALE: Record<Locale, string> = {
   es: "es-AR",
@@ -136,8 +154,16 @@ export type Dict = {
     title: string;
     steps: { label: string; title: string; body: string }[];
   };
-  // `notes` (la sección de la portada) se quitó junto con los artículos
-  // inventados que la llenaban. Vuelve cuando las notas del CMS tengan ruta.
+  notes: {
+    eyebrow: string;
+    title: string;
+    lede: string;
+    /** Cuando el idioma todavía no tiene ninguna nota publicada. */
+    empty: string;
+    back: string;
+    /** "3 de agosto de 2026" se arma con `Intl`; esto es lo que va antes. */
+    publishedOn: string;
+  };
   privacy: { eyebrow: string; title: string; points: { strong: string; rest: string }[]; link: string };
   credits: {
     eyebrow: string;
@@ -285,6 +311,14 @@ const es: Dict = {
           "El texto se escribe sobre la carta ya calculada, y podés leerlo en español, inglés o portugués sin volver a empezar.",
       },
     ],
+  },
+  notes: {
+    eyebrow: "Notas",
+    title: "Qué significa cada cosa que ves en tu carta.",
+    lede: "Astrología explicada sin misticismo: qué mide cada pieza de la carta y qué no.",
+    empty: "Todavía no hay notas publicadas en español. Están en camino.",
+    back: "Todas las notas",
+    publishedOn: "Publicada el",
   },
   privacy: {
     eyebrow: "Privacidad",
@@ -490,6 +524,14 @@ const en: Dict = {
       },
     ],
   },
+  notes: {
+    eyebrow: "Notes",
+    title: "What each thing in your chart actually means.",
+    lede: "Astrology explained without the mysticism: what each piece of the chart measures, and what it doesn't.",
+    empty: "No notes published in English yet. They're on the way.",
+    back: "All notes",
+    publishedOn: "Published on",
+  },
   privacy: {
     eyebrow: "Privacy",
     title: "Your birth details never leave your account.",
@@ -693,6 +735,14 @@ const pt: Dict = {
           "O texto é escrito sobre o mapa já calculado, e você pode lê-lo em espanhol, inglês ou português sem recomeçar.",
       },
     ],
+  },
+  notes: {
+    eyebrow: "Notas",
+    title: "O que significa cada coisa que você vê no seu mapa.",
+    lede: "Astrologia explicada sem misticismo: o que cada peça do mapa mede e o que não mede.",
+    empty: "Ainda não há notas publicadas em português. Estão a caminho.",
+    back: "Todas as notas",
+    publishedOn: "Publicada em",
   },
   privacy: {
     eyebrow: "Privacidade",

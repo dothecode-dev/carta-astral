@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Logo } from "@/components/Logo";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
-import { LOCALES, type Dict, type Locale } from "@/lib/i18n";
+import { LOCALES, NOTES_SLUG, type Dict, type Locale } from "@/lib/i18n";
 
 export function Nav({
   locale,
@@ -34,7 +34,7 @@ export function Nav({
         <div className="navLinks">
           <Link href={`/${locale}/nueva`}>{dict.newChart.navNew}</Link>
           {showExample && <Link href={`/${locale}/ejemplo`}>{dict.nav.example}</Link>}
-          <Link href={`/${locale}`}>{dict.nav.notes}</Link>
+          <Link href={`/${locale}/${NOTES_SLUG[locale]}`}>{dict.nav.notes}</Link>
           <Link href={`/${locale}#descargar`}>{dict.nav.download}</Link>
           <Link className="navEnter" href={`/${locale}${signedIn ? "/cuenta" : "/entrar"}`}>
             {signedIn ? dict.auth.account : dict.auth.navEnter}

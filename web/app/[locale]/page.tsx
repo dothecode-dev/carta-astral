@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { EphemerisRail } from "@/components/EphemerisRail";
 import { Nav } from "@/components/Nav";
 import { SkyWheel } from "@/components/SkyWheel";
-import { getDict, isLocale } from "@/lib/i18n";
+import { NOTES_SLUG, getDict, isLocale } from "@/lib/i18n";
+import { fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
 import { fetchSky } from "@/lib/sky";
 import { StoreBadges } from "@/components/StoreBadges";
 import { Footer } from "@/components/Footer";
@@ -19,6 +21,7 @@ export default async function Home({
   // Del backend, con Swiss Ephemeris. Si no contesta, la rueda se calcula en
   // el navegador y la portada no se entera.
   const sky = await fetchSky();
+  const notes = await fetchNotesOrNone(locale, 3);
 
   return (
     <>
@@ -72,9 +75,35 @@ export default async function Home({
             </div>
           </section>
 
-          {/* Acá iba la sección de notas. Anunciaba tres artículos inventados
-              —con fecha y minutos de lectura— que enlazaban a `#`. Vuelve
-              cuando las notas del CMS tengan ruta en la web. */}
+          {/* Las tres últimas notas publicadas. Si el idioma todavía no tiene
+              ninguna —o el CMS no contesta— la sección no se muestra: es lo
+              que antes se resolvía con tres artículos inventados. */}
+          {notes.length > 0 && (
+            <section>
+              <div className="sectionHead">
+                <p className="eyebrow">{dict.notes.eyebrow}</p>
+                <h2 className="display sectionTitle">{dict.notes.title}</h2>
+              </div>
+
+              <div className="notes">
+                {notes.map((note) => (
+                  <Link
+                    className="note"
+                    href={`/${locale}/${NOTES_SLUG[locale]}/${note.slug}`}
+                    key={note.slug}
+                  >
+                    <span className="noteMeta">
+                      <time dateTime={note.fecha}>{formatNoteDate(locale, note.fecha, "short")}</time>
+                    </span>
+                    <span className="noteText">
+                      <h3 className="noteTitle">{note.title}</h3>
+                      <span className="noteBajada">{note.bajada}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section>
             <div className="sectionHead">
