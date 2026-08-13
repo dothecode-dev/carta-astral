@@ -60,6 +60,10 @@ install: ## Instala las dependencias de los dos proyectos
 	# cual y falla si no coincide con package.json, que es lo que queremos.
 	cd web && npm ci
 	@test -f web/.env.local || cp web/.env.example web/.env.local
+	# `main` no está protegida y se pushea directo: el hook de pre-push es el
+	# único gate antes de GitHub. `core.hooksPath` es config local de cada
+	# clon, así que no viaja con el repo y hay que ponerla acá.
+	@git config core.hooksPath .githooks
 	@echo "listo — 'make dev' para levantar todo"
 
 test: test-back test-web ## Corre todos los gates, los mismos que el CI

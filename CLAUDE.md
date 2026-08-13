@@ -99,15 +99,22 @@ Si vas a tocar una y no hay test que cubra el caso, escribilo primero.
 Los mensajes de commit no llevan trailer `Co-Authored-By` ni menciones a Claude,
 Anthropic o IA — tampoco en descripciones de PR. Autoría humana solamente.
 
-El trabajo entra por rama y PR. `main` está protegida en GitHub: los dos jobs del CI
-(`backend` y `web`) sobre la rama actualizada, una aprobación, sin push directo, sin
-force push y sin borrado de rama.
+**Se pushea directo a `main`. No hay PR ni aprobación.** Somos dos personas: pedir la
+aprobación de alguien era un trámite que terminaba salteándose con `--admin`, y una regla
+que se saltea siempre no es una regla. La protección de rama se quitó el 13-08-2026.
 
-**Pero `enforce_admins` está en `false`, así que la protección no se aplica al dueño
-del repo.** No es una formalidad: entre junio y agosto de 2026 los primeros 170 commits
-entraron por push directo sin un solo PR, y `main` estuvo ocho días en rojo con los
-tests de subidas maliciosas del CMS sin verificar. Si trabajás con permiso de admin, la
-disciplina la ponés vos: mirá el CI antes de mergear.
+El gate no desapareció, se mudó a tu máquina: **`.githooks/pre-push` corre los mismos
+gates que el CI y aborta el push si algo falla**, sólo sobre el área que tocaste. Lo
+activa `make install` (`core.hooksPath` es config local de cada clon, no viaja con el
+repo). Si clonaste a mano, corré `git config core.hooksPath .githooks` o no tenés ningún
+freno.
 
-Al mergear ramas apiladas, **no uses `--delete-branch`**: borrar la rama base de un PR
-abierto lo cierra en vez de reapuntarlo, y hay que rehacerlo a mano.
+`git push --no-verify` lo saltea. Es para emergencias, no para cuando molesta: entre junio
+y agosto de 2026, con push directo y sin este hook, `main` estuvo ocho días en rojo con
+los tests de subidas maliciosas del CMS sin verificar y nadie se enteró.
+
+El CI sigue corriendo sobre `main` y es la segunda red, no la primera. Si lo ves en rojo,
+lo que hay en `main` está roto de verdad — nadie lo frenó antes.
+
+Si algún cambio sí amerita revisión —una superficie crítica, algo que quieras discutir—,
+hacé una rama y un PR igual. Deja de ser obligatorio, no imposible.

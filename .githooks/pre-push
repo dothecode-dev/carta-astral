@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# Corre los gates del CI antes de dejar que algo llegue a GitHub.
+#
+# Existe porque `main` ya no está protegida: se pushea directo, sin PR ni
+# aprobación, así que el único momento en que se puede frenar código roto es
+# antes de que salga de esta máquina. Entre junio y agosto de 2026, con push
+# directo y sin este freno, `main` estuvo ocho días en rojo sin que nadie lo
+# notara.
+#
+# Sólo corre los gates del área que tocaste: si el push no tiene cambios en
+# `web/`, no se pagan los dos builds de Next.
+#
+# Para saltearlo en un caso puntual: `git push --no-verify`.
+
+set -uo pipefail
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+VACIO="0000000000000000000000000000000000000000"
+rangos=()
+
+# git manda por stdin una línea por ref: <ref local> <sha local> <ref remoto> <sha remoto>
+while read -r _ sha_local _ sha_remoto; do
+  [ "$sha_local" = "$VACIO" ] && continue          # borrado de rama: nada que probar
+  if [ "$sha_remoto" = "$VACIO" ]; then
+    # Rama nueva en el remoto: se compara contra main, que es lo que ya está allá.
+    base=$(git merge-base main "$sha_local" 2>/dev/null) || base=""
+    [ -n "$base" ] && rangos+=("$base..$sha_local")
+  else
+    rangos+=("$sha_remoto..$sha_local")
+  fi
+done
+
+# Sin nada que comparar —push de tags, o stdin vacío— se corre todo por las dudas.
+if [ ${#rangos[@]} -eq 0 ]; then
+  tocados="backend/ web/"
+else
+  tocados=$(for r in "${rangos[@]}"; do git diff --name-only "$r"; done | sort -u)
+fi
+
+corre_back=$(grep -q "^backend/" <<<"$tocados" && echo 1 || echo 0)
+corre_web=$(grep -q "^web/" <<<"$tocados" && echo 1 || echo 0)
+
+if [ "$corre_back" = 0 ] && [ "$corre_web" = 0 ]; then
+  echo "pre-push: sin cambios en backend/ ni web/, no hay gates que correr."
+  exit 0
+fi
+
+fallo=0
+if [ "$corre_back" = 1 ]; then
+  echo "pre-push: corriendo los gates del backend..."
+  make test-back || fallo=1
+fi
+if [ "$corre_web" = 1 ]; then
+  echo "pre-push: corriendo los gates de la web..."
+  make test-web || fallo=1
+fi
+
+if [ "$fallo" = 1 ]; then
+  echo
+  echo "pre-push: los gates fallaron, el push se cancela."
+  echo "  Arreglalo, o si sabés lo que hacés: git push --no-verify"
+  exit 1
+fi
+
+echo "pre-push: gates en verde."
+exit 0
