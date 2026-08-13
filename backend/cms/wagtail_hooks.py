@@ -23,7 +23,9 @@ from django.forms.utils import flatatt
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
+from rest_framework.permissions import IsAuthenticated
 from wagtail import hooks
+from wagtail.admin.api.views import PagesAdminAPIViewSet
 from wagtail.images import get_image_model
 from wagtail.images.formats import get_image_format
 from wagtail.images.shortcuts import get_rendition_or_not_found
@@ -121,3 +123,30 @@ def _pisar_handlers_de_stock(features):
     # anterior (no hay merge ni chequeo de conflicto).
     features.register_link_type(NotaLinkHandler)
     features.register_embed_type(NotaImageEmbedHandler)
+
+
+class PaginasDelExplorador(PagesAdminAPIViewSet):
+    """La API que dibuja el árbol de páginas del admin.
+
+    Wagtail no le declara `permission_classes`, así que heredaba los del
+    proyecto (`HasAccount` + token de cuenta, `config/settings.py`), pensados
+    para la app y no para una sesión de admin: el explorador lateral recibía
+    403 y mostraba "Server Error" en vez del árbol.
+
+    Quién puede entrar no lo decide DRF. Todas las URLs del admin están
+    envueltas en `require_admin_access` (`wagtail/admin/urls/__init__.py`), que
+    exige sesión y el permiso `wagtailadmin.access_admin`; para cuando la
+    petición llega hasta acá, ese control ya pasó. `IsAuthenticated` queda como
+    segunda barrera, por si alguien monta estas rutas fuera del urlconf del
+    admin en el futuro.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+
+@hooks.register("construct_admin_api")
+def _arreglar_permisos_del_explorador(router):
+    # `register_endpoint` guarda en un dict keyado por nombre y este hook corre
+    # antes de que el router arme sus urlpatterns (`wagtail/admin/api/urls.py`),
+    # así que registrar "pages" de nuevo reemplaza la vista de stock.
+    router.register_endpoint("pages", PaginasDelExplorador)
