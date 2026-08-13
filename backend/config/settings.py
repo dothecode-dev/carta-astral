@@ -342,6 +342,13 @@ USE_TZ = True
 WAGTAIL_I18N_ENABLED = True
 WAGTAIL_CONTENT_LANGUAGES = [("es", "Español"), ("en", "English"), ("pt", "Português")]
 
+# El default de Wagtail es 20, y a la nota 21 el listado y el sitemap de la web
+# habrían empezado a omitir notas sin que nada fallara. La API es pública pero
+# sólo devuelve notas publicadas, así que el techo no protege nada sensible: es
+# el costo de una respuesta grande. Cuando el blog pase de 200 notas hay que
+# paginar de verdad, no volver a subir este número.
+WAGTAILAPI_LIMIT_MAX = 200
+
 
 # Sólo mapas de bits: un SVG es un documento con scripts (RF6).
 WAGTAILIMAGES_EXTENSIONS = ["gif", "jpg", "jpeg", "png", "webp"]
