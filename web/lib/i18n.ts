@@ -136,7 +136,8 @@ export type Dict = {
     title: string;
     steps: { label: string; title: string; body: string }[];
   };
-  notes: { eyebrow: string; title: string; items: { meta: string; title: string; sign: string }[] };
+  // `notes` (la sección de la portada) se quitó junto con los artículos
+  // inventados que la llenaban. Vuelve cuando las notas del CMS tengan ruta.
   privacy: { eyebrow: string; title: string; points: { strong: string; rest: string }[]; link: string };
   credits: {
     eyebrow: string;
@@ -244,7 +245,7 @@ const es: Dict = {
   meta: {
     title: "ASTRA — cartas astrales",
     description:
-      "Tu carta natal calculada con efemérides reales y leída en tu idioma. Android e iOS.",
+      "Tu carta natal calculada con efemérides reales y leída en tu idioma. Directo en el navegador, sin instalar nada.",
   },
   nav: { example: "Carta de ejemplo", notes: "Notas", download: "Descargar" },
   theme: { night: "Noche", day: "Día", label: "Luz de la página" },
@@ -283,15 +284,6 @@ const es: Dict = {
         body:
           "El texto se escribe sobre la carta ya calculada, y podés leerlo en español, inglés o portugués sin volver a empezar.",
       },
-    ],
-  },
-  notes: {
-    eyebrow: "Notas",
-    title: "Qué significa cada cosa que ves en tu carta.",
-    items: [
-      { meta: "28 jul 2026 · 7 min", title: "Por qué la hora exacta cambia toda tu carta", sign: "☊" },
-      { meta: "14 jul 2026 · 5 min", title: "Sol, Luna y Ascendente: los tres que no son lo mismo", sign: "☉" },
-      { meta: "2 jul 2026 · 9 min", title: "Mercurio retrógrado, explicado sin misticismo", sign: "☿" },
     ],
   },
   privacy: {
@@ -457,7 +449,7 @@ const en: Dict = {
   meta: {
     title: "ASTRA — astrological charts",
     description:
-      "Your natal chart, computed from real ephemeris and written in your language. Android and iOS.",
+      "Your natal chart, computed from real ephemeris and written in your language. Straight from your browser, nothing to install.",
   },
   nav: { example: "Sample chart", notes: "Notes", download: "Download" },
   theme: { night: "Night", day: "Day", label: "Page light" },
@@ -496,15 +488,6 @@ const en: Dict = {
         body:
           "The text is written over the chart already calculated, and you can read it in Spanish, English or Portuguese without starting over.",
       },
-    ],
-  },
-  notes: {
-    eyebrow: "Notes",
-    title: "What each thing in your chart actually means.",
-    items: [
-      { meta: "28 Jul 2026 · 7 min", title: "Why an exact birth time changes your whole chart", sign: "☊" },
-      { meta: "14 Jul 2026 · 5 min", title: "Sun, Moon and Rising: three things that aren't the same", sign: "☉" },
-      { meta: "2 Jul 2026 · 9 min", title: "Mercury retrograde, explained without the mysticism", sign: "☿" },
     ],
   },
   privacy: {
@@ -670,7 +653,7 @@ const pt: Dict = {
   meta: {
     title: "ASTRA — mapas astrais",
     description:
-      "Seu mapa natal calculado com efemérides reais e escrito no seu idioma. Android e iOS.",
+      "Seu mapa natal calculado com efemérides reais e escrito no seu idioma. Direto no navegador, sem instalar nada.",
   },
   nav: { example: "Mapa de exemplo", notes: "Notas", download: "Baixar" },
   theme: { night: "Noite", day: "Dia", label: "Luz da página" },
@@ -709,15 +692,6 @@ const pt: Dict = {
         body:
           "O texto é escrito sobre o mapa já calculado, e você pode lê-lo em espanhol, inglês ou português sem recomeçar.",
       },
-    ],
-  },
-  notes: {
-    eyebrow: "Notas",
-    title: "O que significa cada coisa que você vê no seu mapa.",
-    items: [
-      { meta: "28 jul 2026 · 7 min", title: "Por que a hora exata muda o seu mapa inteiro", sign: "☊" },
-      { meta: "14 jul 2026 · 5 min", title: "Sol, Lua e Ascendente: três coisas que não são a mesma", sign: "☉" },
-      { meta: "2 jul 2026 · 9 min", title: "Mercúrio retrógrado, explicado sem misticismo", sign: "☿" },
     ],
   },
   privacy: {
