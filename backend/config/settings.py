@@ -36,7 +36,18 @@ if not SECRET_KEY:
     raise ImproperlyConfigured("SECRET_KEY env var es obligatoria cuando DEBUG está apagado")
 
 # Lista separada por comas, p.ej. "api.midominio.com,carta-astral.midominio.com".
+# El healthcheck de Docker corre dentro del contenedor y pregunta por
+# `localhost`, no por el dominio público. Django valida el `Host` en el
+# middleware, antes de cualquier vista: sin estos dos, `/healthz/` devolvía 400
+# y Coolify daba la aplicación por muerta —comprobado contra producción el
+# 13-08-2026, donde el dominio público respondía 200 y el pedido interno 400—.
+# No aflojan nada: Traefik enruta por dominio, así que un pedido con
+# `Host: localhost` sólo puede venir de adentro de la red de Docker.
+INTERNAL_HOSTS = ["localhost", "127.0.0.1"]
+
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if ALLOWED_HOSTS:
+    ALLOWED_HOSTS += INTERNAL_HOSTS
 if DEBUG and not ALLOWED_HOSTS:
     # En desarrollo el teléfono y la web de la app le pegan por la IP LAN de
     # la Mac (cambia por DHCP); cualquier host es aceptable con DEBUG.

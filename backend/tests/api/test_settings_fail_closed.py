@@ -66,8 +66,21 @@ def test_sin_secret_key_en_produccion_no_arranca(monkeypatch):
 def test_allowed_hosts_no_es_comodin_en_produccion(monkeypatch):
     s = _cargar_settings(monkeypatch, **PROD_MINIMO)
 
-    assert s.ALLOWED_HOSTS == ["api.ejemplo.com"]
+    assert "api.ejemplo.com" in s.ALLOWED_HOSTS
     assert "*" not in s.ALLOWED_HOSTS
+
+
+def test_allowed_hosts_suma_los_hosts_internos_del_contenedor(monkeypatch):
+    """El healthcheck de Docker pregunta por `localhost` desde adentro.
+
+    Sin esto Django corta con 400 en el middleware, antes de la vista, y Coolify
+    interpreta que la aplicación está muerta. Traefik enruta por dominio, así
+    que un pedido con este `Host` sólo puede venir de la red de Docker.
+    """
+    s = _cargar_settings(monkeypatch, **PROD_MINIMO)
+
+    assert "localhost" in s.ALLOWED_HOSTS
+    assert "127.0.0.1" in s.ALLOWED_HOSTS
 
 
 def test_el_hardening_de_cookies_y_hsts_se_activa_en_produccion(monkeypatch):

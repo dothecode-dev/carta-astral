@@ -15,6 +15,7 @@ from rest_framework.test import APIClient
 from api.auth import create_session
 from api.models import Account
 from api.sso import VerifiedIdentity
+from config.settings import INTERNAL_HOSTS
 
 CLAVES_CHART = {
     "id", "house_system", "zodiac", "data", "engine_version",
@@ -144,6 +145,24 @@ def test_healthz_responde_sin_tocar_la_base():
 
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1"])
+def test_healthz_contesta_al_host_interno_del_contenedor(host, settings):
+    """Docker pregunta por `localhost`, no por el dominio público.
+
+    `ALLOWED_HOSTS` se arma con los dominios del entorno, así que un pedido con
+    `Host: localhost` moría en 400 antes de llegar a la vista —Django valida el
+    host en el middleware— y el healthcheck de Coolify daba la aplicación por
+    muerta. Se comprobó contra producción el 13-08-2026: `curl` desde adentro
+    del contenedor devolvía 400 mientras el dominio público devolvía 200.
+    """
+    settings.ALLOWED_HOSTS = ["api.ejemplo.test"] + INTERNAL_HOSTS
+
+    r = APIClient().get("/healthz/", headers={"host": host})
+
+    assert r.status_code == 200
 
 
 @pytest.mark.django_db
