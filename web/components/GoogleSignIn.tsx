@@ -28,6 +28,18 @@ declare global {
 
 const SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 
+// El backend acepta varias credenciales en una sola variable separadas por coma
+// —Google exige un client id por plataforma, ver `audiences_for` en api/sso.py—,
+// pero acá va una sola. Pegar la lista del backend en esta variable deja un botón
+// que renderiza bien y recién al clickearlo devuelve "invalid_client", con el
+// motivo enterrado en un log de GSI. Pasó en producción el 13-08-2026.
+function usableClientId(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const value = raw.trim();
+  if (/[,\s]/.test(value) || !value.endsWith(".apps.googleusercontent.com")) return undefined;
+  return value;
+}
+
 export function GoogleSignIn({
   locale,
   labels,
@@ -39,13 +51,22 @@ export function GoogleSignIn({
   const router = useRouter();
   // Se resuelve en el build: si falta la credencial, se sabe antes de renderizar
   // y no hay por qué averiguarlo dentro de un efecto.
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const raw = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const clientId = usableClientId(raw);
   const [status, setStatus] = useState<"loading" | "ready" | "blocked" | "failed">(
     clientId ? "loading" : "blocked",
   );
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!clientId) {
+      // Sin esto el problema es indistinguible de un bloqueador de rastreadores.
+      console.error(
+        raw
+          ? `NEXT_PUBLIC_GOOGLE_CLIENT_ID mal formado (${raw.length} caracteres): se espera un único client id terminado en .apps.googleusercontent.com, sin comas ni espacios.`
+          : "NEXT_PUBLIC_GOOGLE_CLIENT_ID no está definido: el acceso con Google queda deshabilitado.",
+      );
+      return;
+    }
 
     async function onCredential(response: Credential) {
       if (!response.credential) {
@@ -93,7 +114,7 @@ export function GoogleSignIn({
     // dejar un botón que no aparece nunca.
     script.onerror = () => setStatus("blocked");
     document.head.appendChild(script);
-  }, [clientId, locale, router]);
+  }, [clientId, raw, locale, router]);
 
   return (
     <div className="signin">
