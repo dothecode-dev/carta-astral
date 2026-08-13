@@ -153,6 +153,12 @@ if not WAGTAILADMIN_BASE_URL:
         "portadas de las notas salen rotas en la web."
     )
 
+# El `detail_url` que la API pone en cada página. Sin esto lo arma con el
+# `Site` de Wagtail, que apunta al dominio de la web —donde esta API no
+# existe—, así que el campo salía con una URL que devuelve 404. Es el mismo
+# origen que el admin porque la API vive en este backend, no en la web.
+WAGTAILAPI_BASE_URL = WAGTAILADMIN_BASE_URL
+
 # Dominio público de la web (Next.js), NO del backend. Este backend es
 # headless: `config/urls.py` nunca monta `wagtail.urls`, así que Wagtail no
 # tiene ninguna URL propia para una página del CMS. Los enlaces internos del
