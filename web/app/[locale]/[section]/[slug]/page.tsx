@@ -5,8 +5,8 @@ import { notFound } from "next/navigation";
 import { Footer } from "@/components/Footer";
 import { Nav } from "@/components/Nav";
 import { SITE_URL } from "@/lib/config";
-import { NOTES_SLUG, getDict, isLocale, isNotesSection } from "@/lib/i18n";
-import { fetchNote, formatNoteDate } from "@/lib/notes";
+import { DEFAULT_LOCALE, NOTES_SLUG, getDict, isLocale, isNotesSection } from "@/lib/i18n";
+import { fetchNote, fetchTranslationsOrNone, formatNoteDate } from "@/lib/notes";
 
 // Mismo criterio que el listado: sin `generateStaticParams`. Enumerar las notas
 // en el build no sólo ata el build a que el CMS esté arriba —el CI no tiene
@@ -25,16 +25,29 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const note = await fetchNote(locale, slug);
   if (!note) return {};
 
+  // Las versiones publicadas en otros idiomas, para declararlas como la misma
+  // nota traducida y no como artículos que compiten entre sí. Sólo las
+  // publicadas: una traducción en borrador todavía daría 404.
+  const traducciones = await fetchTranslationsOrNone(note.id);
+  const languages: Record<string, string> = {
+    [locale]: `/${locale}/${section}/${slug}`,
+    ...Object.fromEntries(
+      traducciones.map((t) => [t.locale, `/${t.locale}/${NOTES_SLUG[t.locale]}/${t.slug}`]),
+    ),
+  };
+
   return {
     metadataBase: new URL(SITE_URL),
     title: `${note.title} — ASTRA`,
     description: note.bajada,
-    // Sin `languages`: cada idioma tiene su propia nota con su propio slug, y
-    // una puede estar publicada en español y todavía no en inglés. Declarar un
-    // alternate hacia una traducción que no existe es peor que no declararlo.
-    // Cuando haya notas traducidas se resuelve con `?translation_of=` de la
-    // API de Wagtail.
-    alternates: { canonical: `/${locale}/${section}/${slug}` },
+    alternates: {
+      canonical: `/${locale}/${section}/${slug}`,
+      languages: {
+        ...languages,
+        // Al resto del mundo, la versión en el idioma por defecto si existe.
+        "x-default": languages[DEFAULT_LOCALE] ?? languages[locale],
+      },
+    },
     openGraph: {
       type: "article",
       title: note.title,

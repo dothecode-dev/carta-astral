@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LOCALES, NOTES_SLUG, isNotesSection } from "@/lib/i18n";
-import { fetchNote, fetchNotes, fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
+import {
+  fetchNote,
+  fetchNotes,
+  fetchNotesOrNone,
+  fetchTranslations,
+  fetchTranslationsOrNone,
+  formatNoteDate,
+} from "@/lib/notes";
 
 // Las notas llegan del CMS de Wagtail. Lo que importa acá es que un CMS caído
 // no se convierta en un listado vacío servido a Google, y que el segmento
@@ -135,6 +142,57 @@ describe("fetchNotesOrNone", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("sin red")));
 
     await expect(fetchNotesOrNone("es")).resolves.toEqual([]);
+  });
+});
+
+describe("fetchTranslations", () => {
+  it("devuelve idioma y slug de cada versión publicada", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        meta: { total_count: 2 },
+        items: [
+          { id: 16, meta: { slug: "exact-birth-time", locale: "en" }, title: "", fecha: "", bajada: "" },
+          { id: 17, meta: { slug: "hora-exata-de-nascimento", locale: "pt" }, title: "", fecha: "", bajada: "" },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const traducciones = await fetchTranslations(13);
+
+    expect(fetchMock.mock.calls[0][0]).toContain("translation_of=13");
+    expect(traducciones).toEqual([
+      { locale: "en", slug: "exact-birth-time" },
+      { locale: "pt", slug: "hora-exata-de-nascimento" },
+    ]);
+  });
+
+  it("descarta lo que no sea uno de los tres idiomas", async () => {
+    // Si mañana se agrega un locale en Wagtail y no en la web, esa traducción
+    // no puede convertirse en un hreflang hacia una ruta que no existe.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({
+          meta: { total_count: 1 },
+          items: [{ id: 20, meta: { slug: "x", locale: "de" }, title: "", fecha: "", bajada: "" }],
+        }),
+      }),
+    );
+
+    await expect(fetchTranslations(13)).resolves.toEqual([]);
+  });
+
+  it("no tumba la nota si el CMS falla al pedirlas", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("sin red")));
+
+    await expect(fetchTranslationsOrNone(13)).resolves.toEqual([]);
   });
 });
 

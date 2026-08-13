@@ -1,5 +1,5 @@
 import { API_URL } from "./config";
-import { INTL_LOCALE, type Locale } from "./i18n";
+import { INTL_LOCALE, isLocale, type Locale } from "./i18n";
 
 // Las notas viven en el CMS de Wagtail (`backend/cms/`) y se leen por su API
 // pública. El pedido sale del servidor de Next, como el del cielo en `sky.ts`:
@@ -21,7 +21,7 @@ type ApiImage = { url: string; width: number; height: number; alt: string };
 
 type ApiNote = {
   id: number;
-  meta: { slug: string; first_published_at: string | null };
+  meta: { slug: string; locale?: string; first_published_at: string | null };
   title: string;
   fecha: string;
   bajada: string;
@@ -31,6 +31,7 @@ type ApiNote = {
 };
 
 export type NoteSummary = {
+  id: number;
   slug: string;
   title: string;
   /** ISO `YYYY-MM-DD`, tal como la guarda el CMS. */
@@ -40,6 +41,9 @@ export type NoteSummary = {
 };
 
 export type Note = NoteSummary & { cuerpo: string };
+
+/** La misma nota en otro idioma: su idioma y su slug, que no se repite. */
+export type NoteTranslation = { locale: Locale; slug: string };
 
 /** La fecha de publicación, escrita en el idioma de la nota.
  *
@@ -77,6 +81,7 @@ async function askCms(query: string): Promise<{ items: ApiNote[] }> {
 
 function toSummary(note: ApiNote): NoteSummary {
   return {
+    id: note.id,
     slug: note.meta.slug,
     title: note.title,
     fecha: note.fecha,
@@ -110,6 +115,36 @@ export async function fetchNote(locale: Locale, slug: string): Promise<Note | nu
     // (`RichTextAPIField` en `cms/models.py`); acá llega listo para pintar.
     cuerpo: note.cuerpo ?? "",
   };
+}
+
+/** Las versiones publicadas de una nota en los otros idiomas.
+ *
+ * Es lo que sostiene el `hreflang` del detalle: sin esto cada traducción sería,
+ * para un buscador, un artículo distinto que compite con los otros en vez de la
+ * misma nota en otro idioma.
+ *
+ * Devuelve sólo las publicadas —la API no expone borradores—, así que una nota
+ * traducida pero sin publicar no se declara, que es lo correcto: apuntar a una
+ * URL que todavía da 404 es peor que no declararla.
+ */
+export async function fetchTranslations(id: number): Promise<NoteTranslation[]> {
+  const { items } = await askCms(`type=cms.NotePage&translation_of=${id}&fields=fecha&limit=20`);
+  return items
+    .map((item) => ({ locale: item.meta.locale, slug: item.meta.slug }))
+    .filter((t): t is NoteTranslation => !!t.locale && isLocale(t.locale));
+}
+
+/** Como `fetchTranslations`, pero sin tirar la página si el CMS falla.
+ *
+ * El `hreflang` es una mejora, no la página: si el CMS no contesta al pedir las
+ * traducciones, es preferible servir la nota sin esa declaración que devolver
+ * un error por algo accesorio. */
+export async function fetchTranslationsOrNone(id: number): Promise<NoteTranslation[]> {
+  try {
+    return await fetchTranslations(id);
+  } catch {
+    return [];
+  }
 }
 
 /** Como `fetchNotes`, pero un CMS caído no tira abajo el build del sitemap. */
