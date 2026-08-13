@@ -17,5 +17,9 @@ function envOr(value: string | undefined, fallback: string): string {
  * rápida de que Google desindexe el sitio sin que nadie se entere. */
 export const SITE_URL = envOr(process.env.NEXT_PUBLIC_SITE_URL, "https://astraguia.com");
 
-/** Backend. Se lee sólo desde el servidor, nunca desde el navegador. */
-export const API_URL = envOr(process.env.API_URL, "https://api.cartaastral.dothecode.com");
+/** Backend. Se lee sólo desde el servidor, nunca desde el navegador.
+ *
+ * Mismo criterio que `SITE_URL`: el fallback es el dominio real de producción.
+ * El que había —`api.cartaastral.dothecode.com`— ya no existe, así que un
+ * deploy sin la variable dejaba la web hablando con la nada. */
+export const API_URL = envOr(process.env.API_URL, "https://api.astraguia.com");

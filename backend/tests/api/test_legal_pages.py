@@ -8,7 +8,18 @@ que corre como gate en el mismo CI.
 import pytest
 from rest_framework.test import APIClient
 
-WEB = "https://astra.dothecode.com"
+WEB = "https://ejemplo.test"
+
+
+@pytest.fixture(autouse=True)
+def web_base_url(settings):
+    """El destino sale de `settings`, así que se fija desde ahí.
+
+    Antes estos tests afirmaban un dominio concreto porque `api.legal` leía la
+    variable de entorno por su cuenta, con un default hardcodeado: el test
+    pasaba justamente cuando el módulo mandaba al dominio equivocado.
+    """
+    settings.WEB_BASE_URL = WEB
 
 
 @pytest.mark.django_db
@@ -35,16 +46,16 @@ def test_lang_invalida_cae_a_espanol():
 
 
 @pytest.mark.django_db
-def test_base_url_configurable_por_entorno(settings, monkeypatch):
-    # El dominio es provisional: cuando cambie, se cambia por env y no por deploy.
-    monkeypatch.setenv("WEB_BASE_URL", "https://ejemplo.test")
-    import importlib
+def test_sigue_a_settings_sin_reimportar(settings):
+    # El dominio ya cambió una vez y puede volver a cambiar. Se toma en cada
+    # request: antes vivía en una constante de módulo y hacía falta recargarlo.
+    settings.WEB_BASE_URL = "https://otro.test"
+    resp = APIClient().get("/legal/privacy")
+    assert resp.headers["Location"] == "https://otro.test/es/legal/privacy"
 
-    from api import legal
 
-    importlib.reload(legal)
-    try:
-        assert legal.WEB_BASE_URL == "https://ejemplo.test"
-    finally:
-        monkeypatch.delenv("WEB_BASE_URL")
-        importlib.reload(legal)
+@pytest.mark.django_db
+def test_no_duplica_la_barra_final(settings):
+    settings.WEB_BASE_URL = "https://ejemplo.test/"
+    resp = APIClient().get("/legal/privacy")
+    assert resp.headers["Location"] == "https://ejemplo.test/es/legal/privacy"

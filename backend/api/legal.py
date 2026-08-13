@@ -10,21 +10,24 @@ Estas rutas quedan porque las versiones de la app ya instaladas las tienen
 compiladas adentro (`carta-astral-app/src/legal/urls.ts`) y porque mantenerlas
 no cuesta nada.
 
-Es 302 y no 301 a propósito: `astra.dothecode.com` es un dominio provisional, y
-un redirect permanente queda cacheado en los navegadores durante meses.
+Es 302 y no 301 a propósito: el dominio de la web puede volver a cambiar, y un
+redirect permanente queda cacheado en los navegadores durante meses.
 """
 
-import os
-
+from django.conf import settings
 from django.http import HttpRequest, HttpResponseRedirect
 
 LANGS = ("es", "en", "pt")
-
-WEB_BASE_URL = os.environ.get("WEB_BASE_URL", "https://astra.dothecode.com").rstrip("/")
 
 
 def legal_page(request: HttpRequest, doc: str) -> HttpResponseRedirect:
     lang = request.GET.get("lang", "es")
     if lang not in LANGS:
         lang = "es"
-    return HttpResponseRedirect(f"{WEB_BASE_URL}/{lang}/legal/{doc}")
+    # De `settings`, que ya exige la variable en producción y cae a
+    # localhost:3000 en desarrollo. Leerla acá por separado —como se hacía—
+    # significaba dos fuentes de verdad que además divergían: el default era el
+    # dominio viejo, así que en desarrollo estas rutas mandaban a un sitio
+    # ajeno en vez de a la web local.
+    base = settings.WEB_BASE_URL.rstrip("/")
+    return HttpResponseRedirect(f"{base}/{lang}/legal/{doc}")
