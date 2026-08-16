@@ -39,8 +39,20 @@ WORKDIR /app
 # hizo fallar dos deploys seguidos con "New container is not healthy, rolling
 # back to the old container", sin que el sitio se cayera y sin ninguna pista en
 # la interfaz.
+# WeasyPrint (el PDF de la carta) no es Python puro: dibuja con Pango y
+# gdk-pixbuf, y sin estas libs el import falla al arrancar, no al primer PDF.
+#
+# `fonts-dejavu-core` es el que dibuja los glifos astrológicos: Outfit y Space
+# Mono son las tipografías de marca y van embebidas en el documento, pero no
+# tienen ni ♈ ni ♃ ni ℞. En el spike del 16-08-2026 la carta salió bien porque
+# DejaVu ya estaba en la imagen por arrastre de Pango; se instala explícito para
+# que deje de depender de un accidente. Si desaparece, la carta entera sale en
+# cajitas y no se entera nadie hasta abrir un PDF.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends \
+       curl \
+       libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libgdk-pixbuf-2.0-0 libffi8 \
+       fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # El venv ya compilado + el código, tal cual quedaron en el builder.
