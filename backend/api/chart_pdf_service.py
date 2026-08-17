@@ -292,15 +292,18 @@ def build_document_html(chart: Chart, data: dict) -> str:
     )
 
     matriz = data.get("aspect_matrix")
-    # La matriz muestra el conjunto de un vistazo; la lista guarda los orbes, que
-    # en la web viven en el tooltip de cada celda y en papel no existirían.
-    seccion_aspectos = (
-        f'<div class="section eyebrow">{_esc(labels["aspects"])}</div>'
-        f"{_matrix_html(matriz) if matriz else ''}"
-        f"<table>{filas_aspectos}</table>"
-        if data["aspects"]
-        else ""
-    )
+    # Con matriz, el documento cierra ahí: la carta ocupa dos hojas —la rueda y
+    # después las posiciones con la matriz— y la lectura empieza en la tercera.
+    # La lista de orbes existe sólo como respaldo, para la carta que no llega a
+    # tener matriz; si se dibujara siempre, partiría la página en dos y correría
+    # la lectura media hoja.
+    if data["aspects"]:
+        cuerpo_aspectos = _matrix_html(matriz) if matriz else f"<table>{filas_aspectos}</table>"
+        seccion_aspectos = (
+            f'<div class="section eyebrow">{_esc(labels["aspects"])}</div>{cuerpo_aspectos}'
+        )
+    else:
+        seccion_aspectos = ""
 
     return f"""<meta charset="utf-8">
 <style>

@@ -176,8 +176,9 @@ def test_el_documento_lista_la_carta(account_client):
     html = _html(_chart(account_client))
     assert "Camila" in html
     assert "Júpiter" in html and "Sol" in html
-    assert "Trígono" in html
     assert "Posiciones" in html and "Aspectos" in html
+    # Los aspectos ya no se nombran uno por uno: están en la matriz, como en la web.
+    assert '<table class="aspectMatrix">' in html
 
 
 def test_sin_reading_lang_no_aparece_la_lectura(account_client):
@@ -241,19 +242,29 @@ def test_la_matriz_de_aspectos_se_dibuja_como_en_la_web(account_client):
     assert "matrixVoid" in tabla
 
 
-def test_la_matriz_no_se_dibuja_si_no_viene(account_client):
+def test_sin_matriz_queda_la_lista_como_respaldo(account_client):
     html = _html(_chart(account_client), aspect_matrix=None)
     # La clase vive en el CSS siempre; lo que no tiene que existir es la tabla.
     assert '<table class="aspectMatrix">' not in html
-    # La lista con los orbes sigue estando: es la que guarda el dato fino.
-    assert "Trígono" in html
+    assert "Trígono" in html and "orbe 7.2°" in html
 
 
-def test_la_lista_de_orbes_acompana_a_la_matriz(account_client):
-    """En papel no hay tooltip ni plegado: si el orbe no está escrito, se pierde."""
+def test_con_matriz_la_carta_cierra_ahi(account_client):
+    """Dos hojas para la carta —rueda, y posiciones con la matriz— y la lectura
+    desde la tercera. La lista de orbes debajo partía la página y corría todo."""
     html = _html(_chart(account_client))
-    assert "aspectMatrix" in html
-    assert "orbe 7.2°" in html
+    assert '<table class="aspectMatrix">' in html
+    assert "orbe 7.2°" not in html
+
+
+def test_la_lectura_empieza_en_hoja_nueva(account_client):
+    chart = _chart(account_client)
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION,
+        text="Tu Sol en Piscis habla de fronteras porosas.", content_key="k",
+    )
+    html = _html(chart, reading_lang="es")
+    assert html.index("pagebreak") < html.index("fronteras porosas")
 
 
 def test_un_tono_desconocido_en_la_matriz_es_400(account_client):
