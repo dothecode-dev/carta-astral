@@ -49,8 +49,13 @@ eso rompió un deploy entero con un `new URL("")`. El build normal no lo detecta
   de la portada para cuando el backend no responde; el camino normal es el endpoint de
   efemérides. Las cartas natales las calcula siempre el backend con Swiss Ephemeris.
 - `components/` — piezas con test propio: `GoogleSignIn`, `Nav`, `StoreBadges`,
-  `NewChartForm`, `AspectMatrix`, `SolarSystem`, `ChartActions`, `AccountCharts`,
-  `DangerZone`, `ThemeSwitch`.
+  `NewChartForm`, `AspectMatrix`, `SolarSystem`, `ChartActions`, `ChartShare`,
+  `AccountCharts`, `DangerZone`, `ThemeSwitch`.
+- `lib/drawWheel.ts` — el pintado de la rueda en un canvas, sin decidir colores. Lo usan
+  `NatalWheel` (con los tokens del tema) y la imagen para redes (con la paleta de marca).
+- `lib/wheelPayload.ts` y `lib/pdfPayload.ts` — lo que se le manda al backend para armar
+  el PDF: la geometría que ya calculó `astra-wheel` y los rótulos ya traducidos. Nunca
+  markup. El diccionario de nombres vive sólo acá; el backend no tiene traducciones.
 - `app/globals.css` — el sistema visual. Los tokens de NOCHE son los mismos que la app;
   DÍA es su inversión, con el dorado bajado para que tenga contraste sobre fondo claro.
 - `app/healthz` — liveness para Coolify.

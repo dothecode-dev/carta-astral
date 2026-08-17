@@ -35,6 +35,36 @@ export async function clearSessionToken(): Promise<void> {
   store.delete(SESSION_COOKIE);
 }
 
+/**
+ * Igual que `callApi`, pero para lo que no es JSON: devuelve la respuesta cruda.
+ *
+ * El PDF de la carta son bytes, y parsearlos como JSON sería romperlos. La
+ * autenticación es la misma: el token sale de la cookie, nunca del cliente.
+ */
+export async function callApiRaw(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const token = await getSessionToken();
+  if (!token) throw new ApiError(401, "sin sesión");
+
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...init.headers,
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new ApiError(res.status, `${path} devolvió ${res.status}`, detail.slice(0, 500));
+  }
+  return res;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,

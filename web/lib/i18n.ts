@@ -241,6 +241,22 @@ export type Dict = {
     waitSteps: [string, string, string];
     reading: string;
   };
+  share: {
+    /** Rótulo de la portada del documento y título de la tabla de posiciones. */
+    chartEyebrow: string;
+    positionsTitle: string;
+    pdf: string;
+    pdfWithReading: string;
+    /** Cuando la lectura está escrita en otro idioma; `{lang}` lo nombra. */
+    pdfWithReadingIn: string;
+    image: string;
+    working: string;
+    failed: string;
+    /** Bajo la marca, en la portada del documento. */
+    tagline: string;
+    madeWith: string;
+    langNames: { es: string; en: string; pt: string };
+  };
   newChart: {
     navNew: string;
     title: string;
@@ -421,6 +437,19 @@ const es: Dict = {
     waitBody: "Estamos escribiendo tu interpretación. Tarda medio minuto: los planetas no se apuran.",
     waitSteps: ["Posiciones calculadas", "Analizando aspectos", "Escribiendo tu lectura"],
     reading: "Tu lectura",
+  },
+  share: {
+    chartEyebrow: "Carta natal",
+    positionsTitle: "Posiciones",
+    pdf: "Descargar PDF",
+    pdfWithReading: "PDF con la lectura",
+    pdfWithReadingIn: "PDF con la lectura (en {lang})",
+    image: "Imagen para redes",
+    working: "Preparando…",
+    failed: "No pudimos preparar el archivo. Probá de nuevo.",
+    tagline: "Tu carta natal",
+    madeWith: "Hecho con ASTRA",
+    langNames: { es: "español", en: "inglés", pt: "portugués" },
   },
   newChart: {
     navNew: "Nueva carta",
@@ -634,6 +663,19 @@ const en: Dict = {
     waitSteps: ["Positions computed", "Analyzing aspects", "Writing your reading"],
     reading: "Your reading",
   },
+  share: {
+    chartEyebrow: "Natal chart",
+    positionsTitle: "Positions",
+    pdf: "Download PDF",
+    pdfWithReading: "PDF with the reading",
+    pdfWithReadingIn: "PDF with the reading (in {lang})",
+    image: "Image for social",
+    working: "Preparing…",
+    failed: "We couldn't prepare the file. Try again.",
+    tagline: "Your natal chart",
+    madeWith: "Made with ASTRA",
+    langNames: { es: "Spanish", en: "English", pt: "Portuguese" },
+  },
   newChart: {
     navNew: "New chart",
     title: "Compute your chart.",
@@ -845,6 +887,19 @@ const pt: Dict = {
     waitBody: "Estamos escrevendo sua interpretação. Leva meio minuto: os planetas não têm pressa.",
     waitSteps: ["Posições calculadas", "Analisando aspectos", "Escrevendo sua leitura"],
     reading: "Sua leitura",
+  },
+  share: {
+    chartEyebrow: "Mapa natal",
+    positionsTitle: "Posições",
+    pdf: "Baixar PDF",
+    pdfWithReading: "PDF com a leitura",
+    pdfWithReadingIn: "PDF com a leitura (em {lang})",
+    image: "Imagem para redes",
+    working: "Preparando…",
+    failed: "Não conseguimos preparar o arquivo. Tente de novo.",
+    tagline: "Seu mapa natal",
+    madeWith: "Feito com ASTRA",
+    langNames: { es: "espanhol", en: "inglês", pt: "português" },
   },
   newChart: {
     navNew: "Novo mapa",

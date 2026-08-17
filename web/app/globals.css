@@ -661,6 +661,21 @@ body {
   padding-top: clamp(1.5rem, 4vw, 2rem);
 }
 
+/* Llevarse la carta. En fila, porque son hermanos: ninguno es la acción
+   principal de la página —esa es leer la carta— y ponerlos en columna debajo del
+   botón de lectura los hacía parecer pasos de un mismo trámite. */
+.chartShare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding-top: clamp(1rem, 3vw, 1.5rem);
+}
+
+.chartShare .formError {
+  flex-basis: 100%;
+}
+
 /* --- Formulario ----------------------------------------------------------
    Los campos son datos: mismo registro mono que la efeméride y la tabla de la
    carta, para que se lea como parte del instrumento y no como un trámite. */

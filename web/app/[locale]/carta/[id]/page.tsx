@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ChartActions } from "@/components/ChartActions";
+import { ChartShare } from "@/components/ChartShare";
 import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartTables } from "@/components/ChartTables";
 import { Nav } from "@/components/Nav";
@@ -10,7 +11,8 @@ import { NatalWheel } from "@/components/NatalWheel";
 import { Reading } from "@/components/Reading";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import { signOf } from "@/lib/ephemeris";
-import { INTL_LOCALE, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
+import { INTL_LOCALE, type Locale, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
+import { buildPdfPayload } from "@/lib/pdfPayload";
 import { ApiError, callApi, getSessionToken } from "@/lib/session";
 import { Footer } from "@/components/Footer";
 
@@ -64,6 +66,14 @@ export default async function ChartPage({
       // Si falla, la carta se muestra igual y el botón vuelve a estar.
     }
   }
+
+  // Para el PDF con la lectura: la de este idioma si está, y si no cualquiera de
+  // las que haya. Traducir una lectura ya escrita no cuesta, pero mientras nadie
+  // la pida existe sólo en el idioma en que se generó, y negarle el PDF a quien
+  // ya la pagó por estar navegando en otro sería absurdo.
+  const readingLang: Locale | null = chart.interpretation_langs.includes(locale)
+    ? locale
+    : ((chart.interpretation_langs.filter(isLocale)[0] as Locale | undefined) ?? null);
 
   const wheel = toWheel(chart);
   const fecha = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
@@ -178,6 +188,17 @@ export default async function ChartPage({
           chartId={chart.id}
           langs={chart.interpretation_langs}
           dict={dict}
+        />
+
+        {/* El payload del PDF se arma acá, en el servidor: es la misma tabla que
+            ya se calculó arriba, con los nombres traducidos de este idioma. */}
+        <ChartShare
+          chartId={chart.id}
+          payload={buildPdfPayload(chart, locale, dict)}
+          wheel={wheel}
+          readingLang={readingLang}
+          dict={dict}
+          locale={locale}
         />
 
         {reading && (
