@@ -24,8 +24,27 @@ Si hace falta cruzar una frontera, el problema es de diseño: se habla antes, no
 contrato.
 
 **`api/views.py` ya es grande.** La lógica nueva va en un módulo de servicio —
-`chart_service.py`, `interpretation_service.py`, `ledger.py` son el patrón — nunca en
-`views.py`.
+`chart_service.py`, `interpretation_service.py`, `ledger.py`, `chart_pdf_service.py` son
+el patrón — nunca en `views.py`.
+
+### El PDF de la carta
+
+`POST /api/charts/{uuid}/pdf/` arma el documento con WeasyPrint. Dos cosas que conviene
+saber antes de tocarlo:
+
+- **El backend no sabe dibujar la rueda y no tiene que aprender.** La geometría la calcula
+  `astra-wheel` en el navegador y viaja en el cuerpo del pedido, junto con los rótulos ya
+  traducidos: acá no hay trigonometría ni diccionario de nombres. Lo que entra son números
+  y texto, validados por `api/pdf_payload.py`; el SVG y el HTML los construye
+  `chart_pdf_service.py`. Generar markup es seguro, filtrarlo no.
+- **El generador tiene prohibido salir a la red.** WeasyPrint resuelve URLs por su cuenta
+  —`<img src>`, `<image href>`, `background-image`— y llega hasta el endpoint de metadata
+  de la instancia. El `url_fetcher` del servicio sólo deja pasar `data:`, que son las
+  tipografías que embebe ese mismo módulo.
+
+La imagen necesita las libs de Pango y `fonts-dejavu-core`: los glifos astrológicos no
+están en las tipografías de marca. Ningún gate construye la imagen, así que después de
+tocar el `Dockerfile` hay que generar un PDF adentro y mirarlo.
 
 ## Configuración
 

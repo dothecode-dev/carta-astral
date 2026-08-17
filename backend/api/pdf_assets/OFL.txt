@@ -1,0 +1,25 @@
+Tipografías embebidas en el PDF de la carta
+===========================================
+
+Outfit-Light.woff2, Outfit-Regular.woff2
+    Outfit, por Smartsheet Inc. — https://fonts.google.com/specimen/Outfit
+    SIL Open Font License 1.1
+
+SpaceMono-Regular.woff2
+    Space Mono, por Colophon Foundry — https://fonts.google.com/specimen/Space+Mono
+    SIL Open Font License 1.1
+
+Son subsets latinos, los mismos que usa el PDF de la app. Se incluyen como
+archivo y no como CDN porque el generador tiene prohibido resolver URLs: el
+`url_fetcher` de `api/chart_pdf_service.py` rechaza todo lo que no sea `data:`.
+
+La SIL Open Font License 1.1 permite redistribuir e incrustar estas fuentes,
+también en un proyecto bajo otra licencia, mientras se conserve este aviso y no
+se vendan las fuentes por separado. El texto completo de la licencia está en
+https://openfontlicense.org y viaja con cada familia en su distribución de
+Google Fonts.
+
+Los glifos astrológicos (♈ ♃ ℞ ⚷ ⚸ ☊) NO están en estas dos familias: los pone
+DejaVu Sans, que se instala en la imagen con `fonts-dejavu-core` (ver el
+Dockerfile). DejaVu tiene su propia licencia, permisiva, y no se redistribuye
+acá: la trae el paquete de Debian.

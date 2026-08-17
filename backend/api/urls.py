@@ -10,6 +10,7 @@ from api.views import (
     GoogleAuthView,
     InterpretationView,
 )
+from api.pdf import ChartPdfView
 from api.sky import SkyView
 from api.webhooks import RevenueCatWebhookView
 
@@ -18,6 +19,7 @@ urlpatterns = [
     path("charts/", ChartCollectionView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
+    path("charts/<uuid:uuid>/pdf/", ChartPdfView.as_view()),
     path("geocode/", GeocodeView.as_view()),
     path("sky/", SkyView.as_view()),
     path("auth/apple", AppleAuthView.as_view()),

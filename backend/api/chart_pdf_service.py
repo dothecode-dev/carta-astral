@@ -1,0 +1,342 @@
+"""El PDF de la carta: de la geometría validada al documento.
+
+Este módulo construye el markup, no lo filtra. Es la diferencia que ordena todo
+lo demás: el cliente manda números y texto, y acá se arma el SVG y el HTML. Con
+texto la defensa es escapar, que es una operación total; con markup ajeno habría
+que mantener una lista blanca, que es una operación que un día tiene un agujero.
+
+La estética es la del PDF de la app (`src/share/chartPdf.ts` en el repo de la
+app): fondo violeta, dorado, mono para los datos. El documento no sigue el tema
+claro/oscuro de quien lo pide: es una pieza de marca y se ve igual siempre.
+"""
+
+from __future__ import annotations
+
+import base64
+import functools
+import html
+import logging
+import re
+import unicodedata
+from pathlib import Path
+from typing import Any
+from urllib.parse import quote
+
+from api.interpretation_service import DISCLAIMERS
+from api.models import Chart
+from interpret.prompts import PROMPT_VERSION
+
+logger = logging.getLogger(__name__)
+
+ASSETS = Path(__file__).resolve().parent / "pdf_assets"
+
+PALETTE = {
+    "void": "#150715",
+    "starlight": "#F9F7F7",
+    "stardust": "#A79BAF",
+    "sol": "#D5C046",
+    "orbit": "rgba(178, 173, 138, 0.28)",
+    "orbit_strong": "rgba(178, 173, 138, 0.6)",
+    "dotted": "#DCCB54",
+    "danger": "#CD1561",
+}
+
+# El aire alrededor de la rueda, en unidades del viewBox: los rótulos de los
+# ejes se dibujan por fuera del anillo exterior y sin este margen se cortan.
+WHEEL_MARGIN = 16
+
+# Los tonos de aspecto, que el cliente nombra y este módulo colorea.
+TONE_COLOR = {
+    "soft": PALETTE["dotted"],
+    "hard": "#CD1561",
+    "neutral": PALETTE["orbit_strong"],
+}
+
+
+class PdfGenerationError(RuntimeError):
+    """El documento no se pudo escribir."""
+
+
+@functools.lru_cache(maxsize=1)
+def pdf_url_fetcher() -> Any:
+    """El generador no sale a buscar nada.
+
+    WeasyPrint resuelve URLs por su cuenta: en el spike del 16-08-2026 intentó
+    traer `<img src>`, `<image href>`, `xlink:href` y el `background-image` de un
+    atributo `style`, incluido `169.254.169.254` —el endpoint de metadata de
+    instancia—. Que el markup lo generemos nosotros no cambia que esto tenga que
+    estar: es la segunda llave, independiente de la primera.
+
+    `data:` es la única excepción y no es una concesión: son los bytes de las
+    tipografías que embebe este mismo módulo. No hay red del otro lado.
+
+    El import es perezoso a propósito: si algún día la imagen se construye sin
+    las libs de Pango, cae este endpoint con un 503 y no el sitio entero.
+    """
+    from weasyprint import URLFetcher
+
+    class _SoloDatos(URLFetcher):
+        def fetch(self, url: str, headers: Any = None) -> Any:
+            if not url.startswith("data:"):
+                logger.warning("pdf: recurso externo bloqueado: %s", url[:120])
+            # `allowed_protocols` hace el rechazo; el log es para enterarnos.
+            return super().fetch(url, headers)
+
+    return _SoloDatos(allowed_protocols=("data",))
+
+
+@functools.lru_cache(maxsize=1)
+def _font_css() -> str:
+    """Las tipografías de marca, embebidas. Subsets latinos, licencia OFL."""
+    fuentes = [
+        ("Outfit", 300, "Outfit-Light.woff2"),
+        ("Outfit", 400, "Outfit-Regular.woff2"),
+        ("Space Mono", 400, "SpaceMono-Regular.woff2"),
+    ]
+    bloques = []
+    for familia, peso, archivo in fuentes:
+        datos = base64.b64encode((ASSETS / archivo).read_bytes()).decode("ascii")
+        bloques.append(
+            f"@font-face {{ font-family: '{familia}'; font-weight: {peso}; "
+            f"src: url(data:font/woff2;base64,{datos}) format('woff2'); }}"
+        )
+    return "\n".join(bloques)
+
+
+def _esc(texto: str) -> str:
+    return html.escape(texto, quote=True)
+
+
+def _svg(wheel: dict) -> str:
+    """La rueda, pintada a partir de la geometría que calculó `astra-wheel`.
+
+    Acá no hay trigonometría y no debe haberla: si el backend empezara a calcular
+    dónde va un glifo, habría dos geometrías que mantener sincronizadas y la que
+    ve la web dejaría de ser la que sale en el PDF.
+    """
+    size = wheel["view_box"]
+    c = wheel["center"]
+    r = wheel["rings"]
+    p = PALETTE
+    partes = [
+        f'<circle cx="{c}" cy="{c}" r="{r["outer"]}" stroke="{p["orbit_strong"]}" stroke-width="1.5" fill="none"/>',
+        f'<circle cx="{c}" cy="{c}" r="{r["signs"]}" stroke="{p["orbit"]}" stroke-width="1" fill="none"/>',
+        f'<circle cx="{c}" cy="{c}" r="{r["houses"]}" stroke="{p["orbit"]}" stroke-width="1" fill="none"/>',
+        f'<circle cx="{c}" cy="{c}" r="{r["aspect"]}" stroke="{p["dotted"]}" '
+        f'stroke-width="0.8" stroke-dasharray="1.5 4" fill="none"/>',
+    ]
+
+    for s in wheel["signs"]:
+        partes.append(
+            f'<text x="{s["x"]}" y="{s["y"]}" font-size="17" fill="{p["stardust"]}" '
+            f'text-anchor="middle">{_esc(s["glyph"])}</text>'
+        )
+
+    for cusp in wheel["cusps"]:
+        eje = cusp["axis"]
+        dash = "" if eje else ' stroke-dasharray="2 3"'
+        color = p["orbit_strong"] if eje else p["orbit"]
+        partes.append(
+            f'<line x1="{cusp["x1"]}" y1="{cusp["y1"]}" x2="{cusp["x2"]}" y2="{cusp["y2"]}" '
+            f'stroke="{color}" stroke-width="{1.2 if eje else 0.6}"{dash}/>'
+            f'<text x="{cusp["label_x"]}" y="{cusp["label_y"]}" font-size="11" '
+            f'fill="{p["stardust"]}" text-anchor="middle">{_esc(cusp["label"])}</text>'
+        )
+
+    for linea in wheel["aspect_lines"]:
+        partes.append(
+            f'<line x1="{linea["x1"]}" y1="{linea["y1"]}" x2="{linea["x2"]}" y2="{linea["y2"]}" '
+            f'stroke="{TONE_COLOR[linea["tone"]]}" stroke-width="0.9" opacity="0.8"/>'
+        )
+
+    for a in wheel["angles"]:
+        partes.append(
+            f'<text x="{a["x"]}" y="{a["y"]}" font-size="10" fill="{p["sol"]}" '
+            f'text-anchor="middle">{_esc(a["label"])}</text>'
+        )
+
+    for b in wheel["bodies"]:
+        color = p["sol"] if b["accent"] else p["starlight"]
+        partes.append(
+            f'<line x1="{b["tick_x1"]}" y1="{b["tick_y1"]}" x2="{b["tick_x2"]}" y2="{b["tick_y2"]}" '
+            f'stroke="{p["sol"]}" stroke-width="1"/>'
+            f'<line x1="{b["leader_x1"]}" y1="{b["leader_y1"]}" x2="{b["leader_x2"]}" '
+            f'y2="{b["leader_y2"]}" stroke="{p["orbit"]}" stroke-width="0.75"/>'
+            f'<text x="{b["x"]}" y="{b["y"]}" font-size="19" fill="{color}" '
+            f'text-anchor="middle">{_esc(b["glyph"])}</text>'
+        )
+
+    # El viewBox se agranda un poco en los cuatro lados: los rótulos de los ejes
+    # van por fuera del borde y el de la izquierda quedaba cortado por la mitad
+    # —"ASC" salía "SC"—. Se vio en el spike del 16-08-2026; el PDF de la app
+    # probablemente tenga lo mismo, porque el código es el que se portó de ahí.
+    m = WHEEL_MARGIN
+    return (
+        f'<svg width="620" height="620" '
+        f'viewBox="{-m} {-m} {size + 2 * m} {size + 2 * m}" '
+        f'xmlns="http://www.w3.org/2000/svg">{"".join(partes)}</svg>'
+    )
+
+
+def _reading_html(texto: str, disclaimer: str, titulo: str) -> str:
+    """La lectura, con el markdown liviano que escribe el generador.
+
+    Sólo títulos y párrafos: el texto se escapa entero y después se le dan
+    etiquetas, nunca al revés.
+    """
+    bloques = []
+    for bloque in re.split(r"\n\n+", texto.strip()):
+        bloque = bloque.strip()
+        if not bloque:
+            continue
+        encabezado = re.match(r"^#{1,3}\s+(.*)$", bloque.split("\n")[0])
+        if encabezado:
+            titulo_bloque = _esc(encabezado.group(1).replace("**", ""))
+            resto = "\n".join(bloque.split("\n")[1:]).strip()
+            bloques.append(f"<h2>{titulo_bloque}</h2>")
+            if resto:
+                bloques.append(f"<p>{_esc(resto.replace('**', ''))}</p>")
+        else:
+            bloques.append(f"<p>{_esc(bloque.replace('**', ''))}</p>")
+
+    return (
+        '<div class="pagebreak"></div>'
+        f'<div class="section eyebrow">{_esc(titulo)}</div>'
+        f'<div class="reading">{"".join(bloques)}</div>'
+        f'<p class="disclaimer">{_esc(disclaimer)}</p>'
+    )
+
+
+def _reading_for(chart: Chart, lang: str | None) -> tuple[str, str] | None:
+    """El texto y el descargo de la lectura pedida, si está escrita."""
+    if not lang:
+        return None
+    interp = chart.interpretations.filter(lang=lang, prompt_version=PROMPT_VERSION).first()
+    if interp is None:
+        # No es un error: la carta se baja igual, sin la lectura.
+        return None
+    return interp.text, DISCLAIMERS[interp.lang]
+
+
+def build_document_html(chart: Chart, data: dict) -> str:
+    """El documento entero como HTML. Función pura: es donde se verifica todo."""
+    labels = data["labels"]
+    p = PALETTE
+
+    filas_posiciones = "".join(
+        f'<tr><td class="glyph">{_esc(pos["glyph"])}</td>'
+        f'<td>{_esc(pos["name"])}{"<span class=\"rx\"> ℞</span>" if pos["retrograde"] else ""}</td>'
+        f'<td class="data">{_esc(pos["position"])}</td>'
+        f'<td class="data">{_esc(pos["house"])}</td></tr>'
+        for pos in data["positions"]
+    )
+    filas_aspectos = "".join(
+        f'<tr><td class="glyph">{_esc(a["glyph"])}</td>'
+        f'<td>{_esc(a["name"])}</td>'
+        f'<td class="data">{_esc(a["detail"])}</td><td></td></tr>'
+        for a in data["aspects"]
+    )
+
+    wheel = data.get("wheel")
+    rueda = f'<div class="wheel-big">{_svg(wheel)}</div>' if wheel else ""
+
+    lectura = _reading_for(chart, data.get("reading_lang"))
+    bloque_lectura = (
+        _reading_html(lectura[0], lectura[1], labels["reading"]) if lectura else ""
+    )
+
+    seccion_aspectos = (
+        f'<div class="section eyebrow">{_esc(labels["aspects"])}</div>'
+        f"<table>{filas_aspectos}</table>"
+        if data["aspects"]
+        else ""
+    )
+
+    return f"""<meta charset="utf-8">
+<style>
+{_font_css()}
+  /* El margen vertical va en todas las páginas; el fondo del html pinta también
+     el área de margen, así no quedan bordes blancos. */
+  @page {{ margin: 36px 0; }}
+  html {{ background: {p["void"]}; }}
+  body {{ margin: 0; padding: 6px 44px; background: {p["void"]};
+    color: {p["starlight"]}; font-family: 'Outfit', sans-serif; }}
+  .eyebrow {{ font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 4px;
+    text-transform: uppercase; color: {p["stardust"]}; }}
+  h1 {{ font-weight: 300; font-size: 30px; letter-spacing: 1px; margin: 6px 0 2px; }}
+  .birth {{ font-family: 'Space Mono', monospace; font-size: 11px; color: {p["stardust"]}; }}
+  table {{ width: 100%; border-collapse: collapse; margin-top: 6px; }}
+  td {{ padding: 5px 4px; font-size: 12px; border-bottom: 0.5px solid {p["orbit"]}; }}
+  .glyph {{ color: {p["sol"]}; font-size: 14px; width: 64px; white-space: nowrap; }}
+  .data {{ font-family: 'Space Mono', monospace; font-size: 11px; text-align: right; }}
+  .rx {{ color: {p["danger"]}; }}
+  .section {{ margin-top: 18px; page-break-after: avoid; }}
+  .footer {{ margin-top: 26px; text-align: center; font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 3px; color: {p["stardust"]}; text-transform: uppercase; }}
+  .footer .sol {{ color: {p["sol"]}; }}
+  .pagebreak {{ page-break-before: always; }}
+  .cover {{ page-break-after: always; text-align: center; padding-top: 34px; }}
+  .brand {{ font-weight: 300; font-size: 34px; letter-spacing: 12px; margin-left: 12px; }}
+  .brand-tag {{ font-family: 'Space Mono', monospace; font-size: 10px;
+    letter-spacing: 6px; text-transform: uppercase; color: {p["stardust"]}; margin-top: 8px; }}
+  .cover h1 {{ margin-top: 10px; }}
+  .cover .wheel-big {{ margin-top: 36px; }}
+  tr {{ page-break-inside: avoid; }}
+  .reading h2 {{ font-weight: 400; font-size: 17px; letter-spacing: 0.5px;
+    margin: 18px 0 6px; page-break-after: avoid; }}
+  .reading p {{ font-size: 12.5px; line-height: 1.75; margin: 0 0 12px;
+    opacity: 0.92; orphans: 3; widows: 3; }}
+  .disclaimer {{ margin-top: 20px; font-size: 10px; line-height: 1.6; color: {p["stardust"]}; }}
+</style>
+<div class="cover">
+  <div class="brand">ASTRA</div>
+  <div class="brand-tag">{_esc(labels["brand_tagline"])}</div>
+  <div class="eyebrow" style="margin-top:44px">{_esc(labels["eyebrow"])}</div>
+  <h1>{_esc(labels["chart_name"])}</h1>
+  <div class="birth">{_esc(labels["birth_line"])}</div>
+  {rueda}
+</div>
+<div class="section eyebrow">{_esc(labels["positions"])}</div>
+<table>{filas_posiciones}</table>
+{seccion_aspectos}
+{bloque_lectura}
+<div class="footer"><span class="sol">☉</span> {_esc(labels["made_with"])}</div>
+"""
+
+
+def render_pdf(chart: Chart, data: dict) -> bytes:
+    """El documento, en bytes.
+
+    Son unos 300 ms de CPU en el worker. El techo de frecuencia lo pone el
+    throttle de la view; el de duración, el `--timeout 60` de gunicorn.
+    """
+    from weasyprint import HTML
+
+    try:
+        return HTML(
+            string=build_document_html(chart, data),
+            url_fetcher=pdf_url_fetcher(),
+        ).write_pdf()
+    except Exception as exc:
+        logger.error(
+            "pdf: no se pudo generar el documento de la carta %s: %s",
+            chart.uuid, exc, exc_info=True,
+        )
+        raise PdfGenerationError(str(exc)) from exc
+
+
+def pdf_filename(nombre: str) -> tuple[str, str]:
+    """Nombre de archivo para el header, en sus dos formas.
+
+    Devuelve (ascii, utf8_percent_encoded): el primero es el respaldo para
+    clientes viejos, el segundo el que conserva los acentos —"João" no se
+    convierte en "Joao" porque el header no sepa transportarlo—.
+    """
+    limpio = re.sub(r'[\\/:*?"<>|\r\n]+', " ", nombre).strip()
+    limpio = re.sub(r"\s+", " ", limpio) or "carta"
+    archivo = f"{limpio}.pdf"
+    ascii_ = (
+        unicodedata.normalize("NFKD", archivo).encode("ascii", "ignore").decode("ascii")
+        or "carta.pdf"
+    )
+    return ascii_, quote(archivo, safe="")
