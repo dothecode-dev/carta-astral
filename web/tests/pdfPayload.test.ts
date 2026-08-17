@@ -142,6 +142,46 @@ describe("buildPdfPayload", () => {
     );
   });
 
+  it("manda la matriz triangular, con el mismo orden que la web", () => {
+    const m = buildPdfPayload(apiChart(), "es", getDict("es")).aspect_matrix!;
+
+    // Los cuerpos primero y los ejes que participan, detrás: igual que AspectMatrix.
+    expect(m.labels.slice(0, 3)).toEqual(["☉", "☽", "☿"]);
+    expect(m.labels).toContain("AC");
+
+    // Triangular: la fila i trae i+1 celdas, ni una más.
+    expect(m.rows).toHaveLength(m.labels.length - 1);
+    m.rows.forEach((fila, i) => expect(fila.cells).toHaveLength(i + 1));
+
+    // Y los cruces ocupados traen glifo y tono, nunca un color.
+    const ocupadas = m.rows.flatMap((f) => f.cells).filter(Boolean);
+    expect(ocupadas.length).toBeGreaterThan(0);
+    for (const celda of ocupadas) {
+      expect(["soft", "hard", "neutral"]).toContain(celda!.tone);
+      expect(celda!.glyph.length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("el tono sigue la misma lectura que la matriz de la web", () => {
+    const chart = apiChart({
+      aspects: [
+        { p1: "Sun", p2: "Moon", aspect: "square", orbit: 1 },
+        { p1: "Sun", p2: "Mercury", aspect: "trine", orbit: 1 },
+        { p1: "Moon", p2: "Mercury", aspect: "conjunction", orbit: 1 },
+      ],
+    });
+    const m = buildPdfPayload(chart, "es", getDict("es")).aspect_matrix!;
+    const tonos = m.rows.flatMap((f) => f.cells).filter(Boolean).map((c) => c!.tone);
+    expect(tonos).toContain("hard");     // cuadratura
+    expect(tonos).toContain("soft");     // trígono
+    expect(tonos).toContain("neutral");  // conjunción
+  });
+
+  it("una carta sin aspectos no manda matriz", () => {
+    const p = buildPdfPayload(apiChart({ aspects: [] }), "es", getDict("es"));
+    expect(p.aspect_matrix).toBeNull();
+  });
+
   it("una carta sin hora viaja sin rueda, no a medias", () => {
     const p = buildPdfPayload(apiChart({ houses: null, angles: null }), "es", getDict("es"));
     expect(p.wheel).toBeNull();

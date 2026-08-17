@@ -1,3 +1,5 @@
+import { buildMatrix } from "astra-wheel";
+
 import type { ApiChart } from "@/lib/chart";
 import { toWheel } from "@/lib/chart";
 import { formatDegree, signOf } from "@/lib/ephemeris";
@@ -29,6 +31,61 @@ const ANGLE_GLYPH: Record<string, string> = {
 function glifo(nombre: string): string {
   return PLANET_GLYPHS[nombre] ?? ANGLE_GLYPH[nombre] ?? "·";
 }
+
+/** Cuadratura y oposición tensan; trígono y sextil fluyen. El resto, ni una cosa
+ *  ni otra. Es la misma lectura que hace la matriz de la web. */
+const HARD = new Set(["square", "opposition"]);
+const SOFT = new Set(["trine", "sextile"]);
+
+function tono(tipo: string): "soft" | "hard" | "neutral" {
+  if (HARD.has(tipo)) return "hard";
+  if (SOFT.has(tipo)) return "soft";
+  return "neutral";
+}
+
+export type PdfMatrix = {
+  labels: string[];
+  rows: { label: string; cells: ({ glyph: string; tone: "soft" | "hard" | "neutral" } | null)[] }[];
+};
+
+/**
+ * La matriz triangular de aspectos, la misma que se ve en el sitio.
+ *
+ * Los pares los arma `buildMatrix`, del mismo paquete que resuelve la rueda, con
+ * el mismo orden que usa `AspectMatrix`: los cuerpos y, detrás, los ejes que
+ * participan de algún aspecto. Viaja sólo el triángulo —la fila i lleva i+1
+ * celdas— porque la mitad de arriba repetiría la de abajo.
+ */
+export function buildPdfMatrix(chart: ApiChart): PdfMatrix | null {
+  const aspects = chart.data.aspects.map((a) => ({
+    a: a.p1, b: a.p2, type: a.aspect, orb: a.orbit,
+  }));
+  if (aspects.length === 0) return null;
+
+  const cuerpos = chart.data.placements.map((p) => p.name);
+  const participantes = new Set(aspects.flatMap((a) => [a.a, a.b]));
+  const order = [
+    ...cuerpos,
+    ...Object.keys(ANGLE_GLYPH).filter((n) => participantes.has(n) && !cuerpos.includes(n)),
+  ];
+  if (order.length < 2) return null;
+
+  const { pairs } = buildMatrix(order, aspects);
+  const porPar = new Map(pairs.map((p) => [`${p.a}|${p.b}`, p]));
+
+  return {
+    labels: order.map(glifo),
+    rows: order.slice(1).map((fila, i) => ({
+      label: glifo(fila),
+      cells: order.slice(0, i + 1).map((col) => {
+        const par = porPar.get(`${col}|${fila}`) ?? porPar.get(`${fila}|${col}`);
+        return par
+          ? { glyph: ASPECT_GLYPHS[par.type] ?? "·", tone: tono(par.type) }
+          : null;
+      }),
+    })),
+  };
+}
 const HOUSE_INDEX: Record<string, number> = {
   First_House: 1, Second_House: 2, Third_House: 3, Fourth_House: 4,
   Fifth_House: 5, Sixth_House: 6, Seventh_House: 7, Eighth_House: 8,
@@ -51,6 +108,7 @@ export type PdfPayload = {
   }[];
   aspects: { glyph: string; name: string; detail: string }[];
   wheel: PdfWheel | null;
+  aspect_matrix: PdfMatrix | null;
   reading_lang?: string | null;
 };
 
@@ -114,5 +172,6 @@ export function buildPdfPayload(chart: ApiChart, locale: Locale, dict: Dict): Pd
       detail: `${dict.chart.aspectColumns.orb} ${a.orbit.toFixed(1)}°`,
     })),
     wheel: wheel ? toPdfWheel(wheel) : null,
+    aspect_matrix: buildPdfMatrix(chart),
   };
 }

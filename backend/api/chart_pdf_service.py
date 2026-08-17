@@ -178,6 +178,52 @@ def _svg(wheel: dict) -> str:
     )
 
 
+def _matrix_html(matrix: dict) -> str:
+    """La matriz triangular de aspectos, como la de la web.
+
+    Cada cruce dice qué aspecto hay entre esos dos cuerpos, y el color dice si el
+    ángulo tensa o fluye. El triángulo superior queda hueco —sin bordes— porque
+    la mitad de arriba repetiría la de abajo.
+
+    El cliente manda sólo las celdas del triángulo; acá se completan las que
+    faltan hasta el ancho de la tabla.
+    """
+    labels = matrix["labels"]
+    if not labels or not matrix["rows"]:
+        return ""
+
+    # El último rótulo nunca encabeza una columna: no tiene con quién cruzarse
+    # más abajo.
+    columnas = labels[:-1]
+    cabecera = "".join(f'<th class="matrixHead">{_esc(g)}</th>' for g in columnas)
+
+    filas = []
+    for i, fila in enumerate(matrix["rows"]):
+        celdas = []
+        for j in range(len(columnas)):
+            if j > i:
+                celdas.append('<td class="matrixVoid"></td>')
+                continue
+            celda = fila["cells"][j] if j < len(fila["cells"]) else None
+            if celda is None:
+                celdas.append('<td class="matrixCell"></td>')
+                continue
+            tono = {"soft": "matrixSoft", "hard": "matrixHard"}.get(
+                celda["tone"], "matrixNeutral"
+            )
+            celdas.append(f'<td class="matrixCell {tono}">{_esc(celda["glyph"])}</td>')
+        filas.append(
+            f'<tr><th class="matrixHead">{_esc(fila["label"])}</th>{"".join(celdas)}</tr>'
+        )
+
+    return (
+        '<table class="aspectMatrix">'
+        f'<tr><td class="matrixVoid"></td>{cabecera}</tr>'
+        f'{"".join(filas)}'
+        "</table>"
+    )
+
+
 def _reading_html(texto: str, disclaimer: str, titulo: str) -> str:
     """La lectura, con el markdown liviano que escribe el generador.
 
@@ -245,8 +291,12 @@ def build_document_html(chart: Chart, data: dict) -> str:
         _reading_html(lectura[0], lectura[1], labels["reading"]) if lectura else ""
     )
 
+    matriz = data.get("aspect_matrix")
+    # La matriz muestra el conjunto de un vistazo; la lista guarda los orbes, que
+    # en la web viven en el tooltip de cada celda y en papel no existirían.
     seccion_aspectos = (
         f'<div class="section eyebrow">{_esc(labels["aspects"])}</div>'
+        f"{_matrix_html(matriz) if matriz else ''}"
         f"<table>{filas_aspectos}</table>"
         if data["aspects"]
         else ""
@@ -271,6 +321,19 @@ def build_document_html(chart: Chart, data: dict) -> str:
   .data {{ font-family: 'Space Mono', monospace; font-size: 11px; text-align: right; }}
   .rx {{ color: {p["danger"]}; }}
   .section {{ margin-top: 18px; page-break-after: avoid; }}
+  /* La matriz de aspectos: la misma lectura que en el sitio. Dieciocho columnas
+     en A4 dan celdas de unos 26pt, asi que el glifo va chico y sin padding. */
+  .aspectMatrix {{ width: 100%; border-collapse: collapse; margin: 4px 0 14px;
+    page-break-inside: avoid; }}
+  .aspectMatrix td, .aspectMatrix th {{ height: 20px; padding: 0; text-align: center;
+    font-size: 10px; border: 0.5px solid {p["orbit"]}; }}
+  .matrixHead {{ font-family: 'Space Mono', monospace; font-size: 8px;
+    font-weight: 400; color: {p["stardust"]}; }}
+  /* La mitad de arriba repetiria la de abajo: va hueca, sin bordes. */
+  .matrixVoid {{ border: 0; }}
+  .matrixSoft {{ color: {p["sol"]}; }}
+  .matrixHard {{ color: {p["starlight"]}; }}
+  .matrixNeutral {{ color: {p["stardust"]}; }}
   .footer {{ margin-top: 26px; text-align: center; font-family: 'Space Mono', monospace;
     font-size: 10px; letter-spacing: 3px; color: {p["stardust"]}; text-transform: uppercase; }}
   .footer .sol {{ color: {p["sol"]}; }}

@@ -22,6 +22,7 @@ const payload = {
   positions: [],
   aspects: [],
   wheel: null,
+  aspect_matrix: null,
 };
 
 function renderShare(readingLang: "es" | "en" | "pt" | null = null, locale: "es" | "en" = "es") {

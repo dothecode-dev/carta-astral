@@ -57,6 +57,21 @@ def _wheel():
     }
 
 
+def _matrix():
+    """La matriz triangular, con tres cuerpos y dos cruces ocupados.
+
+    El cliente manda sólo el triángulo: la fila i trae i+1 celdas. El resto lo
+    completa el backend con huecos, que es lo que hace que se lea como matriz.
+    """
+    return {
+        "labels": ["☉", "☽", "☿"],
+        "rows": [
+            {"label": "☽", "cells": [{"glyph": "☌", "tone": "neutral"}]},
+            {"label": "☿", "cells": [None, {"glyph": "△", "tone": "soft"}]},
+        ],
+    }
+
+
 def _payload(**over):
     base = {
         "labels": {
@@ -79,6 +94,7 @@ def _payload(**over):
             {"glyph": "☉ △ ♃", "name": "Trígono", "detail": "orbe 7.2°"},
         ],
         "wheel": _wheel(),
+        "aspect_matrix": _matrix(),
         "reading_lang": None,
     }
     base.update(over)
@@ -203,6 +219,60 @@ def test_lectura_en_otro_idioma_se_incluye_tal_como_esta(account_client):
     )
     html = _html(chart, reading_lang="es")
     assert "fronteras porosas" in html
+
+
+def test_la_matriz_de_aspectos_se_dibuja_como_en_la_web(account_client):
+    """La misma matriz triangular que muestra el sitio: cada cruce dice qué
+    aspecto hay entre esos dos cuerpos."""
+    html = _html(_chart(account_client))
+
+    tabla = html.split('<table class="aspectMatrix">')[1].split("</table>")[0]
+
+    # Encabezados: todos los rótulos menos el último, que nunca encabeza columna
+    # porque no tiene con quién cruzarse más abajo.
+    cabecera = tabla.split("</tr>")[0]
+    assert '<th class="matrixHead">☉</th>' in cabecera
+    assert '<th class="matrixHead">☿</th>' not in cabecera
+
+    # Los dos cruces ocupados, cada uno con el tono que le toca.
+    assert '<td class="matrixCell matrixNeutral">☌</td>' in tabla
+    assert '<td class="matrixCell matrixSoft">△</td>' in tabla
+    # Y el triángulo superior queda hueco, no con celdas vacías cualesquiera.
+    assert "matrixVoid" in tabla
+
+
+def test_la_matriz_no_se_dibuja_si_no_viene(account_client):
+    html = _html(_chart(account_client), aspect_matrix=None)
+    # La clase vive en el CSS siempre; lo que no tiene que existir es la tabla.
+    assert '<table class="aspectMatrix">' not in html
+    # La lista con los orbes sigue estando: es la que guarda el dato fino.
+    assert "Trígono" in html
+
+
+def test_la_lista_de_orbes_acompana_a_la_matriz(account_client):
+    """En papel no hay tooltip ni plegado: si el orbe no está escrito, se pierde."""
+    html = _html(_chart(account_client))
+    assert "aspectMatrix" in html
+    assert "orbe 7.2°" in html
+
+
+def test_un_tono_desconocido_en_la_matriz_es_400(account_client):
+    chart = _chart(account_client)
+    matriz = _matrix()
+    matriz["rows"][0]["cells"][0]["tone"] = 'x" style="display:none'
+    resp = account_client.post(
+        URL.format(chart.uuid), _payload(aspect_matrix=matriz), format="json"
+    )
+    assert resp.status_code == 400
+
+
+def test_la_matriz_tiene_tope_de_tamano(account_client):
+    chart = _chart(account_client)
+    matriz = {"labels": ["☉"] * 200, "rows": []}
+    resp = account_client.post(
+        URL.format(chart.uuid), _payload(aspect_matrix=matriz), format="json"
+    )
+    assert resp.status_code == 400
 
 
 def test_la_rueda_deja_aire_para_los_rotulos_de_los_ejes(account_client):

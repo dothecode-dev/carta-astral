@@ -141,6 +141,28 @@ class _Aspect(_Strict):
     detail = serializers.CharField(max_length=60, allow_blank=True)
 
 
+class _MatrixCell(_Strict):
+    glyph = serializers.CharField(max_length=4)
+    tone = serializers.ChoiceField(choices=["soft", "hard", "neutral"])
+
+
+class _MatrixRow(_Strict):
+    label = serializers.CharField(max_length=8)
+    # Sólo el triángulo: la fila i trae i+1 celdas, y `None` donde no hay aspecto.
+    cells = serializers.ListField(child=_MatrixCell(allow_null=True), max_length=24)
+
+
+class _AspectMatrix(_Strict):
+    """La matriz triangular, la misma que muestra la web.
+
+    Llega armada por `buildMatrix` de `astra-wheel` —el mismo paquete que
+    resuelve la rueda—, así que acá tampoco se decide qué va en cada cruce.
+    """
+
+    labels = serializers.ListField(child=serializers.CharField(max_length=8), max_length=24)
+    rows = serializers.ListField(child=_MatrixRow(), max_length=24)
+
+
 class ChartPdfSerializer(_Strict):
     labels = _Labels()
     positions = serializers.ListField(child=_Position(), max_length=80)
@@ -148,6 +170,8 @@ class ChartPdfSerializer(_Strict):
     # Sin hora de nacimiento no hay Ascendente y la rueda no se puede orientar:
     # el documento sale con las tablas y sin rueda.
     wheel = _Wheel(required=False, allow_null=True)
+    # Sin aspectos, o sin cuerpos que los tengan, no hay matriz que dibujar.
+    aspect_matrix = _AspectMatrix(required=False, allow_null=True)
     # El idioma de la lectura a incluir. None es el caso normal: el PDF de la
     # carta sola. El texto NO viaja acá; lo lee el backend de su propia base.
     reading_lang = serializers.ChoiceField(
