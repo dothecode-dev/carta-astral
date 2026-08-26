@@ -667,9 +667,26 @@ body {
 .chartShare {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  /* stretch y no center: cada botón lleva debajo su nota, y con notas de largo
+     distinto en una fila centrada quedaban a alturas distintas. */
+  align-items: stretch;
   gap: 0.6rem;
   padding-top: clamp(1rem, 3vw, 1.5rem);
+}
+
+/* Acá el botón es una pila —qué archivo es, y qué trae— y no una línea. */
+.chartShare .btn {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.15rem;
+  text-align: left;
+}
+
+.chartShare .btnHint {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  line-height: 1.4;
 }
 
 .chartShare .formError {

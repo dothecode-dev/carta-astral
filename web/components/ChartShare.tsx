@@ -13,11 +13,30 @@ import { renderStoryCard } from "@/lib/storyCard";
 // null cuando la carta ya está leída, y estos botones tienen que estar siempre:
 // se comparte una carta leída tanto o más que una sin leer.
 
-/** Entrega el archivo por donde el navegador pueda: la hoja del sistema o la
- *  descarga de siempre. `canShare` con archivos no existe en escritorio. */
+/** ¿Vale la pena ofrecer la hoja del sistema? Sólo en un dispositivo táctil.
+ *
+ *  El criterio era `canShare`, y estaba mal: Chrome y Safari en escritorio saben
+ *  compartir archivos, así que la hoja ganaba siempre y la descarga —lo que el
+ *  botón promete y lo que en una computadora se espera— no ocurría nunca. */
+function esTactil(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+}
+
+/** La descarga de siempre, que funciona en cualquier navegador. */
+function descargar(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Entrega el archivo: en el teléfono por la hoja del sistema, que es donde una
+ *  descarga se pierde de vista; en la computadora, descargándolo. */
 async function entregar(blob: Blob, filename: string, title: string): Promise<void> {
   const file = new File([blob], filename, { type: blob.type });
-  if (navigator.canShare?.({ files: [file] })) {
+  if (esTactil() && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title });
       return;
@@ -27,12 +46,7 @@ async function entregar(blob: Blob, filename: string, title: string): Promise<vo
       // Cualquier otra cosa cae a la descarga, que siempre funciona.
     }
   }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  descargar(blob, filename);
 }
 
 /** Del `Content-Disposition` al nombre de archivo, con los acentos puestos. */
@@ -115,6 +129,10 @@ export function ChartShare({
     ? dict.share.pdfWithReadingIn.replace("{lang}", dict.share.langNames[readingLang])
     : dict.share.pdfWithReading;
 
+  // El rótulo nombra el archivo y la línea de abajo dice qué trae: "Descargar
+  // PDF" no distinguía un PDF del otro, y prometía un verbo que en el teléfono
+  // no es el que ocurre. Mientras se prepara cambia la nota, no el rótulo: si se
+  // reemplazaba el rótulo entero el botón saltaba de ancho.
   return (
     <div className="chartShare">
       <button
@@ -124,7 +142,10 @@ export function ChartShare({
         disabled={ocupado !== null}
         aria-busy={ocupado === "pdf"}
       >
-        {ocupado === "pdf" ? dict.share.working : dict.share.pdf}
+        <span className="btnLabel">{dict.share.pdf}</span>
+        <span className="btnHint">
+          {ocupado === "pdf" ? dict.share.working : dict.share.pdfHint}
+        </span>
       </button>
 
       {readingLang && (
@@ -135,7 +156,10 @@ export function ChartShare({
           disabled={ocupado !== null}
           aria-busy={ocupado === "lectura"}
         >
-          {ocupado === "lectura" ? dict.share.working : rotuloLectura}
+          <span className="btnLabel">{rotuloLectura}</span>
+          <span className="btnHint">
+            {ocupado === "lectura" ? dict.share.working : dict.share.pdfWithReadingHint}
+          </span>
         </button>
       )}
 
@@ -146,7 +170,10 @@ export function ChartShare({
         disabled={ocupado !== null}
         aria-busy={ocupado === "imagen"}
       >
-        {ocupado === "imagen" ? dict.share.working : dict.share.image}
+        <span className="btnLabel">{dict.share.image}</span>
+        <span className="btnHint">
+          {ocupado === "imagen" ? dict.share.working : dict.share.imageHint}
+        </span>
       </button>
 
       {error && (

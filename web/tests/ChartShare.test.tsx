@@ -52,7 +52,17 @@ function pdfOk() {
 type Fetch = (url: string, init: { body: string }) => Promise<ReturnType<typeof pdfOk>>;
 type Share = (data: { files: File[]; title: string }) => Promise<void>;
 
-const click = (nombre: string) => fireEvent.click(screen.getByRole("button", { name: nombre }));
+/** El botón se busca por su rótulo, no por su nombre accesible entero: el nombre
+ *  incluye la nota de qué trae el archivo, que no hace falta repetir acá. */
+const boton = (rotulo: string) =>
+  screen.getByRole("button", { name: (nombre: string) => nombre.startsWith(rotulo) });
+const buscarBoton = (rotulo: string) =>
+  screen.queryByRole("button", { name: (nombre: string) => nombre.startsWith(rotulo) });
+const click = (rotulo: string) => fireEvent.click(boton(rotulo));
+
+/** Qué clase de dispositivo cree el navegador que es. */
+const dispositivo = (tactil: boolean) =>
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: tactil })));
 
 beforeEach(() => {
   vi.stubGlobal("URL", {
@@ -60,6 +70,8 @@ beforeEach(() => {
     createObjectURL: vi.fn(() => "blob:x"),
     revokeObjectURL: vi.fn(),
   });
+  // Por defecto, una computadora: es donde apareció el bug de la hoja de compartir.
+  dispositivo(false);
 });
 
 afterEach(() => {
@@ -70,21 +82,28 @@ afterEach(() => {
 describe("ChartShare", () => {
   it("ofrece el PDF y la imagen aunque la carta no tenga lectura", () => {
     renderShare(null);
-    expect(screen.getByRole("button", { name: dict.share.pdf })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: dict.share.image })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: dict.share.pdfWithReading })).toBeNull();
+    expect(boton(dict.share.pdf)).toBeInTheDocument();
+    expect(boton(dict.share.image)).toBeInTheDocument();
+    expect(buscarBoton(dict.share.pdfWithReading)).toBeNull();
+  });
+
+  it("cada botón dice qué trae el archivo", () => {
+    renderShare("es");
+    expect(boton(dict.share.pdf)).toHaveTextContent(dict.share.pdfHint);
+    expect(boton(dict.share.pdfWithReading)).toHaveTextContent(dict.share.pdfWithReadingHint);
+    expect(boton(dict.share.image)).toHaveTextContent(dict.share.imageHint);
   });
 
   it("el botón con la lectura aparece sólo cuando la lectura existe", () => {
     renderShare("es");
-    expect(screen.getByRole("button", { name: dict.share.pdfWithReading })).toBeInTheDocument();
+    expect(boton(dict.share.pdfWithReading)).toBeInTheDocument();
   });
 
   it("si la lectura está en otro idioma, el botón lo dice", () => {
     renderShare("es", "en");
     const en = getDict("en");
     const esperado = en.share.pdfWithReadingIn.replace("{lang}", en.share.langNames.es);
-    expect(screen.getByRole("button", { name: esperado })).toBeInTheDocument();
+    expect(boton(esperado)).toBeInTheDocument();
   });
 
   it("el PDF de la carta no pide la lectura", async () => {
@@ -111,8 +130,39 @@ describe("ChartShare", () => {
     expect(JSON.parse(fetchMock.mock.calls[0]![1].body).reading_lang).toBe("es");
   });
 
-  it("usa la hoja de compartir del sistema cuando el navegador la tiene", async () => {
+  it("mientras prepara el archivo, el rótulo no cambia: cambia la nota", async () => {
+    let entregar: (r: ReturnType<typeof pdfOk>) => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise((resolve) => (entregar = resolve))),
+    );
+    renderShare();
+
+    click(dict.share.pdf);
+
+    await waitFor(() => expect(boton(dict.share.pdf)).toHaveTextContent(dict.share.working));
+    expect(boton(dict.share.pdf)).toBeDisabled();
+    entregar(pdfOk());
+    await waitFor(() => expect(boton(dict.share.pdf)).toHaveTextContent(dict.share.pdfHint));
+  });
+
+  it("en escritorio descarga, aunque el navegador sepa compartir archivos", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => pdfOk()));
+    dispositivo(false);
+    const share = vi.fn<Share>(async () => undefined);
+    vi.stubGlobal("navigator", { canShare: () => true, share });
+    const click_ = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    renderShare();
+
+    click(dict.share.pdf);
+
+    await waitFor(() => expect(click_).toHaveBeenCalled());
+    expect(share).not.toHaveBeenCalled();
+  });
+
+  it("en un dispositivo táctil usa la hoja de compartir del sistema", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => pdfOk()));
+    dispositivo(true);
     const share = vi.fn<Share>(async () => undefined);
     vi.stubGlobal("navigator", { canShare: () => true, share });
     renderShare();
@@ -127,6 +177,7 @@ describe("ChartShare", () => {
 
   it("si el navegador no comparte archivos, descarga", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => pdfOk()));
+    dispositivo(true);
     vi.stubGlobal("navigator", {});
     const click_ = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     renderShare();
@@ -138,6 +189,7 @@ describe("ChartShare", () => {
 
   it("cancelar la hoja de compartir no es un error", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => pdfOk()));
+    dispositivo(true);
     vi.stubGlobal("navigator", {
       canShare: () => true,
       share: vi.fn(async () => {
@@ -148,9 +200,7 @@ describe("ChartShare", () => {
 
     click(dict.share.pdf);
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: dict.share.pdf })).toBeEnabled(),
-    );
+    await waitFor(() => expect(boton(dict.share.pdf)).toBeEnabled());
     expect(screen.queryByRole("alert")).toBeNull();
   });
 

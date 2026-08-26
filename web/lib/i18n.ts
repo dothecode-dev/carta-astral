@@ -250,6 +250,10 @@ export type Dict = {
     /** Cuando la lectura está escrita en otro idioma; `{lang}` lo nombra. */
     pdfWithReadingIn: string;
     image: string;
+    /** La línea chica de cada botón: qué trae el archivo, no qué hace el botón. */
+    pdfHint: string;
+    pdfWithReadingHint: string;
+    imageHint: string;
     working: string;
     failed: string;
     /** Bajo la marca, en la portada del documento. */
@@ -441,10 +445,13 @@ const es: Dict = {
   share: {
     chartEyebrow: "Carta natal",
     positionsTitle: "Posiciones",
-    pdf: "Descargar PDF",
-    pdfWithReading: "PDF con la lectura",
-    pdfWithReadingIn: "PDF con la lectura (en {lang})",
+    pdf: "La carta en PDF",
+    pdfWithReading: "La carta y tu lectura",
+    pdfWithReadingIn: "La carta y tu lectura (en {lang})",
     image: "Imagen para redes",
+    pdfHint: "Rueda, posiciones y aspectos",
+    pdfWithReadingHint: "Todo en un archivo, listo para imprimir",
+    imageHint: "1080×1920, para historias",
     working: "Preparando…",
     failed: "No pudimos preparar el archivo. Probá de nuevo.",
     tagline: "Tu carta natal",
@@ -666,10 +673,13 @@ const en: Dict = {
   share: {
     chartEyebrow: "Natal chart",
     positionsTitle: "Positions",
-    pdf: "Download PDF",
-    pdfWithReading: "PDF with the reading",
-    pdfWithReadingIn: "PDF with the reading (in {lang})",
+    pdf: "The chart as PDF",
+    pdfWithReading: "The chart and your reading",
+    pdfWithReadingIn: "The chart and your reading (in {lang})",
     image: "Image for social",
+    pdfHint: "Wheel, positions and aspects",
+    pdfWithReadingHint: "Everything in one file, ready to print",
+    imageHint: "1080×1920, for stories",
     working: "Preparing…",
     failed: "We couldn't prepare the file. Try again.",
     tagline: "Your natal chart",
@@ -891,10 +901,13 @@ const pt: Dict = {
   share: {
     chartEyebrow: "Mapa natal",
     positionsTitle: "Posições",
-    pdf: "Baixar PDF",
-    pdfWithReading: "PDF com a leitura",
-    pdfWithReadingIn: "PDF com a leitura (em {lang})",
+    pdf: "O mapa em PDF",
+    pdfWithReading: "O mapa e sua leitura",
+    pdfWithReadingIn: "O mapa e sua leitura (em {lang})",
     image: "Imagem para redes",
+    pdfHint: "Roda, posições e aspectos",
+    pdfWithReadingHint: "Tudo num arquivo, pronto para imprimir",
+    imageHint: "1080×1920, para stories",
     working: "Preparando…",
     failed: "Não conseguimos preparar o arquivo. Tente de novo.",
     tagline: "Seu mapa natal",
