@@ -32,6 +32,16 @@ const UNA_NOTA = {
   cuerpo: "<p>El ascendente avanza un grado cada cuatro minutos.</p>",
 };
 
+/** Wagtail devuelve las dos formas de la URL: la relativa y la absoluta. La
+ *  relativa es contra el CMS, que vive en otro dominio que la web. */
+const PORTADA = {
+  url: "/media/images/bucle.width-1600.png",
+  full_url: "https://api.astraguia.com/media/images/bucle.width-1600.png",
+  width: 1600,
+  height: 1000,
+  alt: "El bucle de Mercurio",
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -107,6 +117,16 @@ describe("fetchNotes", () => {
     expect(nota.title).toBe(UNA_NOTA.title);
     expect(nota.fecha).toBe("2026-07-28");
     expect(nota.portada).toBeNull();
+  });
+
+  it("la portada del listado apunta al CMS, no a la web", async () => {
+    vi.stubGlobal("fetch", cmsResponde([{ ...UNA_NOTA, portada_tarjeta: PORTADA }]));
+
+    const [nota] = await fetchNotes("es");
+
+    // Con la relativa, el navegador la pide a astraguia.com y da 404: el
+    // archivo vive en api.astraguia.com.
+    expect(nota.portada?.url).toBe(PORTADA.full_url);
   });
 
   it("rechaza un 200 que no sea JSON, con un mensaje que se entienda", async () => {

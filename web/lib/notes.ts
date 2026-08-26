@@ -17,7 +17,26 @@ const TIMEOUT_MS = 5000;
 /** El techo existe para que un CMS con mil notas no tire abajo el build. */
 const MAX_NOTES = 200;
 
-type ApiImage = { url: string; width: number; height: number; alt: string };
+type ApiImage = {
+  /** Relativa al CMS. Inservible en la web: son dominios distintos. */
+  url: string;
+  full_url: string;
+  width: number;
+  height: number;
+  alt: string;
+};
+
+/** La portada, con la URL que sí resuelve desde el navegador.
+ *
+ * Wagtail devuelve `url` relativa a sí mismo y `full_url` absoluta. La web vive
+ * en otro dominio que el CMS, así que la relativa se resuelve contra la web y
+ * da 404 —la nota sale con la imagen rota, y el `og:image` con una URL que
+ * ningún scraper puede seguir—. Se normaliza acá, una vez, y el resto del
+ * código usa `portada.url` sin pensar. */
+function conUrlAbsoluta(img: ApiImage | null | undefined): ApiImage | null {
+  if (!img) return null;
+  return { ...img, url: img.full_url || img.url };
+}
 
 type ApiNote = {
   id: number;
@@ -86,7 +105,7 @@ function toSummary(note: ApiNote): NoteSummary {
     title: note.title,
     fecha: note.fecha,
     bajada: note.bajada,
-    portada: note.portada_tarjeta ?? null,
+    portada: conUrlAbsoluta(note.portada_tarjeta),
   };
 }
 
@@ -110,7 +129,7 @@ export async function fetchNote(locale: Locale, slug: string): Promise<Note | nu
   if (!note) return null;
   return {
     ...toSummary(note),
-    portada: note.portada_cabecera ?? null,
+    portada: conUrlAbsoluta(note.portada_cabecera),
     // El backend ya expande el formato interno de Wagtail a HTML usable
     // (`RichTextAPIField` en `cms/models.py`); acá llega listo para pintar.
     cuerpo: note.cuerpo ?? "",
