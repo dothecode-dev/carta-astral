@@ -51,10 +51,21 @@ export function normalizarRuta(valor: string): string {
   return valor.replace(UUID, "[id]");
 }
 
+/** Si el valor es una URL o una ruta, que es lo único que hay que normalizar.
+ *
+ * Sanear *todo* string parecía lo más seguro y era un error: `before_send`
+ * también recibe `distinct_id` y `$device_id`, que son uuid, y reemplazarlos
+ * por `[id]` deja a todos los visitantes compartiendo el mismo identificador
+ * —o sea, una sola persona—. Se vio en producción: la columna Distinct ID de
+ * PostHog decía, literal, `[id]`. */
+function esRuta(valor: string): boolean {
+  return valor.startsWith("/") || valor.startsWith("http://") || valor.startsWith("https://");
+}
+
 function limpiar(props: Record<string, unknown>): Record<string, unknown> {
   const limpio: Record<string, unknown> = {};
   for (const [clave, valor] of Object.entries(props)) {
-    limpio[clave] = typeof valor === "string" ? normalizarRuta(valor) : valor;
+    limpio[clave] = typeof valor === "string" && esRuta(valor) ? normalizarRuta(valor) : valor;
   }
   return limpio;
 }

@@ -116,6 +116,33 @@ describe("con token", () => {
     expect(opciones.advanced_disable_flags).toBe(true);
   });
 
+  it("sanea la URL pero no el identificador del visitante", async () => {
+    // El saneo aplastaba todo string que pareciera un uuid, y `before_send`
+    // también recibe `distinct_id` y `$device_id`. En producción eso dejó a
+    // todos los visitantes con el identificador literal "[id]": una sola
+    // persona, y ningún número de usuarios únicos que sirva.
+    guardado.set("astra-consent", "si");
+    const { activarSiConsintio } = await import("@/lib/telemetry");
+    await activarSiConsintio();
+    const [, opciones] = init.mock.calls[0];
+
+    const VISITANTE = "0198f1c2-3d4e-7f80-9a1b-2c3d4e5f6a7b";
+    const salida = opciones.before_send({
+      event: "pagina_vista",
+      properties: {
+        distinct_id: VISITANTE,
+        $device_id: VISITANTE,
+        $current_url: "https://astraguia.com/es/carta/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b",
+        ruta: "/carta/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b",
+      },
+    });
+
+    expect(salida.properties.distinct_id).toBe(VISITANTE);
+    expect(salida.properties.$device_id).toBe(VISITANTE);
+    expect(salida.properties.$current_url).toBe("https://astraguia.com/es/carta/[id]");
+    expect(salida.properties.ruta).toBe("/carta/[id]");
+  });
+
   it("revocar apaga en el orden correcto: reset() y recién después opt_out()", async () => {
     // Al revés el opt-out se deshace solo: `reset()` limpia el consentimiento y
     // devuelve la instancia a su estado por defecto, que acá es "opted in".
