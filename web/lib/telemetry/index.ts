@@ -16,6 +16,14 @@ export type { EventoNombre, EventoProps } from "./events";
 
 const CLAVE = process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "";
 
+/** Si hay algo que medir.
+ *
+ * Sin token no se mide nada, y entonces tampoco corresponde pedir permiso:
+ * pedir consentimiento para una medición que no existe es ruido para el
+ * visitante y una pregunta cuya respuesta no cambia nada. Pasó en producción,
+ * cuando el primer deploy salió sin la variable cargada. */
+export const medicionDisponible = CLAVE !== "";
+
 /** El proxy propio del sitio, servido por los rewrites de `next.config.ts`.
  *
  * Apuntar al dominio de PostHog hace que los bloqueadores de publicidad se

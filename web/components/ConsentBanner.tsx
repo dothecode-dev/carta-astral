@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 
-import { activar, capturarPagina, desactivar, track } from "@/lib/telemetry";
+import { activar, capturarPagina, desactivar, medicionDisponible, track } from "@/lib/telemetry";
 import {
   guardarConsentimiento,
   leerConsentimiento,
@@ -33,6 +33,11 @@ export function ConsentBanner({
   // `useState` dentro de un efecto es exactamente lo que el linter rechaza, y
   // además dejaría al banner y al enlace del pie con dos verdades distintas.
   const decision = useSyncExternalStore(suscribir, leerConsentimiento, leerEnServidor);
+
+  // Sin token de PostHog no hay nada que medir, y preguntar por algo que no
+  // ocurre sólo gasta la atención del visitante. El hook va antes del return
+  // porque no se puede llamar condicionalmente.
+  if (!medicionDisponible) return null;
 
   // `null` es "todavía no decidió". Un "no" guardado no vuelve a preguntar:
   // insistir con el banner en cada visita es la forma más común de convertir

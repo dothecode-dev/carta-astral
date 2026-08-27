@@ -15,7 +15,13 @@ const desactivar = vi.fn();
 const track = vi.fn();
 const capturarPagina = vi.fn();
 
+/** Se lee como getter para poder apagarla en el test del deploy sin token. */
+let hayMedicion = true;
+
 vi.mock("@/lib/telemetry", () => ({
+  get medicionDisponible() {
+    return hayMedicion;
+  },
   activar: (...args: unknown[]) => activar(...(args as [])),
   desactivar: () => desactivar(),
   track: (...args: unknown[]) => track(...(args as [])),
@@ -33,6 +39,7 @@ const textos = {
 let guardado: Map<string, string>;
 
 beforeEach(() => {
+  hayMedicion = true;
   activar.mockClear();
   desactivar.mockClear();
   track.mockClear();
@@ -52,6 +59,16 @@ describe("ConsentBanner", () => {
     render(<ConsentBanner {...textos} />);
 
     expect(screen.getByText(textos.text)).toBeInTheDocument();
+  });
+
+  it("no pregunta nada si no hay token: no habría qué medir", () => {
+    // Pasó en producción: el primer deploy salió sin la variable cargada y el
+    // sitio le pedía permiso a la gente para una medición que no existía.
+    hayMedicion = false;
+
+    render(<ConsentBanner {...textos} />);
+
+    expect(screen.queryByText(textos.text)).not.toBeInTheDocument();
   });
 
   it("no vuelve a preguntar si ya aceptó", () => {
