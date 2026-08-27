@@ -28,7 +28,7 @@ export const legalPt: LegalContent = {
           "Calcular seu mapa astral e mostrá-lo no app.",
           "Gerar a leitura interpretativa: os dados astronômicos do mapa são processados pela **Anthropic** (provedora de IA) para redigir o texto. Não são usados para treinar modelos.",
           "Administrar seu saldo de créditos.",
-          "**Detectar falhas e entender o uso do app.** Usamos **Sentry** (relatórios de erro) e **PostHog** (analítica de produto). Eles registram ações como entrar, criar um mapa, gerar uma leitura ou compartilhá-la, junto com o identificador interno da sua conta. **Nunca enviamos a eles seu nome, sua data, hora ou local de nascimento, nem o texto das suas leituras**, tampouco seu email ou endereço IP.",
+          "**Detectar falhas e entender o uso do app e do site.** Usamos **Sentry** (relatórios de erro) e **PostHog** (analítica de produto). Eles registram ações como entrar, criar um mapa, gerar uma leitura ou baixá-la, junto com o identificador interno da sua conta. **Nunca enviamos a eles seu nome, sua data, hora ou local de nascimento, nem o texto das suas leituras**, tampouco seu email. Seu endereço IP é usado apenas para deduzir o país de onde você acessa e não é armazenado. No site a analítica só é ativada se você aceitar, e você pode mudar de ideia quando quiser pelo link no rodapé. Ambos os serviços processam esses dados nos Estados Unidos.",
         ],
       },
       {

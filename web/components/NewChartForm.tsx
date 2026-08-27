@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import type { Place } from "@/app/api/geocode/route";
+import { track } from "@/lib/telemetry";
 import { PlaceField } from "@/components/PlaceField";
 import type { Dict } from "@/lib/i18n";
 
@@ -54,6 +55,10 @@ export function NewChartForm({ locale, dict }: { locale: string; dict: Dict }) {
       setError(res.status === 402 ? t.noCredits : t.failed);
       return;
     }
+
+    // Sin propiedades: el nombre, la fecha y el lugar que se acaban de cargar
+    // son exactamente lo que la política promete no mandar nunca.
+    track("carta_creada", {});
 
     // Directo a la carta recién calculada, que es lo que se vino a ver.
     const chart: { id?: string } = await res.json();

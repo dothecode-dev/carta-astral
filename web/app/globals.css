@@ -2112,3 +2112,69 @@ body {
   font-weight: 500;
   color: var(--ink);
 }
+
+/* --- Consentimiento de analítica --------------------------------------- */
+/* Fijo abajo y angosto: aparece después del primer paint (la decisión vive en
+   localStorage y se lee en el cliente), así que no puede empujar el contenido
+   ni provocar un salto de layout cuando entra. */
+.consentBar {
+  position: fixed;
+  inset: auto 1rem 1rem;
+  z-index: 50;
+  margin-inline: auto;
+  max-width: 46rem;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.consentText {
+  flex: 1 1 22rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.consentText a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.consentActions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* Las dos acciones pesan lo mismo: un "rechazar" escondido o en gris claro es
+   consentimiento arrancado, no dado. */
+.consentBar .btn {
+  padding: 0.55rem 1.1rem;
+  font-size: 0.875rem;
+}
+
+/* El enlace del pie que vuelve a abrir el banner. Es <button> porque no
+   navega, pero tiene que leerse igual que sus vecinos <a>. */
+.footLinkButton {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.footLinkButton:hover {
+  color: var(--accent);
+}

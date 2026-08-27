@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { identificar, track } from "@/lib/telemetry";
+
 // Google Identity Services devuelve un id_token firmado directamente en la
 // página. Ese token se manda a /api/session, que lo canjea contra el backend y
 // guarda la sesión en una cookie httpOnly: el token de sesión nunca pasa por acá.
@@ -82,6 +84,19 @@ export function GoogleSignIn({
         setStatus("failed");
         return;
       }
+      // El id interno, nunca el email: es lo que ata los eventos de esta
+      // persona sin decirle a PostHog quién es.
+      //
+      // Envuelto entero: la sesión ya es válida en este punto y medirla no
+      // puede hacerla fallar. Un cuerpo ilegible cuesta la identificación,
+      // jamás el login.
+      try {
+        const sesion: { account_id?: number } = await res.json();
+        if (typeof sesion.account_id === "number") identificar(sesion.account_id);
+      } catch {
+        // Ver arriba: sin id no hay a quién atribuir, y se sigue de largo.
+      }
+      track("login", { provider: "google" });
       router.replace(`/${locale}/cuenta`);
       router.refresh();
     }

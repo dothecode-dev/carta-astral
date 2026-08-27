@@ -60,7 +60,9 @@ describe("POST /api/session", () => {
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ credits_available: 1 });
+    // El id de cuenta sí sale: la analítica lo usa para unir el embudo de una
+    // persona sin conocer su email. El token no sale nunca.
+    expect(body).toEqual({ credits_available: 1, account_id: 7 });
     expect(JSON.stringify(body)).not.toContain("secreto");
     expect(store.get(SESSION_COOKIE)?.value).toBe("secreto");
     expect(store.get(SESSION_COOKIE)?.options?.httpOnly).toBe(true);

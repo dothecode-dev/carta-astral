@@ -47,8 +47,13 @@ export async function POST(request: Request) {
 
     await setSessionToken(data.token);
 
-    // Sin el token: lo único que necesita la pantalla es el saldo.
-    return NextResponse.json({ credits_available: data.credits_available });
+    // Sin el token: la pantalla necesita el saldo, y la analítica el id interno
+    // de la cuenta —nunca el email— para poder unir el embudo de una persona.
+    // Es lo que la política de privacidad declara que se manda.
+    return NextResponse.json({
+      credits_available: data.credits_available,
+      account_id: data.account_id,
+    });
   } catch (error) {
     if (error instanceof ApiError) {
       if (error.status === 401) {

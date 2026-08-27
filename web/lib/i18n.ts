@@ -187,6 +187,7 @@ export type Dict = {
     soon: string;
   };
   foot: { brand: string; privacy: string; terms: string; contact: string };
+  consent: { text: string; accept: string; reject: string; more: string; footLink: string };
   auth: {
     navEnter: string;
     title: string;
@@ -483,6 +484,13 @@ const es: Dict = {
     noCredits: "Te quedaste sin créditos.",
   },
   foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto" },
+  consent: {
+    text: "Nos ayuda saber cuánta gente entra y qué páginas mira. Sin publicidad, sin vender datos y sin tu nombre ni tus datos de nacimiento.",
+    accept: "Aceptar",
+    reject: "No, gracias",
+    more: "Cómo tratamos tus datos",
+    footLink: "Analítica",
+  },
   auth: {
     navEnter: "Entrar",
     title: "Entrá a tu cuenta.",
@@ -711,6 +719,13 @@ const en: Dict = {
     noCredits: "You've run out of credits.",
   },
   foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact" },
+  consent: {
+    text: "It helps us to know how many people arrive and which pages they read. No ads, no data selling, and never your name or your birth details.",
+    accept: "Accept",
+    reject: "No thanks",
+    more: "How we handle your data",
+    footLink: "Analytics",
+  },
   auth: {
     navEnter: "Sign in",
     title: "Sign in to your account.",
@@ -939,6 +954,13 @@ const pt: Dict = {
     noCredits: "Você ficou sem créditos.",
   },
   foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato" },
+  consent: {
+    text: "Ajuda-nos saber quantas pessoas chegam e quais páginas leem. Sem publicidade, sem vender dados e sem o seu nome nem os seus dados de nascimento.",
+    accept: "Aceitar",
+    reject: "Não, obrigado",
+    more: "Como tratamos os seus dados",
+    footLink: "Analítica",
+  },
   auth: {
     navEnter: "Entrar",
     title: "Entre na sua conta.",

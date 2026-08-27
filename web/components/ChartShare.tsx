@@ -6,6 +6,7 @@ import type { SampleChart } from "@/content/sample-chart";
 import type { Dict, Locale } from "@/lib/i18n";
 import type { PdfPayload } from "@/lib/pdfPayload";
 import { renderStoryCard } from "@/lib/storyCard";
+import { track } from "@/lib/telemetry";
 
 // Llevarse la carta: el PDF y la imagen para historias.
 //
@@ -33,20 +34,25 @@ function descargar(blob: Blob, filename: string): void {
 }
 
 /** Entrega el archivo: en el teléfono por la hoja del sistema, que es donde una
- *  descarga se pierde de vista; en la computadora, descargándolo. */
-async function entregar(blob: Blob, filename: string, title: string): Promise<void> {
+ *  descarga se pierde de vista; en la computadora, descargándolo.
+ *
+ *  Devuelve si el archivo llegó a destino. Cancelar la hoja del sistema no es
+ *  un error para el usuario, pero tampoco es una descarga: contarla infla el
+ *  número justo en el teléfono, que es donde la hoja se usa. */
+async function entregar(blob: Blob, filename: string, title: string): Promise<boolean> {
   const file = new File([blob], filename, { type: blob.type });
   if (esTactil() && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title });
-      return;
+      return true;
     } catch (error) {
       // Cancelar no es fallar: la persona cerró la hoja y no hay nada que decir.
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof DOMException && error.name === "AbortError") return false;
       // Cualquier otra cosa cae a la descarga, que siempre funciona.
     }
   }
   descargar(blob, filename);
+  return true;
 }
 
 /** Del `Content-Disposition` al nombre de archivo, con los acentos puestos. */
@@ -92,11 +98,12 @@ export function ChartShare({
       });
       if (!res.ok) throw new Error(`pdf: ${res.status}`);
       const blob = await res.blob();
-      await entregar(
+      const entregado = await entregar(
         blob,
         nombreDeArchivo(res.headers.get("content-disposition"), "carta.pdf"),
         payload.labels.chart_name,
       );
+      if (entregado) track("carta_descargada", { formato: "pdf" });
     } catch {
       setError(true);
     } finally {
@@ -113,7 +120,8 @@ export function ChartShare({
         birthLine: payload.labels.birth_line,
         madeWith: payload.labels.made_with,
       });
-      await entregar(blob, `${payload.labels.chart_name}.png`, payload.labels.chart_name);
+      const entregado = await entregar(blob, `${payload.labels.chart_name}.png`, payload.labels.chart_name);
+      if (entregado) track("carta_descargada", { formato: "imagen" });
     } catch {
       setError(true);
     } finally {

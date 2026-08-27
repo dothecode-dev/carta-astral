@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 
 import { SolarSystem } from "@/components/SolarSystem";
 import type { Dict, Locale } from "@/lib/i18n";
+import { track } from "@/lib/telemetry";
 
 // El botón que gasta el crédito, y la espera mientras se escribe la lectura.
 //
@@ -79,6 +80,9 @@ export function ChartActions({
     });
 
     if (res.status === 409 && (await waitForReading())) {
+      // Sin `track`: el 409 significa que otra pestaña del mismo usuario ya
+      // disparó la generación, y esa es la que cuenta. Contar acá también
+      // duplicaría el evento con el que se mide el costo por lectura.
       startTransition(() => router.refresh());
       setBusy(false);
       return;
@@ -89,6 +93,8 @@ export function ChartActions({
       setError(res.status === 402 ? dict.chart.noCredits : dict.chart.failed);
       return;
     }
+
+    track("interpretacion_generada", { lang: locale });
 
     // La lectura queda debajo de la carta, en esta misma página. La animación
     // sigue hasta que el refresh trae el texto, no hasta que responde el POST.

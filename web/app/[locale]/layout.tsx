@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { notFound } from "next/navigation";
 
 import "../globals.css";
+import { ConsentBanner } from "@/components/ConsentBanner";
 import { DEFAULT_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 
@@ -76,6 +77,13 @@ export async function generateMetadata({
       title: dict.meta.title,
       description: dict.meta.description,
     },
+    // Search Console: prueba de propiedad del sitio. Es lo que habilita ver qué
+    // consultas traen gente, que es el dato que PostHog no puede dar. Sin la
+    // variable no se emite la etiqueta, y el build con el entorno vacío
+    // tampoco emite una vacía.
+    verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+      ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+      : undefined,
   };
 }
 
@@ -88,6 +96,7 @@ export default async function LocaleLayout({
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  const dict = getDict(locale);
 
   return (
     // El script de abajo escribe data-theme antes de que React hidrate, así que
@@ -108,7 +117,20 @@ export default async function LocaleLayout({
             dejen de ser estáticas. En producción el aviso no aparece. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Se decide en el cliente por la misma razón que el tema: leer el
+            consentimiento en el servidor obliga a `cookies()` y las tres rutas
+            dejarían de ser estáticas. Aparece un instante después del primer
+            paint, abajo, sin tapar contenido. */}
+        <ConsentBanner
+          locale={locale}
+          text={dict.consent.text}
+          accept={dict.consent.accept}
+          reject={dict.consent.reject}
+          more={dict.consent.more}
+        />
+      </body>
     </html>
   );
 }

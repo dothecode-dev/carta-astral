@@ -14,7 +14,9 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/*/cuenta", "/*/carta/", "/*/nueva"],
+      // `/rueda` es el proxy de PostHog, no una página: rastrearlo es gastar
+      // presupuesto en respuestas de una API de terceros.
+      disallow: ["/api/", "/rueda/", "/*/cuenta", "/*/carta/", "/*/nueva"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
     host: SITE_URL,

@@ -24,7 +24,7 @@ export type LegalContent = {
 };
 
 /** Fecha de la última revisión legal. Cambiarla al tocar cualquier documento. */
-export const LEGAL_UPDATED = "2026-07-16";
+export const LEGAL_UPDATED = "2026-08-27";
 
 export const LEGAL_CONTACT = "info@dothecode.com";
 

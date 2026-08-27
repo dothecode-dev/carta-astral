@@ -28,7 +28,7 @@ export const legalEn: LegalContent = {
           "To compute your natal chart and show it in the app.",
           "To generate the written reading: the chart's astronomical data is processed by **Anthropic** (our AI provider) to produce the text. It is not used to train models.",
           "To manage your credit balance.",
-          "**To detect failures and understand how the app is used.** We use **Sentry** (error reporting) and **PostHog** (product analytics). They record actions such as signing in, creating a chart, generating a reading or sharing it, along with your internal account identifier. **We never send them your name, your birth date, time or place, or the text of your readings**, nor your email or IP address.",
+          "**To detect failures and understand how the app and the site are used.** We use **Sentry** (error reporting) and **PostHog** (product analytics). They record actions such as signing in, creating a chart, generating a reading or downloading it, along with your internal account identifier. **We never send them your name, your birth date, time or place, or the text of your readings**, nor your email. Your IP address is used only to infer the country you are visiting from and is not stored. On the website analytics only run if you accept them, and you can change your mind at any time from the link in the footer. Both services process this data in the United States.",
         ],
       },
       {

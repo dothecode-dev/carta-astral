@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ConsentLink } from "@/components/ConsentLink";
 import { LEGAL_CONTACT } from "@/content/legal";
 import type { Dict, Locale } from "@/lib/i18n";
 
@@ -13,6 +14,7 @@ export function Footer({ locale, dict }: { locale: Locale; dict: Dict }) {
         <Link href={`/${locale}/legal/privacy`}>{dict.foot.privacy}</Link>
         <Link href={`/${locale}/legal/terms`}>{dict.foot.terms}</Link>
         <a href={`mailto:${LEGAL_CONTACT}`}>{dict.foot.contact}</a>
+        <ConsentLink label={dict.consent.footLink} />
       </nav>
     </footer>
   );

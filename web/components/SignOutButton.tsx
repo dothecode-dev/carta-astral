@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { olvidarIdentidad } from "@/lib/telemetry";
+
 export function SignOutButton({ locale, label }: { locale: string; label: string }) {
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
@@ -12,6 +14,9 @@ export function SignOutButton({ locale, label }: { locale: string; label: string
     // Invalida el token en el backend y borra la cookie; si el backend no
     // responde, la ruta borra la cookie igual.
     await fetch("/api/session", { method: "DELETE" });
+    // Sin esto, lo que haga el próximo que use este navegador se sigue
+    // atribuyendo a la cuenta que se acaba de ir.
+    olvidarIdentidad();
     router.replace(`/${locale}`);
     router.refresh();
   }
