@@ -41,6 +41,40 @@ def resumen_previo(interpretacion) -> str:
     )
 
 
+def resumen_gratis(interpretacion) -> list[dict]:
+    """Lo que ve quien no pagó: el índice completo y el arranque de cada
+    sección (RF3).
+
+    No es la primera sección recortada. La primera sección es Sol, Luna y
+    Ascendente —justo lo que más le importa a la gente—, y regalarla entera
+    hace que quien la lee ya no tenga por qué pagar.
+
+    El índice sale de `secciones_aplicables(chart)` —el catálogo, filtrado
+    por si hay hora de nacimiento—, no de `interpretacion.secciones.all()`.
+    La generación corre fuera del request y es reanudable (RF10): este
+    resumen tiene que poder mostrarse con el informe a medio generar, y
+    tiene que nombrar las ocho secciones (o las siete que aplican sin hora)
+    aunque todavía falten por escribirse. Las que no están generadas
+    todavía aparecen con su título y sin párrafo.
+    """
+    generadas = {s.slug: s for s in interpretacion.secciones.all()}
+    salida = []
+    for seccion in secciones_aplicables(interpretacion.chart):
+        existente = generadas.get(seccion.slug)
+        if existente is None:
+            parrafo, restante = "", seccion.palabras
+        else:
+            parrafo, _, resto = existente.texto.partition("\n\n")
+            parrafo, restante = parrafo.strip(), len(resto.split())
+        salida.append({
+            "slug": seccion.slug,
+            "titulo": seccion.titulo[interpretacion.lang],
+            "parrafo": parrafo,
+            "restante": restante,
+        })
+    return salida
+
+
 def generar_informe(interpretacion, client, token: str) -> None:
     """Genera las secciones que falten. Reanudable: llamarla dos veces sobre un
     informe a medio hacer completa el resto sin repetir lo ya escrito.
