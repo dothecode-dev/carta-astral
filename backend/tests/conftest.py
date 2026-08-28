@@ -51,6 +51,18 @@ def account(make_account):
 
 
 @pytest.fixture
+def client_autenticado(account):
+    """Como `account_client`, pero sobre la cuenta del fixture `account` en vez
+    de crear una propia: así comparte cuenta con `chart`/`interpretacion`, que
+    dependen de `account`."""
+    from api.auth import create_session
+    token = create_session(account)
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+    return client
+
+
+@pytest.fixture
 def chart(db, account):
     from api.models import BirthData, Chart
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")

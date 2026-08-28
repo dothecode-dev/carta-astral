@@ -1,0 +1,196 @@
+"""Endpoint del informe: arranca fuera del request y expone su estado.
+
+Task 10: `POST .../interpretation/` deja de generar sincrónicamente (eso
+bloqueaba un worker sync de gunicorn durante los ~4 minutos que tarda un
+informe de ocho secciones) y pasa a cobrar/crear en el hilo del request pero
+generar en uno aparte. `GET .../interpretation/estado` es lo que la web
+sondea mientras tanto.
+"""
+
+import pytest
+from django.core.cache import cache
+from django.utils import timezone
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _cache_limpio():
+    """El lock de generación vive en el cache, no en la base: sin esto, el
+    hilo de fondo real de `test_el_post_no_espera_a_que_termine` puede seguir
+    corriendo (y tomar/soltar el lock) mientras ya arrancó el test siguiente,
+    y el `id` de las cartas de fixture se recicla entre tests porque cada uno
+    corre en una transacción que se revierte. Mismo patrón que
+    `test_interpretation_endpoint.py::_clear_cache`."""
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _sin_api_key_real(settings):
+    """El hilo de fondo no puede pegarle a la API real en un test: si el
+    entorno de quien corre pytest tiene un ANTHROPIC_API_KEY de verdad (pasa
+    en una sesión de Claude Code, que exporta la suya propia), `_build_client`
+    construiría un cliente real y el hilo intentaría una llamada de red de
+    verdad. CI nunca tiene esta variable, así que esto sólo importa para
+    correr los tests a mano; de cualquier forma no hay que depender de que
+    esté ausente."""
+    settings.ANTHROPIC_API_KEY = ""
+
+
+def test_el_post_no_espera_a_que_termine(client_autenticado, chart):
+    # Cuatro minutos dentro de la vista bloquean uno de los tres workers sync:
+    # tres informes a la vez y el sitio deja de responder.
+    r = client_autenticado.post(f"/api/charts/{chart.uuid}/interpretation/", {"lang": "es"}, format="json")
+    assert r.status_code == 202
+
+
+def test_el_post_cobra_y_crea_la_interpretacion_pendiente_sincronicamente(client_autenticado, chart, account):
+    """La fila y el débito existen apenas responde el 202: si no, un GET a
+    /estado inmediatamente después no tendría nada que reportar."""
+    from api.models import Interpretation
+    from interpret.prompts import PROMPT_VERSION
+
+    antes = account.free_balance + account.paid_balance
+    r = client_autenticado.post(f"/api/charts/{chart.uuid}/interpretation/", {"lang": "es"}, format="json")
+    assert r.status_code == 202
+
+    interp = Interpretation.objects.get(chart=chart, lang="es", prompt_version=PROMPT_VERSION)
+    assert interp.completa is False
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes - 1
+
+
+def test_el_estado_dice_cuantas_secciones_van(client_autenticado, chart, interpretacion):
+    from api.models import InterpretationSection
+
+    InterpretationSection.objects.create(interpretation=interpretacion, slug="firma", orden=0, texto="x")
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado")
+    assert r.json() == {"completa": False, "hechas": 1, "total": 8}
+
+
+def test_el_estado_sin_interpretacion_todavia_dice_cero(client_autenticado, chart):
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado")
+    assert r.json() == {"completa": False, "hechas": 0, "total": 8}
+
+
+def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
+    from api import interpretation_service
+
+    def explota(*a, **kw):
+        raise RuntimeError("cayó la API")
+
+    monkeypatch.setattr("api.informe_service.generar_informe", explota)
+    antes = account.free_balance + account.paid_balance
+    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes
+
+
+def test_si_la_generacion_muere_no_queda_una_interpretacion_vacia(chart, account, monkeypatch):
+    from api.models import Interpretation
+    from api import interpretation_service
+    from interpret.prompts import PROMPT_VERSION
+
+    monkeypatch.setattr("api.informe_service.generar_informe", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
+    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+    assert not Interpretation.objects.filter(chart=chart, lang="es", prompt_version=PROMPT_VERSION).exists()
+
+
+def test_si_queda_una_seccion_no_se_devuelve_el_credito(chart, account, settings, monkeypatch):
+    """Contrapunto del anterior: con una sección persistida el trabajo ya
+    está comprado (contrato de `informe_service.generar_informe`); un
+    reintento lo completa gratis, no se regala devolviendo el crédito."""
+    from api.models import InterpretationSection
+    from api import interpretation_service, informe_service
+
+    def falla_despues_de_una_seccion(interpretacion, client, token):
+        InterpretationSection.objects.create(
+            interpretation=interpretacion, slug="firma", orden=0, texto="ya escrita",
+        )
+        raise RuntimeError("cayó la API a mitad")
+
+    monkeypatch.setattr(informe_service, "generar_informe", falla_despues_de_una_seccion)
+    # `_build_client()` se evalúa como argumento ANTES de entrar a
+    # `generar_informe` (que acá está mockeado y ni lo mira), así que igual
+    # necesita una key no vacía para no explotar antes de llegar al mock.
+    settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
+    antes = account.free_balance + account.paid_balance
+    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes - 1
+
+
+def test_el_cap_diario_cuenta_un_informe_no_ocho_llamadas(chart, account, settings, monkeypatch):
+    """Contrato numérico de la Task 10: el cap diario cuenta INFORMES, no
+    llamadas al modelo. Un informe completo hace ocho llamadas (una por
+    sección) pero el contador del cap sólo se mueve una vez. Con el cap en 1,
+    una segunda carta agotaría el cupo del día para esa cuenta."""
+    from api import interpretation_service as svc
+    from api.exceptions import CapReached
+    from api.models import BirthData, Chart
+
+    settings.INTERPRETATION_DAILY_CAP = 1
+    cache.clear()
+
+    class _Bloque:
+        def __init__(self, text):
+            self.type = "text"
+            self.text = text
+
+    class _Respuesta:
+        content = [_Bloque("cuerpo de la sección")]
+        stop_reason = "end_turn"
+
+    class _StreamCtx:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def get_final_message(self):
+            return _Respuesta()
+
+    class ClienteFalso:
+        class _Messages:
+            def stream(self, **kw):
+                return _StreamCtx()
+
+        @property
+        def messages(self):
+            return ClienteFalso._Messages()
+
+    monkeypatch.setattr(svc, "_build_client", lambda: ClienteFalso())
+
+    svc.generar_en_segundo_plano(chart, "es", account)
+
+    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
+    assert cache.get(cap_key) == 1  # una vez por informe, no una por cada una de las 8 secciones
+
+    bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
+    otra_carta = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
+    with pytest.raises(CapReached):
+        svc.iniciar_generacion(otra_carta, "es", account)
+
+
+def test_el_cap_no_se_toca_con_credito_pago(account, settings):
+    """Bypass del cap para créditos pagos, igual que el flujo viejo
+    (`get_or_create_interpretation`): sólo cuenta generación gratis."""
+    from api import interpretation_service as svc
+    from api.models import BirthData, Chart
+
+    settings.INTERPRETATION_DAILY_CAP = 0
+    cache.clear()
+    account.free_balance = 0
+    account.paid_balance = 1
+    account.save()
+
+    bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
+    chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
+
+    interp = svc.iniciar_generacion(chart, "es", account)
+    assert interp is not None
+    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
+    assert cache.get(cap_key) is None

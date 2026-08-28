@@ -79,19 +79,29 @@ def fake_client(monkeypatch, settings):
 
 
 def test_post_returns_interpretation(account_client, fake_client):
+    """Task 10: el POST deja de generar sincrónicamente (RF10) — devuelve 202
+    y arranca el trabajo en un hilo aparte. Lo único verificable acá, en el
+    hilo del request, es que ya existe la fila pendiente y que se cobró; el
+    contenido generado y la devolución de crédito ante una falla se prueban
+    en `tests/api/test_informe_endpoint.py`, sobre `interpretation_service`
+    directamente (un hilo real no ve los datos de una transacción de test sin
+    commitear, así que no hay forma confiable de probar la generación en sí
+    a través de HTTP)."""
     c = _chart(account=account_client.account)
+    antes = account_client.account.free_balance + account_client.account.paid_balance
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
-    assert resp.status_code == 200
-    assert set(resp.data) == {"text", "lang", "prompt_version", "disclaimer", "created_at"}
-    assert resp.data["text"] == "tu carta dice..."
-    assert resp.data["disclaimer"] == svc.DISCLAIMERS["es"]
+    assert resp.status_code == 202
+    interp = Interpretation.objects.get(chart=c, lang="es", prompt_version=svc.PROMPT_VERSION)
+    assert interp.completa is False
+    account_client.account.refresh_from_db()
+    assert account_client.account.free_balance + account_client.account.paid_balance == antes - 1
 
 
 def test_default_lang_es(account_client, fake_client):
     c = _chart(account=account_client.account)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {}, format="json")
-    assert resp.status_code == 200
-    assert resp.data["lang"] == "es"
+    assert resp.status_code == 202
+    assert Interpretation.objects.get(chart=c).lang == "es"
 
 
 def test_invalid_lang_400(account_client, fake_client):
@@ -108,30 +118,28 @@ def test_missing_chart_404(account_client, fake_client):
     assert resp.status_code == 404
 
 
-def test_llm_error_503(account_client, monkeypatch, settings):
-    settings.INTERPRETATION_DAILY_CAP = 100
-    monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
-    c = _chart(account=account_client.account)
-    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
-    assert resp.status_code == 503
-    assert "error" in resp.data
-    assert Interpretation.objects.count() == 0
+# `test_llm_error_503` (retirado en la Task 10): probaba que un fallo del
+# modelo durante la generación respondiera 503 sincrónicamente. Con RF10 la
+# generación corre en un hilo aparte, después de que la vista ya respondió —
+# un fallo del LLM ya no puede volver sincrónico. El equivalente async (la
+# generación muere y el crédito vuelve) está en
+# `tests/api/test_informe_endpoint.py::test_si_la_generacion_muere_el_credito_vuelve`.
 
 
-def test_generation_in_progress_409(account_client, fake_client, db_cache):
-    """Con el lock tomado el cliente tiene que esperar, no ver un error.
-
-    Pasó en producción: dos POST a la vez para la misma carta, el segundo caía
-    en el mismo 503 que un fallo del modelo y la web mostraba "no pudimos
-    generar la lectura" cuando en realidad se estaba escribiendo.
+def test_lock_tomado_no_bloquea_el_202(account_client, fake_client, db_cache):
+    """Con el lock de otra generación en curso tomado, la vista sigue
+    aceptando el pedido (202): no hay body sincrónico que pueda confundirse
+    con un error. El hilo de fondo, al no conseguir el lock, no duplica la
+    generación (ver `completar_generacion`); es la contraparte async del
+    409 que existía antes de la Task 10, cuando el POST todavía generaba en
+    el request y un lock tomado era indistinguible de una falla del modelo.
 
     db_cache: el lock vive en DatabaseCache en producción, no en LocMem.
     """
     c = _chart(account=account_client.account)
-    cache.add(f"interp:lock:{c.id}:{svc.PROMPT_VERSION}", "1", timeout=30)
+    cache.add(f"interp:lock:{c.id}:{svc.PROMPT_VERSION}", "otro-token", timeout=30)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
-    assert resp.status_code == 409
-    assert Interpretation.objects.count() == 0
+    assert resp.status_code == 202
 
 
 def test_cap_reached_503(account_client, monkeypatch, settings):
@@ -143,7 +151,7 @@ def test_cap_reached_503(account_client, monkeypatch, settings):
 
 
 def test_paid_generation_bypasses_cap_via_endpoint(make_account, monkeypatch, settings):
-    """RF9 via HTTP: paid credit bypasses INTERPRETATION_DAILY_CAP=0 and returns 200."""
+    """RF9 via HTTP: paid credit bypasses INTERPRETATION_DAILY_CAP=0 and returns 202."""
     from rest_framework.test import APIClient
     from api.auth import create_session
 
@@ -157,7 +165,7 @@ def test_paid_generation_bypasses_cap_via_endpoint(make_account, monkeypatch, se
 
     c = _chart(account=acc)
     resp = client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
-    assert resp.status_code == 200
+    assert resp.status_code == 202
 
 
 def test_no_credits_returns_402(make_account, monkeypatch):

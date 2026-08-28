@@ -1,6 +1,8 @@
 import logging
+import threading
 
 from django.conf import settings
+from django.db import connections
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -9,9 +11,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.exceptions import CoreError
-from interpret.exceptions import InterpretationError
 
-from api import geocode
+from api import geocode, informe_service, interpretation_service
 from api.accounts import resolve_account
 from api.auth import (
     AccountTokenAuthentication,
@@ -19,17 +20,12 @@ from api.auth import (
 )
 from api.deletion import delete_account, delete_charts
 from api.chart_service import create_chart
-from api.interpretation_service import (
-    DISCLAIMERS,
-    CapReached,
-    GenerationInProgress,
-    QuotaExceeded,
-    get_or_create_interpretation,
-)
+from api.exceptions import CapReached, QuotaExceeded
+from api.interpretation_service import DISCLAIMERS
 from interpret.prompts import PROMPT_VERSION
 from api import apple
 from api.ledger import credits_available as account_credits_available
-from api.models import Chart, ProviderIdentity
+from api.models import Chart, Interpretation, ProviderIdentity
 from api.permissions import HasAccount
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
@@ -166,6 +162,13 @@ class InterpretationView(APIView):
         )
 
     def post(self, request, uuid):
+        """Arranca el informe de ocho secciones y devuelve el control enseguida
+        (RF10): cuatro minutos dentro de esta vista bloquean uno de los tres
+        workers sync de gunicorn, y tres pedidos a la vez dejan el sitio sin
+        atender. Cobrar y crear la fila pendiente sigue siendo sincrónico —así
+        un 402/503 por falta de crédito o cap alcanzado se responde antes de
+        aceptar el 202— pero generar las secciones corre en un hilo aparte; la
+        web sigue el avance con `GET .../interpretation/estado`."""
         lang = request.data.get("lang", "es")
         if lang not in _INTERPRETATION_LANGS:
             return Response(
@@ -173,8 +176,9 @@ class InterpretationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        account = request.user
         try:
-            interp = get_or_create_interpretation(chart, lang, request.user)
+            interpretacion = interpretation_service.iniciar_generacion(chart, lang, account)
         except QuotaExceeded:
             return Response(
                 {"error": "sin créditos disponibles"},
@@ -182,29 +186,56 @@ class InterpretationView(APIView):
             )
         except CapReached:
             return Response(
-                {"error": "límite diario de interpretaciones alcanzado, probá más tarde"},
+                {"error": "límite diario de informes alcanzado, probá más tarde"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except GenerationInProgress:
-            # No es una falla: hay otra petición escribiendo esta misma lectura.
-            # 409 para que el cliente espere y la pida, en vez de mostrar error.
-            return Response(
-                {"error": "generación en curso"},
-                status=status.HTTP_409_CONFLICT,
-            )
-        except InterpretationError as exc:
-            logger.warning("interpretation generation failed: %s", exc, exc_info=True)
-            return Response(
-                {"error": "no se pudo generar la interpretación"},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+
+        def _en_hilo():
+            # Un hilo nuevo no hereda la conexión a la base del request: cada
+            # consulta abre la suya propia (thread-local), y hay que cerrarla
+            # explícitamente al terminar o la conexión queda pérdida (mismo
+            # patrón que `tests/api/test_ledger_concurrencia.py`). El
+            # try/except de acá afuera es la red de seguridad final: si algo
+            # revienta dentro de `completar_generacion` que ni su propio
+            # try/except contempla, esto lo loguea igual — un hilo de fondo
+            # que muere en silencio deja el informe colgado y nadie se entera.
+            try:
+                interpretation_service.completar_generacion(interpretacion, chart, account)
+            except Exception:
+                logger.exception(
+                    "el hilo de generación del informe %s murió sin control",
+                    interpretacion.pk,
+                )
+            finally:
+                connections.close_all()
+
+        threading.Thread(target=_en_hilo, daemon=True).start()
+        return Response(status=status.HTTP_202_ACCEPTED)
+
+
+class InterpretationEstadoView(APIView):
+    """Cuántas secciones del informe ya están escritas. Es lo que la web
+    sondea mientras `InterpretationView.post` genera en segundo plano
+    (RF7/RF10): sin throttle de "interpretation" porque se consulta muchas
+    veces durante los ~4 minutos que tarda un informe."""
+
+    authentication_classes = [AccountTokenAuthentication]
+    permission_classes = [HasAccount]
+
+    def get(self, request, uuid):
+        chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        lang = request.query_params.get("lang", "es")
+        total = len(informe_service.secciones_aplicables(chart))
+        interpretacion = Interpretation.objects.filter(
+            chart=chart, lang=lang, prompt_version=PROMPT_VERSION
+        ).first()
+        if interpretacion is None:
+            return Response({"completa": False, "hechas": 0, "total": total})
         return Response(
             {
-                "text": interp.text,
-                "lang": interp.lang,
-                "prompt_version": interp.prompt_version,
-                "disclaimer": DISCLAIMERS[interp.lang],
-                "created_at": interp.created_at.isoformat(),
+                "completa": interpretacion.completa,
+                "hechas": interpretacion.secciones.count(),
+                "total": total,
             }
         )
 

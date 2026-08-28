@@ -23,6 +23,11 @@ from interpret.exceptions import InterpretationError
 from interpret.generator import build_interpretation, translate_interpretation
 from interpret.prompts import PROMPT_VERSION
 
+# Import diferido (no al tope del módulo): `informe_service` importa
+# `renovar_lock` DESDE acá, así que un `import` a nivel de módulo en ambas
+# direcciones sería circular. `generar_en_segundo_plano` lo importa recién al
+# llamarse.
+
 logger = logging.getLogger(__name__)
 
 # Ocho secciones a ~30-45 s cada una. El valor viejo (30 s) soltaba el candado
@@ -197,3 +202,120 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
         return obj
     finally:
         soltar_lock(chart, lock_token)
+
+
+def iniciar_generacion(chart, lang: str, account) -> Interpretation:
+    """Crea (o recupera) la `Interpretation` de un informe y cobra si
+    corresponde. Corre siempre en el hilo del request —nunca en el hilo de
+    fondo—: es lo que le permite a la vista responder 402/503 sincrónicamente
+    en vez de aceptar un 202 que después nunca va a completarse.
+
+    Usa `get_or_create` (no un lock) para la creación: Django envuelve su
+    `create()` en `atomic()` y reconsulta ante un choque de
+    `unique_together`, así que sólo UNA llamada concurrente gana `created`
+    (mismo mecanismo que ya validó la Tarea 9 para `traducir_informe`). Sólo
+    esa llamada cobra; la que pierde la carrera devuelve la fila existente
+    sin tocar el ledger. El lock de `_lock_key` es para otra cosa —serializar
+    la GENERACIÓN de secciones sobre una misma carta— y lo toma quien sigue
+    con `completar_generacion`, no esta función.
+
+    El cap diario cuenta INFORMES, no llamadas al modelo: se incrementa acá,
+    una vez por `Interpretation` nueva pagada con crédito gratis, y no en
+    `informe_service.generar_informe` (que hace ocho llamadas por informe).
+    Con el cap actual (40) eso da ~40 informes/día × US$0.45 ≈ US$18/día; si
+    contara las ocho llamadas el mismo cap alcanzaría para 5 informes por día
+    y el producto se apagaría a media mañana.
+
+    Lanza `QuotaExceeded` o `CapReached` si corresponde, y en ese caso borra
+    la `Interpretation` vacía que `get_or_create` acababa de crear: si
+    quedara, una llamada posterior (con crédito ya disponible) la
+    encontraría con `created=False` y jamás cobraría nada."""
+    interpretacion, creada = Interpretation.objects.get_or_create(
+        chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
+        defaults={"text": "", "account": account},
+    )
+    if not creada:
+        return interpretacion
+
+    will_be_free = account.free_balance > 0
+    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
+    if will_be_free and cache.get(cap_key, 0) >= settings.INTERPRETATION_DAILY_CAP:
+        interpretacion.delete()
+        logger.warning(
+            "interpretation daily cap reached (cap=%s)", settings.INTERPRETATION_DAILY_CAP
+        )
+        raise CapReached()
+
+    try:
+        _, lot = ledger.charge(account, lambda: interpretacion)
+    except QuotaExceeded:
+        interpretacion.delete()
+        raise
+
+    if lot == "free":
+        cache.add(cap_key, 0, timeout=_seconds_until_midnight())
+        cache.incr(cap_key)
+    return interpretacion
+
+
+def completar_generacion(interpretacion: Interpretation, chart, account) -> None:
+    """Toma el lock de la carta y corre `informe_service.generar_informe`
+    hasta terminar o fallar; al final liquida el crédito.
+
+    Pensada para correr en un hilo aparte del request (la vista la lanza así
+    para no bloquear un worker sync durante los ~4 minutos que tarda un
+    informe), pero no asume threading: es una función común, y
+    `generar_en_segundo_plano` la llama sincrónicamente para los casos (tests,
+    reintentos internos) que necesitan el resultado ya liquidado al volver.
+
+    El lock es el único mecanismo de exclusión (no se inventa un segundo): si
+    ya está tomado, asumimos que otro proceso está generando esta misma carta
+    y no hacemos nada — ni cobramos de nuevo (eso ya lo resolvió
+    `iniciar_generacion`), ni generamos en paralelo (eso duplicaría secciones
+    y ninguna sección tiene protección contra esa carrera, a diferencia de
+    `traducir_informe`).
+
+    Nunca deja una excepción sin loguear: si el hilo de fondo muere en
+    silencio, el informe queda colgado con el crédito ya cobrado y nadie se
+    entera hasta que el usuario se queja."""
+    if interpretacion.completa:
+        return
+
+    lock_key = _lock_key(chart)
+    token = uuid.uuid4().hex
+    if not cache.add(lock_key, token, timeout=LOCK_TTL):
+        logger.info(
+            "ya hay una generación en curso para la carta %s; se ignora este pedido",
+            chart.pk,
+        )
+        return
+
+    from api import informe_service  # import diferido: ver nota al tope del módulo
+
+    try:
+        informe_service.generar_informe(interpretacion, _build_client(), token)
+    except Exception:
+        logger.exception("la generación del informe %s falló", interpretacion.pk)
+    finally:
+        if not interpretacion.secciones.exists():
+            pk = interpretacion.pk
+            interpretacion.delete()
+            ledger.devolver(
+                account, 1,
+                external_id=f"informe:{pk}:devolucion",
+                note=f"informe {pk} sin secciones generadas",
+            )
+        soltar_lock(chart, token)
+
+
+def generar_en_segundo_plano(chart, lang: str, account) -> None:
+    """Arranca (o reanuda) el informe completo de principio a fin:
+    `iniciar_generacion` + `completar_generacion`.
+
+    El nombre es el contrato de la Tarea 10 con la vista y con los tests: la
+    vista NO la llama a ella (necesita el resultado de `iniciar_generacion`
+    antes de responder, para poder devolver 402/503 sincrónicamente), pero
+    todo lo demás —un cron, un management command, o un test que quiere
+    correr el flujo entero sincrónico sobre su propia conexión— sí."""
+    interpretacion = iniciar_generacion(chart, lang, account)
+    completar_generacion(interpretacion, chart, account)

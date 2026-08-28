@@ -51,7 +51,7 @@ def test_delete_charts_preserva_ledger(monkeypatch, settings):
     resp = _client(a).post("/api/charts/", PAYLOAD, format="json")
     uuid = resp.data["id"]
     resp = _client(a).post(f"/api/charts/{uuid}/interpretation/", {"lang": "es"}, format="json")
-    assert resp.status_code == 200
+    assert resp.status_code == 202  # Task 10: se cobra sincrónico, se genera en un hilo aparte
     txns_antes = CreditTransaction.objects.count()
     assert txns_antes > 0
 
