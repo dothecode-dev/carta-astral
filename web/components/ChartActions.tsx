@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { SolarSystem } from "@/components/SolarSystem";
 import type { Dict, Locale } from "@/lib/i18n";
@@ -11,19 +11,23 @@ import { track } from "@/lib/telemetry";
 //
 // El informe tiene ocho secciones (RF1) y el backend las escribe en un hilo
 // aparte (RF10): el POST devuelve 202 al instante y esto sondea
-// `interpretation/estado` hasta que están todas. Tarda unos cuatro minutos.
+// `interpretation/estado` hasta que están todas. Tarda unos seis minutos:
+// ocho llamadas secuenciales de hasta 1000 palabras cada una
+// (`informe_service.py`, docstring de `generar_informe`).
 
 /** Cada cuánto se pregunta cuánto avanzó el informe mientras se escribe. */
 export const POLL_MS = 5000;
 /**
  * Tope de esa espera, en consultas: once minutos.
  *
- * El informe tarda ~4 minutos; el tope viejo (24 intentos × 5 s = 2 minutos)
- * se quedaba corto y la web se rendía en medio de una generación normal.
+ * El informe tarda ~6; el tope viejo (24 intentos × 5 s = 2 minutos) se
+ * quedaba corto y la web se rendía en medio de una generación normal.
  */
 export const POLL_TRIES = 132;
 
 const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+
+type Estado = { completa: boolean; hechas: number; total: number };
 
 export function ChartActions({
   locale,
@@ -61,29 +65,113 @@ export function ChartActions({
    * tarda varios minutos en un hilo de fondo. Sin este sondeo la web no
    * tendría forma de saber cuándo terminó, ni nada real que mostrar mientras
    * tanto.
+   *
+   * `fetch` rechaza ante un corte de red — no resuelve con `ok: false` — y en
+   * una espera de hasta once minutos un wifi que parpadea o una laptop que
+   * suspende y despierta son cosa de todos los días. Sin el `try/catch`, esa
+   * excepción aborta el bucle entero y deja el sistema solar girando para
+   * siempre: acá se cuenta como un intento fallido más, no como el fin de la
+   * espera — la generación sigue corriendo en el servidor aunque esta
+   * consulta puntual no haya llegado.
    */
-  async function waitForReading(): Promise<boolean> {
+  const waitForReading = useCallback(async (): Promise<boolean> => {
     for (let intento = 0; intento < POLL_TRIES; intento++) {
       await sleep(POLL_MS);
-      const res = await fetch(`/api/charts/${chartId}/interpretation/estado?lang=${locale}`);
-      if (!res.ok) continue;
-      const estado = (await res.json()) as { completa: boolean; hechas: number; total: number };
-      setProgreso({ hechas: estado.hechas, total: estado.total });
-      if (estado.completa) return true;
+      try {
+        const res = await fetch(`/api/charts/${chartId}/interpretation/estado?lang=${locale}`);
+        if (!res.ok) continue;
+        const estado = (await res.json()) as Estado;
+        setProgreso({ hechas: estado.hechas, total: estado.total });
+        if (estado.completa) return true;
+      } catch (err) {
+        console.error(`sondeo del informe ${chartId}: falló la consulta`, err);
+      }
     }
     return false;
-  }
+  }, [chartId, locale]);
+
+  /** Espera el resto del informe y, si termina, trae la lectura a la página. */
+  const seguirGenerando = useCallback(
+    async (contarEvento: boolean) => {
+      if (!(await waitForReading())) {
+        setBusy(false);
+        setError(dict.chart.failed);
+        return;
+      }
+
+      // Sin este flag, retomar una generación ajena tras recargar la pestaña
+      // (ver el efecto de más abajo) contaría el mismo evento dos veces: el
+      // costo por lectura se mide una vez por generación, no por pestaña.
+      if (contarEvento) track("interpretacion_generada", { lang: locale });
+
+      // La lectura queda debajo de la carta, en esta misma página. La
+      // animación sigue hasta que el refresh trae el texto, no hasta que el
+      // informe está.
+      startTransition(() => router.refresh());
+      setBusy(false);
+    },
+    [dict.chart.failed, locale, router, startTransition, waitForReading],
+  );
+
+  // Si la pestaña se recarga a mitad de un informe, este componente vuelve a
+  // montar de cero y no tiene memoria de que ya lo pidió: sin este efecto
+  // mostraría el botón "Leer mi carta" como si nada estuviera pasando,
+  // aunque el backend siga escribiendo. Volver a apretarlo sería inofensivo
+  // (`iniciar_generacion` no cobra dos veces y el segundo hilo se retira si
+  // el lock de la carta ya está tomado) pero la experiencia es "se perdió".
+  //
+  // `hechas > 0` sin `completa` es la única prueba inequívoca de que hay una
+  // generación en curso. `hechas === 0` es ambiguo —una fila recién creada
+  // pega la misma respuesta que "nunca se pidió nada"— y se trata como
+  // "nada en curso": es la lectura segura, porque el peor caso es el mismo
+  // reintento inofensivo de arriba.
+  useEffect(() => {
+    if (yaLeida) return;
+    let cancelado = false;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/charts/${chartId}/interpretation/estado?lang=${locale}`);
+        if (!res.ok || cancelado) return;
+        const estado = (await res.json()) as Estado;
+        if (cancelado || estado.completa || estado.hechas <= 0) return;
+
+        setProgreso({ hechas: estado.hechas, total: estado.total });
+        setBusy(true);
+        await seguirGenerando(false);
+      } catch (err) {
+        // Si esta consulta falla, se muestra el botón: reintentar
+        // clickeando es inofensivo.
+        console.error(`consulta de arranque del informe ${chartId} falló`, err);
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [chartId, locale, yaLeida, seguirGenerando]);
 
   async function interpret() {
     setProgreso(null);
     setBusy(true);
     setError(null);
 
-    const res = await fetch(`/api/charts/${chartId}/interpretation`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lang: locale }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`/api/charts/${chartId}/interpretation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang: locale }),
+      });
+    } catch (err) {
+      // Mismo motivo que en `waitForReading`: un corte de red acá no es un
+      // rechazo del backend, y sin este catch dejaba la animación encendida
+      // para siempre en vez de devolver el botón.
+      console.error(`inicio del informe ${chartId} falló`, err);
+      setBusy(false);
+      setError(dict.chart.failed);
+      return;
+    }
 
     if (!res.ok) {
       setBusy(false);
@@ -94,18 +182,7 @@ export function ChartActions({
     // El POST arrancó el hilo de fondo y respondió 202: la lectura todavía no
     // existe. Si el sondeo se agota, se avisa y se deja reintentar (RF7): un
     // botón que desaparece para siempre sería peor que un informe tardío.
-    if (!(await waitForReading())) {
-      setBusy(false);
-      setError(dict.chart.failed);
-      return;
-    }
-
-    track("interpretacion_generada", { lang: locale });
-
-    // La lectura queda debajo de la carta, en esta misma página. La animación
-    // sigue hasta que el refresh trae el texto, no hasta que el informe está.
-    startTransition(() => router.refresh());
-    setBusy(false);
+    await seguirGenerando(true);
   }
 
   if (busy || refrescando) {

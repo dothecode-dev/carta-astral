@@ -22,7 +22,13 @@ export async function GET(
     return NextResponse.json(data);
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 502;
-    console.error(`estado del informe ${id}: backend ${status}`);
-    return NextResponse.json({ error: "no pudimos consultar el estado" }, { status });
+    // 404 es "la carta no existe o es de otra cuenta": no hay nada que
+    // registrar. El resto de los status del backend no se reenvía tal cual
+    // (mismo criterio que el proxy de `interpretation/`): sólo 401 y 404 son
+    // casos que el cliente puede distinguir; cualquier otra cosa es un 502.
+    if (status !== 404) console.error(`estado del informe ${id}: backend ${status}`);
+    if (status === 401) return NextResponse.json({ error: "sin sesión" }, { status: 401 });
+    if (status === 404) return NextResponse.json({ error: "no existe" }, { status: 404 });
+    return NextResponse.json({ error: "no pudimos consultar el estado" }, { status: 502 });
   }
 }

@@ -5,7 +5,12 @@ import { ChartActions, POLL_MS, POLL_TRIES } from "@/components/ChartActions";
 import { getDict } from "@/lib/i18n";
 
 const refresh = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+// Referencia estable a propósito, como el `useRouter()` real: uno nuevo en
+// cada llamada rompía el `useCallback` de `seguirGenerando` (depende de
+// `router`) y con él el efecto de montaje, que lo tiene como dependencia —
+// cada render disparaba el efecto de nuevo, sondeo tras sondeo.
+const routerMock = { refresh };
+vi.mock("next/navigation", () => ({ useRouter: () => routerMock }));
 
 const dict = getDict("es");
 const CHART = "89151d40-e263-4d34-81e0-2fb434f70243";
@@ -28,6 +33,14 @@ const estado = (completa: boolean, hechas: number, total: number) => ({
   status: 200,
   json: async () => ({ completa, hechas, total }),
 });
+
+/**
+ * El efecto de montaje (retomar un informe en curso al recargar la pestaña)
+ * consulta `estado` apenas se renderiza, antes de cualquier click: los tests
+ * de la interacción con el botón encolan esta respuesta primero para que esa
+ * consulta no se coma el valor que el test arma para el POST o el sondeo.
+ */
+const sinGeneracionEnCurso = estado(false, 0, 8);
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -55,6 +68,7 @@ describe("ChartActions", () => {
   it("muestra la lectura cuando el informe termina", async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(sinGeneracionEnCurso) // el efecto de montaje
       .mockResolvedValueOnce(reply(202)) // el POST arranca la generación en un hilo
       .mockResolvedValue(estado(true, 8, 8)); // el sondeo la encuentra completa
     vi.stubGlobal("fetch", fetchMock);
@@ -73,6 +87,7 @@ describe("ChartActions", () => {
     // estado de espera.
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(true, 8, 8));
     vi.stubGlobal("fetch", fetchMock);
@@ -88,6 +103,7 @@ describe("ChartActions", () => {
   it("mientras genera, muestra la espera", async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(false, 0, 8));
     vi.stubGlobal("fetch", fetchMock);
@@ -102,6 +118,7 @@ describe("ChartActions", () => {
   it("muestra en qué sección va, no una animación ciega", async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(false, 3, 8));
     vi.stubGlobal("fetch", fetchMock);
@@ -114,7 +131,7 @@ describe("ChartActions", () => {
   });
 
   it("no se rinde a los dos minutos", () => {
-    // El informe tarda ~4 minutos: 24 intentos × 5 s se quedaban cortos.
+    // El informe tarda ~6 minutos: 24 intentos × 5 s (2 minutos) se quedaban cortos.
     expect(POLL_TRIES * POLL_MS).toBeGreaterThanOrEqual(10 * 60 * 1000);
   });
 
@@ -140,6 +157,7 @@ describe("ChartActions", () => {
   it("se rinde si el informe no aparece completo dentro del tope, y deja reintentar", async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(false, 3, 8));
     vi.stubGlobal("fetch", fetchMock);
@@ -172,5 +190,60 @@ describe("ChartActions", () => {
   it("no avisa de la hora cuando la carta ya la tiene", () => {
     renderActions({ timeKnown: true });
     expect(screen.queryByText(/sin hora de nacimiento/i)).not.toBeInTheDocument();
+  });
+
+  // `fetch` rechaza ante un corte de red; no resuelve con `ok: false`. En una
+  // espera de hasta once minutos eso es cotidiano (wifi que parpadea, la
+  // laptop que suspende y despierta), y sin manejarlo la excepción abortaba
+  // el bucle entero: el sistema solar quedaba girando para siempre, sin
+  // error y sin botón.
+  it("un corte de red durante el sondeo no aborta la espera: sigue intentando", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(sinGeneracionEnCurso) // el efecto de montaje
+      .mockResolvedValueOnce(reply(202)) // el POST arranca la generación
+      .mockRejectedValueOnce(new TypeError("Failed to fetch")) // el wifi parpadea
+      .mockResolvedValue(estado(true, 8, 8)); // vuelve la red y el informe ya está
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions();
+
+    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await correr(POLL_MS * 2);
+
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("avisa del fallo si el POST no llega por un corte de red, y deja reintentar", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    renderActions();
+
+    await clickAndSettle();
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: dict.chart.interpret })).toBeInTheDocument();
+  });
+
+  // Recargar la pestaña a mitad de un informe no debe mostrar el botón como
+  // si nada estuviera pasando: el componente vuelve a montar sin memoria de
+  // que ya lo pidió, y sólo el backend sabe que sigue escribiendo.
+  it("si la pestaña se recarga con un informe en curso, retoma el sondeo en vez del botón", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(estado(false, 3, 8)));
+    renderActions();
+
+    await correr(); // el efecto de montaje consulta el estado
+
+    expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
+    expect(screen.getByText(/3 de 8/)).toBeInTheDocument();
+  });
+
+  it("si al montar no hay ningún informe en curso, muestra el botón normal", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(estado(false, 0, 8)));
+    renderActions();
+
+    await correr();
+
+    expect(screen.getByRole("button", { name: dict.chart.interpret })).toBeInTheDocument();
   });
 });
