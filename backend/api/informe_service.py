@@ -9,7 +9,7 @@ el mismo párrafo.
 
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from api.interpretation_service import renovar_lock
 from api.models import Interpretation, InterpretationSection
@@ -217,15 +217,25 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
     a mitad (`translate_interpretation` puede lanzar `InterpretationError` u
     otra excepción del cliente), las secciones ya traducidas quedan y una
     segunda llamada retoma sólo las que faltan — no le vuelve a pagar al
-    modelo por lo ya traducido. El `unique_together` de `InterpretationSection`
-    es la red de seguridad ante una carrera real entre dos llamadas
-    concurrentes, no el mecanismo: lo que evita el trabajo repetido en el
-    caso normal es el chequeo de `hechas` de abajo.
+    modelo por lo ya traducido. El chequeo de `hechas` es lo que evita el
+    trabajo repetido en el caso normal (dos llamadas secuenciales); el
+    `unique_together` de `InterpretationSection` es la red de seguridad para
+    la carrera real entre dos llamadas concurrentes, y el `except
+    IntegrityError` de abajo es lo que atrapa esa red — sin él, la fila que
+    el `unique_together` bloqueó se cae como una excepción sin atrapar
+    (un 500), no como un descarte silencioso.
 
     `destino.completa` copia `origen.completa` en lugar de fijarse siempre en
     `True`: si el origen todavía está a medio generar, la traducción de lo
     que hay hasta ahora tiene que quedar igual de incompleta, no mentir que
     terminó.
+
+    El `get_or_create` de `destino` no necesita ese mismo `except`: el
+    `get_or_create` de Django ya envuelve su `create()` en un `atomic()`
+    propio y, si choca contra el `unique_together` de `Interpretation`
+    (`chart`, `lang`, `prompt_version`), vuelve a hacer el `get()` con esos
+    mismos campos antes de relanzar — la carrera ahí ya está resuelta por el
+    ORM, no hace falta repetirlo a mano.
     """
     destino, _ = Interpretation.objects.get_or_create(
         chart=origen.chart, lang=destino_lang, prompt_version=origen.prompt_version,
@@ -235,12 +245,24 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
     for seccion in origen.secciones.all():
         if seccion.slug in hechas:
             continue
-        InterpretationSection.objects.create(
-            interpretation=destino,
-            slug=seccion.slug,
-            orden=seccion.orden,
-            texto=translate_interpretation(seccion.texto, destino_lang, client),
-        )
+        texto = translate_interpretation(seccion.texto, destino_lang, client)
+        try:
+            with transaction.atomic():
+                InterpretationSection.objects.create(
+                    interpretation=destino, slug=seccion.slug, orden=seccion.orden, texto=texto,
+                )
+        except IntegrityError:
+            # Carrera: otra llamada concurrente ya tradujo y persistió esta
+            # misma sección primero (mismo patrón que api/ledger.py). Sólo es
+            # "ya hecha" si la fila realmente está — cualquier otro
+            # IntegrityError no es esta carrera y se relanza.
+            if not destino.secciones.filter(slug=seccion.slug).exists():
+                raise
+            logger.info(
+                "traducción concurrente de la sección %s (interpretation=%s, lang=%s) "
+                "ya la había persistido otra llamada; se descarta la traducción repetida",
+                seccion.slug, destino.pk, destino_lang,
+            )
 
     with transaction.atomic():
         destino.text = "\n\n".join(s.texto for s in destino.secciones.all())

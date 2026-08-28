@@ -1,10 +1,21 @@
+import threading
+
 import pytest
+from django.db import connection, connections
 
 from api import informe_service
-from api.models import Interpretation, InterpretationSection
+from api.models import Account, BirthData, Chart, Interpretation, InterpretationSection
 from interpret.prompts import PROMPT_VERSION, SECCIONES
 
 pytestmark = pytest.mark.django_db
+
+# SQLite serializa la base entera y no ejercita una carrera real entre
+# conexiones: un "pasa" ahí sería falso verde. Mismo criterio que
+# tests/api/test_ledger_concurrencia.py.
+requiere_postgres = pytest.mark.skipif(
+    connection.vendor != "postgresql",
+    reason="necesita una carrera real entre conexiones; SQLite la serializa",
+)
 
 
 class _Bloque:
@@ -175,3 +186,61 @@ def test_destino_hereda_el_estado_incompleto_del_origen(interpretacion):
     )
     assert destino.secciones.count() == 1
     assert destino.completa is False
+
+
+# --- carrera real entre dos llamadas concurrentes (sólo Postgres) ---
+
+
+def _en_hilos(fn, veces: int):
+    """Corre `fn` en `veces` hilos a la vez y devuelve (resultados, errores).
+    Calcado de `tests/api/test_ledger_concurrencia.py`."""
+    resultados, errores = [], []
+    barrera = threading.Barrier(veces)
+
+    def worker(i):
+        try:
+            barrera.wait()
+            resultados.append(fn(i))
+        except Exception as exc:  # noqa: BLE001 - se inspeccionan en el test
+            errores.append(exc)
+        finally:
+            connections.close_all()
+
+    hilos = [threading.Thread(target=worker, args=(i,)) for i in range(veces)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join(timeout=20)
+    return resultados, errores
+
+
+@requiere_postgres
+@pytest.mark.django_db(transaction=True)
+def test_dos_traducciones_concurrentes_de_la_misma_carta_no_duplican_ni_explotan():
+    """Dos llamadas a `traducir_informe` para el mismo origen y el mismo
+    idioma, en paralelo, con conexiones de verdad (no la serialización de un
+    solo hilo/una sola transacción). El `unique_together` de
+    `InterpretationSection` es la red de seguridad: esto prueba que la red
+    no deja pasar un 500 sin atrapar cuando efectivamente hace su trabajo."""
+    acc = Account.objects.create(free_balance=1, paid_balance=0)
+    bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
+    chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=acc)
+    origen = Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=acc, completa=True,
+    )
+    for i, s in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=origen, slug=s.slug, orden=i, texto="texto " * 500,
+        )
+
+    resultados, errores = _en_hilos(
+        lambda _i: informe_service.traducir_informe(origen, "en", ClienteFalso()), 2,
+    )
+
+    assert not errores, f"una traducción concurrente terminó en excepción: {errores}"
+    assert len(resultados) == 2
+
+    destino = Interpretation.objects.get(chart=chart, lang="en", prompt_version=PROMPT_VERSION)
+    slugs = list(destino.secciones.values_list("slug", flat=True))
+    assert len(slugs) == 8
+    assert len(set(slugs)) == 8  # ninguna sección duplicada por slug
