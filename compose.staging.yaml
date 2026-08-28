@@ -1,0 +1,99 @@
+# Entorno de staging local: los mismos contenedores que produce Coolify en
+# producción, corriendo en esta máquina.
+#
+# Por qué existe y por qué NO alcanza `make dev`: ese target corre `runserver`,
+# `next dev` y cae en SQLite (`backend/config/settings.py`, el default de
+# `dj_database_url`). En SQLite la UniqueConstraint parcial que sostiene la
+# idempotencia del webhook de pagos tiene otra semántica y los tests de
+# concurrencia no corren, así que un "staging" así no probaría justamente la
+# superficie que mueve plata. Acá va Postgres 16 —la misma imagen que el VPS—,
+# gunicorn en vez de runserver, y la web compilada en vez del server de dev.
+#
+# Lo que este entorno NO cubre: el pipeline de deploy de Coolify. Eso sólo se
+# prueba en un servidor.
+#
+#   make staging-up      levanta todo
+#   make staging-down     lo baja
+#   make staging-logs     mira los logs
+#   make staging-reset    borra la base y vuelve a empezar
+#
+# Las variables salen de `.env.staging` (copiar de `.env.staging.example`).
+
+name: astra-staging
+
+services:
+  db:
+    # postgres:16-alpine es EXACTAMENTE la imagen que corre en producción.
+    # Si esto cambia, staging deja de probar lo que se despliega.
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-astra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env.staging}
+      POSTGRES_DB: ${POSTGRES_DB:-astra_staging}
+    volumes:
+      - db-staging:/var/lib/postgresql/data
+    ports:
+      # Expuesto para poder correr pytest del host contra este Postgres, que es
+      # la única forma de que los tests de concurrencia prueben algo.
+      - "${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-astra} -d ${POSTGRES_DB:-astra_staging}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env.staging
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-astra}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-astra_staging}
+      # Igual que producción: sin caché compartida el proceso no arranca fuera
+      # de DEBUG, y el lock de interpretación no existiría entre workers.
+      USE_DB_CACHE: "1"
+      DEBUG: "0"
+      MEDIA_ROOT: /data/media
+    volumes:
+      - media-staging:/data/media
+    ports:
+      - "${BACK_PORT:-8001}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Las NEXT_PUBLIC_* se incrustan AL COMPILAR, no al arrancar. Si no
+        # llegan como args acá, el bundle sale sin ellas — es el mismo error
+        # que en el Dockerfile ya rompió un deploy con un ARG ausente.
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3001}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+        NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION:-}
+    environment:
+      # Server-side de Next: habla con el backend por la red interna.
+      API_URL: http://backend:8000
+    ports:
+      - "${WEB_PORT:-3002}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  db-staging:
+  media-staging:

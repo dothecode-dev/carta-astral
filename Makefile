@@ -21,11 +21,12 @@ WEB_PORT  ?= 3000
 DEV_ENV = DEBUG=1 USE_DB_CACHE=1
 
 .DEFAULT_GOAL := help
-.PHONY: help dev back web stop install test test-back test-web sky
+.PHONY: help dev back web stop install test test-back test-web sky \
+        staging-up staging-down staging-logs staging-reset test-back-pg
 
 help: ## Muestra estos comandos
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-11s\033[0m %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'
 
 dev: stop ## Levanta backend y web juntos (Ctrl-C corta los dos)
 	@echo "  backend → http://localhost:$(BACK_PORT)"
@@ -89,6 +90,60 @@ test-web: ## Gates de la web: eslint, tests, tipos, legales, los dos builds
 	# que el gate nacido de ese incidente era el único que no se podía correr en
 	# local: verde en tu máquina no significaba verde en CI.
 	cd web && NEXT_PUBLIC_SITE_URL= NEXT_PUBLIC_GOOGLE_CLIENT_ID= API_URL= npm run build
+
+# ---------------------------------------------------------------------------
+# Staging local: los mismos contenedores que Coolify arma en producción.
+#
+# No confundir con `make dev`: ese corre runserver, next dev y SQLite. Esto
+# corre gunicorn, la web compilada y Postgres 16 — la misma imagen del VPS.
+# Es el único entorno local donde probar el cobro significa algo, porque en
+# SQLite la constraint que sostiene la idempotencia del webhook se comporta
+# distinto y los tests de concurrencia no corren.
+#
+# Requiere un runtime de contenedores (OrbStack o Docker Desktop).
+# ---------------------------------------------------------------------------
+STAGING = docker compose -f compose.staging.yaml --env-file .env.staging
+
+staging-up: .env.staging ## Levanta el staging local (web :3002, backend :8001)
+	$(STAGING) up -d --build
+	@echo ""
+	@echo "  web     → http://localhost:$${WEB_PORT:-3002}"
+	@echo "  backend → http://localhost:$${BACK_PORT:-8001}/healthz/"
+	@echo "  base    → localhost:$${DB_PORT:-5433}"
+	@echo ""
+	@echo "  Tu Mac es arm64 y el VPS amd64. Esto builda nativo, que alcanza"
+	@echo "  para probar comportamiento. Para verificar el build REAL de"
+	@echo "  producción:  DOCKER_DEFAULT_PLATFORM=linux/amd64 make staging-up"
+
+staging-down: ## Baja el staging local (conserva la base)
+	$(STAGING) down
+
+staging-logs: ## Sigue los logs del staging local
+	$(STAGING) logs -f
+
+staging-reset: ## Borra la base de staging y levanta de cero
+	$(STAGING) down -v
+	$(STAGING) up -d --build
+
+# Si falta el archivo de entorno, decirlo con una instrucción en vez de que
+# docker compose falle con un error críptico sobre una variable no definida.
+.env.staging:
+	@echo "Falta .env.staging. Crealo con:"
+	@echo "    cp .env.staging.example .env.staging"
+	@echo "y completá al menos POSTGRES_PASSWORD y SECRET_KEY."
+	@exit 1
+
+test-back-pg: .env.staging ## pytest contra el Postgres de staging (corre los tests que SQLite saltea)
+	# Por qué existe: `make test-back` usa el default de dj_database_url, que es
+	# SQLite. Ahí los 6 tests de tests/api/test_ledger_concurrencia.py se saltean
+	# solos (`skipif connection.vendor != "postgresql"`), así que la idempotencia
+	# del cobro nunca se prueba en local — igual que advierte el CLAUDE.md.
+	# Medido el 28-08-2026: SQLite 1 passed + 6 skipped, Postgres 7 passed.
+	# Necesita el staging arriba (`make staging-up`).
+	@set -a; . ./.env.staging; set +a; \
+		cd backend && DEBUG=1 \
+		DATABASE_URL="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@localhost:$$DB_PORT/$$POSTGRES_DB" \
+		.venv/bin/python -m pytest -q
 
 sky: ## Muestra el cielo que devuelve el backend local
 	@curl -s http://localhost:$(BACK_PORT)/api/sky/ | python3 -m json.tool

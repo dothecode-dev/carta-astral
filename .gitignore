@@ -14,3 +14,6 @@ docs/
 *.keystore
 *.jks
 LEEME-*.txt
+
+# Entorno de staging local (ver .env.staging.example, que sí se versiona).
+.env.staging
