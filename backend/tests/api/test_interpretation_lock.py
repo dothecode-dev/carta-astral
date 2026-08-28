@@ -73,3 +73,23 @@ def test_renovar_lock_no_pisa_el_lock_de_otro_proceso(db_cache, chart):
     assert cache.add(key, token_b, timeout=interpretation_service.LOCK_TTL)  # B lo toma
     assert interpretation_service.renovar_lock(chart, token_a) is False
     assert cache.get(key) == token_b
+
+
+def test_soltar_lock_libera_el_propio(db_cache, chart):
+    key = f"interp:lock:{chart.id}:{PROMPT_VERSION}"
+    token = "tok-propio"
+    cache.set(key, token, timeout=interpretation_service.LOCK_TTL)
+    interpretation_service.soltar_lock(chart, token)
+    assert cache.get(key) is None
+
+
+def test_soltar_lock_no_toca_el_ajeno(db_cache, chart):
+    """Proceso A toma el lock, expira, proceso B lo toma. A llama a
+    soltar_lock con su token viejo y el lock de B queda intacto."""
+    key = f"interp:lock:{chart.id}:{PROMPT_VERSION}"
+    token_a = "tok-a"
+    token_b = "tok-b"
+    cache.set(key, token_a, timeout=-1)  # el lock de A ya venció
+    assert cache.add(key, token_b, timeout=interpretation_service.LOCK_TTL)  # B lo toma
+    interpretation_service.soltar_lock(chart, token_a)
+    assert cache.get(key) == token_b
