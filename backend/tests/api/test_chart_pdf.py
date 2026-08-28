@@ -25,11 +25,11 @@ pytestmark = pytest.mark.django_db
 URL = "/api/charts/{}/pdf/"
 
 
-def _chart(client, name="Camila"):
+def _chart(client, name="Camila", time_known=True):
     return create_chart(
         {
             "name": name, "date": "1994-03-12", "time": "07:20",
-            "time_known": True, "lat": -34.6118, "lng": -58.3960,
+            "time_known": time_known, "lat": -34.6118, "lng": -58.3960,
             "place_label": "Buenos Aires, Argentina",
         },
         account=client.account,
@@ -110,6 +110,32 @@ def _informe(chart, texto, lang="es", completa=True):
     InterpretationSection.objects.create(
         interpretation=interp, slug=SECCIONES[0].slug, orden=0, texto=texto,
     )
+    return interp
+
+
+def _informe_legacy(chart, texto, lang="es", completa=True):
+    """La forma anterior a la Tarea 2: el texto completo en `Interpretation.text`,
+    sin ninguna `InterpretationSection`. Es exactamente lo que preserva
+    `0020_backfill_completa` para lo que ya existía en producción antes del
+    informe de ocho secciones — sigue existiendo hoy, no es un caso teórico."""
+    return Interpretation.objects.create(
+        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=completa, text=texto,
+    )
+
+
+def _informe_completo(chart, lang="es"):
+    """Todas las secciones que aplican a esta carta (`secciones_aplicables`,
+    filtrado por si hay hora de nacimiento), cada una con su propio texto."""
+    from api.informe_service import secciones_aplicables
+
+    interp = Interpretation.objects.create(
+        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=True,
+    )
+    for orden, seccion in enumerate(secciones_aplicables(chart)):
+        InterpretationSection.objects.create(
+            interpretation=interp, slug=seccion.slug, orden=orden,
+            texto=f"Texto de la sección {seccion.slug}.",
+        )
     return interp
 
 
@@ -228,6 +254,60 @@ def test_lectura_en_otro_idioma_se_incluye_tal_como_esta(account_client):
     assert "fronteras porosas" in html
 
 
+# --- la forma legacy: texto completo, sin InterpretationSection -------------
+#
+# `0020_backfill_completa.py` preserva a propósito estas filas —marca
+# `completa=True` sin tocar el texto ni inventarle secciones— para lo que ya
+# existía en producción antes de que el informe se partiera en ocho. Siguen
+# ahí hoy: no es un caso teórico, es la lectura por la que alguien ya pagó.
+
+
+def test_informe_legacy_sin_secciones_aparece_en_el_pdf(account_client):
+    chart = _chart(account_client)
+    _informe_legacy(chart, "Tu Sol en Piscis habla de fronteras porosas.")
+    html = _html(chart, reading_lang="es")
+    assert "fronteras porosas" in html
+
+
+def test_legacy_aparece_el_disclaimer(account_client):
+    chart = _chart(account_client)
+    _informe_legacy(chart, "Tu Sol en Piscis habla de fronteras porosas.")
+    html = _html(chart, reading_lang="es")
+    from api.interpretation_service import DISCLAIMERS
+    assert DISCLAIMERS["es"][:40] in html
+
+
+def test_legacy_en_otro_idioma_se_incluye_tal_como_esta(account_client):
+    chart = _chart(account_client)
+    _informe_legacy(chart, "Tu Sol en Piscis habla de fronteras porosas.")
+    html = _html(chart, reading_lang="es")
+    assert "fronteras porosas" in html
+
+
+def test_legacy_la_lectura_empieza_en_hoja_nueva(account_client):
+    chart = _chart(account_client)
+    _informe_legacy(chart, "Tu Sol en Piscis habla de fronteras porosas.")
+    html = _html(chart, reading_lang="es")
+    assert html.index("pagebreak") < html.index("fronteras porosas")
+
+
+def test_legacy_no_promete_capitulos_que_no_tiene(account_client):
+    """El texto legacy no está partido en secciones: mostrar un índice de
+    ocho títulos sobre un texto de una sola pieza prometería una estructura
+    que el documento no tiene. Decisión explícita: sin índice para este caso."""
+    chart = _chart(account_client)
+    _informe_legacy(chart, "Tu Sol en Piscis habla de fronteras porosas.")
+    html = _html(chart, reading_lang="es")
+    assert '<ol class="indice">' not in html
+
+
+def test_legacy_incompleta_no_aparece_en_el_pdf(account_client):
+    chart = _chart(account_client)
+    _informe_legacy(chart, "Tu Sol en Piscis habla de fronteras porosas.", completa=False)
+    html = _html(chart, reading_lang="es")
+    assert "fronteras porosas" not in html
+
+
 def test_la_matriz_de_aspectos_se_dibuja_como_en_la_web(account_client):
     """La misma matriz triangular que muestra el sitio: cada cruce dice qué
     aspecto hay entre esos dos cuerpos."""
@@ -305,6 +385,20 @@ def test_el_indice_nombra_las_secciones_que_faltan(account_client):
     html = _html(chart, reading_lang="es")
     assert SECCIONES[-1].titulo["es"] in html
     assert f'<h2>{SECCIONES[0].titulo["es"]}</h2>' in html
+
+
+def test_el_indice_no_promete_casas_sin_hora_de_nacimiento(account_client):
+    """Sin hora de nacimiento son siete secciones, no ocho: "casas" no aplica
+    (`secciones_aplicables`). El índice no puede prometer un capítulo que el
+    informe nunca va a escribir para esta carta."""
+    chart = _chart(account_client, time_known=False)
+    _informe_completo(chart)
+    html = _html(chart, reading_lang="es")
+
+    casas = next(s for s in SECCIONES if s.slug == "casas")
+    firma = next(s for s in SECCIONES if s.slug == "firma")
+    assert casas.titulo["es"] not in html
+    assert firma.titulo["es"] in html
 
 
 def test_un_tono_desconocido_en_la_matriz_es_400(account_client):

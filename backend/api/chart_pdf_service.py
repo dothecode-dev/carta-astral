@@ -240,10 +240,10 @@ def _matrix_html(matrix: dict) -> str:
 
 
 def _seccion_html(texto: str) -> str:
-    """Los párrafos de una sección. El markdown que escribe el generador es
-    liviano —sólo `**` para negrita, que acá se descarta— y no trae sus
-    propios títulos: el título es el del catálogo (`Seccion.titulo`), no algo
-    que haya que parsear del texto."""
+    """Los párrafos de una sección del catálogo. El markdown que escribe el
+    generador es liviano —sólo `**` para negrita, que acá se descarta— y no
+    trae sus propios títulos: el título es el del catálogo (`Seccion.titulo`),
+    no algo que haya que parsear del texto."""
     return "".join(
         f"<p>{_esc(bloque.strip().replace('**', ''))}</p>"
         for bloque in re.split(r"\n\n+", texto.strip())
@@ -251,19 +251,51 @@ def _seccion_html(texto: str) -> str:
     )
 
 
+def _legado_html(texto: str) -> str:
+    """Una lectura de antes de que el informe se partiera en secciones
+    (Tarea 2): título y párrafos en markdown liviano, con el mismo parseo que
+    usaba el render antes de la Tarea 11 (`#`/`##`/`###` como encabezado de
+    bloque). No hay título de catálogo para este texto —nunca se escribió con
+    uno—, así que si trae su propia estructura es acá donde se respeta; si no
+    trae ninguna, sale todo como párrafos, igual que salía antes."""
+    bloques = []
+    for bloque in re.split(r"\n\n+", texto.strip()):
+        bloque = bloque.strip()
+        if not bloque:
+            continue
+        encabezado = re.match(r"^#{1,3}\s+(.*)$", bloque.split("\n")[0])
+        if encabezado:
+            titulo_bloque = _esc(encabezado.group(1).replace("**", ""))
+            resto = "\n".join(bloque.split("\n")[1:]).strip()
+            bloques.append(f"<h2>{titulo_bloque}</h2>")
+            if resto:
+                bloques.append(f"<p>{_esc(resto.replace('**', ''))}</p>")
+        else:
+            bloques.append(f"<p>{_esc(bloque.replace('**', ''))}</p>")
+    return "".join(bloques)
+
+
 def _reading_html(reading: dict, disclaimer: str, titulo: str) -> str:
     """La lectura: el índice de las secciones aplicables —nombra también las
     que todavía no se escribieron, ver `pdf_payload.build`— y el texto de
-    cada una que sí está, con su propio título."""
+    cada una que sí está, con su propio título.
+
+    Sin índice (`reading["indice"]` vacío) es el caso legacy: un texto de una
+    sola pieza, sin `titulo` de catálogo, que se renderiza con el parseo
+    anterior a la Tarea 11 en vez de con `_seccion_html`.
+    """
     indice_html = "".join(f"<li>{_esc(t)}</li>" for t in reading["indice"])
+    indice_bloque = f'<ol class="indice">{indice_html}</ol>' if reading["indice"] else ""
     secciones_html = "".join(
         f'<div class="seccion"><h2>{_esc(seccion["titulo"])}</h2>{_seccion_html(seccion["texto"])}</div>'
+        if seccion["titulo"]
+        else f'<div class="seccion">{_legado_html(seccion["texto"])}</div>'
         for seccion in reading["secciones"]
     )
     return (
         '<div class="pagebreak"></div>'
         f'<div class="section eyebrow">{_esc(titulo)}</div>'
-        f'<ol class="indice">{indice_html}</ol>'
+        f'{indice_bloque}'
         f'<div class="reading">{secciones_html}</div>'
         f'<p class="disclaimer">{_esc(disclaimer)}</p>'
     )

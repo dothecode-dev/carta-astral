@@ -204,14 +204,34 @@ def build(chart: Chart, interpretacion: Interpretation) -> dict[str, Any]:
 
     Quien llama decide si `interpretacion` corresponde a un informe
     terminado (`completa=True`); acá no se vuelve a chequear.
+
+    Caso legacy: `0020_backfill_completa` preserva a propósito las filas de
+    antes de la Tarea 2 —`completa=True`, `text` poblado, cero
+    `InterpretationSection`—, y siguen existiendo en producción. Sin este
+    caso, esas lecturas ya pagadas llegaban al PDF con la portada, el índice
+    y el disclaimer de un informe terminado, y el cuerpo vacío: el texto
+    desaparecía sin ningún error (hallazgo de revisión). Acá se detectan por
+    "cero secciones y texto no vacío" y se sirven como una única pieza sin
+    título de catálogo (`titulo=""`, que `chart_pdf_service` interpreta como
+    "renderizar con el markdown liviano de antes", no con el título de una
+    sección del catálogo que este texto nunca tuvo). El índice para este caso
+    queda vacío a propósito: una lectura de una sola pieza no tiene ocho
+    capítulos, y prometerlos sería mentir sobre una estructura que el texto
+    no tiene.
     """
     aplicables = secciones_aplicables(chart)
     lang = interpretacion.lang
     escritas = {s.slug: s.texto for s in interpretacion.secciones.all()}
-    secciones = [
-        {"titulo": seccion.titulo[lang], "texto": escritas[seccion.slug]}
-        for seccion in aplicables
-        if seccion.slug in escritas
-    ]
-    indice = [seccion.titulo[lang] for seccion in aplicables]
+
+    if not escritas and interpretacion.text:
+        secciones = [{"titulo": "", "texto": interpretacion.text}]
+        indice: list[str] = []
+    else:
+        secciones = [
+            {"titulo": seccion.titulo[lang], "texto": escritas[seccion.slug]}
+            for seccion in aplicables
+            if seccion.slug in escritas
+        ]
+        indice = [seccion.titulo[lang] for seccion in aplicables]
+
     return {"reading": {"secciones": secciones, "indice": indice}}
