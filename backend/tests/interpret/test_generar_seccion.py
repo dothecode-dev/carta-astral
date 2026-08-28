@@ -2,7 +2,7 @@ import pytest
 
 from interpret.exceptions import InterpretationError
 from interpret.generator import build_interpretation, build_seccion
-from interpret.prompts import SECCIONES
+from interpret.prompts import MAX_TOKENS, SECCIONES
 
 
 class _Bloque:
@@ -86,6 +86,29 @@ def test_el_tope_de_tokens_acompana_al_largo_pedido():
     c = ClienteFalso()
     build_seccion({"planets": []}, SECCIONES[4], "es", "", c)  # tensiones: 1000 palabras
     assert c.llamadas[0]["max_tokens"] >= 1000 * 2
+
+
+def test_el_factor_de_tokens_por_palabra_alcanza_al_menos_el_ratio_de_build_interpretation():
+    """HALLAZGO 1 de code review: `seccion.palabras * 2` es insuficiente. El
+    español y el portugués corren 1,7 a 2,2 tokens por palabra, así que
+    "tensiones" (1000 palabras, techo de 2000 tokens con el factor viejo)
+    cruza el techo con frecuencia y el fallo es terminal (ver
+    `interpret/prompts.py::SECCION_TOKENS_POR_PALABRA`).
+
+    `build_interpretation`, ya en producción, da 1500 tokens para un
+    objetivo de 400-700 palabras: un factor de 2,1 a 3,75×. El factor de las
+    secciones tiene que igualar o superar ese máximo (3,75×), porque a
+    diferencia de `build_interpretation` el `system` de una sección no fija
+    ningún largo (lo fija sólo el pedido), así que no hay ninguna presión
+    adicional que mantenga a la sección corta."""
+    from interpret.prompts import SECCION_TOKENS_POR_PALABRA
+
+    ratio_build_interpretation = MAX_TOKENS / 400  # el objetivo más corto: la mayor exigencia
+    assert SECCION_TOKENS_POR_PALABRA >= ratio_build_interpretation
+
+    c = ClienteFalso()
+    build_seccion({"planets": []}, SECCIONES[4], "es", "", c)  # tensiones: 1000 palabras
+    assert c.llamadas[0]["max_tokens"] == 1000 * SECCION_TOKENS_POR_PALABRA
 
 
 def test_una_seccion_truncada_por_max_tokens_falla():

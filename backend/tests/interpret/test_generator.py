@@ -12,10 +12,16 @@ class _Block:
         self.text = text
 
 
+class _Usage:
+    def __init__(self, output_tokens):
+        self.output_tokens = output_tokens
+
+
 class _Resp:
-    def __init__(self, text="Sos una persona...", stop_reason="end_turn"):
+    def __init__(self, text="Sos una persona...", stop_reason="end_turn", usage=None):
         self.content = [_Block(text)]
         self.stop_reason = stop_reason
+        self.usage = usage
 
 
 class _StreamCtx:
@@ -90,6 +96,34 @@ def test_truncated_raises():
     client = FakeClient(resp=_Resp(stop_reason="max_tokens"))
     with pytest.raises(InterpretationError):
         build_interpretation(CHART, "es", "v1", client)
+
+
+def test_loguea_stop_reason_y_tokens_de_salida(caplog):
+    """HALLAZGO 1 de code review: sin esto, la próxima decisión sobre el
+    factor de tokens por palabra sale de una estimación y no de datos
+    reales. El log tiene que existir SIEMPRE, incluso (sobre todo) cuando
+    stop_reason es "max_tokens" — es la señal de que el tope se quedó
+    corto, y se emite antes de levantar InterpretationError."""
+    import logging
+
+    client = FakeClient(resp=_Resp(usage=_Usage(output_tokens=1234)))
+    with caplog.at_level(logging.INFO, logger="interpret.generator"):
+        build_interpretation(CHART, "es", "v1", client)
+
+    mensajes = [r.getMessage() for r in caplog.records]
+    assert any("end_turn" in m and "1234" in m for m in mensajes)
+
+
+def test_loguea_stop_reason_aunque_la_respuesta_venga_truncada(caplog):
+    import logging
+
+    client = FakeClient(resp=_Resp(stop_reason="max_tokens", usage=_Usage(output_tokens=1500)))
+    with caplog.at_level(logging.INFO, logger="interpret.generator"):
+        with pytest.raises(InterpretationError):
+            build_interpretation(CHART, "es", "v1", client)
+
+    mensajes = [r.getMessage() for r in caplog.records]
+    assert any("max_tokens" in m and "1500" in m for m in mensajes)
 
 
 def test_anthropic_error_wrapped():

@@ -14,13 +14,14 @@ MAX_TOKENS = 1500
 TRANSLATE_MODEL = "claude-haiku-4-5-20251001"
 # Por sección, no por informe entero: 6.400 palabras no entran en una sola
 # llamada de traducción, así que `traducir_informe` traduce de a una sección
-# (hasta 1000 palabras nominales, la de "tensiones"). Con el mismo criterio
-# de holgura que usa `build_seccion` (`seccion.palabras * 2`) el piso sería
-# 2000 — el valor de acá antes de esta tarea, dimensionado en su momento
-# para la lectura corta de 400 a 700 palabras, no para una sección del
-# informe. Se deja con margen sobre ese piso porque `build_seccion` genera
-# con un tope de tokens, no de palabras: una sección real puede superar su
-# objetivo nominal, y traducirla con el piso justo la cortaría a mitad.
+# (hasta 1000 palabras nominales, la de "tensiones"). NO se revisó como parte
+# del HALLAZGO 1 (que subió `SECCION_TOKENS_POR_PALABRA` de 2 a 4): una
+# sección generada ahora puede ser más larga que antes de esa tarea, así que
+# este valor podría necesitar el mismo repaso — queda pendiente porque el
+# pedido de esta tarea fue específicamente sobre la generación, no sobre la
+# traducción, y no hay todavía dato real de cuánto crecen las secciones con
+# el factor nuevo (la observabilidad que agrega el HALLAZGO 1 es la fuente
+# para esa próxima decisión).
 TRANSLATE_MAX_TOKENS = 2500
 
 _BASE_ES = (
@@ -82,6 +83,32 @@ _BASE_PT_SECCION = (
 )
 
 SYSTEM_PROMPTS_SECCION = {"es": _BASE_ES_SECCION, "en": _BASE_EN_SECCION, "pt": _BASE_PT_SECCION}
+
+# HALLAZGO 1 de code review (informe-natal): `seccion.palabras * 2` (el valor
+# viejo) era insuficiente y el fallo es terminal. El español y el portugués
+# corren 1,7 a 2,2 tokens por palabra, así que "tensiones" (1000 palabras,
+# techo de 2000 tokens con el factor viejo) cruzaba el techo con frecuencia
+# con sólo alcanzar su objetivo NOMINAL, sin margen para que el modelo se
+# extienda un poco más (algo que puede pasar: a diferencia de
+# `build_interpretation`, el `system` de una sección no fija ningún largo,
+# lo fija sólo el pedido). Cuando eso pasa, `_stream_text` levanta
+# `InterpretationError` por `stop_reason == "max_tokens"`, `generar_informe`
+# aborta a mitad con secciones ya persistidas (no se devuelve el crédito,
+# correcto por contrato) y el usuario queda con `completa=False` para
+# siempre: cada reintento pega contra la misma pared en la misma sección.
+#
+# Referencia elegida: `build_interpretation`, ya en producción, da
+# `MAX_TOKENS` (1500) para un objetivo de 400-700 palabras — un factor de
+# 2,1× a 3,75× según el extremo del rango. Ese 3,75× es el peor caso real
+# que ya se sirve en producción sin problema. El factor de las secciones
+# iguala ese máximo:
+#   1500 / 400 = 3,75  →  redondeado a 4 para quedar en un entero prolijo.
+# Con factor 4 y el peor ratio real (2,2 tokens/palabra), una sección puede
+# crecer casi el doble de su objetivo nominal antes de tocar el techo
+# (4 / 2,2 ≈ 1,8×), margen que el factor 2 viejo no daba ni al ratio más
+# favorable (2 / 1,7 ≈ 1,18×). Ver `tests/interpret/test_generar_seccion.py`
+# para el test que fija este número.
+SECCION_TOKENS_POR_PALABRA = 4
 
 
 @dataclass(frozen=True)
