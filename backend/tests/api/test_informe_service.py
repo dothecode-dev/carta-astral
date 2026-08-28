@@ -59,6 +59,7 @@ class ClienteFalso:
     def __init__(self, falla_en=None):
         self.falla_en = falla_en
         self.generadas = 0
+        self.llamadas = []
 
     class _Messages:
         def __init__(self, outer):
@@ -66,6 +67,7 @@ class ClienteFalso:
 
         def stream(self, **kwargs):
             self.outer.generadas += 1
+            self.outer.llamadas.append(kwargs)
             if self.outer.falla_en is not None and self.outer.generadas == self.outer.falla_en:
                 raise RuntimeError("cayó la API")
             return _StreamCtx(_Respuesta())
@@ -162,3 +164,29 @@ def test_nunca_llama_a_devolver_credito_ante_una_falla_parcial(interpretacion, m
     monkeypatch.setattr(ledger, "devolver", _explota)
     with pytest.raises(RuntimeError):
         informe_service.generar_informe(interpretacion, ClienteFalso(falla_en=5), TOKEN)
+
+
+def test_al_reanudar_el_contexto_previo_viaja_desde_la_base_no_desde_memoria(interpretacion):
+    """Regresión del hallazgo de revisión: `resumen_previo` tiene que leer
+    `interpretacion.secciones.all()` de la base en cada llamada, no acumular
+    en memoria. Un proceso nuevo (el que reanuda) no tiene ningún acumulador:
+    sólo tiene el pk. Por eso acá se recarga la interpretación con
+    `Interpretation.objects.get(pk=...)`, simulando exactamente eso."""
+    from api.models import Interpretation
+
+    InterpretationSection.objects.create(
+        interpretation=interpretacion, slug="firma", orden=0,
+        texto="MARCA-FIRMA-7b2c: el Sol domina esta carta.",
+    )
+    InterpretationSection.objects.create(
+        interpretation=interpretacion, slug="mente", orden=1,
+        texto="MARCA-MENTE-91af: Mercurio afila el detalle.",
+    )
+    recargada = Interpretation.objects.get(pk=interpretacion.pk)
+
+    cliente = ClienteFalso()
+    informe_service.generar_informe(recargada, cliente, TOKEN)
+
+    enviado = cliente.llamadas[0]["messages"][0]["content"]
+    assert "MARCA-FIRMA-7b2c" in enviado
+    assert "MARCA-MENTE-91af" in enviado
