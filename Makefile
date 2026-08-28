@@ -140,7 +140,15 @@ test-back-pg: .env.staging ## pytest contra el Postgres de staging (corre los te
 	# del cobro nunca se prueba en local — igual que advierte el CLAUDE.md.
 	# Medido el 28-08-2026: SQLite 1 passed + 6 skipped, Postgres 7 passed.
 	# Necesita el staging arriba (`make staging-up`).
-	@set -a; . ./.env.staging; set +a; \
+	#
+	# Toma SÓLO las cuatro variables de conexión, no el .env.staging entero. La
+	# primera versión hacía `set -a; . ./.env.staging` y exportaba todo el
+	# archivo: `INSTALL_FREE_CREDITS`, `INTERPRETATION_DAILY_CAP`, `SECRET_KEY`
+	# y `ANTHROPIC_API_KEY` pisaban los defaults del código, así que este gate y
+	# `make test-back` corrían con entornos distintos y sus resultados no eran
+	# comparables. El 28-08-2026 eso dio dos tests en rojo acá y en verde allá,
+	# por una diferencia de entorno y no de motor de base.
+	@eval "$$(grep -E '^(POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_DB|DB_PORT)=' .env.staging)"; \
 		cd backend && DEBUG=1 \
 		DATABASE_URL="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@localhost:$$DB_PORT/$$POSTGRES_DB" \
 		.venv/bin/python -m pytest -q
