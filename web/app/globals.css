@@ -1256,77 +1256,33 @@ body {
 }
 
 /* --- Créditos ----------------------------------------------------------- */
-.packsTable,
-.termsTable {
-  width: 100%;
+.priceTag {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
   max-width: var(--measure);
-  border-collapse: collapse;
   margin-top: 2rem;
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 
-.packsTable {
-  font-size: 0.9375rem;
-}
-
-.packsTable thead th {
-  text-align: right;
-  font-weight: 400;
-  font-size: 0.625rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--hairline-strong);
-}
-
-.packsTable thead th:first-child {
-  text-align: left;
-}
-
-.packsTable tbody th {
-  text-align: left;
-  font-weight: 400;
-  padding: 0.7rem 0;
-  border-bottom: 1px solid var(--hairline);
+.priceAmount {
+  font-size: 2rem;
   color: var(--ink);
 }
 
-.packsTable tbody td {
-  text-align: right;
-  padding: 0.7rem 0;
-  border-bottom: 1px solid var(--hairline);
-  color: var(--ink);
-}
-
-.unit {
-  color: var(--ink-soft);
+.priceLabel {
   font-size: 0.8125rem;
-}
-
-.packPopular th,
-.packPopular td {
-  color: var(--accent);
-}
-
-.packPopular .unit {
-  color: var(--accent);
-  opacity: 0.75;
-}
-
-.tag {
-  font-size: 0.5625rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 999px;
-  padding: 0.15rem 0.5rem;
-  margin-left: 0.6rem;
-  vertical-align: 0.1em;
+  color: var(--ink-soft);
 }
 
 .termsTable {
+  width: 100%;
+  max-width: var(--measure);
+  border-collapse: collapse;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.8125rem;
   /* Pegada a la de precios: las dos son la misma respuesta, en dos registros. */
   margin-top: 1.25rem;

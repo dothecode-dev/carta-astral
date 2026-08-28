@@ -136,32 +136,10 @@ export default async function Home({
               <h2 className="display sectionTitle">{dict.credits.title}</h2>
             </div>
 
-            <table className="packsTable">
-              <thead>
-                <tr>
-                  <th>{dict.credits.colCredits}</th>
-                  <th>{dict.credits.colPrice}</th>
-                  <th>{dict.credits.colUnit}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dict.credits.packs.map((pack) => (
-                  <tr
-                    key={pack.credits}
-                    className={pack.popular ? "packPopular" : undefined}
-                  >
-                    <th scope="row">
-                      {pack.credits}
-                      {pack.popular ? (
-                        <span className="tag">{dict.credits.popular}</span>
-                      ) : null}
-                    </th>
-                    <td>{pack.price}</td>
-                    <td className="unit">{pack.unit}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <p className="priceTag">
+              <span className="priceAmount">{dict.credits.price}</span>
+              <span className="priceLabel">{dict.credits.priceNote}</span>
+            </p>
 
             <table className="termsTable">
               <tbody>

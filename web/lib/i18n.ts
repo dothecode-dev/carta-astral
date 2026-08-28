@@ -168,11 +168,9 @@ export type Dict = {
   credits: {
     eyebrow: string;
     title: string;
-    colCredits: string;
-    colPrice: string;
-    colUnit: string;
-    popular: string;
-    packs: { credits: string; price: string; unit: string; popular?: boolean }[];
+    /** El único precio decidido hoy: el informe completo, comprado suelto. */
+    price: string;
+    priceNote: string;
     terms: { label: string; value: string; free?: boolean }[];
     note: string;
   };
@@ -365,24 +363,17 @@ const es: Dict = {
   },
   credits: {
     eyebrow: "Créditos",
-    title: "Tu primera carta es gratis. Después, un crédito por carta.",
-    colCredits: "Créditos",
-    colPrice: "Precio",
-    colUnit: "Por carta",
-    popular: "Más elegido",
-    packs: [
-      { credits: "3", price: "US$ 2,99", unit: "US$ 1,00" },
-      { credits: "10", price: "US$ 6,99", unit: "US$ 0,70", popular: true },
-      { credits: "25", price: "US$ 12,99", unit: "US$ 0,52" },
-    ],
+    title: "Tus primeras tres cartas son gratis. Después, un crédito por carta.",
+    price: "US$ 29",
+    priceNote: "el informe, una vez que se te acaban los créditos gratis",
     terms: [
-      { label: "Primera carta", value: "Gratis", free: true },
+      { label: "Tus primeras 3 cartas", value: "Gratis", free: true },
       { label: "Cada carta nueva", value: "1 crédito" },
       { label: "La misma carta en otro idioma", value: "Sin costo", free: true },
       { label: "Vencimiento de los créditos", value: "No vencen" },
     ],
     note:
-      "Precios en dólares. En tu tienda vas a ver el equivalente en tu moneda, con impuestos incluidos donde correspondan.",
+      "Precios en dólares. Se paga directo en la web, no en la tienda de tu teléfono; el importe final puede incluir impuestos según tu país.",
   },
   faq: {
     eyebrow: "Preguntas",
@@ -601,24 +592,17 @@ const en: Dict = {
   },
   credits: {
     eyebrow: "Credits",
-    title: "Your first chart is free. After that, one credit per chart.",
-    colCredits: "Credits",
-    colPrice: "Price",
-    colUnit: "Per chart",
-    popular: "Most chosen",
-    packs: [
-      { credits: "3", price: "US$ 2.99", unit: "US$ 1.00" },
-      { credits: "10", price: "US$ 6.99", unit: "US$ 0.70", popular: true },
-      { credits: "25", price: "US$ 12.99", unit: "US$ 0.52" },
-    ],
+    title: "Your first three charts are free. After that, one credit per chart.",
+    price: "US$ 29",
+    priceNote: "per report, once your free credits run out",
     terms: [
-      { label: "First chart", value: "Free", free: true },
+      { label: "Your first 3 charts", value: "Free", free: true },
       { label: "Each new chart", value: "1 credit" },
       { label: "The same chart in another language", value: "No charge", free: true },
       { label: "Credit expiry", value: "They don't expire" },
     ],
     note:
-      "Prices in US dollars. Your store shows the equivalent in your currency, with tax included where it applies.",
+      "Prices in US dollars. You pay directly on the web, not through your phone's store; the final amount may include tax depending on your country.",
   },
   faq: {
     eyebrow: "Questions",
@@ -837,24 +821,17 @@ const pt: Dict = {
   },
   credits: {
     eyebrow: "Créditos",
-    title: "Seu primeiro mapa é grátis. Depois, um crédito por mapa.",
-    colCredits: "Créditos",
-    colPrice: "Preço",
-    colUnit: "Por mapa",
-    popular: "Mais escolhido",
-    packs: [
-      { credits: "3", price: "US$ 2,99", unit: "US$ 1,00" },
-      { credits: "10", price: "US$ 6,99", unit: "US$ 0,70", popular: true },
-      { credits: "25", price: "US$ 12,99", unit: "US$ 0,52" },
-    ],
+    title: "Seus primeiros três mapas são grátis. Depois, um crédito por mapa.",
+    price: "US$ 29",
+    priceNote: "o relatório, quando seus créditos grátis acabarem",
     terms: [
-      { label: "Primeiro mapa", value: "Grátis", free: true },
+      { label: "Seus primeiros 3 mapas", value: "Grátis", free: true },
       { label: "Cada mapa novo", value: "1 crédito" },
       { label: "O mesmo mapa em outro idioma", value: "Sem custo", free: true },
       { label: "Validade dos créditos", value: "Não expiram" },
     ],
     note:
-      "Preços em dólares. Na sua loja você vê o equivalente na sua moeda, com impostos incluídos onde se aplicam.",
+      "Preços em dólares. O pagamento é feito direto pela web, não pela loja do seu celular; o valor final pode incluir impostos conforme o seu país.",
   },
   faq: {
     eyebrow: "Perguntas",
