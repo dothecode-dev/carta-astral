@@ -140,6 +140,30 @@ def test_renueva_el_lock_despues_de_cada_seccion_persistida(interpretacion, monk
     assert all(chart_id == interpretacion.chart_id and token == TOKEN for chart_id, token in llamadas)
 
 
+def test_si_pierde_el_lock_justo_tras_la_ultima_seccion_igual_marca_completa(interpretacion, monkeypatch):
+    """HALLAZGO 4 de code review: si `renovar_lock` devuelve False DESPUÉS de
+    persistir la ÚLTIMA sección, ya no queda ningún trabajo pendiente —
+    perder el lock ahí no puede dejar un informe entero (las ocho secciones
+    ya escritas) marcado `completa=False` para siempre (404 en el GET,
+    ausente del PDF). Sólo importa perder el lock cuando todavía hay
+    secciones por pedir: ahí sí hay que abortar para no escribir en paralelo
+    con el proceso que tomó el lock."""
+    total = len(informe_service.secciones_aplicables(interpretacion.chart))
+    llamadas = []
+
+    def _renovar(chart, token):
+        llamadas.append(1)
+        return len(llamadas) < total  # falla justo en la renovación de la última
+
+    monkeypatch.setattr(informe_service, "renovar_lock", _renovar)
+    cliente = ClienteFalso()
+    informe_service.generar_informe(interpretacion, cliente, TOKEN)
+    interpretacion.refresh_from_db()
+    assert interpretacion.secciones.count() == total
+    assert interpretacion.completa is True
+    assert cliente.generadas == total
+
+
 def test_si_pierde_el_lock_aborta_sin_completar_ni_seguir_pidiendo(interpretacion, monkeypatch):
     cliente = ClienteFalso()
 

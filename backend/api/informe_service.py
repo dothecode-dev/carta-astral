@@ -142,6 +142,15 @@ def generar_informe(interpretacion, client, token: str) -> None:
     no toca el ledger. Seguir generando en ese momento significaría dos
     procesos escribiendo las mismas secciones.
 
+    HALLAZGO 4 de code review: ese abort sólo importa si TODAVÍA queda
+    trabajo pendiente. `renovar_lock` se llama después de CADA sección,
+    incluida la última — y si falla justo ahí, ya no hay ninguna sección más
+    que pedir: el informe está entero. Abortar en ese punto (como hacía la
+    versión vieja) dejaba un informe completo marcado `completa=False` para
+    siempre —404 en el GET, ausente del PDF— por perder un lock que ya no
+    hacía falta. Por eso el resultado de `renovar_lock` sólo aborta cuando
+    `secciones_pendientes` diga que falta al menos una más.
+
     Contrato de crédito para quien llama (hoy nadie; la Tarea 10 es quien
     decide si cobra y si devuelve, no esta función):
 
@@ -171,7 +180,8 @@ def generar_informe(interpretacion, client, token: str) -> None:
     aplicables = secciones_aplicables(interpretacion.chart)
     orden_por_slug = {seccion.slug: indice for indice, seccion in enumerate(aplicables)}
 
-    for seccion in secciones_pendientes(interpretacion):
+    pendientes = secciones_pendientes(interpretacion)
+    for indice, seccion in enumerate(pendientes):
         texto = build_seccion(
             interpretacion.chart.data,
             seccion,
@@ -185,7 +195,12 @@ def generar_informe(interpretacion, client, token: str) -> None:
             orden=orden_por_slug[seccion.slug],
             texto=texto,
         )
-        if not renovar_lock(interpretacion.chart, token):
+        lock_renovado = renovar_lock(interpretacion.chart, token)
+        queda_trabajo = indice < len(pendientes) - 1
+        # El lock se renueva siempre (arriba), pero sólo importa su
+        # resultado cuando falta al menos otra sección (HALLAZGO 4): perder
+        # el lock justo tras la última no tiene nada más que proteger.
+        if not lock_renovado and queda_trabajo:
             logger.warning(
                 "se perdió el lock del informe (interpretation=%s) a mitad de "
                 "generación; otro proceso lo tomó, se aborta sin tocar el ledger",
