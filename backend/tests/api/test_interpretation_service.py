@@ -135,7 +135,7 @@ def test_cap_does_not_block_cache_hits(fake_client, settings):
 def test_lock_held_raises_without_llm(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    cache.add(f"interp:lock:{c.id}:es:{PROMPT_VERSION}", "1", timeout=30)
+    cache.add(f"interp:lock:{c.id}:{PROMPT_VERSION}", "1", timeout=30)
     # Distinguible de una falla real: la lectura se está escribiendo, y quien
     # la pidió tiene que esperar en vez de ver un error.
     with pytest.raises(svc.GenerationInProgress):

@@ -24,7 +24,10 @@ from interpret.prompts import PROMPT_VERSION
 
 logger = logging.getLogger(__name__)
 
-LOCK_TTL = 30
+# Ocho secciones a ~30-45 s cada una. El valor viejo (30 s) soltaba el candado
+# mientras el informe se seguía escribiendo, y dos pestañas generaban el mismo
+# informe dos veces cobrando dos créditos.
+LOCK_TTL = 600
 
 DISCLAIMERS = {
     "es": "Esta interpretación fue generada con inteligencia artificial con fines "
@@ -56,6 +59,22 @@ def _seconds_until_midnight() -> int:
         hour=0, minute=0, second=0, microsecond=0
     )
     return int((tomorrow - now).total_seconds())
+
+
+def _lock_key(chart) -> str:
+    return f"interp:lock:{chart.id}:{PROMPT_VERSION}"
+
+
+def renovar_lock(chart) -> bool:
+    """Repone el TTL del lock de esta carta mientras hay progreso real.
+
+    Un informe son ocho llamadas secuenciales al LLM: la Tarea 6 llama a esto
+    después de persistir cada sección para que el lock nunca expire en medio
+    de una generación en curso. Si el lock no existe —otro proceso lo tomó, ya
+    expiró, o nunca se tomó— no lo crea: `touch()` es un no-op en ese caso, así
+    que un lock ajeno o vencido nunca se pisa.
+    """
+    return bool(cache.touch(_lock_key(chart), LOCK_TTL))
 
 
 def _existing(chart, lang):
@@ -96,7 +115,9 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
     if will_charge and ledger.credits_available(account) <= 0:
         raise QuotaExceeded()
 
-    lock_key = f"interp:lock:{chart.id}:{lang}:{PROMPT_VERSION}"
+    # Por carta, no por carta e idioma: si no, pedir en español y cambiar a
+    # inglés a mitad dispara dos generaciones concurrentes de la misma carta.
+    lock_key = _lock_key(chart)
     if not cache.add(lock_key, "1", timeout=LOCK_TTL):
         hit = _existing(chart, lang)
         if hit is not None:
