@@ -8,6 +8,7 @@ se lo inyecta a interpret/ (que no toca settings ni la API key).
 import hashlib
 import json
 import logging
+import uuid
 
 import anthropic
 from django.conf import settings
@@ -65,16 +66,41 @@ def _lock_key(chart) -> str:
     return f"interp:lock:{chart.id}:{PROMPT_VERSION}"
 
 
-def renovar_lock(chart) -> bool:
+def renovar_lock(chart, token: str) -> bool:
     """Repone el TTL del lock de esta carta mientras hay progreso real.
 
     Un informe son ocho llamadas secuenciales al LLM: la Tarea 6 llama a esto
     después de persistir cada sección para que el lock nunca expire en medio
-    de una generación en curso. Si el lock no existe —otro proceso lo tomó, ya
-    expiró, o nunca se tomó— no lo crea: `touch()` es un no-op en ese caso, así
-    que un lock ajeno o vencido nunca se pisa.
+    de una generación en curso. Recibe el token que devolvió `tomar_lock` al
+    tomarlo: sólo renueva si el valor guardado en la clave todavía es ESE
+    token, nunca "el lock que haya".
+
+    `touch()` no chequea expiración por sí solo (sólo `add` lo hace, en
+    `_base_set`): sobre `DatabaseCache` puede resucitar 600 s una fila vencida
+    que el purgado todavía no borró. Por eso el chequeo es con `get()`
+    primero: sobre `DatabaseCache` un `get()` de una clave vencida devuelve
+    `None` y purga la fila al pasar, que es la comprobación de expiración que
+    a `touch()` le falta. Queda una ventana de microsegundos entre el `get` y
+    el `touch` donde la clave podría vencer o cambiar de dueño justo en el
+    medio; el peor caso ahí es extender un lock propio recién vencido, nunca
+    resucitar ni pisar el de otro proceso.
     """
-    return bool(cache.touch(_lock_key(chart), LOCK_TTL))
+    key = _lock_key(chart)
+    if cache.get(key) != token:
+        return False
+    return bool(cache.touch(key, LOCK_TTL))
+
+
+def soltar_lock(chart, token: str) -> None:
+    """Libera el lock sólo si sigue siendo el propio.
+
+    Sin este chequeo, un proceso cuyo lock ya expiró y fue tomado por otro
+    borraría el lock ajeno al terminar (o fallar) tarde. Mismo principio que
+    `renovar_lock`: nunca tocar una clave cuyo token no es el nuestro.
+    """
+    key = _lock_key(chart)
+    if cache.get(key) == token:
+        cache.delete(key)
 
 
 def _existing(chart, lang):
@@ -117,8 +143,11 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
 
     # Por carta, no por carta e idioma: si no, pedir en español y cambiar a
     # inglés a mitad dispara dos generaciones concurrentes de la misma carta.
+    # El valor es un token propio (no "1") para que renovar/soltar puedan
+    # distinguir "mi lock" de "el lock que haya".
     lock_key = _lock_key(chart)
-    if not cache.add(lock_key, "1", timeout=LOCK_TTL):
+    lock_token = uuid.uuid4().hex
+    if not cache.add(lock_key, lock_token, timeout=LOCK_TTL):
         hit = _existing(chart, lang)
         if hit is not None:
             return hit
@@ -167,4 +196,4 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
             cache.incr(cap_key)
         return obj
     finally:
-        cache.delete(lock_key)
+        soltar_lock(chart, lock_token)

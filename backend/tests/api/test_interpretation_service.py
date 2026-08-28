@@ -132,7 +132,8 @@ def test_cap_does_not_block_cache_hits(fake_client, settings):
     assert fake_client.calls == 1
 
 
-def test_lock_held_raises_without_llm(fake_client, settings):
+def test_lock_held_raises_without_llm(fake_client, settings, db_cache):
+    # db_cache: el lock vive en DatabaseCache en producción, no en LocMem.
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
     cache.add(f"interp:lock:{c.id}:{PROMPT_VERSION}", "1", timeout=30)

@@ -118,12 +118,14 @@ def test_llm_error_503(account_client, monkeypatch, settings):
     assert Interpretation.objects.count() == 0
 
 
-def test_generation_in_progress_409(account_client, fake_client):
+def test_generation_in_progress_409(account_client, fake_client, db_cache):
     """Con el lock tomado el cliente tiene que esperar, no ver un error.
 
     Pasó en producción: dos POST a la vez para la misma carta, el segundo caía
     en el mismo 503 que un fallo del modelo y la web mostraba "no pudimos
     generar la lectura" cuando en realidad se estaba escribiendo.
+
+    db_cache: el lock vive en DatabaseCache en producción, no en LocMem.
     """
     c = _chart(account=account_client.account)
     cache.add(f"interp:lock:{c.id}:{svc.PROMPT_VERSION}", "1", timeout=30)

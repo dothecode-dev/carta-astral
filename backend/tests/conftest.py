@@ -65,3 +65,30 @@ def interpretacion(db, chart, account):
     return Interpretation.objects.create(
         chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
+
+
+@pytest.fixture
+def db_cache(settings, db):
+    """Corre un test contra `DatabaseCache`, el backend real de producción.
+
+    `make test-back` y `make test-back-pg` usan LocMem por default (no
+    exportan `USE_DB_CACHE`): ahí `touch()` chequea expiración antes de
+    tocar la clave y cualquier test de locking pasa por una razón que no es
+    la real. `DatabaseCache` no hace ese chequeo en `touch()` — sólo en
+    `add()` — así que es el único backend donde un bug de lock resucitado
+    se puede ver fallar. Usar este fixture en cualquier test que ejercite
+    `interp:lock:*` (tomar, renovar o soltar).
+    """
+    from django.core.cache import cache
+    from django.core.management import call_command
+
+    settings.CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "django_cache",
+        }
+    }
+    call_command("createcachetable")
+    cache.clear()
+    yield cache
+    cache.clear()
