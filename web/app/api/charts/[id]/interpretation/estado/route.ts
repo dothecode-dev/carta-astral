@@ -18,7 +18,7 @@ export async function GET(
   const lang = new URL(request.url).searchParams.get("lang") ?? "es";
 
   try {
-    const data = await callApi(`/api/charts/${id}/interpretation/estado?lang=${lang}`);
+    const data = await callApi(`/api/charts/${id}/interpretation/estado/?lang=${lang}`);
     return NextResponse.json(data);
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 502;

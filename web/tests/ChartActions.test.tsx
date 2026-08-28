@@ -45,6 +45,10 @@ const sinGeneracionEnCurso = estado(false, 0, 8);
 beforeEach(() => {
   vi.useFakeTimers();
   refresh.mockClear();
+  // El reintento de POST al recargar (HALLAZGO 3) se recuerda en
+  // sessionStorage por pestaña: sin limpiarlo, un test contamina al
+  // siguiente porque todos usan el mismo CHART.
+  window.sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -116,6 +120,8 @@ describe("ChartActions", () => {
   });
 
   it("muestra en qué sección va, no una animación ciega", async () => {
+    // HALLAZGO 4: `hechas` son las secciones YA terminadas, no la que está en
+    // curso. Con 3 hechas, la sección en curso es la 4 (min(hechas+1, total)).
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(sinGeneracionEnCurso)
@@ -127,7 +133,26 @@ describe("ChartActions", () => {
     fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
     await correr(POLL_MS);
 
-    expect(screen.getByText(/3 de 8/)).toBeInTheDocument();
+    expect(screen.getByText(/4 de 8/)).toBeInTheDocument();
+  });
+
+  it("HALLAZGO 4: arranca en la sección 1, no en la 0", async () => {
+    // El primer sondeo llega a los 5 segundos, antes de que termine la
+    // sección 1 (`hechas` todavía en 0): mostrar "sección 0 de 8" es mentira,
+    // ya está escribiendo la primera.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(sinGeneracionEnCurso)
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(false, 0, 8));
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions();
+
+    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await correr(POLL_MS);
+
+    expect(screen.getByText(/1 de 8/)).toBeInTheDocument();
+    expect(screen.queryByText(/0 de 8/)).not.toBeInTheDocument();
   });
 
   it("no se rinde a los dos minutos", () => {
@@ -152,6 +177,22 @@ describe("ChartActions", () => {
     await clickAndSettle();
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
+  });
+
+  // HALLAZGO 2: el backend devuelve 409 cuando ya hay una generación en curso
+  // para esta carta en OTRO idioma (`_sibling_en_curso` en
+  // backend/api/interpretation_service.py). No es un fallo duro: es "esperá
+  // unos segundos y reintentá". Mostrarlo como `dict.chart.failed` mentía.
+  it("avisa que hay una generación en curso ante un 409, y deja reintentar", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(409)));
+    renderActions();
+
+    await clickAndSettle();
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.generationInProgress);
+    // No es un callejón sin salida: el botón sigue ahí para reintentar.
+    expect(screen.getByRole("button", { name: dict.chart.interpret })).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("se rinde si el informe no aparece completo dentro del tope, y deja reintentar", async () => {
@@ -235,7 +276,56 @@ describe("ChartActions", () => {
     await correr(); // el efecto de montaje consulta el estado
 
     expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
-    expect(screen.getByText(/3 de 8/)).toBeInTheDocument();
+    expect(screen.getByText(/4 de 8/)).toBeInTheDocument();
+  });
+
+  // HALLAZGO 3: si el proceso que generaba murió (deploy, worker reciclado,
+  // fallo) no hay nada corriendo del lado del servidor tras la recarga —
+  // sondear sin volver a pedirlo deja el progreso congelado hasta el tope.
+  // `iniciar_generacion` no cobra dos veces cuando la fila ya existe
+  // (backend/api/interpretation_service.py), así que reintentar el POST es
+  // seguro.
+  it("al recargar con un informe en curso, vuelve a pedir la generación por si el proceso murió", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(estado(false, 3, 8)) // el efecto de montaje ve progreso a medias
+      .mockResolvedValueOnce(reply(202)) // el reintento del POST
+      .mockResolvedValue(estado(false, 3, 8)); // los sondeos siguientes
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions();
+
+    await correr();
+
+    const [postUrl, postInit] = fetchMock.mock.calls[1];
+    expect(String(postUrl)).toContain(`/api/charts/${CHART}/interpretation`);
+    expect(postInit).toMatchObject({ method: "POST" });
+  });
+
+  it("no repite el reintento si ya lo hizo antes en esta misma pestaña", async () => {
+    // Sin este freno, recargar muchas veces mientras el informe se escribe
+    // dispararía un POST por recarga: inofensivo para el crédito, pero gasta
+    // sin necesidad la cuota diaria de la ruta (`INTERPRETATION_RATE`) y abre
+    // hilos de más en el backend.
+    const primeraTanda = vi
+      .fn()
+      .mockResolvedValueOnce(estado(false, 3, 8))
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(false, 3, 8));
+    vi.stubGlobal("fetch", primeraTanda);
+    const { unmount } = renderActions();
+    await correr();
+    unmount();
+
+    const segundaTanda = vi.fn().mockResolvedValue(estado(false, 3, 8));
+    vi.stubGlobal("fetch", segundaTanda);
+    renderActions();
+    await correr();
+
+    const posts = segundaTanda.mock.calls.filter((call) => {
+      const init = call[1] as RequestInit | undefined;
+      return init?.method === "POST";
+    });
+    expect(posts).toHaveLength(0);
   });
 
   it("si al montar no hay ningún informe en curso, muestra el botón normal", async () => {

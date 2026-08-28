@@ -29,6 +29,33 @@ const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 type Estado = { completa: boolean; hechas: number; total: number };
 
+/**
+ * Si ya se reintentó el POST de recuperación (HALLAZGO 3) para esta carta e
+ * idioma en esta pestaña. `sessionStorage` —no una variable en memoria— para
+ * que sobreviva a la recarga completa que da lugar al reintento: es
+ * exactamente el caso que hay que frenar en la SEGUNDA recarga en adelante.
+ *
+ * Envuelto en try/catch porque un navegador en modo privado puede bloquear
+ * `sessionStorage`: en ese caso, el peor resultado es reintentar el POST en
+ * cada recarga, que sigue siendo seguro (no cobra dos veces), sólo menos
+ * prolijo con la cuota diaria de la ruta.
+ */
+function yaReintentoEstaSesion(chartId: string, locale: string): boolean {
+  try {
+    return window.sessionStorage.getItem(`astra:retomo:${chartId}:${locale}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function marcarReintentado(chartId: string, locale: string): void {
+  try {
+    window.sessionStorage.setItem(`astra:retomo:${chartId}:${locale}`, "1");
+  } catch {
+    // ver comentario de yaReintentoEstaSesion
+  }
+}
+
 export function ChartActions({
   locale,
   chartId,
@@ -138,7 +165,38 @@ export function ChartActions({
 
         setProgreso({ hechas: estado.hechas, total: estado.total });
         setBusy(true);
-        await seguirGenerando(false);
+
+        // HALLAZGO 3: si el proceso que generaba murió (deploy, worker
+        // reciclado, fallo) no queda nada corriendo del lado del servidor, y
+        // sondear sin volver a pedirlo deja el progreso congelado hasta el
+        // tope de `POLL_TRIES`. `iniciar_generacion` no cobra dos veces
+        // cuando la fila ya existe (backend/api/interpretation_service.py):
+        // este POST es seguro. Una sola vez por pestaña alcanza — si el
+        // proceso sigue vivo, el backend lo ignora porque el lock de la carta
+        // ya está tomado; repetirlo en cada recarga sólo gastaría la cuota
+        // diaria de la ruta sin necesidad.
+        //
+        // No puede chocar con el 409 del HALLAZGO 2 (esta carta en OTRO
+        // idioma en curso): ese código sólo lo lanza `iniciar_generacion` al
+        // CREAR una fila nueva, y acá la fila de este mismo idioma ya existe
+        // (por eso `hechas > 0`), así que el backend la devuelve tal cual sin
+        // volver a cobrar ni a chequear siblings.
+        if (!cancelado && !yaReintentoEstaSesion(chartId, locale)) {
+          marcarReintentado(chartId, locale);
+          try {
+            await fetch(`/api/charts/${chartId}/interpretation`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ lang: locale }),
+            });
+          } catch (err) {
+            // Un corte de red acá no es el fin: si el proceso seguía vivo, el
+            // sondeo de abajo lo encuentra igual.
+            console.error(`reintento del informe ${chartId} falló`, err);
+          }
+        }
+
+        if (!cancelado) await seguirGenerando(false);
       } catch (err) {
         // Si esta consulta falla, se muestra el botón: reintentar
         // clickeando es inofensivo.
@@ -175,7 +233,25 @@ export function ChartActions({
 
     if (!res.ok) {
       setBusy(false);
-      setError(res.status === 402 ? dict.chart.noCredits : dict.chart.failed);
+      // HALLAZGO 2: el backend responde 409 cuando ya hay una generación en
+      // curso para esta carta en OTRO idioma (`_sibling_en_curso` en
+      // backend/api/interpretation_service.py: pedir "es" y, a mitad de su
+      // generación, pedir "en" cae acá). No es un fallo duro — es "esperá
+      // unos segundos y reintentá" — así que no comparte mensaje con
+      // `dict.chart.failed`.
+      //
+      // Elegido: mensaje específico + dejar el botón (mismo patrón que 402 y
+      // 503, arriba). La alternativa —enganchar el sondeo de `estado` para
+      // este idioma— no sirve acá: el backend borra la fila de ESTE idioma
+      // antes de devolver el 409 (`interpretacion.delete()` en
+      // `iniciar_generacion`), así que `estado` respondería `hechas: 0` como
+      // si nunca se hubiera pedido nada, indistinguible del caso "no hay
+      // nada en curso". Sondear ahí sería fingir un progreso que no existe.
+      if (res.status === 409) {
+        setError(dict.chart.generationInProgress);
+      } else {
+        setError(res.status === 402 ? dict.chart.noCredits : dict.chart.failed);
+      }
       return;
     }
 
@@ -193,8 +269,12 @@ export function ChartActions({
           <h2 className="display waitingTitle">{dict.chart.waitTitle}</h2>
           <p className="waitingBody">
             {progreso
-              ? dict.chart.waitProgress
-                  .replace("{hechas}", String(progreso.hechas))
+              ? // HALLAZGO 4: `hechas` son las secciones YA terminadas, no la
+                // que está en curso — con 0 hechas ya se está escribiendo la
+                // sección 1, no la "0". `min` cubre el instante en que
+                // `hechas` llega a `total` pero `completa` todavía no se leyó.
+                dict.chart.waitProgress
+                  .replace("{hechas}", String(Math.min(progreso.hechas + 1, progreso.total)))
                   .replace("{total}", String(progreso.total))
               : dict.chart.waitBody}
           </p>

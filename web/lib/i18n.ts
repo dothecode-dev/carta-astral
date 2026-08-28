@@ -227,6 +227,8 @@ export type Dict = {
     readAgain: string;
     noCredits: string;
     failed: string;
+    /** 409: ya hay una generación en curso para esta carta en otro idioma. */
+    generationInProgress: string;
     columns: { body: string; position: string; house: string };
     houses: string;
     aspects: string;
@@ -424,6 +426,8 @@ const es: Dict = {
     readAgain: "Ver la lectura",
     noCredits: "Te quedaste sin créditos.",
     failed: "No pudimos generar la lectura. Probá de nuevo en un rato.",
+    generationInProgress:
+      "Ya hay una generación en curso para esta carta en otro idioma. Esperá unos segundos y volvé a intentar.",
     columns: { body: "Cuerpo", position: "Posición", house: "Casa" },
     houses: "Casas",
     aspects: "Aspectos",
@@ -653,6 +657,8 @@ const en: Dict = {
     readAgain: "See the reading",
     noCredits: "You've run out of credits.",
     failed: "We couldn't generate the reading. Try again in a while.",
+    generationInProgress:
+      "There's already a generation in progress for this chart in another language. Wait a few seconds and try again.",
     columns: { body: "Body", position: "Position", house: "House" },
     houses: "Houses",
     aspects: "Aspects",
@@ -882,6 +888,8 @@ const pt: Dict = {
     readAgain: "Ver a leitura",
     noCredits: "Você ficou sem créditos.",
     failed: "Não conseguimos gerar a leitura. Tente de novo daqui a pouco.",
+    generationInProgress:
+      "Já há uma geração em andamento para este mapa em outro idioma. Espere alguns segundos e tente de novo.",
     columns: { body: "Corpo", position: "Posição", house: "Casa" },
     houses: "Casas",
     aspects: "Aspectos",

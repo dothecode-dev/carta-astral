@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DELETE as accountDelete } from "@/app/api/account/route";
 import { DELETE as chartsDelete, POST as chartsPost } from "@/app/api/charts/route";
 import { GET as readingGet, POST as readingPost } from "@/app/api/charts/[id]/interpretation/route";
+import { GET as estadoGet } from "@/app/api/charts/[id]/interpretation/estado/route";
 import { POST as geocodePost } from "@/app/api/geocode/route";
 import { DELETE as sessionDelete, POST as sessionPost } from "@/app/api/session/route";
 import { SESSION_COOKIE } from "@/lib/session";
@@ -203,6 +204,22 @@ describe("/api/charts/[id]/interpretation", () => {
     const res = await readingGet(new Request("http://x?lang=es"), params);
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe("/api/charts/[id]/interpretation/estado", () => {
+  it("pega con la barra final que pide la ruta del backend", async () => {
+    // El backend sumó la barra final a esta ruta (era la única sin ella): un
+    // pedido sin barra sigue funcionando gracias al redirect de APPEND_SLASH,
+    // pero no hay que depender de eso a propósito.
+    const fetchMock = vi.fn().mockResolvedValue(json({ completa: false, hechas: 1, total: 8 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await estadoGet(new Request("http://x?lang=en"), params);
+
+    expect(res.status).toBe(200);
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/interpretation/estado/?lang=en");
   });
 });
 
