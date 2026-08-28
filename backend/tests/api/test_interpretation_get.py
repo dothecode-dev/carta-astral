@@ -37,7 +37,7 @@ def cliente(cuenta):
 def test_devuelve_la_interpretacion_existente(cliente, carta):
     Interpretation.objects.create(
         chart=carta, lang="es", text="Un texto ya escrito.", prompt_version=PROMPT_VERSION,
-        content_key="x"
+        content_key="x", completa=True,
     )
 
     resp = cliente.get(f"/api/charts/{carta.uuid}/interpretation/?lang=es")
@@ -46,6 +46,26 @@ def test_devuelve_la_interpretacion_existente(cliente, carta):
     assert resp.json()["text"] == "Un texto ya escrito."
     assert resp.json()["lang"] == "es"
     assert resp.json()["disclaimer"]
+
+
+@pytest.mark.django_db
+def test_no_devuelve_200_vacio_mientras_se_genera(cliente, carta):
+    """Task 10: `iniciar_generacion` crea la fila de entrada (completa=False,
+    text="") apenas arranca la generación en el hilo de fondo. Antes de este
+    fix, este GET devolvía 200 con `text=""` en ese estado: la web lo tomaba
+    como éxito, mostraba una pantalla en blanco y no tenía botón de
+    reintento. Un error acá lo puede manejar el cliente; un éxito vacío lo
+    deja en un estado terminal sin salida."""
+    Interpretation.objects.create(
+        chart=carta, lang="es", text="", prompt_version=PROMPT_VERSION,
+        content_key="x", completa=False,
+    )
+
+    resp = cliente.get(f"/api/charts/{carta.uuid}/interpretation/?lang=es")
+
+    assert resp.status_code == 404
+    # No la borra ni la toca: el hilo de fondo sigue escribiéndola.
+    assert Interpretation.objects.filter(chart=carta, lang="es").exists()
 
 
 @pytest.mark.django_db

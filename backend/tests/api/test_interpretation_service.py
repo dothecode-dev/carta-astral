@@ -290,3 +290,16 @@ def test_interpretation_langs_helper(fake_client, fake_translator, settings):
     svc.get_or_create_interpretation(c, "es", acc)
     svc.get_or_create_interpretation(c, "en", acc)
     assert sorted(svc.interpretation_langs(c)) == ["en", "es"]
+
+
+def test_interpretation_langs_excluye_incompletas(settings):
+    """Task 10: `iniciar_generacion` crea la fila de entrada (completa=False,
+    text="") apenas arranca el hilo de fondo, antes de escribir ninguna
+    sección. Esa fila no es un idioma disponible: es un trabajo en curso, y
+    listarla como si ya hubiera una lectura es lo que dejaba a la web
+    pidiendo un texto que todavía no existe."""
+    settings.INTERPRETATION_DAILY_CAP = 100
+    c = _chart()
+    acc = _account()
+    svc.iniciar_generacion(c, "es", acc)
+    assert svc.interpretation_langs(c) == []

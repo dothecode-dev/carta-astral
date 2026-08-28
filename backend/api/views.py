@@ -51,9 +51,17 @@ class AccountView(APIView):
 
 def _chart_repr(chart: Chart) -> dict:
     birth = chart.birth_data
-    # Con prefetch_related("interpretations") esto no agrega queries por carta.
+    # Con prefetch_related("interpretations") esto no agrega queries por
+    # carta (por eso no delega en `interpretation_service.interpretation_langs`,
+    # que haría una consulta propia por carta). `completa` es la misma
+    # condición que esa función aplica: una fila `completa=False` es la
+    # generación en curso que crea `iniciar_generacion` (Tarea 10), no una
+    # lectura disponible.
     langs = sorted(
-        {i.lang for i in chart.interpretations.all() if i.prompt_version == PROMPT_VERSION}
+        {
+            i.lang for i in chart.interpretations.all()
+            if i.prompt_version == PROMPT_VERSION and i.completa
+        }
     )
     return {
         "id": str(chart.uuid),
@@ -147,9 +155,17 @@ class InterpretationView(APIView):
         interp = chart.interpretations.filter(
             lang=lang, prompt_version=PROMPT_VERSION
         ).first()
-        if interp is None:
-            # Incluye el caso de una lectura escrita con un prompt viejo: ya no
-            # es la que el sistema generaría hoy.
+        if interp is None or not interp.completa:
+            # Incluye el caso de una lectura escrita con un prompt viejo (ya no
+            # es la que el sistema generaría hoy) y el de la Tarea 10: apenas
+            # arranca el hilo de fondo, `iniciar_generacion` ya creó la fila
+            # (completa=False, text=""). Antes de este chequeo eso devolvía
+            # 200 con text="": un "éxito" que la web no podía distinguir de
+            # una lectura vacía de verdad, y la dejaba en una pantalla en
+            # blanco sin botón de reintento. 404 —el mismo código que "no
+            # existe todavía"— es un estado que el cliente puede manejar
+            # (reintentar, o consultar `/estado` para seguir el progreso);
+            # un 200 vacío no.
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(
             {

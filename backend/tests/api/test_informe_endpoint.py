@@ -75,6 +75,43 @@ def test_el_estado_sin_interpretacion_todavia_dice_cero(client_autenticado, char
     assert r.json() == {"completa": False, "hechas": 0, "total": 8}
 
 
+def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monkeypatch):
+    """Recupera la cobertura que perdió `test_generation_in_progress_409`
+    (retirado en la Task 10, cuando el POST dejó de responder 409
+    sincrónico). Con el lock de la carta tomado por otra generación en
+    curso, `completar_generacion` no tiene que generar en paralelo —ninguna
+    sección tiene protección contra esa carrera, a diferencia de
+    `traducir_informe`— ni cobrar de nuevo, eso ya lo resolvió
+    `iniciar_generacion`. El test nuevo del POST
+    (`test_lock_tomado_no_bloquea_el_202`, en `test_interpretation_endpoint.py`)
+    sólo mira el 202, que sale igual con o sin lock porque `iniciar_generacion`
+    ni lo consulta: el comportamiento real —justo el bug que motivó el 409
+    original— se había quedado sin ningún test.
+
+    db_cache: el lock vive en `DatabaseCache` en producción, no en LocMem.
+    """
+    from api import interpretation_service as svc, informe_service
+    from api.models import Interpretation, InterpretationSection
+    from interpret.prompts import PROMPT_VERSION
+
+    llamadas = []
+    monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas.append(1))
+
+    interpretacion = svc.iniciar_generacion(chart, "es", account)
+    account.refresh_from_db()
+    antes = account.free_balance + account.paid_balance
+
+    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "otro-token", timeout=30)
+
+    svc.completar_generacion(interpretacion, chart, account)
+
+    assert llamadas == []  # no generó en paralelo
+    assert InterpretationSection.objects.filter(interpretation=interpretacion).count() == 0
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes  # no cobró ni devolvió de nuevo
+    assert Interpretation.objects.filter(pk=interpretacion.pk).exists()  # no la tocó
+
+
 def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
     from api import interpretation_service
 

@@ -115,9 +115,16 @@ def _existing(chart, lang):
 
 
 def interpretation_langs(chart) -> list[str]:
-    """Idiomas en los que esta carta ya tiene lectura (prompt actual)."""
+    """Idiomas en los que esta carta ya tiene lectura completa (prompt
+    actual). `completa=True` es la condición: desde la Tarea 10,
+    `iniciar_generacion` crea la fila de entrada (vacía) apenas arranca el
+    hilo de fondo, antes de escribir ninguna sección. Una fila así no es un
+    idioma disponible, es un trabajo en curso — listarla igual es lo que
+    hacía que la web pidiera un texto que todavía no existe."""
     return list(
-        Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION)
+        Interpretation.objects.filter(
+            chart=chart, prompt_version=PROMPT_VERSION, completa=True,
+        )
         .values_list("lang", flat=True)
     )
 
@@ -185,9 +192,15 @@ def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
         def _factory():
             try:
                 with transaction.atomic():
+                    # completa=True: a diferencia del flujo de la Tarea 10
+                    # (secciones persistidas de a una, `completa` recién en
+                    # `generar_informe`), acá `text` ya está armado entero
+                    # antes de crear la fila — no hay estado intermedio que
+                    # marcar como incompleto.
                     return Interpretation.objects.create(
                         chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
                         text=text, account=account, content_key=key,
+                        completa=True,
                     )
             except IntegrityError:
                 return _existing(chart, lang)

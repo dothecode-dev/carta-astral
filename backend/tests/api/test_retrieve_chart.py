@@ -67,6 +67,29 @@ def test_chart_repr_lists_interpretation_langs(account_client):
     chart = Chart.objects.get(uuid=resp.json()["id"])
     Interpretation.objects.create(
         chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="x", content_key="k",
+        completa=True,
     )
     detail = account_client.get(f"/api/charts/{chart.uuid}/")
     assert detail.json()["interpretation_langs"] == ["es"]
+
+
+def test_chart_repr_no_lista_interpretacion_en_curso(account_client):
+    """Task 10: `iniciar_generacion` crea la fila de la interpretación
+    (completa=False) apenas arranca el hilo de fondo, antes de que exista
+    ninguna sección escrita. Listarla en `interpretation_langs` le dice a la
+    web que ya hay una lectura para mostrar cuando en realidad se está
+    generando — el bug que dejaba la pantalla de la carta en blanco."""
+    from api.models import Chart, Interpretation
+    from interpret.prompts import PROMPT_VERSION
+
+    resp = account_client.post("/api/charts/", {
+        "name": "L", "date": "1990-01-01", "time": "12:00",
+        "time_known": True, "lat": -34.5, "lng": -58.4,
+    }, format="json")
+    chart = Chart.objects.get(uuid=resp.json()["id"])
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="",
+        account=account_client.account, completa=False,
+    )
+    detail = account_client.get(f"/api/charts/{chart.uuid}/")
+    assert detail.json()["interpretation_langs"] == []
