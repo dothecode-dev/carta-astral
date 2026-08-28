@@ -148,7 +148,23 @@ test-back-pg: .env.staging ## pytest contra el Postgres de staging (corre los te
 	# `make test-back` corrían con entornos distintos y sus resultados no eran
 	# comparables. El 28-08-2026 eso dio dos tests en rojo acá y en verde allá,
 	# por una diferencia de entorno y no de motor de base.
-	@eval "$$(grep -E '^(POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_DB|DB_PORT)=' .env.staging)"; \
+	#
+	# HALLAZGO 6 de code review: la versión con `eval "$$(grep ...)"` evaluaba
+	# las líneas crudas de `.env.staging` como shell — una contraseña con
+	# espacio, `$`, backtick o comilla rompía la asignación o EJECUTABA lo que
+	# tuviera adentro. `read` no tiene ese problema: asigna el valor tal cual,
+	# sin volver a interpretarlo como código (probado a mano con una
+	# contraseña con `$b\`whoami\`` — queda literal, no ejecuta nada). No usa
+	# `grep | while read` (un pipe mete el `while` en una subshell y las
+	# `export` no sobreviven fuera de ella) ni `<(...)` de bash (no está
+	# disponible acá: `/bin/sh` corre en modo POSIX y lo rechaza) — lee
+	# `.env.staging` directo con redirección de archivo, que no abre subshell,
+	# y filtra las cuatro variables que importan con `case`.
+	@while IFS='=' read -r key value; do \
+		case "$$key" in \
+			POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_DB|DB_PORT) export "$$key=$$value" ;; \
+		esac; \
+	done < .env.staging; \
 		cd backend && DEBUG=1 \
 		DATABASE_URL="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@localhost:$$DB_PORT/$$POSTGRES_DB" \
 		.venv/bin/python -m pytest -q
