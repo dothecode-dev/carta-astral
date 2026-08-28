@@ -67,8 +67,35 @@ class Interpretation(models.Model):
     content_key = models.CharField(max_length=64, blank=True, default="", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Un informe se arma de a secciones: hasta que están las ocho, no se
+    # entrega ni se considera pago.
+    completa = models.BooleanField(default=False)
+
     class Meta:
         unique_together = ("chart", "lang", "prompt_version")
+
+
+class InterpretationSection(models.Model):
+    """Una sección del informe, persistida apenas se termina de generar.
+
+    Es lo que hace la generación reanudable sin cola de trabajos: si el proceso
+    muere a mitad, las secciones ya escritas siguen ahí y el reintento sigue
+    desde la que falta, sin volver a pagarle al modelo ni al usuario."""
+
+    interpretation = models.ForeignKey(
+        Interpretation, on_delete=models.CASCADE, related_name="secciones",
+    )
+    slug = models.CharField(max_length=20)
+    orden = models.PositiveSmallIntegerField()
+    texto = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["orden"]
+        unique_together = ("interpretation", "slug")
+
+    def __str__(self):
+        return f"{self.slug} (interp={self.interpretation_id})"
 
 
 class CreditTransaction(models.Model):

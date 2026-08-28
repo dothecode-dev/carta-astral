@@ -43,3 +43,25 @@ def account_client(make_account):
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
     client.account = acc
     return client
+
+
+@pytest.fixture
+def account(make_account):
+    return make_account()
+
+
+@pytest.fixture
+def chart(db, account):
+    from api.models import BirthData, Chart
+    bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
+    return Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
+
+
+@pytest.fixture
+def interpretacion(db, chart, account):
+    from api.models import Interpretation
+    from interpret.prompts import PROMPT_VERSION
+
+    return Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+    )
