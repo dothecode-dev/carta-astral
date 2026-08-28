@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from api import ledger
 from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
-from api.models import Interpretation
+from api.models import CreditTransaction, Interpretation
 from interpret.exceptions import InterpretationError
 from interpret.generator import build_interpretation, translate_interpretation
 from interpret.prompts import PROMPT_VERSION
@@ -112,6 +112,25 @@ def _existing(chart, lang):
     return Interpretation.objects.filter(
         chart=chart, lang=lang, prompt_version=PROMPT_VERSION
     ).first()
+
+
+def _sibling_completo(chart, lang: str) -> Interpretation | None:
+    """Informe COMPLETO de esta misma carta en otro idioma, si existe.
+
+    Es el mismo criterio de `get_or_create_interpretation` (RF8: un crédito
+    por carta, no por idioma) adaptado al flujo de la Tarea 10: acá `completa`
+    hace falta porque `iniciar_generacion` deja una fila vacía
+    (`completa=False`) apenas arranca, y esa fila en curso no sirve como
+    fuente de traducción ni cuenta como "ya pagado" — todavía no hay texto
+    que traducir. `iniciar_generacion` la usa para decidir si cobra;
+    `completar_generacion` la vuelve a evaluar para decidir si traduce en vez
+    de generar. Recalcularla en vez de pasarla entre ambas evita acoplar sus
+    firmas al resultado de la otra, a costa de una consulta extra barata."""
+    return (
+        Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION, completa=True)
+        .exclude(lang=lang)
+        .first()
+    )
 
 
 def interpretation_langs(chart) -> list[str]:
@@ -242,12 +261,23 @@ def iniciar_generacion(chart, lang: str, account) -> Interpretation:
     Lanza `QuotaExceeded` o `CapReached` si corresponde, y en ese caso borra
     la `Interpretation` vacía que `get_or_create` acababa de crear: si
     quedara, una llamada posterior (con crédito ya disponible) la
-    encontraría con `created=False` y jamás cobraría nada."""
+    encontraría con `created=False` y jamás cobraría nada.
+
+    RF8 / BUG de la revisión final: esta función no heredaba el chequeo de
+    `sibling` que sí tiene `get_or_create_interpretation` (el flujo viejo), y
+    cobraba un crédito nuevo por cada `(chart, lang)` aunque la carta ya
+    tuviera una lectura completa en otro idioma — la web promete lo
+    contrario. Con `_sibling_completo` encontrado, el segundo idioma no cobra
+    ni cuenta contra el cap: `completar_generacion` va a traducir ese sibling
+    en vez de generar desde cero."""
     interpretacion, creada = Interpretation.objects.get_or_create(
         chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
         defaults={"text": "", "account": account},
     )
     if not creada:
+        return interpretacion
+
+    if _sibling_completo(chart, lang) is not None:
         return interpretacion
 
     will_be_free = account.free_balance > 0
@@ -290,7 +320,16 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
 
     Nunca deja una excepción sin loguear: si el hilo de fondo muere en
     silencio, el informe queda colgado con el crédito ya cobrado y nadie se
-    entera hasta que el usuario se queja."""
+    entera hasta que el usuario se queja.
+
+    Si ya existe un informe completo de esta carta en otro idioma
+    (`_sibling_completo`), traduce ese informe (`informe_service.
+    traducir_informe`, Tarea 9) en vez de generar desde cero: es gratis (RF8,
+    ya lo decidió `iniciar_generacion` no cobrando) y evita pagarle al modelo
+    ocho secciones que ya existen en otro idioma. El lock es el mismo en
+    ambos caminos — se toma acá antes de saber cuál toca — así que la
+    traducción queda serializada contra otra generación de la misma carta
+    igual que la generación."""
     if interpretacion.completa:
         return
 
@@ -305,18 +344,36 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
 
     from api import informe_service  # import diferido: ver nota al tope del módulo
 
+    sibling = _sibling_completo(chart, interpretacion.lang)
+
     try:
-        informe_service.generar_informe(interpretacion, _build_client(), token)
+        if sibling is not None:
+            informe_service.traducir_informe(sibling, interpretacion.lang, _build_client())
+        else:
+            informe_service.generar_informe(interpretacion, _build_client(), token)
     except Exception:
         logger.exception("la generación del informe %s falló", interpretacion.pk)
     finally:
-        if not interpretacion.secciones.exists():
+        # Sólo se cobró si NO había sibling (si lo había, `iniciar_generacion`
+        # no tocó el ledger): devolver acá en el camino de traducción
+        # regalaría un crédito que nunca se cobró.
+        if sibling is None and not interpretacion.secciones.exists():
             pk = interpretacion.pk
+            # El lote se lee ANTES de borrar: `CreditTransaction.interpretation`
+            # es SET_NULL, no CASCADE, pero de todas formas hace falta el dato
+            # antes de que la fila deje de existir. Se devuelve al MISMO lote
+            # del que se cobró (BUG de la revisión final: antes `ledger.devolver`
+            # fijaba "paid" siempre).
+            consumo = CreditTransaction.objects.filter(
+                interpretation=interpretacion, kind="consumption",
+            ).first()
+            lot = consumo.lot if consumo is not None else "paid"
             interpretacion.delete()
             ledger.devolver(
                 account, 1,
                 external_id=f"informe:{pk}:devolucion",
                 note=f"informe {pk} sin secciones generadas",
+                lot=lot,
             )
         soltar_lock(chart, token)
 

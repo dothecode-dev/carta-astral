@@ -125,6 +125,48 @@ def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
     assert account.free_balance + account.paid_balance == antes
 
 
+def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, account, monkeypatch):
+    """BUG 2: `ledger.devolver` fijaba `lot="paid"` siempre, así que un
+    informe cobrado de `free_balance` devolvía el crédito a `paid_balance`.
+    El test anterior (`test_si_la_generacion_muere_el_credito_vuelve`) sólo
+    compara el total y no lo distingue; éste mira cada lote por separado."""
+    from api import interpretation_service
+
+    def explota(*a, **kw):
+        raise RuntimeError("cayó la API")
+
+    monkeypatch.setattr("api.informe_service.generar_informe", explota)
+    account.free_balance = 3
+    account.paid_balance = 0
+    account.save()
+
+    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+
+    account.refresh_from_db()
+    assert account.free_balance == 3
+    assert account.paid_balance == 0
+
+
+def test_si_la_generacion_paga_muere_el_credito_vuelve_al_lote_paid(chart, account, monkeypatch):
+    """Contrapunto del anterior: cobrado de `paid_balance`, tiene que volver
+    ahí y no a `free_balance`."""
+    from api import interpretation_service
+
+    def explota(*a, **kw):
+        raise RuntimeError("cayó la API")
+
+    monkeypatch.setattr("api.informe_service.generar_informe", explota)
+    account.free_balance = 0
+    account.paid_balance = 3
+    account.save()
+
+    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+
+    account.refresh_from_db()
+    assert account.free_balance == 0
+    assert account.paid_balance == 3
+
+
 def test_si_la_generacion_muere_no_queda_una_interpretacion_vacia(chart, account, monkeypatch):
     from api.models import Interpretation
     from api import interpretation_service
@@ -231,3 +273,53 @@ def test_el_cap_no_se_toca_con_credito_pago(account, settings):
     assert interp is not None
     cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
     assert cache.get(cap_key) is None
+
+
+# --- BUG 1: el segundo idioma es una traducción gratis (RF8), no un cobro nuevo ---
+
+
+def test_iniciar_generacion_no_cobra_si_ya_hay_un_idioma_completo(chart, account, interpretacion_completa):
+    """`iniciar_generacion` no había heredado el chequeo de `sibling` que sí
+    tiene el flujo viejo `get_or_create_interpretation`: cobraba de nuevo por
+    cada `(chart, lang)` aunque la carta ya tuviera una lectura completa en
+    otro idioma. `interpretacion_completa` ya deja una lectura "es" completa
+    sobre `chart`/`account`."""
+    from api import interpretation_service as svc
+
+    antes = account.free_balance + account.paid_balance
+    svc.iniciar_generacion(chart, "en", account)
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes
+
+
+def test_iniciar_generacion_cobra_si_no_hay_ningun_idioma_completo(chart, account):
+    """Contrapunto: sin ninguna lectura completa todavía, el primer idioma
+    sigue cobrando y generando normal."""
+    from api import interpretation_service as svc
+
+    antes = account.free_balance + account.paid_balance
+    svc.iniciar_generacion(chart, "es", account)
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes - 1
+
+
+def test_completar_generacion_traduce_el_segundo_idioma_en_vez_de_regenerar(
+    chart, account, interpretacion_completa, settings, monkeypatch
+):
+    """Con un idioma completo ya existente, `completar_generacion` tiene que
+    tomar el camino de `informe_service.traducir_informe` (probado en la
+    Tarea 9) y no el de `generar_informe`, que le pagaría al modelo ocho
+    secciones de nuevo por algo que ya está escrito."""
+    from api import interpretation_service as svc, informe_service
+
+    # `_build_client()` se evalúa antes de entrar a las funciones mockeadas.
+    settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
+    llamadas_generar = []
+    llamadas_traducir = []
+    monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas_generar.append(1))
+    monkeypatch.setattr(informe_service, "traducir_informe", lambda *a, **kw: llamadas_traducir.append(1))
+
+    svc.generar_en_segundo_plano(chart, "en", account)
+
+    assert llamadas_traducir == [1]
+    assert llamadas_generar == []

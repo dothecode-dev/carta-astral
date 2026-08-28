@@ -82,23 +82,35 @@ def refund_credits(account, n: int, external_id: str, note: str = "") -> bool:
     return True
 
 
-def devolver(account, n: int = 1, note: str = "", external_id: str = "") -> bool:
+def devolver(account, n: int = 1, note: str = "", external_id: str = "", lot: str = "paid") -> bool:
     """Repone créditos que se cobraron por un informe que nunca llegó a existir.
 
     NO es `refund_credits`: aquello es un reembolso de dinero, incrementa
     `refund_count` y puede marcar la cuenta. Acá el usuario no hizo nada — falló
     la generación de nuestro lado — y marcarlo sería castigarlo por un bug.
 
+    `lot` tiene que ser el mismo lote del que se cobró (BUG de la revisión
+    final: antes esto fijaba "paid" siempre, así que un informe cobrado de
+    `free_balance` devolvía el crédito a `paid_balance` — el total cuadraba
+    pero el lote no. Dos consecuencias reales: el crédito devuelto dejaba de
+    estar sujeto al cap diario, que sólo mira `free_balance`; y
+    `paid_balance` es contra lo que se concilia Polar, así que recibía
+    ajustes que nunca fueron una compra). El default "paid" es sólo
+    compatibilidad con el llamador que no sabe de qué lote se cobró — quien sí
+    lo sabe (`api.interpretation_service.completar_generacion`, que lo lee de
+    la `CreditTransaction` de consumo) tiene que pasarlo explícito.
+
     Idempotente por external_id igual que `refund_credits`/`credit_purchase`:
     con external_id vacío no hay protección (la UniqueConstraint es parcial y
     no aplica a filas sin clave). Devuelve True si acreditó, False si ya
     estaba procesado."""
+    campo = "free_balance" if lot == "free" else "paid_balance"
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
         try:
             with transaction.atomic():
                 CreditTransaction.objects.create(
-                    account=acc, kind="adjustment", lot="paid",
+                    account=acc, kind="adjustment", lot=lot,
                     amount=n, external_id=external_id, note=note,
                 )
         except IntegrityError:
@@ -107,9 +119,9 @@ def devolver(account, n: int = 1, note: str = "", external_id: str = "") -> bool
             if CreditTransaction.objects.filter(external_id=external_id).exists():
                 return False
             raise
-        acc.paid_balance += n
-        acc.save(update_fields=["paid_balance"])
-    account.paid_balance = acc.paid_balance
+        setattr(acc, campo, getattr(acc, campo) + n)
+        acc.save(update_fields=[campo])
+    setattr(account, campo, getattr(acc, campo))
     return True
 
 

@@ -150,6 +150,7 @@ def test_cap_reached_503(account_client, monkeypatch, settings):
     assert resp.status_code == 503
 
 
+@pytest.mark.django_db(transaction=True)
 def test_paid_generation_bypasses_cap_via_endpoint(make_account, monkeypatch, settings):
     """RF9 via HTTP: paid credit bypasses INTERPRETATION_DAILY_CAP=0 and returns 202."""
     from rest_framework.test import APIClient
