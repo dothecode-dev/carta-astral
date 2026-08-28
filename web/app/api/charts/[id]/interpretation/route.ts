@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { ApiError, callApi } from "@/lib/session";
+import { ApiError, callApi, callApiRaw } from "@/lib/session";
 
 // Genera la lectura de una carta. Es la única llamada de la web que gasta un
 // crédito: el descuento lo hace el backend, nunca el navegador.
@@ -45,11 +45,16 @@ export async function POST(
   }
 
   try {
-    const data = await callApi(`/api/charts/${id}/interpretation/`, {
+    // El backend arranca la generación en un hilo y devuelve el control con
+    // 202: el informe todavía no existe. `callApi` sólo lanza si `!res.ok`, y
+    // 202 lo es — usarlo acá aplastaría ese 202 a un 200 con body `null`,
+    // indistinguible de un éxito síncrono, y la web nunca esperaría el
+    // resultado. `callApiRaw` deja pasar el status real.
+    const res = await callApiRaw(`/api/charts/${id}/interpretation/`, {
       method: "POST",
       body: JSON.stringify({ lang: body.lang }),
     });
-    return NextResponse.json(data);
+    return new NextResponse(null, { status: res.status });
   } catch (error) {
     if (error instanceof ApiError) {
       // Sin esto, un fallo de generación llega al log como un 502 sin motivo.

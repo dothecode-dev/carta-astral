@@ -1,23 +1,27 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { SolarSystem } from "@/components/SolarSystem";
 import type { Dict, Locale } from "@/lib/i18n";
 import { track } from "@/lib/telemetry";
 
-// El botón que gasta el crédito, y la espera mientras se escribe la lectura.
+// El botón que gasta el crédito, y la espera mientras se escribe el informe.
 //
-// La espera es la misma coreografía que la app: el sistema solar girando y tres
-// pasos que se encienden. La generación real tarda unos 25-30 segundos; los
-// pasos no miden nada, acompañan.
+// El informe tiene ocho secciones (RF1) y el backend las escribe en un hilo
+// aparte (RF10): el POST devuelve 202 al instante y esto sondea
+// `interpretation/estado` hasta que están todas. Tarda unos cuatro minutos.
 
-const STEP_MS = 9000;
-/** Cada cuánto se pregunta si la lectura ya está, mientras otra petición la escribe. */
-const POLL_MS = 5000;
-/** Techo de esa espera, en consultas: dos minutos. Después, algo salió mal de verdad. */
-const POLL_TRIES = 24;
+/** Cada cuánto se pregunta cuánto avanzó el informe mientras se escribe. */
+export const POLL_MS = 5000;
+/**
+ * Tope de esa espera, en consultas: once minutos.
+ *
+ * El informe tarda ~4 minutos; el tope viejo (24 intentos × 5 s = 2 minutos)
+ * se quedaba corto y la web se rendía en medio de una generación normal.
+ */
+export const POLL_TRIES = 132;
 
 const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
@@ -25,11 +29,14 @@ export function ChartActions({
   locale,
   chartId,
   langs,
+  timeKnown,
   dict,
 }: {
   locale: Locale;
   chartId: string;
   langs: string[];
+  /** RF12: si la carta no tiene hora, el informe sale sin la sección de casas. */
+  timeKnown: boolean;
   dict: Dict;
 }) {
   const router = useRouter();
@@ -38,7 +45,7 @@ export function ChartActions({
   // `refrescando` dice cuándo el servidor ya devolvió la lectura: sin eso la
   // animación se quedaba encendida para siempre debajo del texto ya escrito.
   const [refrescando, startTransition] = useTransition();
-  const [step, setStep] = useState(0);
+  const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const yaLeida = langs.includes(locale);
@@ -46,30 +53,29 @@ export function ChartActions({
   // cobrar. Decir "usa 1 crédito" ahí sería mentir, y es lo que hace la app.
   const enOtroIdioma = !yaLeida && langs.length > 0;
 
-  useEffect(() => {
-    if (!busy || step >= dict.chart.waitSteps.length - 1) return;
-    const timer = window.setTimeout(() => setStep((s) => s + 1), STEP_MS);
-    return () => window.clearTimeout(timer);
-  }, [busy, step, dict.chart.waitSteps.length]);
-
   /**
-   * Espera a que aparezca una lectura que otra petición ya está escribiendo.
+   * Sondea cuántas de las ocho secciones ya están escritas, hasta que el
+   * informe está completo.
    *
-   * El backend responde 409 cuando dos pedidos coinciden sobre la misma carta:
-   * uno la escribe y el otro rebota. Rendirse ahí sería mentir —la lectura está
-   * en camino—, así que se pregunta cada tanto hasta que existe.
+   * El POST sólo arranca la generación (RF10): responde 202 y el texto real
+   * tarda varios minutos en un hilo de fondo. Sin este sondeo la web no
+   * tendría forma de saber cuándo terminó, ni nada real que mostrar mientras
+   * tanto.
    */
   async function waitForReading(): Promise<boolean> {
     for (let intento = 0; intento < POLL_TRIES; intento++) {
       await sleep(POLL_MS);
-      const res = await fetch(`/api/charts/${chartId}/interpretation?lang=${locale}`);
-      if (res.ok) return true;
+      const res = await fetch(`/api/charts/${chartId}/interpretation/estado?lang=${locale}`);
+      if (!res.ok) continue;
+      const estado = (await res.json()) as { completa: boolean; hechas: number; total: number };
+      setProgreso({ hechas: estado.hechas, total: estado.total });
+      if (estado.completa) return true;
     }
     return false;
   }
 
   async function interpret() {
-    setStep(0);
+    setProgreso(null);
     setBusy(true);
     setError(null);
 
@@ -79,25 +85,25 @@ export function ChartActions({
       body: JSON.stringify({ lang: locale }),
     });
 
-    if (res.status === 409 && (await waitForReading())) {
-      // Sin `track`: el 409 significa que otra pestaña del mismo usuario ya
-      // disparó la generación, y esa es la que cuenta. Contar acá también
-      // duplicaría el evento con el que se mide el costo por lectura.
-      startTransition(() => router.refresh());
-      setBusy(false);
-      return;
-    }
-
     if (!res.ok) {
       setBusy(false);
       setError(res.status === 402 ? dict.chart.noCredits : dict.chart.failed);
       return;
     }
 
+    // El POST arrancó el hilo de fondo y respondió 202: la lectura todavía no
+    // existe. Si el sondeo se agota, se avisa y se deja reintentar (RF7): un
+    // botón que desaparece para siempre sería peor que un informe tardío.
+    if (!(await waitForReading())) {
+      setBusy(false);
+      setError(dict.chart.failed);
+      return;
+    }
+
     track("interpretacion_generada", { lang: locale });
 
     // La lectura queda debajo de la carta, en esta misma página. La animación
-    // sigue hasta que el refresh trae el texto, no hasta que responde el POST.
+    // sigue hasta que el refresh trae el texto, no hasta que el informe está.
     startTransition(() => router.refresh());
     setBusy(false);
   }
@@ -108,20 +114,14 @@ export function ChartActions({
         <SolarSystem size={200} speed={2.5} />
         <div className="waitingCopy">
           <h2 className="display waitingTitle">{dict.chart.waitTitle}</h2>
-          <p className="waitingBody">{dict.chart.waitBody}</p>
+          <p className="waitingBody">
+            {progreso
+              ? dict.chart.waitProgress
+                  .replace("{hechas}", String(progreso.hechas))
+                  .replace("{total}", String(progreso.total))
+              : dict.chart.waitBody}
+          </p>
         </div>
-        <ol className="waitingSteps">
-          {dict.chart.waitSteps.map((texto, i) => {
-            if (i > step) return <li key={texto} className="waitingStep" aria-hidden="true" />;
-            const hecho = i < step;
-            return (
-              <li key={texto} className={`waitingStep ${hecho ? "waitingDone" : "waitingNow"}`}>
-                <span aria-hidden="true">{hecho ? "●" : "○"}</span>
-                {texto}
-              </li>
-            );
-          })}
-        </ol>
       </section>
     );
   }
@@ -136,6 +136,7 @@ export function ChartActions({
       <p className="fieldNote">
         {enOtroIdioma ? dict.chart.interpretFreeLang : dict.chart.interpretCost}
       </p>
+      {!timeKnown && <p className="fieldNote">{dict.chart.noTimeWarning}</p>}
       {error && (
         <p className="formError" role="alert">
           {error}

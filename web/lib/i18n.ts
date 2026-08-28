@@ -239,7 +239,10 @@ export type Dict = {
     hide: string;
     waitTitle: string;
     waitBody: string;
-    waitSteps: [string, string, string];
+    /** Con `{hechas}` y `{total}`: cuántas de las ocho secciones ya están. */
+    waitProgress: string;
+    /** RF12: aviso previo, antes de gastar el crédito, si la carta no tiene hora. */
+    noTimeWarning: string;
     reading: string;
   };
   share: {
@@ -439,8 +442,9 @@ const es: Dict = {
     show: "Ver",
     hide: "Ocultar",
     waitTitle: "Leyendo tu cielo",
-    waitBody: "Estamos escribiendo tu interpretación. Tarda medio minuto: los planetas no se apuran.",
-    waitSteps: ["Posiciones calculadas", "Analizando aspectos", "Escribiendo tu lectura"],
+    waitBody: "Estamos escribiendo tu informe, en ocho secciones. Tarda unos minutos: no hace falta que te quedes en esta pantalla.",
+    waitProgress: "Vamos por la sección {hechas} de {total}.",
+    noTimeWarning: "Esta carta quedó sin hora de nacimiento: el informe sale con siete secciones, sin la de casas.",
     reading: "Tu lectura",
   },
   share: {
@@ -674,8 +678,9 @@ const en: Dict = {
     show: "Show",
     hide: "Hide",
     waitTitle: "Reading your sky",
-    waitBody: "We're writing your interpretation. It takes half a minute: planets don't rush.",
-    waitSteps: ["Positions computed", "Analyzing aspects", "Writing your reading"],
+    waitBody: "We're writing your report, in eight sections. It takes a few minutes: no need to stay on this screen.",
+    waitProgress: "We're on section {hechas} of {total}.",
+    noTimeWarning: "This chart has no birth time: the report comes out with seven sections, without the houses one.",
     reading: "Your reading",
   },
   share: {
@@ -909,8 +914,9 @@ const pt: Dict = {
     show: "Ver",
     hide: "Ocultar",
     waitTitle: "Lendo o seu céu",
-    waitBody: "Estamos escrevendo sua interpretação. Leva meio minuto: os planetas não têm pressa.",
-    waitSteps: ["Posições calculadas", "Analisando aspectos", "Escrevendo sua leitura"],
+    waitBody: "Estamos escrevendo seu relatório, em oito seções. Leva alguns minutos: não precisa ficar nesta tela.",
+    waitProgress: "Vamos na seção {hechas} de {total}.",
+    noTimeWarning: "Este mapa ficou sem hora de nascimento: o relatório sai com sete seções, sem a de casas.",
     reading: "Sua leitura",
   },
   share: {

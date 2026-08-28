@@ -187,6 +187,7 @@ export default async function ChartPage({
           locale={locale}
           chartId={chart.id}
           langs={chart.interpretation_langs}
+          timeKnown={chart.birth.time_known}
           dict={dict}
         />
 
