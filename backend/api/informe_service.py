@@ -12,8 +12,8 @@ import logging
 from django.db import transaction
 
 from api.interpretation_service import renovar_lock
-from api.models import InterpretationSection
-from interpret.generator import build_seccion
+from api.models import Interpretation, InterpretationSection
+from interpret.generator import build_seccion, translate_interpretation
 from interpret.prompts import SECCIONES, Seccion
 
 logger = logging.getLogger(__name__)
@@ -199,3 +199,50 @@ def generar_informe(interpretacion, client, token: str) -> None:
         )
         interpretacion.completa = True
         interpretacion.save(update_fields=["text", "completa"])
+
+
+def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
+    """Traduce a `destino_lang` un informe ya generado (o a medio generar),
+    sección por sección. Gratis para quien lo pide (RF8): el crédito se cobró
+    una vez, en el primer idioma; esta función no debita ni devuelve nada del
+    ledger, ni siquiera si se corta a mitad.
+
+    `translate_interpretation` traduce de a un texto por llamada y las ocho
+    secciones juntas (hasta 6.400 palabras) no entran en una sola: por eso
+    acá se traduce sección por sección, igual que `generar_informe` genera
+    sección por sección.
+
+    Reanudable con el mismo mecanismo que `generar_informe`: cada sección
+    traducida se persiste apenas se termina, así que si una llamada se corta
+    a mitad (`translate_interpretation` puede lanzar `InterpretationError` u
+    otra excepción del cliente), las secciones ya traducidas quedan y una
+    segunda llamada retoma sólo las que faltan — no le vuelve a pagar al
+    modelo por lo ya traducido. El `unique_together` de `InterpretationSection`
+    es la red de seguridad ante una carrera real entre dos llamadas
+    concurrentes, no el mecanismo: lo que evita el trabajo repetido en el
+    caso normal es el chequeo de `hechas` de abajo.
+
+    `destino.completa` copia `origen.completa` en lugar de fijarse siempre en
+    `True`: si el origen todavía está a medio generar, la traducción de lo
+    que hay hasta ahora tiene que quedar igual de incompleta, no mentir que
+    terminó.
+    """
+    destino, _ = Interpretation.objects.get_or_create(
+        chart=origen.chart, lang=destino_lang, prompt_version=origen.prompt_version,
+        defaults={"text": "", "account": origen.account},
+    )
+    hechas = set(destino.secciones.values_list("slug", flat=True))
+    for seccion in origen.secciones.all():
+        if seccion.slug in hechas:
+            continue
+        InterpretationSection.objects.create(
+            interpretation=destino,
+            slug=seccion.slug,
+            orden=seccion.orden,
+            texto=translate_interpretation(seccion.texto, destino_lang, client),
+        )
+
+    with transaction.atomic():
+        destino.text = "\n\n".join(s.texto for s in destino.secciones.all())
+        destino.completa = origen.completa
+        destino.save(update_fields=["text", "completa"])

@@ -12,7 +12,16 @@ MAX_TOKENS = 1500
 
 # Traducción de lecturas ya generadas: tarea fácil, modelo barato.
 TRANSLATE_MODEL = "claude-haiku-4-5-20251001"
-TRANSLATE_MAX_TOKENS = 2000
+# Por sección, no por informe entero: 6.400 palabras no entran en una sola
+# llamada de traducción, así que `traducir_informe` traduce de a una sección
+# (hasta 1000 palabras nominales, la de "tensiones"). Con el mismo criterio
+# de holgura que usa `build_seccion` (`seccion.palabras * 2`) el piso sería
+# 2000 — el valor de acá antes de esta tarea, dimensionado en su momento
+# para la lectura corta de 400 a 700 palabras, no para una sección del
+# informe. Se deja con margen sobre ese piso porque `build_seccion` genera
+# con un tope de tokens, no de palabras: una sección real puede superar su
+# objetivo nominal, y traducirla con el piso justo la cortaría a mitad.
+TRANSLATE_MAX_TOKENS = 2500
 
 _BASE_ES = (
     "Sos un astrólogo que escribe interpretaciones de cartas natales claras, "
