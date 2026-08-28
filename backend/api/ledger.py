@@ -82,7 +82,7 @@ def refund_credits(account, n: int, external_id: str, note: str = "") -> bool:
     return True
 
 
-def devolver(account, n: int = 1, note: str = "", external_id: str = "", lot: str = "paid") -> bool:
+def devolver(account, external_id: str, n: int = 1, note: str = "", lot: str = "paid") -> bool:
     """Repone créditos que se cobraron por un informe que nunca llegó a existir.
 
     NO es `refund_credits`: aquello es un reembolso de dinero, incrementa
@@ -101,8 +101,13 @@ def devolver(account, n: int = 1, note: str = "", external_id: str = "", lot: st
     la `CreditTransaction` de consumo) tiene que pasarlo explícito.
 
     Idempotente por external_id igual que `refund_credits`/`credit_purchase`:
-    con external_id vacío no hay protección (la UniqueConstraint es parcial y
-    no aplica a filas sin clave). Devuelve True si acreditó, False si ya
+    la `UniqueConstraint` es PARCIAL (`condition=Q(external_id__gt="")`), así
+    que con external_id vacío la protección queda desactivada en silencio —
+    ni un error, ni un log, simplemente dos devoluciones del mismo informe se
+    acreditan las dos. `external_id` es obligatorio acá (BUG de la revisión
+    de seguridad: antes tenía default `""`, que invitaba justo a ese error;
+    hoy el único llamador ya lo pasaba explícito, pero un default sin efecto
+    protector no debería existir). Devuelve True si acreditó, False si ya
     estaba procesado."""
     campo = "free_balance" if lot == "free" else "paid_balance"
     with transaction.atomic():

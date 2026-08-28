@@ -142,6 +142,25 @@ def test_lock_tomado_no_bloquea_el_202(account_client, fake_client, db_cache):
     assert resp.status_code == 202
 
 
+def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fake_client):
+    """BUG de la revisión de seguridad: pedir "es" y, con esa generación
+    todavía en curso (`completa=False`), pedir "en" no puede aceptar un 202
+    que cobre y nunca vaya a completarse. La vista responde 409 —el mismo
+    código que ya espera la web (`web/app/api/charts/[id]/interpretation/
+    route.ts`) para "generación en curso"— y no cobra nada."""
+    c = _chart(account=account_client.account)
+    antes = account_client.account.free_balance + account_client.account.paid_balance
+
+    r1 = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    assert r1.status_code == 202
+
+    r2 = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "en"}, format="json")
+    assert r2.status_code == 409
+
+    account_client.account.refresh_from_db()
+    assert account_client.account.free_balance + account_client.account.paid_balance == antes - 1
+
+
 def test_cap_reached_503(account_client, monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 0
     monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())

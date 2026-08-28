@@ -10,7 +10,7 @@ pytestmark = pytest.mark.django_db
 def test_devolver_repone_el_saldo(account):
     account.paid_balance = 0
     account.save()
-    ledger.devolver(account, 1, note="informe fallido")
+    ledger.devolver(account, external_id="informe:1:fallo", note="informe fallido")
     account.refresh_from_db()
     assert account.paid_balance == 1
 
@@ -18,14 +18,14 @@ def test_devolver_repone_el_saldo(account):
 def test_devolver_no_marca_la_cuenta_como_sospechosa(account):
     # Un fallo técnico nuestro no es un reembolso: el usuario no hizo nada.
     antes = account.refund_count
-    ledger.devolver(account, 1)
+    ledger.devolver(account, external_id="informe:1:fallo")
     account.refresh_from_db()
     assert account.refund_count == antes
     assert account.flagged is False
 
 
 def test_devolver_deja_su_registro_en_el_ledger(account):
-    ledger.devolver(account, 1, note="informe fallido")
+    ledger.devolver(account, external_id="informe:1:fallo", note="informe fallido")
     txn = CreditTransaction.objects.filter(account=account, kind="adjustment").last()
     assert txn.amount == 1
     assert txn.note == "informe fallido"
@@ -34,8 +34,8 @@ def test_devolver_deja_su_registro_en_el_ledger(account):
 def test_devolver_es_idempotente_por_external_id(account):
     # El hilo de la Tarea 10 puede sobrevivir a su propio lock y reintentar:
     # la segunda llamada con el mismo external_id no debe acreditar de nuevo.
-    primera = ledger.devolver(account, 1, external_id="informe:123:fallo")
-    segunda = ledger.devolver(account, 1, external_id="informe:123:fallo")
+    primera = ledger.devolver(account, external_id="informe:123:fallo")
+    segunda = ledger.devolver(account, external_id="informe:123:fallo")
     account.refresh_from_db()
     assert primera is True
     assert segunda is False
@@ -43,8 +43,8 @@ def test_devolver_es_idempotente_por_external_id(account):
 
 
 def test_devolver_con_external_id_distinto_acredita_dos_veces(account):
-    ledger.devolver(account, 1, external_id="informe:123:fallo")
-    ledger.devolver(account, 1, external_id="informe:456:fallo")
+    ledger.devolver(account, external_id="informe:123:fallo")
+    ledger.devolver(account, external_id="informe:456:fallo")
     account.refresh_from_db()
     assert account.paid_balance == 2
 
@@ -55,7 +55,7 @@ def test_devolver_repone_al_lote_free_cuando_se_indica(account):
     account.free_balance = 0
     account.paid_balance = 5
     account.save()
-    ledger.devolver(account, 1, lot="free")
+    ledger.devolver(account, external_id="informe:1:fallo", lot="free")
     account.refresh_from_db()
     assert account.free_balance == 1
     assert account.paid_balance == 5
@@ -66,7 +66,17 @@ def test_devolver_repetido_nunca_marca_la_cuenta(account):
     # debe cruzar REFUND_FLAG_THRESHOLD ni tocar refund_count: el usuario no
     # hizo nada, así que no hay umbral de sospecha que aplicarle.
     for i in range(settings.REFUND_FLAG_THRESHOLD + 2):
-        ledger.devolver(account, 1, external_id=f"informe:{i}:fallo")
+        ledger.devolver(account, external_id=f"informe:{i}:fallo")
     account.refresh_from_db()
     assert account.refund_count == 0
     assert account.flagged is False
+
+
+def test_devolver_exige_external_id():
+    """BUG de la revisión de seguridad: el default `external_id=""` caía en
+    la mitad no protegida de la `UniqueConstraint` parcial y desactivaba la
+    idempotencia en silencio. Ahora es un argumento obligatorio."""
+    import inspect
+
+    parametros = inspect.signature(ledger.devolver).parameters
+    assert parametros["external_id"].default is inspect.Parameter.empty

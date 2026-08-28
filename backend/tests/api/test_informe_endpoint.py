@@ -323,3 +323,44 @@ def test_completar_generacion_traduce_el_segundo_idioma_en_vez_de_regenerar(
 
     assert llamadas_traducir == [1]
     assert llamadas_generar == []
+
+
+# --- BUG de la revisión de seguridad: segundo idioma con el primero EN CURSO ---
+# `_sibling_completo` sólo mira informes `completa=True`. Pedir "es" y, a
+# mitad de sus ~6 minutos de generación, pedir "en" no encontraba sibling
+# (el de "es" existe pero no está completo) así que `iniciar_generacion`
+# cobraba un segundo crédito para "en". El hilo de "en" llamaba después a
+# `completar_generacion`, encontraba el lock de la carta tomado por el hilo
+# de "es" y hacía `return` ANTES de su propio `try/finally` — el crédito
+# recién cobrado nunca se devolvía. La web promete el segundo idioma gratis
+# (`web/lib/i18n.ts`): esto cobraba por algo anunciado como gratis.
+
+
+def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account, db_cache):
+    """Reproduce la secuencia exacta: "es" en curso (lock de la carta
+    tomado, fila `completa=False`) y se pide "en". El saldo no puede bajar:
+    ni corresponde cobrar un segundo crédito (la carta ya se pagó con "es")
+    ni, si se llegara a cobrar, puede perderse sin devolverse."""
+    from api import interpretation_service as svc
+    from api.exceptions import GenerationInProgress
+    from api.models import Interpretation
+    from interpret.prompts import PROMPT_VERSION
+
+    interpretacion_es = svc.iniciar_generacion(chart, "es", account)
+    assert interpretacion_es.completa is False
+
+    # El hilo de "es" ya tomó el lock de la carta y sigue generando (igual
+    # que haría `completar_generacion` en segundo plano durante ~6 minutos).
+    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "token-es-en-curso", timeout=600)
+
+    account.refresh_from_db()
+    antes = account.free_balance + account.paid_balance
+
+    with pytest.raises(GenerationInProgress):
+        svc.iniciar_generacion(chart, "en", account)
+
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes  # no se perdió ningún crédito
+    assert not Interpretation.objects.filter(
+        chart=chart, lang="en", prompt_version=PROMPT_VERSION
+    ).exists()  # no queda una fila "en" vacía y cobrada

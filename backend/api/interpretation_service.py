@@ -133,6 +133,48 @@ def _sibling_completo(chart, lang: str) -> Interpretation | None:
     )
 
 
+def _sibling_en_curso(chart, lang: str) -> Interpretation | None:
+    """Informe de esta misma carta en OTRO idioma que ya arrancó pero
+    todavía no terminó (`completa=False`).
+
+    BUG de la revisión de seguridad: `iniciar_generacion` sólo consultaba
+    `_sibling_completo` (arriba), que exige `completa=True`. Pedir "es" y, a
+    mitad de sus ~6 minutos de generación, pedir "en" no encontraba sibling
+    —el de "es" existe pero no está completo— así que cobraba un segundo
+    crédito para "en". El hilo de "en" llamaba después a
+    `completar_generacion`, encontraba el lock de la carta (compartido por
+    todos los idiomas, ver `_lock_key`) tomado por el hilo de "es", y hacía
+    `return` sin generar nada: el crédito recién cobrado quedaba perdido —la
+    web promete el segundo idioma gratis (`web/lib/i18n.ts`).
+
+    La corrección va acá y no en `completar_generacion` porque el problema
+    es cobrar, no dejar de devolver: mientras exista un sibling en curso, no
+    hay nada que traducir todavía (no como `_sibling_completo`) y tampoco
+    conviene generar un informe independiente para "en" —eso pagaría dos
+    veces por la misma carta, violando RF8 apenas "es" termine y sea gratis
+    para traducir. `iniciar_generacion` rechaza el pedido en vez de cobrar y
+    esperar: no hay una cola ni un job que retome el pedido de "en" solo,
+    así que "esperar" significaría un 202 fantasma que nunca progresa.
+    Rechazar con un estado claro (`GenerationInProgress`, ya usado
+    por el flujo viejo `get_or_create_interpretation` en este mismo caso) es
+    lo que la web ya sabe interpretar como "reintentá en unos segundos"
+    (ver `web/app/api/charts/[id]/interpretation/route.ts`, que traduce un
+    409 del backend a ese mensaje).
+
+    Deja una ventana de carrera microscópica frente a `_sibling_completo`
+    (dos consultas separadas, no una transacción): si "es" termina justo
+    entre ambas, esta consulta ya no lo ve (pasó a `completa=True`) y
+    "en" cobra y genera desde cero en vez de traducir gratis. No es el bug
+    reportado (que es una espera de minutos, no de microsegundos) y no
+    pierde plata —cobra una vez, igual que si no hubiera sibling—, así que
+    no amerita la complejidad de una transacción con lock de fila."""
+    return (
+        Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION, completa=False)
+        .exclude(lang=lang)
+        .first()
+    )
+
+
 def interpretation_langs(chart) -> list[str]:
     """Idiomas en los que esta carta ya tiene lectura completa (prompt
     actual). `completa=True` es la condición: desde la Tarea 10,
@@ -269,7 +311,16 @@ def iniciar_generacion(chart, lang: str, account) -> Interpretation:
     tuviera una lectura completa en otro idioma — la web promete lo
     contrario. Con `_sibling_completo` encontrado, el segundo idioma no cobra
     ni cuenta contra el cap: `completar_generacion` va a traducir ese sibling
-    en vez de generar desde cero."""
+    en vez de generar desde cero.
+
+    RF8 / BUG de la revisión de seguridad: `_sibling_completo` no alcanza —
+    exige `completa=True`, y el caso real es uno EN CURSO. Pedir "es" y, a
+    mitad de sus ~6 minutos, pedir "en" no encontraba sibling completo,
+    cobraba igual, y ese crédito se perdía cuando el hilo de "en" chocaba
+    contra el lock que "es" todavía tenía tomado (ver `_sibling_en_curso`
+    para el detalle y la justificación de por qué se rechaza acá en vez de
+    esperar). Se lanza `GenerationInProgress` ANTES de cobrar: no hay nada
+    que devolver porque nunca se llega a tocar el ledger."""
     interpretacion, creada = Interpretation.objects.get_or_create(
         chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
         defaults={"text": "", "account": account},
@@ -279,6 +330,13 @@ def iniciar_generacion(chart, lang: str, account) -> Interpretation:
 
     if _sibling_completo(chart, lang) is not None:
         return interpretacion
+
+    if _sibling_en_curso(chart, lang) is not None:
+        interpretacion.delete()
+        raise GenerationInProgress(
+            "hay una generación en curso para esta carta en otro idioma, "
+            "reintentá en unos segundos"
+        )
 
     will_be_free = account.free_balance > 0
     cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
@@ -329,24 +387,40 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     ocho secciones que ya existen en otro idioma. El lock es el mismo en
     ambos caminos — se toma acá antes de saber cuál toca — así que la
     traducción queda serializada contra otra generación de la misma carta
-    igual que la generación."""
+    igual que la generación.
+
+    El chequeo del lock vive DENTRO del `try/finally` (no antes, con un
+    `return` temprano) a propósito: la revisión de seguridad encontró que un
+    `return` antes de entrar al bloque protegido salteaba el `finally` que
+    devuelve el crédito, y ese es justo el tipo de bug que un refactor futuro
+    podría reintroducir si el chequeo volviera a vivir afuera. Con
+    `got_lock=False` el `finally` sigue corriendo igual, pero no hace nada —
+    `sibling` es `None` sin haberse cobrado nunca desde acá (esta llamada no
+    tocó el ledger, así que no hay nada que devolver) y `soltar_lock` no
+    aplica (nunca se tomó el lock). No confundir con la Tarea 10: cuando el
+    lock está tomado por OTRO proceso, `iniciar_generacion` ya cobró antes de
+    lanzar este hilo, pero es una carga legítima —alguien más lo está
+    generando (u otro intento sobre la MISMA `Interpretation`, ver
+    `test_lock_tomado_no_genera_ni_cobra_de_nuevo`) y esa llamada, no ésta,
+    es responsable de terminarlo o de devolver si falla."""
     if interpretacion.completa:
         return
 
     lock_key = _lock_key(chart)
     token = uuid.uuid4().hex
-    if not cache.add(lock_key, token, timeout=LOCK_TTL):
-        logger.info(
-            "ya hay una generación en curso para la carta %s; se ignora este pedido",
-            chart.pk,
-        )
-        return
+    got_lock = cache.add(lock_key, token, timeout=LOCK_TTL)
 
     from api import informe_service  # import diferido: ver nota al tope del módulo
 
-    sibling = _sibling_completo(chart, interpretacion.lang)
+    sibling = _sibling_completo(chart, interpretacion.lang) if got_lock else None
 
     try:
+        if not got_lock:
+            logger.info(
+                "ya hay una generación en curso para la carta %s; se ignora este pedido",
+                chart.pk,
+            )
+            return
         if sibling is not None:
             informe_service.traducir_informe(sibling, interpretacion.lang, _build_client())
         else:
@@ -354,10 +428,14 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     except Exception:
         logger.exception("la generación del informe %s falló", interpretacion.pk)
     finally:
-        # Sólo se cobró si NO había sibling (si lo había, `iniciar_generacion`
-        # no tocó el ledger): devolver acá en el camino de traducción
-        # regalaría un crédito que nunca se cobró.
-        if sibling is None and not interpretacion.secciones.exists():
+        # `got_lock` es la guarda: sin lock propio esta llamada nunca cobró
+        # ni generó nada (ver el docstring), así que no hay crédito que
+        # devolver ni lock propio que soltar.
+        #
+        # Con lock propio, sólo se cobró si NO había sibling (si lo había,
+        # `iniciar_generacion` no tocó el ledger): devolver acá en el camino
+        # de traducción regalaría un crédito que nunca se cobró.
+        if got_lock and sibling is None and not interpretacion.secciones.exists():
             pk = interpretacion.pk
             # El lote se lee ANTES de borrar: `CreditTransaction.interpretation`
             # es SET_NULL, no CASCADE, pero de todas formas hace falta el dato
@@ -370,12 +448,13 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
             lot = consumo.lot if consumo is not None else "paid"
             interpretacion.delete()
             ledger.devolver(
-                account, 1,
+                account,
                 external_id=f"informe:{pk}:devolucion",
                 note=f"informe {pk} sin secciones generadas",
                 lot=lot,
             )
-        soltar_lock(chart, token)
+        if got_lock:
+            soltar_lock(chart, token)
 
 
 def generar_en_segundo_plano(chart, lang: str, account) -> None:

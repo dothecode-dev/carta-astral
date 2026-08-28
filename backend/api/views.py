@@ -20,7 +20,7 @@ from api.auth import (
 )
 from api.deletion import delete_account, delete_charts
 from api.chart_service import create_chart
-from api.exceptions import CapReached, QuotaExceeded
+from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
 from api.interpretation_service import DISCLAIMERS
 from interpret.prompts import PROMPT_VERSION
 from api import apple
@@ -204,6 +204,16 @@ class InterpretationView(APIView):
             return Response(
                 {"error": "límite diario de informes alcanzado, probá más tarde"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except GenerationInProgress:
+            # Ya hay una generación en curso para esta carta en otro idioma
+            # (BUG de la revisión de seguridad: cobrar acá y esperar dejaba
+            # un crédito cobrado sin generación posible). 409: la web ya lo
+            # traduce a "generación en curso" y reintenta más tarde, igual
+            # que hacía con el 409 síncrono que existía antes de la Task 10.
+            return Response(
+                {"error": "generación en curso para esta carta en otro idioma"},
+                status=status.HTTP_409_CONFLICT,
             )
 
         def _en_hilo():
