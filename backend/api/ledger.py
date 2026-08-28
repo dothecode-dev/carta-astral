@@ -82,20 +82,35 @@ def refund_credits(account, n: int, external_id: str, note: str = "") -> bool:
     return True
 
 
-def devolver(account, n: int = 1, note: str = "") -> None:
+def devolver(account, n: int = 1, note: str = "", external_id: str = "") -> bool:
     """Repone créditos que se cobraron por un informe que nunca llegó a existir.
 
     NO es `refund_credits`: aquello es un reembolso de dinero, incrementa
     `refund_count` y puede marcar la cuenta. Acá el usuario no hizo nada — falló
-    la generación de nuestro lado — y marcarlo sería castigarlo por un bug."""
+    la generación de nuestro lado — y marcarlo sería castigarlo por un bug.
+
+    Idempotente por external_id igual que `refund_credits`/`credit_purchase`:
+    con external_id vacío no hay protección (la UniqueConstraint es parcial y
+    no aplica a filas sin clave). Devuelve True si acreditó, False si ya
+    estaba procesado."""
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
+        try:
+            with transaction.atomic():
+                CreditTransaction.objects.create(
+                    account=acc, kind="adjustment", lot="paid",
+                    amount=n, external_id=external_id, note=note,
+                )
+        except IntegrityError:
+            # Solo es duplicado si esa external_id ya existe; cualquier otro
+            # IntegrityError se propaga (no perder un crédito por un error real).
+            if CreditTransaction.objects.filter(external_id=external_id).exists():
+                return False
+            raise
         acc.paid_balance += n
         acc.save(update_fields=["paid_balance"])
-        CreditTransaction.objects.create(
-            account=acc, kind="adjustment", lot="paid", amount=n, note=note,
-        )
     account.paid_balance = acc.paid_balance
+    return True
 
 
 def credit_purchase(account, n: int, external_id: str, note: str = "") -> bool:
