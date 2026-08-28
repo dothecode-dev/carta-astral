@@ -66,12 +66,23 @@ def test_el_estado_dice_cuantas_secciones_van(client_autenticado, chart, interpr
     from api.models import InterpretationSection
 
     InterpretationSection.objects.create(interpretation=interpretacion, slug="firma", orden=0, texto="x")
-    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado")
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado/")
     assert r.json() == {"completa": False, "hechas": 1, "total": 8}
 
 
 def test_el_estado_sin_interpretacion_todavia_dice_cero(client_autenticado, chart):
-    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado")
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado/")
+    assert r.json() == {"completa": False, "hechas": 0, "total": 8}
+
+
+def test_el_estado_sin_barra_final_redirige_en_vez_de_404(client_autenticado, chart):
+    """HALLAZGO 5 de code review: era la única ruta del archivo sin barra
+    final. `APPEND_SLASH` agrega la barra pero nunca la saca, así que un
+    cliente que normalizaba a `/estado/` (la forma correcta ahora) recibía
+    404 sin redirect. Un cliente viejo que pegue sin la barra sigue
+    funcionando: Django lo redirige a la versión canónica."""
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado", follow=True)
+    assert r.redirect_chain  # hubo un redirect antes de la respuesta final
     assert r.json() == {"completa": False, "hechas": 0, "total": 8}
 
 
