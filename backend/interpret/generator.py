@@ -15,6 +15,7 @@ from interpret.prompts import (
     SYSTEM_PROMPTS,
     TRANSLATE_MAX_TOKENS,
     TRANSLATE_MODEL,
+    Seccion,
 )
 
 # Instrucción y nota de degradación en el idioma pedido: si el user message
@@ -92,3 +93,55 @@ def translate_interpretation(text: str, target_lang: str, client) -> str:
     escrito, solo cambia el idioma."""
     system = [{"type": "text", "text": _TRANSLATE_SYSTEM.format(target=_TRANSLATE_TARGETS[target_lang])}]
     return _stream_text(client, TRANSLATE_MODEL, system, text, TRANSLATE_MAX_TOKENS)
+
+
+_PEDIDO_SECCION = {
+    "es": "Escribí la sección «{titulo}» de un informe de carta natal.\n{foco}\nExtensión: unas {palabras} palabras.",
+    "en": "Write the «{titulo}» section of a natal chart report.\n{foco}\nLength: about {palabras} words.",
+    "pt": "Escreva a seção «{titulo}» de um relatório de mapa natal.\n{foco}\nExtensão: cerca de {palabras} palavras.",
+}
+
+_CONTEXTO_PREVIO = {
+    "es": "\n\nYA ESCRITO en secciones anteriores (no lo repitas, podés referirte a ello):\n{previo}",
+    "en": "\n\nALREADY WRITTEN in earlier sections (don't repeat it, you may refer to it):\n{previo}",
+    "pt": "\n\nJÁ ESCRITO em seções anteriores (não repita, pode se referir a isso):\n{previo}",
+}
+
+
+def _create_text(client, model: str, system: str, user_content: str, max_tokens: int) -> str:
+    """Como _stream_text pero sin streaming. Las secciones son bastante más
+    cortas que la interpretación completa: no valen la complejidad de un
+    read-timeout por-chunk, y en la Tarea 6 se llama ocho veces seguidas."""
+    try:
+        resp = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user_content}],
+        )
+    except anthropic.AnthropicError as exc:  # timeout, API, conexión, etc.
+        raise InterpretationError(f"error del LLM: {exc}") from exc
+
+    text = "".join(getattr(b, "text", "") for b in resp.content).strip()
+    if not text:
+        raise InterpretationError("respuesta vacía del LLM")
+    return text
+
+
+def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, client) -> str:
+    """Genera una sección del informe. `previo` es el resumen de lo ya
+    escrito en secciones anteriores: es lo único que impide que, por ejemplo,
+    la sección de tensiones repita lo que ya dijo la de la firma. Vacío
+    (`""`) para la primera sección."""
+    pedido = _PEDIDO_SECCION[lang].format(
+        titulo=seccion.titulo[lang], foco=seccion.foco[lang], palabras=seccion.palabras
+    )
+    cuerpo = json.dumps(chart_data, ensure_ascii=False)
+    content = f"{pedido}\n\n{cuerpo}"
+    if not chart_data.get("time_known", True):
+        content += _DEGRADED_NOTES[lang]
+    if previo:
+        content += _CONTEXTO_PREVIO[lang].format(previo=previo)
+
+    # Holgura sobre el objetivo: un tope justo corta la sección a la mitad.
+    return _create_text(client, MODEL, SYSTEM_PROMPTS[lang], content, seccion.palabras * 2)
