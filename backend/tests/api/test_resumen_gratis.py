@@ -83,3 +83,79 @@ def test_sin_hora_de_nacimiento_el_indice_no_incluye_casas(interpretacion):
     salida = informe_service.resumen_gratis(interpretacion)
     assert len(salida) == 7
     assert "casas" not in [e["slug"] for e in salida]
+
+
+def _parrafo_realista(cantidad_palabras):
+    """Un párrafo de apertura como el que realmente escribe el modelo: varias
+    oraciones, sin relleno repetido, de la longitud que se le pida. Ni
+    `SYSTEM_PROMPTS_SECCION` ni el pedido de cada sección le ponen un tope al
+    párrafo de apertura — 80 a 120 palabras es perfectamente plausible para
+    una narrativa cálida de 700 a 1000 palabras en total."""
+    oracion = (
+        "El Sol conversa con la Luna y traza un temperamento cálido y curioso, "
+        "con una necesidad de reconocimiento que aparece en cada vínculo "
+        "importante de tu vida, incluso en los que preferís no nombrar en voz alta. "
+    )
+    palabras = (oracion * (cantidad_palabras // len(oracion.split()) + 1)).split()
+    return " ".join(palabras[:cantidad_palabras])
+
+
+def test_con_parrafos_realistas_el_total_sigue_bajo_400(interpretacion):
+    """Regresión: con `texto.partition('\\n\\n')` sin tope, un párrafo de
+    apertura de 80-120 palabras (plausible para una sección de 700-1000)
+    multiplicado por ocho secciones da 640-960 palabras — más del doble del
+    límite de RF3, y ningún test con `"Primer párrafo de la sección."` (4
+    palabras) lo hubiera visto nunca."""
+    for i, s in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=interpretacion, slug=s.slug, orden=i,
+            texto=_parrafo_realista(100) + "\n\n" + ("relleno " * 300),
+        )
+    total = sum(len(e["parrafo"].split()) for e in informe_service.resumen_gratis(interpretacion))
+    assert total < 400
+
+
+def test_con_parrafos_realistas_sin_hora_el_total_sigue_bajo_400(interpretacion):
+    interpretacion.chart.data["time_known"] = False
+    interpretacion.chart.save()
+    for i, s in enumerate(SECCIONES):
+        if s.requiere_hora:
+            continue
+        InterpretationSection.objects.create(
+            interpretation=interpretacion, slug=s.slug, orden=i,
+            texto=_parrafo_realista(120) + "\n\n" + ("relleno " * 300),
+        )
+    salida = informe_service.resumen_gratis(interpretacion)
+    assert len(salida) == 7
+    total = sum(len(e["parrafo"].split()) for e in salida)
+    assert total < 400
+
+
+def test_el_corte_no_parte_una_palabra_ni_deja_puntuacion_colgando(interpretacion):
+    InterpretationSection.objects.create(
+        interpretation=interpretacion, slug=SECCIONES[0].slug, orden=0,
+        texto=_parrafo_realista(100) + "\n\n" + ("relleno " * 300),
+    )
+    entrada = informe_service.resumen_gratis(interpretacion)[0]
+    # Cortó: se nota con una elipsis, no termina de golpe.
+    assert entrada["parrafo"].endswith("…")
+    # Antes de la elipsis no queda un espacio ni un signo de puntuación
+    # colgando (eso sería un corte prolijo a medias).
+    antes_de_elipsis = entrada["parrafo"][: -len("…")]
+    assert antes_de_elipsis[-1] not in " ,;:.!?¡¿-—"
+    # Ninguna palabra del original quedó partida al medio: cada token del
+    # párrafo mostrado (menos la elipsis) aparece completo en el original.
+    original = _parrafo_realista(100).split()
+    mostrado = antes_de_elipsis.split()
+    assert mostrado == original[: len(mostrado)]
+
+
+def test_una_seccion_corta_no_se_corta_ni_se_rellena(interpretacion):
+    """Si el párrafo real es más corto que el tope, se muestra entero: sin
+    elipsis y sin agregarle nada."""
+    InterpretationSection.objects.create(
+        interpretation=interpretacion, slug=SECCIONES[0].slug, orden=0,
+        texto="Un párrafo corto de verdad.\n\n" + ("relleno " * 300),
+    )
+    entrada = informe_service.resumen_gratis(interpretacion)[0]
+    assert entrada["parrafo"] == "Un párrafo corto de verdad."

@@ -23,6 +23,17 @@ logger = logging.getLogger(__name__)
 # se repitan y mantiene el input acotado.
 RESUMEN_POR_SECCION = 400
 
+# Presupuesto total de palabras del resumen gratis (RF3: "menos de 400
+# palabras"). Es un tope, no un objetivo: `_tope_por_seccion` reparte
+# PRESUPUESTO_GRATIS - 1 entre las secciones aplicables para garantizar la
+# desigualdad estricta pase lo que pase con la división entera (con 400 y
+# ocho secciones el reparto da justo 50 y el total daría exactamente 400,
+# que no es "menos de 400").
+PRESUPUESTO_GRATIS = 400
+
+# Signos de puntuación que no pueden quedar pegados a una elipsis de corte.
+_PUNTUACION_COLGANTE = " ,;:.!?¡¿-—"
+
 
 def secciones_aplicables(chart) -> list[Seccion]:
     """Las ocho, menos las que dependen de una hora de nacimiento que no está."""
@@ -41,6 +52,36 @@ def resumen_previo(interpretacion) -> str:
     )
 
 
+def _tope_por_seccion(cantidad_aplicables: int) -> int:
+    """Cuántas palabras del párrafo de apertura se muestran por sección.
+
+    `SYSTEM_PROMPTS_SECCION` no le pone largo al párrafo de apertura de una
+    sección (a propósito: fijarlo ahí sería una expectativa sobre el modelo,
+    no una garantía). El tope vive acá, derivado del presupuesto total, para
+    que ninguna combinación de secciones aplicables pueda superar
+    `PRESUPUESTO_GRATIS` palabras."""
+    return (PRESUPUESTO_GRATIS - 1) // cantidad_aplicables
+
+
+def _abrir(parrafo: str, tope: int) -> tuple[str, int]:
+    """Corta `parrafo` a lo sumo a `tope` palabras, en el límite de palabra.
+
+    Si corta, lo marca con una elipsis (un texto que termina de golpe se lee
+    como un error; uno que sigue con "…" se lee como "hay más, pagá para
+    verlo") y nunca deja un espacio o un signo de puntuación pegado a esa
+    elipsis. Si el párrafo real es más corto que el tope, se devuelve entero
+    y sin agregarle nada.
+
+    Devuelve el texto a mostrar y cuántas palabras del original se muestran
+    (sin contar la elipsis) — lo que hace falta para calcular `restante`.
+    """
+    palabras = parrafo.split()
+    if len(palabras) <= tope:
+        return parrafo, len(palabras)
+    mostrado = " ".join(palabras[:tope]).rstrip(_PUNTUACION_COLGANTE)
+    return mostrado + "…", tope
+
+
 def resumen_gratis(interpretacion) -> list[dict]:
     """Lo que ve quien no pagó: el índice completo y el arranque de cada
     sección (RF3).
@@ -56,16 +97,26 @@ def resumen_gratis(interpretacion) -> list[dict]:
     tiene que nombrar las ocho secciones (o las siete que aplican sin hora)
     aunque todavía falten por escribirse. Las que no están generadas
     todavía aparecen con su título y sin párrafo.
+
+    El párrafo de apertura de cada sección generada se recorta a
+    `_tope_por_seccion(...)` palabras: el modelo escribe secciones de 700 a
+    1000 palabras y no tiene ningún tope sobre el largo del párrafo de
+    apertura, así que sin este recorte el resumen entero podía superar
+    ampliamente las 400 palabras que promete RF3.
     """
+    aplicables = secciones_aplicables(interpretacion.chart)
+    tope = _tope_por_seccion(len(aplicables))
     generadas = {s.slug: s for s in interpretacion.secciones.all()}
     salida = []
-    for seccion in secciones_aplicables(interpretacion.chart):
+    for seccion in aplicables:
         existente = generadas.get(seccion.slug)
         if existente is None:
             parrafo, restante = "", seccion.palabras
         else:
-            parrafo, _, resto = existente.texto.partition("\n\n")
-            parrafo, restante = parrafo.strip(), len(resto.split())
+            primer_parrafo, _, _resto = existente.texto.partition("\n\n")
+            total_palabras = len(existente.texto.split())
+            parrafo, mostradas = _abrir(primer_parrafo.strip(), tope)
+            restante = total_palabras - mostradas
         salida.append({
             "slug": seccion.slug,
             "titulo": seccion.titulo[interpretacion.lang],
