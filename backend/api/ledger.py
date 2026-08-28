@@ -82,6 +82,22 @@ def refund_credits(account, n: int, external_id: str, note: str = "") -> bool:
     return True
 
 
+def devolver(account, n: int = 1, note: str = "") -> None:
+    """Repone créditos que se cobraron por un informe que nunca llegó a existir.
+
+    NO es `refund_credits`: aquello es un reembolso de dinero, incrementa
+    `refund_count` y puede marcar la cuenta. Acá el usuario no hizo nada — falló
+    la generación de nuestro lado — y marcarlo sería castigarlo por un bug."""
+    with transaction.atomic():
+        acc = Account.objects.select_for_update().get(pk=account.pk)
+        acc.paid_balance += n
+        acc.save(update_fields=["paid_balance"])
+        CreditTransaction.objects.create(
+            account=acc, kind="adjustment", lot="paid", amount=n, note=note,
+        )
+    account.paid_balance = acc.paid_balance
+
+
 def credit_purchase(account, n: int, external_id: str, note: str = "") -> bool:
     """Acredita n créditos pagos de forma idempotente por external_id.
     Devuelve True si acreditó, False si ya estaba procesado."""
