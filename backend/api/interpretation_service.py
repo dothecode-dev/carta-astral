@@ -167,7 +167,35 @@ def _sibling_en_curso(chart, lang: str) -> Interpretation | None:
     "en" cobra y genera desde cero en vez de traducir gratis. No es el bug
     reportado (que es una espera de minutos, no de microsegundos) y no
     pierde plata —cobra una vez, igual que si no hubiera sibling—, así que
-    no amerita la complejidad de una transacción con lock de fila."""
+    no amerita la complejidad de una transacción con lock de fila.
+
+    HALLAZGO 2 de code review (informe-natal): esta función no tenía límite
+    de antigüedad — CUALQUIER fila `completa=False` bloqueaba el resto de
+    los idiomas de esa carta con 409 para siempre, sin salida. Y quedan así
+    fácil: un restart de gunicorn a mitad de generación, o el techo de
+    tokens del HALLAZGO 1 (`interpret/generator.py`), dejan una fila
+    `completa=False` cuyo proceso ya no existe.
+
+    Criterio elegido: lock VIVO. El lock de la carta (`_lock_key`, con TTL y
+    dueño vía `renovar_lock`/`soltar_lock`, todos en este mismo módulo) es
+    justo la señal de "hay un proceso generando esto ahora mismo" que ya
+    existe y ya está tuneada (`LOCK_TTL` cubre las ocho llamadas de un
+    informe). Sin lock vivo no hay nadie escribiendo esta carta —ni "es" va
+    a progresar más— así que bloquear otro idioma no evita ningún trabajo
+    duplicado, sólo deja al usuario sin salida. Se prefirió sobre una
+    antigüedad fija (`created_at`/`updated_at`) porque el lock ya captura
+    "vivo" con precisión (se renueva sección a sección) en vez de una
+    ventana de tiempo arbitraria que sería demasiado corta para un informe
+    lento o demasiado larga para uno realmente abandonado.
+
+    Nota: en el caso de un restart de gunicorn a mitad de generación, el
+    lock sigue vivo hasta que expira su TTL (hasta `LOCK_TTL` segundos) —
+    ese informe abandonado todavía bloquea otros idiomas por esa ventana,
+    después dejar de hacerlo solo. Es el mismo comportamiento que ya tiene
+    el resto del módulo (nada purga el lock antes de su TTL) y no es peor
+    que antes: antes bloqueaba para SIEMPRE."""
+    if cache.get(_lock_key(chart)) is None:
+        return None
     return (
         Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION, completa=False)
         .exclude(lang=lang)

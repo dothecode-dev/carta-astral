@@ -3,6 +3,7 @@ from django.core.cache import cache
 
 from api import interpretation_service
 from api.exceptions import GenerationInProgress
+from api.models import Interpretation
 from interpret.prompts import PROMPT_VERSION
 
 pytestmark = pytest.mark.django_db
@@ -14,6 +15,51 @@ def test_una_generacion_en_curso_bloquea_tambien_los_otros_idiomas(db_cache, cha
     cache.set(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "1", timeout=600)
     with pytest.raises(GenerationInProgress):
         interpretation_service.get_or_create_interpretation(chart, "en", account)
+
+
+# --- HALLAZGO 2 de code review: `_sibling_en_curso` sin límite de antigüedad ---
+# Cualquier `Interpretation` que quede `completa=False` bloqueaba con 409 el
+# resto de los idiomas de esa carta para siempre: un restart de gunicorn a
+# mitad de generación, o el techo de tokens del HALLAZGO 1, sueltan el lock
+# de la carta (por TTL o al terminar `completar_generacion`) pero dejan la
+# fila `completa=False` — y `_sibling_en_curso` sólo miraba esa fila, nunca
+# el lock. Criterio elegido: lock VIVO (`cache.get(_lock_key(chart))`), el
+# mismo mecanismo que ya usan `renovar_lock`/`soltar_lock` en este módulo —
+# sin lock, no hay ningún proceso generando esta carta ahora mismo, así que
+# un `completa=False` sin lock es un abandonado, no "en curso".
+
+
+def test_sibling_en_curso_ignora_una_interpretacion_abandonada_sin_lock(db_cache, chart, account):
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+    )
+    # No se toma ningún lock: simula un proceso muerto (restart de gunicorn a
+    # mitad de generación, o el fallo terminal del HALLAZGO 1) que ya no
+    # sostiene el candado de la carta.
+    assert interpretation_service._sibling_en_curso(chart, "en") is None
+
+
+def test_sibling_en_curso_sigue_bloqueando_con_el_lock_vivo(db_cache, chart, account):
+    """Contrapunto: con el lock realmente tomado, el criterio nuevo sigue
+    detectando la generación en curso igual que antes."""
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+    )
+    cache.set(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "token-vivo", timeout=600)
+    sibling = interpretation_service._sibling_en_curso(chart, "en")
+    assert sibling is not None
+    assert sibling.lang == "es"
+
+
+def test_interpretacion_abandonada_sin_lock_no_bloquea_otro_idioma(db_cache, chart, account):
+    """Nivel de comportamiento (no sólo la función privada): pedir el otro
+    idioma sobre una carta con un informe abandonado no puede quedar
+    bloqueado para siempre — `iniciar_generacion` tiene que poder seguir."""
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+    )
+    otra = interpretation_service.iniciar_generacion(chart, "en", account)
+    assert otra.lang == "en"
 
 
 def test_el_ttl_cubre_lo_que_tarda_un_informe_de_ocho_secciones():
