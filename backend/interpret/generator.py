@@ -108,31 +108,16 @@ _CONTEXTO_PREVIO = {
 }
 
 
-def _create_text(client, model: str, system: str, user_content: str, max_tokens: int) -> str:
-    """Como _stream_text pero sin streaming. Las secciones son bastante más
-    cortas que la interpretación completa: no valen la complejidad de un
-    read-timeout por-chunk, y en la Tarea 6 se llama ocho veces seguidas."""
-    try:
-        resp = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[{"role": "user", "content": user_content}],
-        )
-    except anthropic.AnthropicError as exc:  # timeout, API, conexión, etc.
-        raise InterpretationError(f"error del LLM: {exc}") from exc
-
-    text = "".join(getattr(b, "text", "") for b in resp.content).strip()
-    if not text:
-        raise InterpretationError("respuesta vacía del LLM")
-    return text
-
-
 def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, client) -> str:
     """Genera una sección del informe. `previo` es el resumen de lo ya
     escrito en secciones anteriores: es lo único que impide que, por ejemplo,
     la sección de tensiones repita lo que ya dijo la de la firma. Vacío
-    (`""`) para la primera sección."""
+    (`""`) para la primera sección.
+
+    Usa _stream_text igual que build_interpretation: las secciones piden
+    hasta el doble de max_tokens que la interpretación completa (una sección
+    de 1000 palabras pide 2000 tokens contra los 1500 de MAX_TOKENS), así que
+    el read-timeout por-chunk del streaming es tan o más necesario acá."""
     pedido = _PEDIDO_SECCION[lang].format(
         titulo=seccion.titulo[lang], foco=seccion.foco[lang], palabras=seccion.palabras
     )
@@ -143,5 +128,8 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     if previo:
         content += _CONTEXTO_PREVIO[lang].format(previo=previo)
 
+    # cache_control queda diferido: es optimización de costo, no correctitud
+    # (ver ítem de cierre del plan que mide el costo real de un informe).
+    system = [{"type": "text", "text": SYSTEM_PROMPTS[lang]}]
     # Holgura sobre el objetivo: un tope justo corta la sección a la mitad.
-    return _create_text(client, MODEL, SYSTEM_PROMPTS[lang], content, seccion.palabras * 2)
+    return _stream_text(client, MODEL, system, content, seccion.palabras * 2)

@@ -1,21 +1,60 @@
+import pytest
+
+from interpret.exceptions import InterpretationError
 from interpret.generator import build_seccion
 from interpret.prompts import SECCIONES
 
 
+class _Bloque:
+    def __init__(self, text):
+        self.type = "text"
+        self.text = text
+
+
+class _Respuesta:
+    def __init__(self, text="texto de la sección", stop_reason="end_turn"):
+        self.content = [_Bloque(text)]
+        self.stop_reason = stop_reason
+
+
+class _StreamCtx:
+    def __init__(self, resp, raises):
+        self._resp = resp
+        self._raises = raises
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get_final_message(self):
+        if self._raises:
+            raise self._raises
+        return self._resp
+
+
 class ClienteFalso:
-    """Captura lo que se le manda al modelo y devuelve un texto fijo."""
+    """Captura lo que se le manda al modelo y devuelve una respuesta fija,
+    igual que el streaming real: `messages.stream(...)` como context manager
+    y el texto final vía `get_final_message()`."""
 
-    def __init__(self):
+    def __init__(self, resp=None, raises=None):
+        self._resp = resp or _Respuesta()
+        self._raises = raises
         self.llamadas = []
-        self.messages = self
 
-    def create(self, **kwargs):
-        self.llamadas.append(kwargs)
+    class _Messages:
+        def __init__(self, outer):
+            self.outer = outer
 
-        class R:
-            content = [type("B", (), {"text": "texto de la sección"})()]
+        def stream(self, **kwargs):
+            self.outer.llamadas.append(kwargs)
+            return _StreamCtx(self.outer._resp, self.outer._raises)
 
-        return R()
+    @property
+    def messages(self):
+        return ClienteFalso._Messages(self)
 
 
 def test_la_primera_seccion_no_recibe_contexto_previo():
@@ -47,3 +86,11 @@ def test_el_tope_de_tokens_acompana_al_largo_pedido():
     c = ClienteFalso()
     build_seccion({"planets": []}, SECCIONES[4], "es", "", c)  # tensiones: 1000 palabras
     assert c.llamadas[0]["max_tokens"] >= 1000 * 2
+
+
+def test_una_seccion_truncada_por_max_tokens_falla():
+    """Garantía de que una sección cortada a la mitad no se persiste como si
+    estuviera completa: _stream_text valida stop_reason y levanta."""
+    c = ClienteFalso(resp=_Respuesta(stop_reason="max_tokens"))
+    with pytest.raises(InterpretationError):
+        build_seccion({"planets": []}, SECCIONES[0], "es", "", c)
