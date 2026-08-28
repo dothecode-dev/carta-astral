@@ -364,3 +364,44 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
     assert not Interpretation.objects.filter(
         chart=chart, lang="en", prompt_version=PROMPT_VERSION
     ).exists()  # no queda una fila "en" vacía y cobrada
+
+
+# --- HALLAZGO 3 de code review: la devolución infiere "se cobró" en vez de saberlo ---
+# La guarda de `completar_generacion` recalculaba `sibling is None` en el
+# hilo de fondo — un estado que `iniciar_generacion` ya había decidido antes,
+# sobre otra foto de la base. Si `iniciar_generacion` encontró un sibling
+# completo (y por eso NO cobró) y ese sibling desaparece antes de que corra
+# `completar_generacion`, el recálculo daba `sibling is None`, la generación
+# de reemplazo fallaba con 0 secciones, y se acreditaba un crédito por un
+# débito que nunca ocurrió.
+
+
+def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
+    chart, account, interpretacion_completa, settings, monkeypatch
+):
+    """Reproduce la secuencia exacta: `iniciar_generacion` encuentra el
+    sibling "es" completo y no cobra por "en" (RF8). El sibling desaparece
+    antes de `completar_generacion` (p. ej. se borra esa interpretación) y
+    la generación de reemplazo falla sin persistir ninguna sección. El
+    saldo no puede bajar: nunca se cobró nada, así que no hay nada que
+    devolver."""
+    from api import interpretation_service as svc, informe_service
+
+    settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
+    antes = account.free_balance + account.paid_balance
+
+    interpretacion_en = svc.iniciar_generacion(chart, "en", account)
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes  # confirmado: no cobró
+
+    interpretacion_completa.delete()  # el sibling desaparece antes de completar_generacion
+
+    def falla_sin_secciones(*a, **kw):
+        raise RuntimeError("cayó la API")
+
+    monkeypatch.setattr(informe_service, "generar_informe", falla_sin_secciones)
+
+    svc.completar_generacion(interpretacion_en, chart, account)
+
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes  # nunca se cobró: no hay nada que devolver

@@ -423,14 +423,27 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     devuelve el crédito, y ese es justo el tipo de bug que un refactor futuro
     podría reintroducir si el chequeo volviera a vivir afuera. Con
     `got_lock=False` el `finally` sigue corriendo igual, pero no hace nada —
-    `sibling` es `None` sin haberse cobrado nunca desde acá (esta llamada no
-    tocó el ledger, así que no hay nada que devolver) y `soltar_lock` no
-    aplica (nunca se tomó el lock). No confundir con la Tarea 10: cuando el
-    lock está tomado por OTRO proceso, `iniciar_generacion` ya cobró antes de
-    lanzar este hilo, pero es una carga legítima —alguien más lo está
-    generando (u otro intento sobre la MISMA `Interpretation`, ver
-    `test_lock_tomado_no_genera_ni_cobra_de_nuevo`) y esa llamada, no ésta,
-    es responsable de terminarlo o de devolver si falla."""
+    esta llamada no tocó el ledger, así que no hay nada que devolver — y
+    `soltar_lock` no aplica (nunca se tomó el lock). No confundir con la
+    Tarea 10: cuando el lock está tomado por OTRO proceso, `iniciar_generacion`
+    ya cobró antes de lanzar este hilo, pero es una carga legítima —alguien
+    más lo está generando (u otro intento sobre la MISMA `Interpretation`,
+    ver `test_lock_tomado_no_genera_ni_cobra_de_nuevo`) y esa llamada, no
+    ésta, es responsable de terminarlo o de devolver si falla.
+
+    HALLAZGO 3 de code review: la guarda de la devolución (ver `finally`)
+    NO usa `sibling is None`, aunque `sibling` sigue existiendo para decidir
+    el camino de traducir-vs-generar (arriba). `sibling` es una foto de la
+    base tomada ACÁ, en el hilo de fondo — un instante distinto del que usó
+    `iniciar_generacion` para decidir si cobraba. Si `iniciar_generacion`
+    encontró un sibling completo (no cobró) y ese sibling desaparece antes
+    de que corra esta función (p. ej. se borra esa interpretación), `sibling`
+    recién calculado da `None` aunque acá nunca se cobró nada — devolver en
+    ese caso acredita un crédito que nunca se debitó. La guarda correcta no
+    es "¿existe un sibling ahora?" sino "¿esta `Interpretation` tiene una
+    `CreditTransaction` de consumo?" — el hecho que `iniciar_generacion`
+    dejó escrito en la base cuando SÍ cobró (vía `ledger.charge`), y que no
+    cambia aunque cualquier otra fila de la base sí lo haga."""
     if interpretacion.completa:
         return
 
@@ -460,20 +473,26 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # ni generó nada (ver el docstring), así que no hay crédito que
         # devolver ni lock propio que soltar.
         #
-        # Con lock propio, sólo se cobró si NO había sibling (si lo había,
-        # `iniciar_generacion` no tocó el ledger): devolver acá en el camino
-        # de traducción regalaría un crédito que nunca se cobró.
-        if got_lock and sibling is None and not interpretacion.secciones.exists():
-            pk = interpretacion.pk
-            # El lote se lee ANTES de borrar: `CreditTransaction.interpretation`
-            # es SET_NULL, no CASCADE, pero de todas formas hace falta el dato
-            # antes de que la fila deje de existir. Se devuelve al MISMO lote
-            # del que se cobró (BUG de la revisión final: antes `ledger.devolver`
-            # fijaba "paid" siempre).
-            consumo = CreditTransaction.objects.filter(
+        # `consumo` (no `sibling is None`, HALLAZGO 3 de code review) es el
+        # dato explícito: existe si y sólo si `iniciar_generacion` llegó a
+        # llamar a `ledger.charge` para ESTA `Interpretation` — el hecho de
+        # si se cobró, escrito en la base por quien lo decidió, en vez de
+        # re-derivado acá sobre una foto de la base que puede haber
+        # cambiado. El lote se lee ANTES de borrar: `CreditTransaction.
+        # interpretation` es SET_NULL, no CASCADE, pero de todas formas hace
+        # falta el dato antes de que la fila deje de existir. Se devuelve al
+        # MISMO lote del que se cobró (BUG de la revisión final: antes
+        # `ledger.devolver` fijaba "paid" siempre).
+        consumo = (
+            CreditTransaction.objects.filter(
                 interpretation=interpretacion, kind="consumption",
             ).first()
-            lot = consumo.lot if consumo is not None else "paid"
+            if got_lock
+            else None
+        )
+        if got_lock and consumo is not None and not interpretacion.secciones.exists():
+            pk = interpretacion.pk
+            lot = consumo.lot
             interpretacion.delete()
             ledger.devolver(
                 account,
