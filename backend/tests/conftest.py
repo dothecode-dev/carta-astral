@@ -80,6 +80,27 @@ def interpretacion(db, chart, account):
 
 
 @pytest.fixture
+def interpretacion_completa(db, chart, account):
+    """Un informe terminado, con las ocho secciones ya escritas.
+
+    `chart.data` es `{}`, así que `time_known` cae en el default de
+    `secciones_aplicables` (`True`): las ocho secciones del catálogo aplican,
+    incluida "casas"."""
+    from api.models import Interpretation, InterpretationSection
+    from interpret.prompts import PROMPT_VERSION, SECCIONES
+
+    interpretacion = Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, account=account, completa=True,
+    )
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=interpretacion, slug=seccion.slug, orden=orden,
+            texto=f"Texto de la sección {seccion.slug}.",
+        )
+    return interpretacion
+
+
+@pytest.fixture
 def db_cache(settings, db):
     """Corre un test contra `DatabaseCache`, el backend real de producción.
 

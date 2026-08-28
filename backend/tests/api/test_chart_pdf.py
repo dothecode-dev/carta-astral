@@ -17,8 +17,8 @@ import uuid
 import pytest
 
 from api.chart_service import create_chart
-from api.models import Interpretation
-from interpret.prompts import PROMPT_VERSION
+from api.models import Interpretation, InterpretationSection
+from interpret.prompts import PROMPT_VERSION, SECCIONES
 
 pytestmark = pytest.mark.django_db
 
@@ -99,6 +99,18 @@ def _payload(**over):
     }
     base.update(over)
     return base
+
+
+def _informe(chart, texto, lang="es", completa=True):
+    """Un informe con una sola sección escrita, para probar el render de la
+    lectura sin tener que armar las ocho."""
+    interp = Interpretation.objects.create(
+        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=completa,
+    )
+    InterpretationSection.objects.create(
+        interpretation=interp, slug=SECCIONES[0].slug, orden=0, texto=texto,
+    )
+    return interp
 
 
 def _html(chart, **over):
@@ -193,10 +205,7 @@ def test_sin_reading_lang_no_aparece_la_lectura(account_client):
 
 def test_con_reading_lang_aparece_la_lectura_y_el_disclaimer(account_client):
     chart = _chart(account_client)
-    Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION,
-        text="Tu Sol en Piscis habla de fronteras porosas.", content_key="k",
-    )
+    _informe(chart, "Tu Sol en Piscis habla de fronteras porosas.")
     html = _html(chart, reading_lang="es")
     assert "fronteras porosas" in html
     from api.interpretation_service import DISCLAIMERS
@@ -214,10 +223,7 @@ def test_lectura_en_otro_idioma_se_incluye_tal_como_esta(account_client):
     """La lectura se compra una vez y se traduce gratis: si existe en español y
     la página está en inglés, el PDF la lleva en español antes que no llevarla."""
     chart = _chart(account_client)
-    Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION,
-        text="Tu Sol en Piscis habla de fronteras porosas.", content_key="k",
-    )
+    _informe(chart, "Tu Sol en Piscis habla de fronteras porosas.")
     html = _html(chart, reading_lang="es")
     assert "fronteras porosas" in html
 
@@ -259,12 +265,46 @@ def test_con_matriz_la_carta_cierra_ahi(account_client):
 
 def test_la_lectura_empieza_en_hoja_nueva(account_client):
     chart = _chart(account_client)
-    Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION,
-        text="Tu Sol en Piscis habla de fronteras porosas.", content_key="k",
-    )
+    _informe(chart, "Tu Sol en Piscis habla de fronteras porosas.")
     html = _html(chart, reading_lang="es")
     assert html.index("pagebreak") < html.index("fronteras porosas")
+
+
+def test_el_pdf_trae_las_ocho_secciones_con_indice(interpretacion_completa):
+    from api import pdf_payload
+
+    payload = pdf_payload.build(interpretacion_completa.chart, interpretacion_completa)
+    assert len(payload["reading"]["secciones"]) == 8
+    assert payload["reading"]["indice"] == [s.titulo["es"] for s in SECCIONES]
+
+
+def test_la_hoja_de_estilos_evita_titulos_huerfanos():
+    # Un título solo al pie de una página se lee como error de maquetación, y
+    # este PDF se vende a US$29. WeasyPrint respeta break-after.
+    from pathlib import Path
+
+    css = Path("api/pdf_assets/informe.css").read_text(encoding="utf-8")
+    assert "break-after: avoid" in css
+
+
+def test_interpretacion_incompleta_no_aparece_en_el_pdf(account_client):
+    """Un informe a medio generar no se sirve como si estuviera terminado
+    (mismo criterio que `InterpretationView.get`)."""
+    chart = _chart(account_client)
+    _informe(chart, "Tu Sol en Piscis habla de fronteras porosas.", completa=False)
+    html = _html(chart, reading_lang="es")
+    assert "fronteras porosas" not in html
+    assert "Tu lectura" not in html
+
+
+def test_el_indice_nombra_las_secciones_que_faltan(account_client):
+    """El índice lista las ocho (o siete sin hora) aunque sólo una esté
+    escrita: mismo criterio que `informe_service.resumen_gratis`."""
+    chart = _chart(account_client)
+    _informe(chart, "Tu Sol en Piscis habla de fronteras porosas.", completa=True)
+    html = _html(chart, reading_lang="es")
+    assert SECCIONES[-1].titulo["es"] in html
+    assert f'<h2>{SECCIONES[0].titulo["es"]}</h2>' in html
 
 
 def test_un_tono_desconocido_en_la_matriz_es_400(account_client):

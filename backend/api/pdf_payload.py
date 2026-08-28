@@ -8,11 +8,23 @@ tercera copia de la misma verdad.
 Todo lo que no está declarado se rechaza: los campos desconocidos hacen fallar la
 validación en vez de ignorarse, que es el default de DRF. Un payload que no se
 entiende no se dibuja a medias.
+
+`build()`, más abajo, es la excepción a ese contrato: no valida nada del
+cliente, arma la parte de la lectura que el cliente NO manda —viaja sólo
+`reading_lang`— a partir de lo que ya está persistido. Vive acá y no en
+`chart_pdf_service` porque es la otra mitad del mismo contrato: qué forma
+tiene el "payload" de lectura que consume el armado del HTML.
 """
 
+from __future__ import annotations
+
 import math
+from typing import Any
 
 from rest_framework import serializers
+
+from api.informe_service import secciones_aplicables
+from api.models import Chart, Interpretation
 
 
 class _Number(serializers.FloatField):
@@ -177,3 +189,29 @@ class ChartPdfSerializer(_Strict):
     reading_lang = serializers.ChoiceField(
         choices=["es", "en", "pt"], required=False, allow_null=True
     )
+
+
+def build(chart: Chart, interpretacion: Interpretation) -> dict[str, Any]:
+    """La lectura para el PDF: título y texto de cada sección ya escrita, más
+    el índice completo del informe.
+
+    El índice sale de `secciones_aplicables(chart)` —el catálogo, filtrado
+    por si hay hora de nacimiento—, no de `interpretacion.secciones.all()`:
+    nombra las que corresponden aunque alguna todavía no se haya escrito
+    (mismo criterio que `informe_service.resumen_gratis`). `secciones` en
+    cambio sólo trae las que ya están: no hay texto que mostrar para una que
+    falta.
+
+    Quien llama decide si `interpretacion` corresponde a un informe
+    terminado (`completa=True`); acá no se vuelve a chequear.
+    """
+    aplicables = secciones_aplicables(chart)
+    lang = interpretacion.lang
+    escritas = {s.slug: s.texto for s in interpretacion.secciones.all()}
+    secciones = [
+        {"titulo": seccion.titulo[lang], "texto": escritas[seccion.slug]}
+        for seccion in aplicables
+        if seccion.slug in escritas
+    ]
+    indice = [seccion.titulo[lang] for seccion in aplicables]
+    return {"reading": {"secciones": secciones, "indice": indice}}

@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from api import pdf_payload
 from api.interpretation_service import DISCLAIMERS
 from api.models import Chart
 from interpret.prompts import PROMPT_VERSION
@@ -101,6 +102,20 @@ def _font_css() -> str:
             f"src: url(data:font/woff2;base64,{datos}) format('woff2'); }}"
         )
     return "\n".join(bloques)
+
+
+@functools.lru_cache(maxsize=1)
+def _base_css() -> str:
+    """La hoja de estilos del documento, dinámica sólo en la paleta.
+
+    Los colores de marca son variables CSS que se fijan acá desde `PALETTE`
+    —la misma fuente que usa `_svg`—; el resto de las reglas vive en
+    `pdf_assets/informe.css` como una hoja de estilos de verdad, no como un
+    f-string gigante.
+    """
+    variables = "\n".join(f"  --{clave.replace('_', '-')}: {valor};" for clave, valor in PALETTE.items())
+    hoja = (ASSETS / "informe.css").read_text(encoding="utf-8")
+    return f":root {{\n{variables}\n}}\n{hoja}"
 
 
 def _esc(texto: str) -> str:
@@ -224,50 +239,57 @@ def _matrix_html(matrix: dict) -> str:
     )
 
 
-def _reading_html(texto: str, disclaimer: str, titulo: str) -> str:
-    """La lectura, con el markdown liviano que escribe el generador.
+def _seccion_html(texto: str) -> str:
+    """Los párrafos de una sección. El markdown que escribe el generador es
+    liviano —sólo `**` para negrita, que acá se descarta— y no trae sus
+    propios títulos: el título es el del catálogo (`Seccion.titulo`), no algo
+    que haya que parsear del texto."""
+    return "".join(
+        f"<p>{_esc(bloque.strip().replace('**', ''))}</p>"
+        for bloque in re.split(r"\n\n+", texto.strip())
+        if bloque.strip()
+    )
 
-    Sólo títulos y párrafos: el texto se escapa entero y después se le dan
-    etiquetas, nunca al revés.
-    """
-    bloques = []
-    for bloque in re.split(r"\n\n+", texto.strip()):
-        bloque = bloque.strip()
-        if not bloque:
-            continue
-        encabezado = re.match(r"^#{1,3}\s+(.*)$", bloque.split("\n")[0])
-        if encabezado:
-            titulo_bloque = _esc(encabezado.group(1).replace("**", ""))
-            resto = "\n".join(bloque.split("\n")[1:]).strip()
-            bloques.append(f"<h2>{titulo_bloque}</h2>")
-            if resto:
-                bloques.append(f"<p>{_esc(resto.replace('**', ''))}</p>")
-        else:
-            bloques.append(f"<p>{_esc(bloque.replace('**', ''))}</p>")
 
+def _reading_html(reading: dict, disclaimer: str, titulo: str) -> str:
+    """La lectura: el índice de las secciones aplicables —nombra también las
+    que todavía no se escribieron, ver `pdf_payload.build`— y el texto de
+    cada una que sí está, con su propio título."""
+    indice_html = "".join(f"<li>{_esc(t)}</li>" for t in reading["indice"])
+    secciones_html = "".join(
+        f'<div class="seccion"><h2>{_esc(seccion["titulo"])}</h2>{_seccion_html(seccion["texto"])}</div>'
+        for seccion in reading["secciones"]
+    )
     return (
         '<div class="pagebreak"></div>'
         f'<div class="section eyebrow">{_esc(titulo)}</div>'
-        f'<div class="reading">{"".join(bloques)}</div>'
+        f'<ol class="indice">{indice_html}</ol>'
+        f'<div class="reading">{secciones_html}</div>'
         f'<p class="disclaimer">{_esc(disclaimer)}</p>'
     )
 
 
-def _reading_for(chart: Chart, lang: str | None) -> tuple[str, str] | None:
-    """El texto y el descargo de la lectura pedida, si está escrita."""
+def _reading_for(chart: Chart, lang: str | None) -> tuple[dict, str] | None:
+    """El informe pedido, si está escrito y terminado.
+
+    Una interpretación con `completa=False` no se sirve —mismo criterio que
+    `InterpretationView.get`—: un informe a medio generar no tiene por qué
+    salir en un PDF como si estuviera terminado.
+    """
     if not lang:
         return None
-    interp = chart.interpretations.filter(lang=lang, prompt_version=PROMPT_VERSION).first()
+    interp = chart.interpretations.filter(
+        lang=lang, prompt_version=PROMPT_VERSION, completa=True
+    ).first()
     if interp is None:
         # No es un error: la carta se baja igual, sin la lectura.
         return None
-    return interp.text, DISCLAIMERS[interp.lang]
+    return pdf_payload.build(chart, interp)["reading"], DISCLAIMERS[interp.lang]
 
 
 def build_document_html(chart: Chart, data: dict) -> str:
     """El documento entero como HTML. Función pura: es donde se verifica todo."""
     labels = data["labels"]
-    p = PALETTE
 
     filas_posiciones = "".join(
         f'<tr><td class="glyph">{_esc(pos["glyph"])}</td>'
@@ -308,51 +330,7 @@ def build_document_html(chart: Chart, data: dict) -> str:
     return f"""<meta charset="utf-8">
 <style>
 {_font_css()}
-  /* El margen vertical va en todas las páginas; el fondo del html pinta también
-     el área de margen, así no quedan bordes blancos. */
-  @page {{ margin: 36px 0; }}
-  html {{ background: {p["void"]}; }}
-  body {{ margin: 0; padding: 6px 44px; background: {p["void"]};
-    color: {p["starlight"]}; font-family: 'Outfit', sans-serif; }}
-  .eyebrow {{ font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 4px;
-    text-transform: uppercase; color: {p["stardust"]}; }}
-  h1 {{ font-weight: 300; font-size: 30px; letter-spacing: 1px; margin: 6px 0 2px; }}
-  .birth {{ font-family: 'Space Mono', monospace; font-size: 11px; color: {p["stardust"]}; }}
-  table {{ width: 100%; border-collapse: collapse; margin-top: 6px; }}
-  td {{ padding: 5px 4px; font-size: 12px; border-bottom: 0.5px solid {p["orbit"]}; }}
-  .glyph {{ color: {p["sol"]}; font-size: 14px; width: 64px; white-space: nowrap; }}
-  .data {{ font-family: 'Space Mono', monospace; font-size: 11px; text-align: right; }}
-  .rx {{ color: {p["danger"]}; }}
-  .section {{ margin-top: 18px; page-break-after: avoid; }}
-  /* La matriz de aspectos: la misma lectura que en el sitio. Dieciocho columnas
-     en A4 dan celdas de unos 26pt, asi que el glifo va chico y sin padding. */
-  .aspectMatrix {{ width: 100%; border-collapse: collapse; margin: 4px 0 14px;
-    page-break-inside: avoid; }}
-  .aspectMatrix td, .aspectMatrix th {{ height: 20px; padding: 0; text-align: center;
-    font-size: 10px; border: 0.5px solid {p["orbit"]}; }}
-  .matrixHead {{ font-family: 'Space Mono', monospace; font-size: 8px;
-    font-weight: 400; color: {p["stardust"]}; }}
-  /* La mitad de arriba repetiria la de abajo: va hueca, sin bordes. */
-  .matrixVoid {{ border: 0; }}
-  .matrixSoft {{ color: {p["sol"]}; }}
-  .matrixHard {{ color: {p["starlight"]}; }}
-  .matrixNeutral {{ color: {p["stardust"]}; }}
-  .footer {{ margin-top: 26px; text-align: center; font-family: 'Space Mono', monospace;
-    font-size: 10px; letter-spacing: 3px; color: {p["stardust"]}; text-transform: uppercase; }}
-  .footer .sol {{ color: {p["sol"]}; }}
-  .pagebreak {{ page-break-before: always; }}
-  .cover {{ page-break-after: always; text-align: center; padding-top: 34px; }}
-  .brand {{ font-weight: 300; font-size: 34px; letter-spacing: 12px; margin-left: 12px; }}
-  .brand-tag {{ font-family: 'Space Mono', monospace; font-size: 10px;
-    letter-spacing: 6px; text-transform: uppercase; color: {p["stardust"]}; margin-top: 8px; }}
-  .cover h1 {{ margin-top: 10px; }}
-  .cover .wheel-big {{ margin-top: 36px; }}
-  tr {{ page-break-inside: avoid; }}
-  .reading h2 {{ font-weight: 400; font-size: 17px; letter-spacing: 0.5px;
-    margin: 18px 0 6px; page-break-after: avoid; }}
-  .reading p {{ font-size: 12.5px; line-height: 1.75; margin: 0 0 12px;
-    opacity: 0.92; orphans: 3; widows: 3; }}
-  .disclaimer {{ margin-top: 20px; font-size: 10px; line-height: 1.6; color: {p["stardust"]}; }}
+{_base_css()}
 </style>
 <div class="cover">
   <div class="brand">ASTRA</div>
