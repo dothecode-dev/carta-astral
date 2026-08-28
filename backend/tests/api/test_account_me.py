@@ -1,4 +1,5 @@
 import pytest
+from django.conf import settings
 from rest_framework.test import APIClient
 
 
@@ -13,5 +14,5 @@ def test_account_me_returns_credits():
     c.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
     resp = c.get("/api/account/")
     assert resp.status_code == 200
-    assert resp.data["credits_available"] == 1
+    assert resp.data["credits_available"] == settings.INSTALL_FREE_CREDITS
     assert resp.data["account_id"] == acc.id

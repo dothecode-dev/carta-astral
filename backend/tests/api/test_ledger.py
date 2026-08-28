@@ -13,7 +13,10 @@ def _make_interp(chart):
 @pytest.fixture
 def chart(db):
     from api.models import Account, BirthData, Chart
-    acc = Account.objects.create()  # free_balance=1 por default
+    # free_balance=1 explícito: lo que prueban estos tests es la mecánica del
+    # ledger (consumir el lote free antes que el paid), no el valor de
+    # INSTALL_FREE_CREDITS — que puede cambiar sin que esto se rompa.
+    acc = Account.objects.create(free_balance=1)
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     return Chart.objects.create(birth_data=bd, data={}, engine_version="x", account=acc)
 
