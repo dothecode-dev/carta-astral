@@ -1,7 +1,7 @@
 import pytest
 
 from interpret.exceptions import InterpretationError
-from interpret.generator import build_seccion
+from interpret.generator import build_interpretation, build_seccion
 from interpret.prompts import SECCIONES
 
 
@@ -94,3 +94,22 @@ def test_una_seccion_truncada_por_max_tokens_falla():
     c = ClienteFalso(resp=_Respuesta(stop_reason="max_tokens"))
     with pytest.raises(InterpretationError):
         build_seccion({"planets": []}, SECCIONES[0], "es", "", c)
+
+
+def test_el_system_de_seccion_no_fija_un_largo_y_difiere_del_de_interpretacion():
+    """El largo de una sección lo fija el pedido (varía 600-1000 según la
+    sección), no el system: si el system dijera "400 a 700 palabras" como el
+    de la interpretación corta, el informe completo saldría muy por debajo de
+    las 6400 palabras que promete el catálogo."""
+    c_seccion = ClienteFalso()
+    build_seccion({"planets": []}, SECCIONES[0], "es", "", c_seccion)
+    system_seccion = c_seccion.llamadas[0]["system"][0]["text"]
+
+    for palabra_prohibida in ("400", "700", "words", "palabras", "palavras"):
+        assert palabra_prohibida not in system_seccion.lower()
+
+    c_interpretacion = ClienteFalso()
+    build_interpretation({"planets": []}, "es", "v2", c_interpretacion)
+    system_interpretacion = c_interpretacion.llamadas[0]["system"][0]["text"]
+
+    assert system_seccion != system_interpretacion

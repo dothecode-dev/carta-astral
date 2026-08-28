@@ -13,6 +13,7 @@ from interpret.prompts import (
     MAX_TOKENS,
     MODEL,
     SYSTEM_PROMPTS,
+    SYSTEM_PROMPTS_SECCION,
     TRANSLATE_MAX_TOKENS,
     TRANSLATE_MODEL,
     Seccion,
@@ -128,8 +129,12 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     if previo:
         content += _CONTEXTO_PREVIO[lang].format(previo=previo)
 
+    # SYSTEM_PROMPTS_SECCION, no SYSTEM_PROMPTS: éste no fija un largo (lo fija
+    # el pedido, que varía por sección) y aclara que es una sección de un
+    # informe más largo, no una pieza autónoma. SYSTEM_PROMPTS sigue siendo de
+    # build_interpretation, la lectura corta que ya está en producción.
     # cache_control queda diferido: es optimización de costo, no correctitud
     # (ver ítem de cierre del plan que mide el costo real de un informe).
-    system = [{"type": "text", "text": SYSTEM_PROMPTS[lang]}]
+    system = [{"type": "text", "text": SYSTEM_PROMPTS_SECCION[lang]}]
     # Holgura sobre el objetivo: un tope justo corta la sección a la mitad.
     return _stream_text(client, MODEL, system, content, seccion.palabras * 2)
