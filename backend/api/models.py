@@ -3,6 +3,8 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from interpret.prompts import TIER_CORTO, TIER_LARGO
+
 
 class BirthData(models.Model):
     name = models.CharField(max_length=200, null=True, blank=True)
@@ -55,7 +57,10 @@ class Interpretation(models.Model):
     """Interpretación LLM cacheada de una carta. Clave de cache: (chart, lang,
     prompt_version, tier) — cambiar prompt_version genera registros nuevos."""
 
-    TIERS = (("corto", "corto"), ("largo", "largo"))
+    # Mismos literales que interpret.prompts.SECCION_BREVE/SECCIONES usan para
+    # elegir el catálogo (`secciones_aplicables`): dos fuentes de verdad sin
+    # atar dejarían el bug en silencio si alguien cambia una y no la otra.
+    TIERS = ((TIER_CORTO, TIER_CORTO), (TIER_LARGO, TIER_LARGO))
 
     chart = models.ForeignKey(Chart, on_delete=models.CASCADE, related_name="interpretations")
     account = models.ForeignKey(
@@ -68,7 +73,7 @@ class Interpretation(models.Model):
     # clave única porque los dos conviven sobre la misma carta (RF6): quien
     # leyó la breve y después paga tiene que poder generar el completo sin
     # perder la breve.
-    tier = models.CharField(max_length=6, choices=TIERS, default="largo")
+    tier = models.CharField(max_length=6, choices=TIERS, default=TIER_LARGO)
     text = models.TextField()
     # sha256 del input del LLM (chart.data canónico + lang + prompt_version).
     # Permite reutilizar el texto entre cartas idénticas sin llamar a la API.
