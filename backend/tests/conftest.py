@@ -38,11 +38,11 @@ def make_account(db):
 def account_client(make_account):
     from api.auth import create_session
     # paid_balance=3, igual que el free_balance que ya trae make_account()
-    # por default (INSTALL_FREE_CREDITS): el POST de interpretación (Task 6)
-    # está fijado a tier="largo" hasta que la Task 7 le sume el tier por
-    # query param, y el informe completo se cobra del lote paid (RF9), no
-    # del free — sin esto, cualquier test que postee al endpoint sin fondear
-    # paid_balance explícito se choca con QuotaExceeded("paid").
+    # por default (INSTALL_FREE_CREDITS): la mayoría de los tests de este
+    # archivo piden tier="largo" (informe completo), que se cobra del lote
+    # paid (RF9), no del free — sin esto, cualquier test que postee al
+    # endpoint con tier="largo" sin fondear paid_balance explícito se choca
+    # con QuotaExceeded("paid").
     acc = make_account(paid_balance=3)
     token = create_session(acc)
     client = APIClient()

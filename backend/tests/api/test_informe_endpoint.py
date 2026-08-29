@@ -42,7 +42,9 @@ def _sin_api_key_real(settings):
 def test_el_post_no_espera_a_que_termine(client_autenticado, chart):
     # Cuatro minutos dentro de la vista bloquean uno de los tres workers sync:
     # tres informes a la vez y el sitio deja de responder.
-    r = client_autenticado.post(f"/api/charts/{chart.uuid}/interpretation/", {"lang": "es"}, format="json")
+    r = client_autenticado.post(
+        f"/api/charts/{chart.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
     assert r.status_code == 202
 
 
@@ -53,7 +55,9 @@ def test_el_post_cobra_y_crea_la_interpretacion_pendiente_sincronicamente(client
     from interpret.prompts import PROMPT_VERSION
 
     antes = account.free_balance + account.paid_balance
-    r = client_autenticado.post(f"/api/charts/{chart.uuid}/interpretation/", {"lang": "es"}, format="json")
+    r = client_autenticado.post(
+        f"/api/charts/{chart.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
     assert r.status_code == 202
 
     interp = Interpretation.objects.get(chart=chart, lang="es", prompt_version=PROMPT_VERSION)
@@ -66,13 +70,20 @@ def test_el_estado_dice_cuantas_secciones_van(client_autenticado, chart, interpr
     from api.models import InterpretationSection
 
     InterpretationSection.objects.create(interpretation=interpretacion, slug="firma", orden=0, texto="x")
-    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado/")
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado/?tier=largo")
     assert r.json() == {"completa": False, "hechas": 1, "total": 8}
 
 
 def test_el_estado_sin_interpretacion_todavia_dice_cero(client_autenticado, chart):
-    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado/")
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado/?tier=largo")
     assert r.json() == {"completa": False, "hechas": 0, "total": 8}
+
+
+def test_el_estado_sin_tier_es_400(client_autenticado, chart):
+    """El tier no tiene default, igual que en el POST: sin él no hay
+    catálogo de secciones que calcular (`secciones_aplicables` lo exige)."""
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado/")
+    assert r.status_code == 400
 
 
 def test_el_estado_sin_barra_final_redirige_en_vez_de_404(client_autenticado, chart):
@@ -81,9 +92,36 @@ def test_el_estado_sin_barra_final_redirige_en_vez_de_404(client_autenticado, ch
     cliente que normalizaba a `/estado/` (la forma correcta ahora) recibía
     404 sin redirect. Un cliente viejo que pegue sin la barra sigue
     funcionando: Django lo redirige a la versión canónica."""
-    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado", follow=True)
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado?tier=largo", follow=True)
     assert r.redirect_chain  # hubo un redirect antes de la respuesta final
     assert r.json() == {"completa": False, "hechas": 0, "total": 8}
+
+
+def test_el_estado_no_mezcla_el_progreso_de_otro_tier(client_autenticado, chart, account):
+    """RF9: la breve y el informe completo pueden convivir en la misma carta
+    e idioma. Sin filtrar la consulta por tier, `.first()` es determinista
+    por pk —encuentra la fila creada primero— así que sondear el estado de
+    la breve mientras el informe completo (creado antes) ya está terminado
+    devolvía el progreso del producto equivocado: mismo bug de clase que ya
+    se había cerrado en el GET de lectura
+    (`test_interpretation_get.py::test_con_dos_productos_...`)."""
+    from api.models import Interpretation, InterpretationSection
+    from interpret.prompts import PROMPT_VERSION, SECCIONES
+
+    largo = Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        account=account, completa=True,
+    )
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(interpretation=largo, slug=seccion.slug, orden=orden, texto="x")
+
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        account=account, completa=False,
+    )
+
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/estado/?lang=es&tier=corto")
+    assert r.json() == {"completa": False, "hechas": 0, "total": 1}
 
 
 def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monkeypatch):

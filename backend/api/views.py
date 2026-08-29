@@ -22,7 +22,7 @@ from api.deletion import delete_account, delete_charts
 from api.chart_service import create_chart
 from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
 from api.interpretation_service import DISCLAIMERS
-from interpret.prompts import PROMPT_VERSION, TIER_LARGO
+from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 from api import apple
 from api.ledger import credits_available as account_credits_available
 from api.models import Chart, Interpretation, ProviderIdentity
@@ -32,6 +32,11 @@ from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 logger = logging.getLogger(__name__)
 
 _INTERPRETATION_LANGS = ("es", "en", "pt")
+# Sin default a propósito (RF9, RF20): adivinar el tier es gastar el lote de
+# crédito equivocado (free para la breve, paid para el informe completo), y
+# un default silencioso convertiría un olvido del cliente en un cobro de
+# US$ 29 sin que nadie lo haya pedido.
+_TIERS = (TIER_CORTO, TIER_LARGO)
 
 
 class AccountView(APIView):
@@ -151,16 +156,20 @@ class InterpretationView(APIView):
                 {"error": f"lang debe ser uno de {_INTERPRETATION_LANGS}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        tier = request.query_params.get("tier")
+        if tier not in _TIERS:
+            return Response(
+                {"error": f"tier debe ser uno de {_TIERS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
-        # tier=TIER_LARGO explícito (fix round 1, Important 2): sin filtrar
-        # por tier, con RF9 dos productos pueden convivir en el mismo
-        # (chart, lang) y cuál de los dos sirve `.first()` queda a criterio
-        # del motor — entregar el informe completo a quien pidió la breve
-        # (o al revés) es entregar el producto equivocado. Mismo puente que
-        # el POST, de abajo, hasta que la Task 7 sume el tier por query
-        # param (RF20).
+        # Filtrado por tier (RF9, RF20): con dos productos pudiendo convivir
+        # en el mismo (chart, lang), sin este filtro cuál de los dos sirve
+        # `.first()` queda a criterio del motor — entregar el informe
+        # completo a quien pidió la breve (o al revés) es entregar el
+        # producto equivocado.
         interp = chart.interpretations.filter(
-            lang=lang, prompt_version=PROMPT_VERSION, tier=TIER_LARGO,
+            lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
         if interp is None or not interp.completa:
             # Incluye el caso de una lectura escrita con un prompt viejo (ya no
@@ -185,7 +194,8 @@ class InterpretationView(APIView):
         )
 
     def post(self, request, uuid):
-        """Arranca el informe de ocho secciones y devuelve el control enseguida
+        """Arranca la generación pedida (la lectura breve o el informe de
+        ocho secciones, según `tier`) y devuelve el control enseguida
         (RF10): cuatro minutos dentro de esta vista bloquean uno de los tres
         workers sync de gunicorn, y tres pedidos a la vez dejan el sitio sin
         atender. Cobrar y crear la fila pendiente sigue siendo sincrónico —así
@@ -198,20 +208,24 @@ class InterpretationView(APIView):
                 {"error": f"lang debe ser uno de {_INTERPRETATION_LANGS}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        tier = request.data.get("tier")
+        if tier not in _TIERS:
+            return Response(
+                {"error": f"tier debe ser uno de {_TIERS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
         account = request.user
         try:
-            # tier=TIER_LARGO explícito: este endpoint todavía sólo sirve el
-            # informe completo (el mismo puente que ya usa
-            # InterpretationEstadoView.get, abajo) hasta que la Task 7 le
-            # sume el tier por query param (RF20) para poder pedir también
-            # la lectura breve.
             interpretacion = interpretation_service.iniciar_generacion(
-                chart, lang, account, tier=TIER_LARGO
+                chart, lang, account, tier=tier
             )
-        except QuotaExceeded:
+        except QuotaExceeded as exc:
+            # `.lote` dice cuál crédito faltó ("free" o "paid"): la web
+            # muestra dos pantallas distintas ("te quedaste sin lecturas
+            # gratis" no es lo mismo que "comprá el informe completo").
             return Response(
-                {"error": "sin créditos disponibles"},
+                {"error": "sin créditos disponibles", "code": f"sin_{exc.lote}"},
                 status=status.HTTP_402_PAYMENT_REQUIRED,
             )
         except CapReached:
@@ -263,16 +277,21 @@ class InterpretationEstadoView(APIView):
     permission_classes = [HasAccount]
 
     def get(self, request, uuid):
-        chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
         lang = request.query_params.get("lang", "es")
+        tier = request.query_params.get("tier")
+        if tier not in _TIERS:
+            return Response(
+                {"error": f"tier debe ser uno de {_TIERS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        # Filtrado por tier, mismo motivo que en `InterpretationView.get`:
+        # sin él, con dos productos conviviendo en (chart, lang), `.first()`
+        # podía devolver el progreso del informe completo a quien está
+        # sondeando la lectura breve (o al revés).
         interpretacion = Interpretation.objects.filter(
-            chart=chart, lang=lang, prompt_version=PROMPT_VERSION
+            chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
-        # Sin interpretación todavía no hay tier que leer: el único producto
-        # que hoy pide este endpoint es el informe completo, así que se asume
-        # "largo" (mismo default que `Interpretation.tier`). Con una
-        # interpretación en curso se usa su tier real, no el default.
-        tier = interpretacion.tier if interpretacion is not None else TIER_LARGO
         total = len(informe_service.secciones_aplicables(chart, tier))
         if interpretacion is None:
             return Response({"completa": False, "hechas": 0, "total": total})

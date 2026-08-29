@@ -49,14 +49,14 @@ def test_delete_charts_preserva_ledger(monkeypatch, settings):
     # ahí, sólo por `_build_client` dentro de `completar_generacion`.)
     monkeypatch.setattr(svc, "_build_client", lambda: object())
 
-    # paid_balance=1: el POST de interpretación está fijado a tier="largo"
-    # (informe completo, Task 6) hasta que la Task 7 sume el tier por query
-    # param, y ese producto se cobra del lote paid (RF9), no del free que
-    # trae el default del modelo.
+    # paid_balance=1: este test pide tier="largo" (informe completo), que se
+    # cobra del lote paid (RF9), no del free que trae el default del modelo.
     a = Account.objects.create(paid_balance=1)
     resp = _client(a).post("/api/charts/", PAYLOAD, format="json")
     uuid = resp.data["id"]
-    resp = _client(a).post(f"/api/charts/{uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = _client(a).post(
+        f"/api/charts/{uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
     assert resp.status_code == 202  # Task 10: se cobra sincrónico, se genera en un hilo aparte
     txns_antes = CreditTransaction.objects.count()
     assert txns_antes > 0

@@ -89,7 +89,9 @@ def test_post_returns_interpretation(account_client, fake_client):
     a través de HTTP)."""
     c = _chart(account=account_client.account)
     antes = account_client.account.free_balance + account_client.account.paid_balance
-    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = account_client.post(
+        f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
     assert resp.status_code == 202
     interp = Interpretation.objects.get(chart=c, lang="es", prompt_version=svc.PROMPT_VERSION)
     assert interp.completa is False
@@ -99,21 +101,23 @@ def test_post_returns_interpretation(account_client, fake_client):
 
 def test_default_lang_es(account_client, fake_client):
     c = _chart(account=account_client.account)
-    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {}, format="json")
+    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"tier": "largo"}, format="json")
     assert resp.status_code == 202
     assert Interpretation.objects.get(chart=c).lang == "es"
 
 
 def test_invalid_lang_400(account_client, fake_client):
     c = _chart(account=account_client.account)
-    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "fr"}, format="json")
+    resp = account_client.post(
+        f"/api/charts/{c.uuid}/interpretation/", {"lang": "fr", "tier": "largo"}, format="json"
+    )
     assert resp.status_code == 400
     assert "error" in resp.data
 
 
 def test_missing_chart_404(account_client, fake_client):
     resp = account_client.post(
-        f"/api/charts/{uuid.uuid4()}/interpretation/", {"lang": "es"}, format="json"
+        f"/api/charts/{uuid.uuid4()}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
     )
     assert resp.status_code == 404
 
@@ -138,7 +142,9 @@ def test_lock_tomado_no_bloquea_el_202(account_client, fake_client, db_cache):
     """
     c = _chart(account=account_client.account)
     cache.add(svc._lock_key(c, "largo"), "otro-token", timeout=30)
-    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = account_client.post(
+        f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
     assert resp.status_code == 202
 
 
@@ -151,10 +157,14 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fak
     c = _chart(account=account_client.account)
     antes = account_client.account.free_balance + account_client.account.paid_balance
 
-    r1 = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    r1 = account_client.post(
+        f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
     assert r1.status_code == 202
 
-    r2 = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "en"}, format="json")
+    r2 = account_client.post(
+        f"/api/charts/{c.uuid}/interpretation/", {"lang": "en", "tier": "largo"}, format="json"
+    )
     assert r2.status_code == 409
 
     account_client.account.refresh_from_db()
@@ -162,22 +172,21 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fak
 
 
 # `test_cap_reached_503` (retirado en la Task 6): probaba que el cap diario
-# bloqueara este POST con un 503. Desde esta tarea el endpoint está fijado a
-# tier="largo" (Task 6 — hasta que la Task 7 le sume el tier por query param,
-# RF20) y el informe completo se cobra siempre del lote paid, que bypassea
-# el cap por diseño (RF9): pedirlo con INTERPRETATION_DAILY_CAP=0 ya no
-# puede dar 503, va a dar 202 (con paid_balance, que `account_client` ahora
-# fondea) o 402 (sin él) pero nunca un cap alcanzado. Es exactamente lo que
-# prueba `test_paid_generation_bypasses_cap_via_endpoint`, ahí abajo, que ya
-# cubría este mismo escenario desde el lado "sí bypassea".
+# bloqueara este POST con un 503. El informe completo ("largo") se cobra
+# siempre del lote paid, que bypassea el cap por diseño (RF9): pedirlo con
+# INTERPRETATION_DAILY_CAP=0 no puede dar 503, va a dar 202 (con
+# paid_balance, que `account_client` fondea) o 402 (sin él) pero nunca un cap
+# alcanzado. Es exactamente lo que prueba
+# `test_paid_generation_bypasses_cap_via_endpoint`, ahí abajo, que ya cubría
+# este mismo escenario desde el lado "sí bypassea".
 #
 # Fix round 1, Important 4: retirar ese test dejó el `except CapReached:
 # return 503` de la vista (`views.py`) sin ningún test en todo el repo —ni
-# siquiera indirecto, porque ya no hay forma de alcanzar `CapReached` por
-# HTTP con el endpoint fijado a paid. La cobertura se repone mockeando
-# `iniciar_generacion` para que lo levante directo: no prueba que el cap se
-# alcance (eso es responsabilidad de `interpretation_service`, ya cubierto
-# en sus propios tests), prueba que la vista traduce esa excepción a 503.
+# siquiera indirecto, porque el "largo" nunca toca el cap. La cobertura se
+# repone mockeando `iniciar_generacion` para que lo levante directo: no
+# prueba que el cap se alcance (eso es responsabilidad de
+# `interpretation_service`, ya cubierto en sus propios tests), prueba que la
+# vista traduce esa excepción a 503.
 
 
 def test_cap_reached_503(account_client, monkeypatch):
@@ -193,7 +202,9 @@ def test_cap_reached_503(account_client, monkeypatch):
 
     monkeypatch.setattr(svc, "iniciar_generacion", _levanta_cap)
     c = _chart(account=account_client.account)
-    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = account_client.post(
+        f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
     assert resp.status_code == 503
 
 
@@ -212,7 +223,9 @@ def test_paid_generation_bypasses_cap_via_endpoint(make_account, monkeypatch, se
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
     c = _chart(account=acc)
-    resp = client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = client.post(
+        f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
     assert resp.status_code == 202
 
 
@@ -230,7 +243,9 @@ def test_no_credits_returns_402(make_account, monkeypatch):
     monkeypatch.setattr(svc, "_build_client", lambda: client_built.append(1) or _FakeClient())
 
     c = _chart(account=acc)
-    resp = client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    resp = client.post(
+        f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
+    )
 
     assert resp.status_code == 402
     assert Interpretation.objects.count() == 0

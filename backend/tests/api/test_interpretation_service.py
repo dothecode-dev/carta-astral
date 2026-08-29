@@ -56,7 +56,7 @@ def _generar(chart, lang, account, tier="largo"):
     el texto se escribe sobre OTRA instancia obtenida con `get_or_create`
     adentro de esa función, no sobre el objeto `interp` que tenemos acá.
     tier="largo" por default: este archivo prueba el flujo del informe
-    completo, el único reachable hasta la Task 7."""
+    completo."""
     interp = svc.iniciar_generacion(chart, lang, account, tier=tier)
     svc.completar_generacion(interp, chart, account)
     interp.refresh_from_db()

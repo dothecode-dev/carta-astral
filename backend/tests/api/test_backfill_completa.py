@@ -102,7 +102,7 @@ def test_escenario_legacy_end_to_end(client_autenticado, chart, account, monkeyp
     assert legacy.completa is True
 
     # 1) GET .../interpretation/: ya no es el 404 de "no disponible".
-    resp = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/?lang=es")
+    resp = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/?lang=es&tier=largo")
     assert resp.status_code == 200
     assert resp.json()["text"] == legacy.text
 

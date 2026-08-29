@@ -36,7 +36,7 @@ def test_interpretation_scoped_to_account(monkeypatch, settings):
     # B tries to interpret A's chart — must be 404, not a cross-account read
     resp = _client(b).post(
         f"/api/charts/{a_uuid}/interpretation/",
-        {"lang": "es"},
+        {"lang": "es", "tier": "largo"},
         format="json",
     )
     assert resp.status_code == 404

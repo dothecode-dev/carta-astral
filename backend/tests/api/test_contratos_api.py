@@ -80,6 +80,137 @@ def test_interpretation_langs_es_una_lista_incluso_sin_lecturas(cliente_con_cart
     assert r.data["interpretation_langs"] == []
 
 
+@pytest.fixture
+def cliente_sin_free_con_carta(db, make_account):
+    """Misma carta que `cliente_con_carta`, pero la cuenta arranca sin
+    crédito free: sólo sirve para probar el 402 de la lectura breve."""
+    from api.chart_service import create_chart
+
+    acc = make_account(free_balance=0, paid_balance=5)
+    chart = create_chart(
+        {
+            "name": "Ceci",
+            "date": "1993-03-21",
+            "time": "08:45",
+            "time_known": True,
+            "lat": -34.6,
+            "lng": -58.4,
+            "place_label": "Buenos Aires",
+        },
+        acc,
+    )
+    c = APIClient()
+    c.credentials(HTTP_AUTHORIZATION=f"Bearer {create_session(acc)}")
+    c.account = acc
+    c.chart = chart
+    return c
+
+
+@pytest.fixture
+def cliente_sin_paid_con_carta(db, make_account):
+    """Contrapunto: cuenta con free pero sin paid, para probar el 402 del
+    informe completo."""
+    from api.chart_service import create_chart
+
+    acc = make_account(free_balance=5, paid_balance=0)
+    chart = create_chart(
+        {
+            "name": "Ceci",
+            "date": "1993-03-21",
+            "time": "08:45",
+            "time_known": True,
+            "lat": -34.6,
+            "lng": -58.4,
+            "place_label": "Buenos Aires",
+        },
+        acc,
+    )
+    c = APIClient()
+    c.credentials(HTTP_AUTHORIZATION=f"Bearer {create_session(acc)}")
+    c.account = acc
+    c.chart = chart
+    return c
+
+
+@pytest.mark.django_db
+def test_sin_tier_es_400(cliente_con_carta):
+    """No se adivina: adivinar el tier es gastar el lote de crédito
+    equivocado (la breve cobra free, el informe completo cobra paid) por un
+    olvido del cliente."""
+    r = cliente_con_carta.post(
+        f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/",
+        {"lang": "es"},
+        format="json",
+    )
+    assert r.status_code == 400
+    assert "tier" in r.json()["error"]
+
+
+@pytest.mark.django_db
+def test_tier_desconocido_es_400(cliente_con_carta):
+    """"premium" no es ninguno de los dos productos que vende ASTRA."""
+    r = cliente_con_carta.post(
+        f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/",
+        {"lang": "es", "tier": "premium"},
+        format="json",
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
+def test_el_402_dice_cual_credito_falto_sin_free(cliente_sin_free_con_carta):
+    """`QuotaExceeded.lote` viaja hasta la respuesta: la web muestra "te
+    quedaste sin lecturas gratis" en vez de "comprá el informe completo"."""
+    r = cliente_sin_free_con_carta.post(
+        f"/api/charts/{cliente_sin_free_con_carta.chart.uuid}/interpretation/",
+        {"lang": "es", "tier": "corto"},
+        format="json",
+    )
+    assert r.status_code == 402
+    assert r.json()["code"] == "sin_free"
+
+
+@pytest.mark.django_db
+def test_el_402_dice_cual_credito_falto_sin_paid(cliente_sin_paid_con_carta):
+    """Contrapunto: sin crédito paid, pedir el informe completo devuelve
+    "sin_paid", no "sin_free" — el `f"sin_{exc.lote}"` de la vista tiene que
+    reflejar el lote real, no un literal fijo."""
+    r = cliente_sin_paid_con_carta.post(
+        f"/api/charts/{cliente_sin_paid_con_carta.chart.uuid}/interpretation/",
+        {"lang": "es", "tier": "largo"},
+        format="json",
+    )
+    assert r.status_code == 402
+    assert r.json()["code"] == "sin_paid"
+
+
+@pytest.mark.django_db
+def test_el_estado_reporta_una_sola_seccion_para_la_breve(cliente_con_carta):
+    """La barra de progreso de la lectura breve no puede decir "1 de 8": ese
+    catálogo es de una sola sección (`SECCION_BREVE`), no las ocho del
+    informe completo."""
+    r = cliente_con_carta.get(
+        f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/estado/?lang=es&tier=corto"
+    )
+    assert r.json()["total"] == 1
+
+
+@pytest.mark.django_db
+def test_el_estado_sin_tier_es_400(cliente_con_carta):
+    r = cliente_con_carta.get(
+        f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/estado/?lang=es"
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
+def test_el_get_de_lectura_sin_tier_es_400(cliente_con_carta):
+    r = cliente_con_carta.get(
+        f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/?lang=es"
+    )
+    assert r.status_code == 400
+
+
 @pytest.mark.django_db
 def test_la_respuesta_del_login_tiene_exactamente_estas_claves(monkeypatch, settings):
     """Es lo que la app guarda como sesión: si falta account_id, no puede
