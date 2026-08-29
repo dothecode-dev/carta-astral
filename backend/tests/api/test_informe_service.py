@@ -1,7 +1,7 @@
 import pytest
 from django.core.cache import cache
 
-from api import informe_service
+from api import informe_service, interpretation_service
 from api.models import Account, BirthData, Chart, Interpretation, InterpretationSection
 from interpret.prompts import PROMPT_VERSION
 
@@ -17,10 +17,10 @@ def lock_tomado(chart):
     `renovar_lock` real (no mockeado) siempre devuelve False porque no hay
     ningún lock que renovar, y los tests de arriba abortarían en la primera
     sección por una razón ajena a lo que están probando."""
-    # :largo — el fixture `interpretacion` (que usan los tests de este
+    # "largo" — el fixture `interpretacion` (que usan los tests de este
     # archivo salvo los que arman su propio tier vía `_interpretacion`,
     # abajo) crea su fila con el tier default del modelo, "largo".
-    key = f"interp:lock:{chart.id}:{PROMPT_VERSION}:largo"
+    key = interpretation_service._lock_key(chart, "largo")
     cache.set(key, TOKEN, timeout=600)
     yield
     cache.delete(key)

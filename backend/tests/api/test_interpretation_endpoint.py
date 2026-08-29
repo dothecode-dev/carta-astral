@@ -137,7 +137,7 @@ def test_lock_tomado_no_bloquea_el_202(account_client, fake_client, db_cache):
     db_cache: el lock vive en DatabaseCache en producción, no en LocMem.
     """
     c = _chart(account=account_client.account)
-    cache.add(f"interp:lock:{c.id}:{svc.PROMPT_VERSION}:largo", "otro-token", timeout=30)
+    cache.add(svc._lock_key(c, "largo"), "otro-token", timeout=30)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 202
 

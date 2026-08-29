@@ -103,7 +103,6 @@ def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monke
     """
     from api import interpretation_service as svc, informe_service
     from api.models import Interpretation, InterpretationSection
-    from interpret.prompts import PROMPT_VERSION
 
     llamadas = []
     monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas.append(1))
@@ -112,7 +111,7 @@ def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monke
     account.refresh_from_db()
     antes = account.free_balance + account.paid_balance
 
-    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}:largo", "otro-token", timeout=30)
+    cache.add(svc._lock_key(chart, "largo"), "otro-token", timeout=30)
 
     svc.completar_generacion(interpretacion, chart, account)
 
@@ -333,7 +332,7 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
 
     # El hilo de "es" ya tomó el lock de SU tier y sigue generando (igual
     # que haría `completar_generacion` en segundo plano durante ~6 minutos).
-    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}:largo", "token-es-en-curso", timeout=600)
+    cache.add(svc._lock_key(chart, "largo"), "token-es-en-curso", timeout=600)
 
     account.refresh_from_db()
     antes = account.free_balance + account.paid_balance
@@ -370,7 +369,6 @@ def test_pedir_el_corto_con_el_largo_en_curso_mismo_idioma_no_pierde_el_credito(
     lock existe para impedir, y las filas de corto y largo son distintas)."""
     from api import informe_service, interpretation_service as svc
     from api.models import InterpretationSection
-    from interpret.prompts import PROMPT_VERSION
 
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
 
@@ -378,7 +376,7 @@ def test_pedir_el_corto_con_el_largo_en_curso_mismo_idioma_no_pierde_el_credito(
     assert interpretacion_largo.completa is False
 
     # El "largo" ya tomó SU lock y sigue generando.
-    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}:largo", "token-largo-en-curso", timeout=600)
+    cache.add(svc._lock_key(chart, "largo"), "token-largo-en-curso", timeout=600)
 
     account.refresh_from_db()
     antes = account.free_balance + account.paid_balance
