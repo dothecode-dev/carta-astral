@@ -19,7 +19,13 @@ from api import ledger
 from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
 from api.models import CreditTransaction, Interpretation
 from interpret.exceptions import InterpretationError
-from interpret.prompts import PROMPT_VERSION
+from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
+
+# Qué lote de créditos compra cada producto (RF9 dos tiers): la lectura breve
+# se paga con un crédito gratis, el informe completo con uno pago. Con dos
+# productos el lote ES el producto — de acá sale el `lot` que `ledger.charge`
+# ya no elige por su cuenta (ver su docstring).
+LOTE_POR_TIER = {TIER_CORTO: "free", TIER_LARGO: "paid"}
 
 # Import diferido (no al tope del módulo): `informe_service` importa
 # `renovar_lock` DESDE acá, así que un `import` a nivel de módulo en ambas
@@ -106,8 +112,8 @@ def soltar_lock(chart, token: str) -> None:
         cache.delete(key)
 
 
-def _sibling_completo(chart, lang: str) -> Interpretation | None:
-    """Informe COMPLETO de esta misma carta en otro idioma, si existe.
+def _sibling_completo(chart, lang: str, tier: str) -> Interpretation | None:
+    """Informe COMPLETO de esta misma carta, MISMO tier, en otro idioma, si existe.
 
     Es el mismo criterio del flujo viejo de interpretación (RF8: un crédito
     por carta, no por idioma) adaptado al flujo de la Tarea 10: acá `completa`
@@ -117,15 +123,24 @@ def _sibling_completo(chart, lang: str) -> Interpretation | None:
     que traducir. `iniciar_generacion` la usa para decidir si cobra;
     `completar_generacion` la vuelve a evaluar para decidir si traduce en vez
     de generar. Recalcularla en vez de pasarla entre ambas evita acoplar sus
-    firmas al resultado de la otra, a costa de una consulta extra barata."""
+    firmas al resultado de la otra, a costa de una consulta extra barata.
+
+    El filtro por `tier` (Task 6, RF9) es lo que evita regalar el informe
+    completo: una lectura breve en español no es sibling de un informe
+    completo en inglés — son productos distintos, no traducciones uno del
+    otro. Sin este filtro, pedir la breve en "en" después de tener el
+    completo en "es" encontraría ese completo como sibling y lo entregaría
+    gratis en vez de cobrar el crédito free que corresponde."""
     return (
-        Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION, completa=True)
+        Interpretation.objects.filter(
+            chart=chart, prompt_version=PROMPT_VERSION, tier=tier, completa=True,
+        )
         .exclude(lang=lang)
         .first()
     )
 
 
-def _sibling_en_curso(chart, lang: str) -> Interpretation | None:
+def _sibling_en_curso(chart, lang: str, tier: str) -> Interpretation | None:
     """Informe de esta misma carta en OTRO idioma que ya arrancó pero
     todavía no terminó (`completa=False`).
 
@@ -185,11 +200,17 @@ def _sibling_en_curso(chart, lang: str) -> Interpretation | None:
     ese informe abandonado todavía bloquea otros idiomas por esa ventana,
     después dejar de hacerlo solo. Es el mismo comportamiento que ya tiene
     el resto del módulo (nada purga el lock antes de su TTL) y no es peor
-    que antes: antes bloqueaba para SIEMPRE."""
+    que antes: antes bloqueaba para SIEMPRE.
+
+    El filtro por `tier` (Task 6, RF9) es el mismo que en `_sibling_completo`
+    y por la misma razón: una lectura breve en curso no es sibling de un
+    informe completo en curso en otro idioma, son productos distintos."""
     if cache.get(_lock_key(chart)) is None:
         return None
     return (
-        Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION, completa=False)
+        Interpretation.objects.filter(
+            chart=chart, prompt_version=PROMPT_VERSION, tier=tier, completa=False,
+        )
         .exclude(lang=lang)
         .first()
     )
@@ -225,11 +246,19 @@ def content_key(chart_data: dict, lang: str, prompt_version: str, tier: str) -> 
     return hashlib.sha256(f"{prompt_version}:{lang}:{tier}:{canonical}".encode()).hexdigest()
 
 
-def iniciar_generacion(chart, lang: str, account) -> Interpretation:
+def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
     """Crea (o recupera) la `Interpretation` de un informe y cobra si
     corresponde. Corre siempre en el hilo del request —nunca en el hilo de
     fondo—: es lo que le permite a la vista responder 402/503 sincrónicamente
     en vez de aceptar un 202 que después nunca va a completarse.
+
+    `tier` no tiene default (Task 6, RF9, mismo criterio que
+    `informe_service.secciones_aplicables`): un default silencioso
+    convertiría "me olvidé de pasar el tier" en "le cobro/entrego el
+    producto equivocado" en vez de un `TypeError` inmediato. Decide, vía
+    `LOTE_POR_TIER`, de qué lote se cobra — free para la lectura breve, paid
+    para el informe completo — porque con dos productos el lote ES el
+    producto: caer al otro lote sería cobrar el que no corresponde.
 
     Usa `get_or_create` (no un lock) para la creación: Django envuelve su
     `create()` en `atomic()` y reconsulta ante un choque de
@@ -269,25 +298,29 @@ def iniciar_generacion(chart, lang: str, account) -> Interpretation:
     esperar). Se lanza `GenerationInProgress` ANTES de cobrar: no hay nada
     que devolver porque nunca se llega a tocar el ledger."""
     interpretacion, creada = Interpretation.objects.get_or_create(
-        chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
+        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         defaults={"text": "", "account": account},
     )
     if not creada:
         return interpretacion
 
-    if _sibling_completo(chart, lang) is not None:
+    if _sibling_completo(chart, lang, tier) is not None:
         return interpretacion
 
-    if _sibling_en_curso(chart, lang) is not None:
+    if _sibling_en_curso(chart, lang, tier) is not None:
         interpretacion.delete()
         raise GenerationInProgress(
             "hay una generación en curso para esta carta en otro idioma, "
             "reintentá en unos segundos"
         )
 
-    will_be_free = account.free_balance > 0
+    lote = LOTE_POR_TIER[tier]
+    # El cap diario protege el gasto de LLM que no tiene ingreso: aplica sólo
+    # al lote free, que ahora es exactamente la lectura breve (antes de los
+    # dos tiers se adivinaba con `account.free_balance > 0` si el cobro *iba*
+    # a caer en free; ahora no hace falta adivinar, el lote ya lo dice).
     cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
-    if will_be_free and cache.get(cap_key, 0) >= settings.INTERPRETATION_DAILY_CAP:
+    if lote == "free" and cache.get(cap_key, 0) >= settings.INTERPRETATION_DAILY_CAP:
         interpretacion.delete()
         logger.warning(
             "interpretation daily cap reached (cap=%s)", settings.INTERPRETATION_DAILY_CAP
@@ -295,7 +328,7 @@ def iniciar_generacion(chart, lang: str, account) -> Interpretation:
         raise CapReached()
 
     try:
-        _, lot = ledger.charge(account, lambda: interpretacion)
+        _, lot = ledger.charge(account, lambda: interpretacion, lot=lote)
     except QuotaExceeded:
         interpretacion.delete()
         raise
@@ -372,7 +405,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
 
     from api import informe_service  # import diferido: ver nota al tope del módulo
 
-    sibling = _sibling_completo(chart, interpretacion.lang) if got_lock else None
+    sibling = _sibling_completo(chart, interpretacion.lang, interpretacion.tier) if got_lock else None
 
     try:
         if not got_lock:
@@ -423,14 +456,14 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
             soltar_lock(chart, token)
 
 
-def generar_en_segundo_plano(chart, lang: str, account) -> None:
-    """Arranca (o reanuda) el informe completo de principio a fin:
-    `iniciar_generacion` + `completar_generacion`.
+def generar_en_segundo_plano(chart, lang: str, account, tier: str) -> None:
+    """Arranca (o reanuda) el informe de principio a fin, para el tier
+    pedido: `iniciar_generacion` + `completar_generacion`.
 
     El nombre es el contrato de la Tarea 10 con la vista y con los tests: la
     vista NO la llama a ella (necesita el resultado de `iniciar_generacion`
     antes de responder, para poder devolver 402/503 sincrónicamente), pero
     todo lo demás —un cron, un management command, o un test que quiere
     correr el flujo entero sincrónico sobre su propia conexión— sí."""
-    interpretacion = iniciar_generacion(chart, lang, account)
+    interpretacion = iniciar_generacion(chart, lang, account, tier)
     completar_generacion(interpretacion, chart, account)

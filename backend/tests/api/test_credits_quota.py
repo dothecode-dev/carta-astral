@@ -35,7 +35,7 @@ def test_quota_exceeded_blocks_new_generation(settings):
     settings.INSTALL_FREE_CREDITS = 0
     acc = _account()  # free_balance=0, paid_balance=0
     with pytest.raises(QuotaExceeded):
-        svc.iniciar_generacion(_chart(), "es", acc)
+        svc.iniciar_generacion(_chart(), "es", acc, tier="corto")
 
 
 def test_cache_hit_served_with_zero_credits(settings):
@@ -49,8 +49,9 @@ def test_cache_hit_served_with_zero_credits(settings):
     )
     # 0 créditos pero ya existe: `iniciar_generacion` la encuentra
     # (`get_or_create` con `created=False`) y la devuelve sin volver a
-    # consultar el ledger.
-    out = svc.iniciar_generacion(chart, "es", acc)
+    # consultar el ledger. tier="largo": el default del modelo, el mismo
+    # tier de la fila creada arriba.
+    out = svc.iniciar_generacion(chart, "es", acc, tier="largo")
     assert out.text == "cached"
 
 
@@ -71,9 +72,45 @@ def test_paid_generation_bypasses_daily_cap(settings):
     cache.clear()
 
     before = cache.get(cap_key)
-    interp = svc.iniciar_generacion(chart, "es", acc)
+    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
     after = cache.get(cap_key)
 
     assert isinstance(interp, Interpretation)
     assert before is None
     assert after is None  # paid generation never touches the cap counter
+
+
+def test_la_breve_cobra_free_y_el_completo_cobra_paid(make_account):
+    """RF9: el tier decide el lote, no al revés. La breve ("corto") gasta
+    free_balance; el informe completo ("largo") gasta paid_balance — y son
+    dos `Interpretation` distintas sobre la misma carta e idioma, no la
+    misma fila cobrada dos veces."""
+    acc = make_account(free_balance=1, paid_balance=1)
+    chart = _chart()
+    svc.iniciar_generacion(chart, "es", acc, tier="corto")
+    acc.refresh_from_db()
+    assert (acc.free_balance, acc.paid_balance) == (0, 1)
+    svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    acc.refresh_from_db()
+    assert (acc.free_balance, acc.paid_balance) == (0, 0)
+
+
+def test_sin_free_la_breve_falla_diciendo_que_falto_free(make_account):
+    """Sin crédito free, pedir la breve no cae a paid_balance aunque sobre
+    saldo ahí: `QuotaExceeded.lote` dice cuál faltó ("free"), para que la
+    vista pueda mostrar la pantalla correcta ("te quedaste sin lecturas
+    gratis", no "comprá el informe")."""
+    acc = make_account(free_balance=0, paid_balance=5)
+    with pytest.raises(QuotaExceeded) as exc:
+        svc.iniciar_generacion(_chart(), "es", acc, tier="corto")
+    assert exc.value.lote == "free"
+
+
+def test_la_interpretacion_vacia_se_borra_si_no_hay_credito(make_account):
+    """Sin esto queda una fila completa=False que hace que el próximo intento
+    crea que hay una generación en curso y no arranque nunca."""
+    acc = make_account(free_balance=0, paid_balance=0)
+    chart = _chart()
+    with pytest.raises(QuotaExceeded):
+        svc.iniciar_generacion(chart, "es", acc, tier="corto")
+    assert chart.interpretations.count() == 0

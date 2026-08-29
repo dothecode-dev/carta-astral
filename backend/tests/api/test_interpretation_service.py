@@ -48,14 +48,16 @@ def _chart_with_data(data):
     return Chart.objects.create(birth_data=bd, data=data, engine_version="test")
 
 
-def _generar(chart, lang, account):
+def _generar(chart, lang, account, tier="largo"):
     """Arranca y completa un informe sincrónicamente, como hace
     `generar_en_segundo_plano`, devolviendo la `Interpretation` ya
     completada. El refresh es necesario: cuando `completar_generacion` toma
     el camino de traducir un sibling (`informe_service.traducir_informe`),
     el texto se escribe sobre OTRA instancia obtenida con `get_or_create`
-    adentro de esa función, no sobre el objeto `interp` que tenemos acá."""
-    interp = svc.iniciar_generacion(chart, lang, account)
+    adentro de esa función, no sobre el objeto `interp` que tenemos acá.
+    tier="largo" por default: este archivo prueba el flujo del informe
+    completo, el único reachable hasta la Task 7."""
+    interp = svc.iniciar_generacion(chart, lang, account, tier=tier)
     svc.completar_generacion(interp, chart, account)
     interp.refresh_from_db()
     return interp
@@ -127,7 +129,9 @@ SECCIONES_POR_INFORME = 8
 def test_miss_generates_and_persists(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    interp = _generar(c, "es", _account())
+    # paid_balance=1: `_generar` pide tier="largo" (informe completo) por
+    # default, que desde la Task 6 cobra del lote paid, no del free.
+    interp = _generar(c, "es", _account(paid_balance=1))
     assert interp.completa is True
     assert "una interpretación" in interp.text
     assert Interpretation.objects.count() == 1
@@ -137,7 +141,7 @@ def test_miss_generates_and_persists(fake_client, settings):
 def test_hit_serves_without_llm(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    acc = _account()
+    acc = _account(paid_balance=1)
     _generar(c, "es", acc)
     llamadas_tras_la_primera = fake_client.calls
     _generar(c, "es", acc)
@@ -146,25 +150,33 @@ def test_hit_serves_without_llm(fake_client, settings):
 
 
 def test_daily_cap_blocks_new_generation(fake_client, settings):
+    """El cap sólo protege el lote free (Task 6, RF9): con dos tiers, "ambas
+    generaciones son gratis" ya no es una elección de saldo (como antes de
+    esta tarea) sino del producto pedido — `tier="corto"` es la única forma
+    de tocar el lote free, así que el cap se ejercita ahí, no con
+    `tier="largo"` (que siempre cobra paid y siempre bypassea el cap, ver
+    `test_paid_generation_bypasses_daily_cap` en `test_credits_quota.py`)."""
     settings.INTERPRETATION_DAILY_CAP = 1
     settings.INSTALL_FREE_CREDITS = 5  # both generations are free, to isolate the cap
     acc = _account()  # free_balance=5 (reads settings at call time)
-    _generar(_chart(), "es", acc)
+    _generar(_chart(), "es", acc, tier="corto")
+    llamadas_tras_la_primera = fake_client.calls
     with pytest.raises(svc.CapReached):
         # el cap se chequea (y cuenta) en `iniciar_generacion`, antes de
         # arrancar ninguna sección: una carta con datos distintos no dedupea
         # (no hay dedup contra el camino nuevo, ver concern en el reporte de
         # la Task 0) y de todas formas choca contra el cap ya consumido.
         svc.iniciar_generacion(
-            _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", acc
+            _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", acc,
+            tier="corto",
         )
-    assert fake_client.calls == SECCIONES_POR_INFORME  # sólo la primera generación llegó a pedirle al LLM
+    assert fake_client.calls == llamadas_tras_la_primera  # sólo la primera generación llegó a pedirle al LLM
 
 
 def test_cap_does_not_block_cache_hits(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 1
     c = _chart()
-    acc = _account()
+    acc = _account(paid_balance=1)
     first = _generar(c, "es", acc)
     again = _generar(c, "es", acc)
     assert again.text == first.text
@@ -183,9 +195,9 @@ def test_llm_error_no_deja_interpretacion_persistida(monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
     c = _chart()
-    acc = _account()
+    acc = _account(paid_balance=1)  # tier="largo" (informe completo) cobra paid, no free
     antes = acc.free_balance + acc.paid_balance
-    svc.generar_en_segundo_plano(c, "es", acc)
+    svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
     assert Interpretation.objects.count() == 0
     acc.refresh_from_db()
     assert acc.free_balance + acc.paid_balance == antes
@@ -199,9 +211,9 @@ def test_missing_api_key_no_deja_interpretacion_persistida(settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     settings.ANTHROPIC_API_KEY = ""
     c = _chart()
-    acc = _account()
+    acc = _account(paid_balance=1)  # tier="largo" (informe completo) cobra paid, no free
     antes = acc.free_balance + acc.paid_balance
-    svc.generar_en_segundo_plano(c, "es", acc)
+    svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
     assert Interpretation.objects.count() == 0
     acc.refresh_from_db()
     assert acc.free_balance + acc.paid_balance == antes
@@ -239,7 +251,9 @@ def fake_translator(monkeypatch):
 def test_second_lang_translates_without_new_generation_nor_charge(fake_client, fake_translator, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    acc = _account(free_balance=1)
+    # free_balance=0, paid_balance=1: informe completo (tier="largo", el
+    # default de `_generar`) cobra paid desde la Task 6.
+    acc = _account(free_balance=0, paid_balance=1)
     _generar(c, "es", acc)  # cobra el único crédito
     llamadas_generacion = fake_client.calls
     second = _generar(c, "en", acc)
@@ -257,7 +271,7 @@ def test_second_lang_translates_without_new_generation_nor_charge(fake_client, f
 def test_translation_available_with_zero_credits(fake_client, fake_translator, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    acc = _account(free_balance=1)
+    acc = _account(free_balance=0, paid_balance=1)
     _generar(c, "es", acc)  # gasta el último crédito
     # ya sin saldo, el cambio de idioma sigue funcionando (la carta ya se pagó)
     out = _generar(c, "pt", acc)
@@ -265,21 +279,26 @@ def test_translation_available_with_zero_credits(fake_client, fake_translator, s
 
 
 def test_translation_does_not_consume_daily_cap(fake_client, fake_translator, settings):
+    """tier="corto" en los tres llamados (Task 6): el cap sólo se mueve con
+    el lote free, y desde RF9 el único tier que lo toca es la lectura breve
+    — con tier="largo" (paid) el cap nunca se alcanzaría y este test no
+    probaría nada (ver `test_daily_cap_blocks_new_generation`, arriba)."""
     settings.INTERPRETATION_DAILY_CAP = 1
     settings.INSTALL_FREE_CREDITS = 5
     c = _chart()
-    _generar(c, "es", _account())
-    _generar(c, "en", _account(free_balance=1))
+    _generar(c, "es", _account(), tier="corto")
+    _generar(c, "en", _account(free_balance=1), tier="corto")
     with pytest.raises(svc.CapReached):
         svc.iniciar_generacion(
-            _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", _account()
+            _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", _account(),
+            tier="corto",
         )
 
 
 def test_interpretation_langs_helper(fake_client, fake_translator, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    acc = _account()
+    acc = _account(paid_balance=1)
     assert svc.interpretation_langs(c) == []
     _generar(c, "es", acc)
     _generar(c, "en", acc)
@@ -294,8 +313,8 @@ def test_interpretation_langs_excluye_incompletas(settings):
     pidiendo un texto que todavía no existe."""
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    acc = _account()
-    svc.iniciar_generacion(c, "es", acc)
+    acc = _account(paid_balance=1)
+    svc.iniciar_generacion(c, "es", acc, tier="largo")
     assert svc.interpretation_langs(c) == []
 
 

@@ -34,6 +34,8 @@ def test_devolver_deja_su_registro_en_el_ledger(account):
 def test_devolver_es_idempotente_por_external_id(account):
     # El hilo de la Tarea 10 puede sobrevivir a su propio lock y reintentar:
     # la segunda llamada con el mismo external_id no debe acreditar de nuevo.
+    account.paid_balance = 0  # arranca en cero para poder afirmar el valor exacto abajo
+    account.save()
     primera = ledger.devolver(account, external_id="informe:123:fallo")
     segunda = ledger.devolver(account, external_id="informe:123:fallo")
     account.refresh_from_db()
@@ -43,6 +45,8 @@ def test_devolver_es_idempotente_por_external_id(account):
 
 
 def test_devolver_con_external_id_distinto_acredita_dos_veces(account):
+    account.paid_balance = 0  # arranca en cero para poder afirmar el valor exacto abajo
+    account.save()
     ledger.devolver(account, external_id="informe:123:fallo")
     ledger.devolver(account, external_id="informe:456:fallo")
     account.refresh_from_db()

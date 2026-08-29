@@ -23,4 +23,15 @@ class GenerationInProgress(InterpretationError):
 
 
 class QuotaExceeded(Exception):
-    """La cuenta no tiene créditos disponibles para una generación nueva."""
+    """Sin crédito del lote que compra el producto pedido.
+
+    `lote` dice cuál faltó ("free" o "paid"): la web muestra "te quedaste
+    sin lecturas gratis" o "comprá el informe completo" según el caso, que
+    son dos pantallas distintas. El default "free" es sólo compatibilidad
+    con quien instancie la excepción sin decir cuál lote faltó (no debería
+    quedar ninguno tras esta tarea); `ledger.charge` siempre lo pasa
+    explícito con el lote que realmente rechazó."""
+
+    def __init__(self, lote: str = "free"):
+        self.lote = lote
+        super().__init__(f"sin créditos del lote {lote}")

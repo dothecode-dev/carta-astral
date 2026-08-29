@@ -37,7 +37,13 @@ def make_account(db):
 @pytest.fixture
 def account_client(make_account):
     from api.auth import create_session
-    acc = make_account()
+    # paid_balance=3, igual que el free_balance que ya trae make_account()
+    # por default (INSTALL_FREE_CREDITS): el POST de interpretación (Task 6)
+    # está fijado a tier="largo" hasta que la Task 7 le sume el tier por
+    # query param, y el informe completo se cobra del lote paid (RF9), no
+    # del free — sin esto, cualquier test que postee al endpoint sin fondear
+    # paid_balance explícito se choca con QuotaExceeded("paid").
+    acc = make_account(paid_balance=3)
     token = create_session(acc)
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
@@ -47,7 +53,10 @@ def account_client(make_account):
 
 @pytest.fixture
 def account(make_account):
-    return make_account()
+    # Mismo motivo que `account_client`: `chart`/`interpretacion`/
+    # `client_autenticado` cuelgan de esta cuenta y varios tests ejercitan
+    # el informe completo (tier="largo" ⇒ lote paid) directo o vía HTTP.
+    return make_account(paid_balance=3)
 
 
 @pytest.fixture

@@ -194,7 +194,14 @@ class InterpretationView(APIView):
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
         account = request.user
         try:
-            interpretacion = interpretation_service.iniciar_generacion(chart, lang, account)
+            # tier=TIER_LARGO explícito: este endpoint todavía sólo sirve el
+            # informe completo (el mismo puente que ya usa
+            # InterpretationEstadoView.get, abajo) hasta que la Task 7 le
+            # sume el tier por query param (RF20) para poder pedir también
+            # la lectura breve.
+            interpretacion = interpretation_service.iniciar_generacion(
+                chart, lang, account, tier=TIER_LARGO
+            )
         except QuotaExceeded:
             return Response(
                 {"error": "sin créditos disponibles"},

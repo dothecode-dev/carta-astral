@@ -69,7 +69,7 @@ def test_dos_consumos_simultaneos_con_un_credito_solo_uno_gana():
     acc = Account.objects.create(free_balance=1, paid_balance=0)
 
     def consumir(_i):
-        return ledger.charge(acc, lambda: None)
+        return ledger.charge(acc, lambda: None, lot="free")
 
     resultados, errores = _en_hilos(consumir, 2)
 
@@ -86,9 +86,15 @@ def test_dos_consumos_simultaneos_con_un_credito_solo_uno_gana():
 @requiere_postgres
 @pytest.mark.django_db(transaction=True)
 def test_cinco_consumos_simultaneos_con_tres_creditos_gastan_exactamente_tres():
-    acc = Account.objects.create(free_balance=2, paid_balance=1)
+    """El lock de fila cierra el doble gasto también con más de un crédito
+    en juego, no sólo con uno (arriba). Los 3 créditos son del mismo lote
+    (free): con `lot` explícito por llamada ya no hay un pool combinado
+    entre free y paid del que 5 hilos puedan repartirse 3 créditos —eso era
+    el fallback que esta tarea elimina—, así que este test fija los 3
+    créditos en un solo lote para seguir ejerciendo la misma concurrencia."""
+    acc = Account.objects.create(free_balance=3, paid_balance=0)
 
-    resultados, errores = _en_hilos(lambda _i: ledger.charge(acc, lambda: None), 5)
+    resultados, errores = _en_hilos(lambda _i: ledger.charge(acc, lambda: None, lot="free"), 5)
 
     assert len(resultados) == 3
     assert all(isinstance(e, QuotaExceeded) for e in errores)
@@ -165,7 +171,7 @@ def test_consumir_y_acreditar_a_la_vez_no_pierde_ninguna_operacion():
     def operar(i):
         if i % 2 == 0:
             return ledger.credit_purchase(acc, 3, external_id=f"mix_{i}")
-        return ledger.charge(acc, lambda: None)
+        return ledger.charge(acc, lambda: None, lot="free")
 
     _resultados, errores = _en_hilos(operar, 4)
 

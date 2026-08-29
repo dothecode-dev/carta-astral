@@ -22,10 +22,11 @@ def chart(db):
 
 
 @pytest.mark.django_db
-def test_charge_uses_free_lot_first(chart):
+def test_charge_con_lot_free_gasta_free(chart):
+    """`lot="free"` cobra del free_balance y deja el rastro en el ledger."""
     from api import ledger
 
-    interp, lot = ledger.charge(chart.account, _make_interp(chart))
+    interp, lot = ledger.charge(chart.account, _make_interp(chart), lot="free")
     chart.account.refresh_from_db()
     assert lot == "free"
     assert chart.account.free_balance == 0
@@ -35,30 +36,35 @@ def test_charge_uses_free_lot_first(chart):
 
 @pytest.mark.django_db
 def test_charge_raises_when_no_balance(chart):
+    """Sin saldo en el lote pedido, `charge` no tiene a dónde caer: lanza
+    QuotaExceeded en vez de mirar el otro lote."""
     from api import ledger
     from api.interpretation_service import QuotaExceeded
 
-    ledger.charge(chart.account, _make_interp(chart))  # gasta la única free
+    ledger.charge(chart.account, _make_interp(chart), lot="free")  # gasta la única free
     # segunda carta de la misma cuenta, sin balance
     from api.models import BirthData, Chart
     bd = BirthData.objects.create(date="2001-01-01", lat=0, lng=0, tz_name="UTC")
     ch2 = Chart.objects.create(birth_data=bd, data={}, engine_version="x", account=chart.account)
     with pytest.raises(QuotaExceeded):
-        ledger.charge(chart.account, _make_interp(ch2))
+        ledger.charge(chart.account, _make_interp(ch2), lot="free")
 
 
 @pytest.mark.django_db
-def test_charge_uses_paid_when_free_exhausted(chart):
+def test_charge_con_lot_paid_gasta_paid_sin_tocar_free(chart):
+    """Contrapunto del test de arriba: `lot="paid"` cobra del paid_balance y
+    no toca el free_balance aunque haya saldo ahí — no hay fallback entre
+    lotes, quien llama decide cuál se cobra."""
     from api import ledger
     ledger.grant_paid(chart.account, 2)
-    ledger.charge(chart.account, _make_interp(chart))  # gasta free
     from api.models import BirthData, Chart
     bd = BirthData.objects.create(date="2002-01-01", lat=0, lng=0, tz_name="UTC")
     ch2 = Chart.objects.create(birth_data=bd, data={}, engine_version="x", account=chart.account)
-    interp, lot = ledger.charge(chart.account, _make_interp(ch2))
+    interp, lot = ledger.charge(chart.account, _make_interp(ch2), lot="paid")
     chart.account.refresh_from_db()
     assert lot == "paid"
     assert chart.account.paid_balance == 1
+    assert chart.account.free_balance == 1  # intacto: no hubo fallback
 
 
 @pytest.mark.django_db

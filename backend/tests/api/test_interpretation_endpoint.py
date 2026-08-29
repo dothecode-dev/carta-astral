@@ -161,12 +161,15 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fak
     assert account_client.account.free_balance + account_client.account.paid_balance == antes - 1
 
 
-def test_cap_reached_503(account_client, monkeypatch, settings):
-    settings.INTERPRETATION_DAILY_CAP = 0
-    monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
-    c = _chart(account=account_client.account)
-    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
-    assert resp.status_code == 503
+# `test_cap_reached_503` (retirado en la Task 6): probaba que el cap diario
+# bloqueara este POST con un 503. Desde esta tarea el endpoint está fijado a
+# tier="largo" (Task 6 — hasta que la Task 7 le sume el tier por query param,
+# RF20) y el informe completo se cobra siempre del lote paid, que bypassea
+# el cap por diseño (RF9): pedirlo con INTERPRETATION_DAILY_CAP=0 ya no
+# puede dar 503, va a dar 202 (con paid_balance, que `account_client` ahora
+# fondea) o 402 (sin él) pero nunca un cap alcanzado. Es exactamente lo que
+# prueba `test_paid_generation_bypasses_cap_via_endpoint`, ahí abajo, que ya
+# cubría este mismo escenario desde el lado "sí bypassea".
 
 
 @pytest.mark.django_db(transaction=True)

@@ -28,7 +28,7 @@ def test_interpretacion_en_curso_con_lock_vivo_bloquea_otro_idioma(db_cache, cha
     )
     cache.set(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "token-vivo", timeout=600)
     with pytest.raises(GenerationInProgress):
-        interpretation_service.iniciar_generacion(chart, "en", account)
+        interpretation_service.iniciar_generacion(chart, "en", account, tier="largo")
 
 
 # --- HALLAZGO 2 de code review: `_sibling_en_curso` sin límite de antigüedad ---
@@ -50,7 +50,7 @@ def test_sibling_en_curso_ignora_una_interpretacion_abandonada_sin_lock(db_cache
     # No se toma ningún lock: simula un proceso muerto (restart de gunicorn a
     # mitad de generación, o el fallo terminal del HALLAZGO 1) que ya no
     # sostiene el candado de la carta.
-    assert interpretation_service._sibling_en_curso(chart, "en") is None
+    assert interpretation_service._sibling_en_curso(chart, "en", "largo") is None
 
 
 def test_sibling_en_curso_sigue_bloqueando_con_el_lock_vivo(db_cache, chart, account):
@@ -60,7 +60,7 @@ def test_sibling_en_curso_sigue_bloqueando_con_el_lock_vivo(db_cache, chart, acc
         chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     cache.set(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "token-vivo", timeout=600)
-    sibling = interpretation_service._sibling_en_curso(chart, "en")
+    sibling = interpretation_service._sibling_en_curso(chart, "en", "largo")
     assert sibling is not None
     assert sibling.lang == "es"
 
@@ -72,7 +72,7 @@ def test_interpretacion_abandonada_sin_lock_no_bloquea_otro_idioma(db_cache, cha
     Interpretation.objects.create(
         chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
-    otra = interpretation_service.iniciar_generacion(chart, "en", account)
+    otra = interpretation_service.iniciar_generacion(chart, "en", account, tier="largo")
     assert otra.lang == "en"
 
 

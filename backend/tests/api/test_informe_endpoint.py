@@ -108,7 +108,7 @@ def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monke
     llamadas = []
     monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas.append(1))
 
-    interpretacion = svc.iniciar_generacion(chart, "es", account)
+    interpretacion = svc.iniciar_generacion(chart, "es", account, tier="largo")
     account.refresh_from_db()
     antes = account.free_balance + account.paid_balance
 
@@ -131,7 +131,7 @@ def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
 
     monkeypatch.setattr("api.informe_service.generar_informe", explota)
     antes = account.free_balance + account.paid_balance
-    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes
 
@@ -151,7 +151,12 @@ def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, acc
     account.paid_balance = 0
     account.save()
 
-    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+    # tier="corto" (Task 6): con el lote atado al tier, un cobro de
+    # free_balance sólo puede venir de la lectura breve — el informe
+    # completo ("largo") siempre cobra paid_balance, nunca free. Antes de
+    # esta tarea cualquier `charge()` podía caer en cualquier lote según el
+    # saldo disponible; ahora el lote lo decide el producto pedido.
+    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="corto")
 
     account.refresh_from_db()
     assert account.free_balance == 3
@@ -171,7 +176,7 @@ def test_si_la_generacion_paga_muere_el_credito_vuelve_al_lote_paid(chart, accou
     account.paid_balance = 3
     account.save()
 
-    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
 
     account.refresh_from_db()
     assert account.free_balance == 0
@@ -184,7 +189,7 @@ def test_si_la_generacion_muere_no_queda_una_interpretacion_vacia(chart, account
     from interpret.prompts import PROMPT_VERSION
 
     monkeypatch.setattr("api.informe_service.generar_informe", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
-    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
     assert not Interpretation.objects.filter(chart=chart, lang="es", prompt_version=PROMPT_VERSION).exists()
 
 
@@ -207,62 +212,28 @@ def test_si_queda_una_seccion_no_se_devuelve_el_credito(chart, account, settings
     # necesita una key no vacía para no explotar antes de llegar al mock.
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
     antes = account.free_balance + account.paid_balance
-    interpretation_service.generar_en_segundo_plano(chart, "es", account)
+    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes - 1
 
 
-def test_el_cap_diario_cuenta_un_informe_no_ocho_llamadas(chart, account, settings, monkeypatch):
-    """Contrato numérico de la Task 10: el cap diario cuenta INFORMES, no
-    llamadas al modelo. Un informe completo hace ocho llamadas (una por
-    sección) pero el contador del cap sólo se mueve una vez. Con el cap en 1,
-    una segunda carta agotaría el cupo del día para esa cuenta."""
-    from api import interpretation_service as svc
-    from api.exceptions import CapReached
-    from api.models import BirthData, Chart
-
-    settings.INTERPRETATION_DAILY_CAP = 1
-    cache.clear()
-
-    class _Bloque:
-        def __init__(self, text):
-            self.type = "text"
-            self.text = text
-
-    class _Respuesta:
-        content = [_Bloque("cuerpo de la sección")]
-        stop_reason = "end_turn"
-
-    class _StreamCtx:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def get_final_message(self):
-            return _Respuesta()
-
-    class ClienteFalso:
-        class _Messages:
-            def stream(self, **kw):
-                return _StreamCtx()
-
-        @property
-        def messages(self):
-            return ClienteFalso._Messages()
-
-    monkeypatch.setattr(svc, "_build_client", lambda: ClienteFalso())
-
-    svc.generar_en_segundo_plano(chart, "es", account)
-
-    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
-    assert cache.get(cap_key) == 1  # una vez por informe, no una por cada una de las 8 secciones
-
-    bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
-    otra_carta = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
-    with pytest.raises(CapReached):
-        svc.iniciar_generacion(otra_carta, "es", account)
+# `test_el_cap_diario_cuenta_un_informe_no_ocho_llamadas` (retirado en la
+# Task 6): probaba que el cap diario se moviera UNA vez por informe completo
+# de ocho secciones, no una vez por llamada al LLM. Con el lote atado al tier
+# (RF9, `LOTE_POR_TIER`) esa combinación ya no puede darse: el informe
+# completo ("largo") es siempre paid, y paid bypassea el cap por diseño (no
+# lo toca en absoluto, ver `iniciar_generacion` — `if lote == "free" and
+# ...`), así que un informe de ocho secciones nunca puede tocar el contador.
+# La única generación que sí lo toca es la lectura breve ("corto"), que hace
+# UNA sola llamada — no hay forma de reproducir "ocho llamadas, un solo
+# incremento" bajo el diseño nuevo. Cobertura equivalente sigue viva: que el
+# cap se mueve una vez por generación free (no por sección) es una
+# consecuencia estructural de dónde vive el incremento (`iniciar_generacion`,
+# antes de generar ninguna sección), ya cubierta por
+# `test_credits_quota.py::test_paid_generation_bypasses_daily_cap` y
+# `test_el_cap_no_se_toca_con_credito_pago` (abajo) para el bypass de paid, y
+# por `test_interpretation_service.py::test_daily_cap_blocks_new_generation`
+# para el conteo del lote free.
 
 
 def test_el_cap_no_se_toca_con_credito_pago(account, settings):
@@ -280,7 +251,7 @@ def test_el_cap_no_se_toca_con_credito_pago(account, settings):
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
 
-    interp = svc.iniciar_generacion(chart, "es", account)
+    interp = svc.iniciar_generacion(chart, "es", account, tier="largo")
     assert interp is not None
     cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
     assert cache.get(cap_key) is None
@@ -298,7 +269,7 @@ def test_iniciar_generacion_no_cobra_si_ya_hay_un_idioma_completo(chart, account
     from api import interpretation_service as svc
 
     antes = account.free_balance + account.paid_balance
-    svc.iniciar_generacion(chart, "en", account)
+    svc.iniciar_generacion(chart, "en", account, tier="largo")
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes
 
@@ -309,7 +280,7 @@ def test_iniciar_generacion_cobra_si_no_hay_ningun_idioma_completo(chart, accoun
     from api import interpretation_service as svc
 
     antes = account.free_balance + account.paid_balance
-    svc.iniciar_generacion(chart, "es", account)
+    svc.iniciar_generacion(chart, "es", account, tier="largo")
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes - 1
 
@@ -330,7 +301,7 @@ def test_completar_generacion_traduce_el_segundo_idioma_en_vez_de_regenerar(
     monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas_generar.append(1))
     monkeypatch.setattr(informe_service, "traducir_informe", lambda *a, **kw: llamadas_traducir.append(1))
 
-    svc.generar_en_segundo_plano(chart, "en", account)
+    svc.generar_en_segundo_plano(chart, "en", account, tier="largo")
 
     assert llamadas_traducir == [1]
     assert llamadas_generar == []
@@ -357,7 +328,7 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
     from api.models import Interpretation
     from interpret.prompts import PROMPT_VERSION
 
-    interpretacion_es = svc.iniciar_generacion(chart, "es", account)
+    interpretacion_es = svc.iniciar_generacion(chart, "es", account, tier="largo")
     assert interpretacion_es.completa is False
 
     # El hilo de "es" ya tomó el lock de la carta y sigue generando (igual
@@ -368,7 +339,7 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
     antes = account.free_balance + account.paid_balance
 
     with pytest.raises(GenerationInProgress):
-        svc.iniciar_generacion(chart, "en", account)
+        svc.iniciar_generacion(chart, "en", account, tier="largo")
 
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes  # no se perdió ningún crédito
@@ -401,7 +372,7 @@ def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
     antes = account.free_balance + account.paid_balance
 
-    interpretacion_en = svc.iniciar_generacion(chart, "en", account)
+    interpretacion_en = svc.iniciar_generacion(chart, "en", account, tier="largo")
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes  # confirmado: no cobró
 

@@ -55,7 +55,7 @@ def test_no_toca_una_generacion_real_en_curso(chart, account):
     matchea el marcador legacy, así que el backfill no debe tocarla."""
     from api import interpretation_service as svc
 
-    en_curso = svc.iniciar_generacion(chart, "es", account)
+    en_curso = svc.iniciar_generacion(chart, "es", account, tier="largo")
     assert en_curso.completa is False
     assert en_curso.text == ""
 
@@ -112,7 +112,7 @@ def test_escenario_legacy_end_to_end(client_autenticado, chart, account, monkeyp
 
     # 3) iniciar_generacion: encuentra la fila existente y NO cobra de nuevo.
     antes = account.free_balance + account.paid_balance
-    encontrada = svc.iniciar_generacion(chart, "es", account)
+    encontrada = svc.iniciar_generacion(chart, "es", account, tier="largo")
     assert encontrada.pk == legacy.pk
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes

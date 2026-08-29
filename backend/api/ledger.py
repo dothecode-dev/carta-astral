@@ -16,23 +16,28 @@ def credits_available(account) -> int:
     return account.free_balance + account.paid_balance
 
 
-def charge(account, build_interpretation):
-    """Cobra 1 crédito (free primero, luego paid) y crea la interpretación.
+def charge(account, build_interpretation, lot: str):
+    """Cobra 1 crédito del lote pedido y crea la interpretación.
+
+    El lote lo decide quien llama, no esta función: con dos productos el lote
+    ES el producto (free → lectura breve, paid → informe completo), así que
+    caer al otro lote cuando el pedido no tiene saldo cobraría el producto
+    equivocado. Antes de que existieran dos tiers esta función gastaba free
+    primero y paid después, que era correcto cuando los dos compraban lo mismo.
 
     build_interpretation: callable sin args que crea y devuelve la Interpretation.
-    Devuelve (interpretation, lot). Lanza QuotaExceeded si no hay balance.
+    Devuelve (interpretation, lot). Lanza QuotaExceeded(lot) si ese lote no
+    tiene saldo, sin tocar el otro lote ni caer a él.
     """
+    if lot not in ("free", "paid"):
+        raise ValueError(f"lote desconocido: {lot!r}")
+    campo = "free_balance" if lot == "free" else "paid_balance"
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
-        if acc.free_balance > 0:
-            lot = "free"
-            acc.free_balance -= 1
-        elif acc.paid_balance > 0:
-            lot = "paid"
-            acc.paid_balance -= 1
-        else:
-            raise QuotaExceeded()
-        acc.save(update_fields=["free_balance", "paid_balance"])
+        if getattr(acc, campo) <= 0:
+            raise QuotaExceeded(lot)
+        setattr(acc, campo, getattr(acc, campo) - 1)
+        acc.save(update_fields=[campo])
         interp = build_interpretation()
         CreditTransaction.objects.create(
             account=acc, kind="consumption", lot=lot, amount=-1, interpretation=interp,

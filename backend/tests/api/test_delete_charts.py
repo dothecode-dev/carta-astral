@@ -49,7 +49,11 @@ def test_delete_charts_preserva_ledger(monkeypatch, settings):
     # ahí, sólo por `_build_client` dentro de `completar_generacion`.)
     monkeypatch.setattr(svc, "_build_client", lambda: object())
 
-    a = Account.objects.create()
+    # paid_balance=1: el POST de interpretación está fijado a tier="largo"
+    # (informe completo, Task 6) hasta que la Task 7 sume el tier por query
+    # param, y ese producto se cobra del lote paid (RF9), no del free que
+    # trae el default del modelo.
+    a = Account.objects.create(paid_balance=1)
     resp = _client(a).post("/api/charts/", PAYLOAD, format="json")
     uuid = resp.data["id"]
     resp = _client(a).post(f"/api/charts/{uuid}/interpretation/", {"lang": "es"}, format="json")
