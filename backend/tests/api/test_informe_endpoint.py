@@ -266,8 +266,8 @@ def test_el_cap_diario_cuenta_un_informe_no_ocho_llamadas(chart, account, settin
 
 
 def test_el_cap_no_se_toca_con_credito_pago(account, settings):
-    """Bypass del cap para créditos pagos, igual que el flujo viejo
-    (`get_or_create_interpretation`): sólo cuenta generación gratis."""
+    """Bypass del cap para créditos pagos, igual que el flujo viejo de
+    interpretación: sólo cuenta generación gratis."""
     from api import interpretation_service as svc
     from api.models import BirthData, Chart
 
@@ -291,7 +291,7 @@ def test_el_cap_no_se_toca_con_credito_pago(account, settings):
 
 def test_iniciar_generacion_no_cobra_si_ya_hay_un_idioma_completo(chart, account, interpretacion_completa):
     """`iniciar_generacion` no había heredado el chequeo de `sibling` que sí
-    tiene el flujo viejo `get_or_create_interpretation`: cobraba de nuevo por
+    tenía el flujo viejo de interpretación: cobraba de nuevo por
     cada `(chart, lang)` aunque la carta ya tuviera una lectura completa en
     otro idioma. `interpretacion_completa` ya deja una lectura "es" completa
     sobre `chart`/`account`."""

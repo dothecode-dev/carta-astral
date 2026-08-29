@@ -13,14 +13,12 @@ import uuid
 import anthropic
 from django.conf import settings
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from api import ledger
 from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
 from api.models import CreditTransaction, Interpretation
 from interpret.exceptions import InterpretationError
-from interpret.generator import build_interpretation, translate_interpretation
 from interpret.prompts import PROMPT_VERSION
 
 # Import diferido (no al tope del módulo): `informe_service` importa
@@ -108,16 +106,10 @@ def soltar_lock(chart, token: str) -> None:
         cache.delete(key)
 
 
-def _existing(chart, lang):
-    return Interpretation.objects.filter(
-        chart=chart, lang=lang, prompt_version=PROMPT_VERSION
-    ).first()
-
-
 def _sibling_completo(chart, lang: str) -> Interpretation | None:
     """Informe COMPLETO de esta misma carta en otro idioma, si existe.
 
-    Es el mismo criterio de `get_or_create_interpretation` (RF8: un crédito
+    Es el mismo criterio del flujo viejo de interpretación (RF8: un crédito
     por carta, no por idioma) adaptado al flujo de la Tarea 10: acá `completa`
     hace falta porque `iniciar_generacion` deja una fila vacía
     (`completa=False`) apenas arranca, y esa fila en curso no sirve como
@@ -156,7 +148,7 @@ def _sibling_en_curso(chart, lang: str) -> Interpretation | None:
     esperar: no hay una cola ni un job que retome el pedido de "en" solo,
     así que "esperar" significaría un 202 fantasma que nunca progresa.
     Rechazar con un estado claro (`GenerationInProgress`, ya usado
-    por el flujo viejo `get_or_create_interpretation` en este mismo caso) es
+    por el flujo viejo de interpretación en este mismo caso) es
     lo que la web ya sabe interpretar como "reintentá en unos segundos"
     (ver `web/app/api/charts/[id]/interpretation/route.ts`, que traduce un
     409 del backend a ese mensaje).
@@ -225,87 +217,6 @@ def content_key(chart_data: dict, lang: str, prompt_version: str) -> str:
     return hashlib.sha256(f"{prompt_version}:{lang}:{canonical}".encode()).hexdigest()
 
 
-def get_or_create_interpretation(chart, lang: str, account) -> Interpretation:
-    hit = _existing(chart, lang)
-    if hit is not None:
-        return hit
-
-    # El crédito se cobra UNA vez por carta: la primera lectura, en el idioma
-    # que sea. Los demás idiomas son traducciones de esa lectura, gratis.
-    sibling = (
-        Interpretation.objects.filter(chart=chart, prompt_version=PROMPT_VERSION)
-        .exclude(lang=lang)
-        .first()
-    )
-    will_charge = sibling is None
-
-    if will_charge and ledger.credits_available(account) <= 0:
-        raise QuotaExceeded()
-
-    # Por carta, no por carta e idioma: si no, pedir en español y cambiar a
-    # inglés a mitad dispara dos generaciones concurrentes de la misma carta.
-    # El valor es un token propio (no "1") para que renovar/soltar puedan
-    # distinguir "mi lock" de "el lock que haya".
-    lock_key = _lock_key(chart)
-    lock_token = uuid.uuid4().hex
-    if not cache.add(lock_key, lock_token, timeout=LOCK_TTL):
-        hit = _existing(chart, lang)
-        if hit is not None:
-            return hit
-        raise GenerationInProgress("generación en curso, reintentá en unos segundos")
-
-    try:
-        key = content_key(chart.data, lang, PROMPT_VERSION)
-        # Dedup entre cartas: mismo input del LLM → se reutiliza el texto sin
-        # llamar a la API. El crédito de la carta se cobra igual; solo el costo
-        # LLM y el cap aplican a generaciones reales.
-        donor = Interpretation.objects.filter(content_key=key).first()
-        llm_generated = False
-        if donor is not None:
-            text = donor.text
-        elif sibling is not None:
-            # Traducción con modelo barato; fuera del cap (no es generación).
-            text = translate_interpretation(sibling.text, lang, _build_client())
-        else:
-            # Determine lot BEFORE charging to apply the cap only to free generations.
-            will_be_free = account.free_balance > 0
-            cap = settings.INTERPRETATION_DAILY_CAP
-            cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
-            if will_be_free and cache.get(cap_key, 0) >= cap:
-                logger.warning("interpretation daily cap reached (cap=%s)", cap)
-                raise CapReached()
-
-            text = build_interpretation(chart.data, lang, PROMPT_VERSION, _build_client())
-            llm_generated = True
-
-        def _factory():
-            try:
-                with transaction.atomic():
-                    # completa=True: a diferencia del flujo de la Tarea 10
-                    # (secciones persistidas de a una, `completa` recién en
-                    # `generar_informe`), acá `text` ya está armado entero
-                    # antes de crear la fila — no hay estado intermedio que
-                    # marcar como incompleto.
-                    return Interpretation.objects.create(
-                        chart=chart, lang=lang, prompt_version=PROMPT_VERSION,
-                        text=text, account=account, content_key=key,
-                        completa=True,
-                    )
-            except IntegrityError:
-                return _existing(chart, lang)
-
-        if not will_charge:
-            return _factory()
-
-        obj, lot = ledger.charge(account, _factory)
-        if lot == "free" and llm_generated:
-            cache.add(cap_key, 0, timeout=_seconds_until_midnight())
-            cache.incr(cap_key)
-        return obj
-    finally:
-        soltar_lock(chart, lock_token)
-
-
 def iniciar_generacion(chart, lang: str, account) -> Interpretation:
     """Crea (o recupera) la `Interpretation` de un informe y cobra si
     corresponde. Corre siempre en el hilo del request —nunca en el hilo de
@@ -334,7 +245,7 @@ def iniciar_generacion(chart, lang: str, account) -> Interpretation:
     encontraría con `created=False` y jamás cobraría nada.
 
     RF8 / BUG de la revisión final: esta función no heredaba el chequeo de
-    `sibling` que sí tiene `get_or_create_interpretation` (el flujo viejo), y
+    `sibling` que sí tenía el flujo viejo de interpretación, y
     cobraba un crédito nuevo por cada `(chart, lang)` aunque la carta ya
     tuviera una lectura completa en otro idioma — la web promete lo
     contrario. Con `_sibling_completo` encontrado, el segundo idioma no cobra

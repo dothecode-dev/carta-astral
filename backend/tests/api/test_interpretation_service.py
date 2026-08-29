@@ -4,10 +4,10 @@ import pytest
 from django.core.cache import cache
 from django.conf import settings as django_settings
 
+from api import informe_service
 from api import interpretation_service as svc
 from api.models import Account, BirthData, Chart, Interpretation
 from interpret.exceptions import InterpretationError
-from interpret.prompts import PROMPT_VERSION
 
 pytestmark = pytest.mark.django_db
 
@@ -34,6 +34,31 @@ def _chart():
         tz_name="America/Argentina/Buenos_Aires",
     )
     return Chart.objects.create(birth_data=bd, data={"time_known": True}, engine_version="test")
+
+
+def _chart_with_data(data):
+    bd = BirthData.objects.create(
+        date=datetime.date(1989, 7, 14),
+        time=datetime.time(23, 45),
+        time_known=True,
+        lat=-34.5,
+        lng=-58.4,
+        tz_name="America/Argentina/Buenos_Aires",
+    )
+    return Chart.objects.create(birth_data=bd, data=data, engine_version="test")
+
+
+def _generar(chart, lang, account):
+    """Arranca y completa un informe sincrónicamente, como hace
+    `generar_en_segundo_plano`, devolviendo la `Interpretation` ya
+    completada. El refresh es necesario: cuando `completar_generacion` toma
+    el camino de traducir un sibling (`informe_service.traducir_informe`),
+    el texto se escribe sobre OTRA instancia obtenida con `get_or_create`
+    adentro de esa función, no sobre el objeto `interp` que tenemos acá."""
+    interp = svc.iniciar_generacion(chart, lang, account)
+    svc.completar_generacion(interp, chart, account)
+    interp.refresh_from_db()
+    return interp
 
 
 class _Stream:
@@ -90,22 +115,33 @@ def fake_client(monkeypatch):
     return _FakeClient
 
 
+# Ocho secciones aplican siempre en estos tests: `_chart()`/`_chart_with_data`
+# ponen `time_known=True`, así que ninguna sección con `requiere_hora` se
+# excluye (`informe_service.secciones_aplicables`). Cada sección es una
+# llamada al LLM (`build_seccion`), así que una generación completa cuenta
+# ocho contra `fake_client.calls`, no una como en el flujo viejo (que armaba
+# el texto entero en un único llamado).
+SECCIONES_POR_INFORME = 8
+
+
 def test_miss_generates_and_persists(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    interp = svc.get_or_create_interpretation(c, "es", _account())
-    assert interp.text == "una interpretación"
+    interp = _generar(c, "es", _account())
+    assert interp.completa is True
+    assert "una interpretación" in interp.text
     assert Interpretation.objects.count() == 1
-    assert fake_client.calls == 1
+    assert fake_client.calls == SECCIONES_POR_INFORME
 
 
 def test_hit_serves_without_llm(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
     acc = _account()
-    svc.get_or_create_interpretation(c, "es", acc)
-    svc.get_or_create_interpretation(c, "es", acc)
-    assert fake_client.calls == 1
+    _generar(c, "es", acc)
+    llamadas_tras_la_primera = fake_client.calls
+    _generar(c, "es", acc)
+    assert fake_client.calls == llamadas_tras_la_primera
     assert Interpretation.objects.count() == 1
 
 
@@ -113,124 +149,73 @@ def test_daily_cap_blocks_new_generation(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 1
     settings.INSTALL_FREE_CREDITS = 5  # both generations are free, to isolate the cap
     acc = _account()  # free_balance=5 (reads settings at call time)
-    svc.get_or_create_interpretation(_chart(), "es", acc)
+    _generar(_chart(), "es", acc)
     with pytest.raises(svc.CapReached):
-        # data distinto: si fuera idéntico, dedupearía en vez de llegar al cap
-        svc.get_or_create_interpretation(
+        # el cap se chequea (y cuenta) en `iniciar_generacion`, antes de
+        # arrancar ninguna sección: una carta con datos distintos no dedupea
+        # (no hay dedup contra el camino nuevo, ver concern en el reporte de
+        # la Task 0) y de todas formas choca contra el cap ya consumido.
+        svc.iniciar_generacion(
             _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", acc
         )
-    assert fake_client.calls == 1
+    assert fake_client.calls == SECCIONES_POR_INFORME  # sólo la primera generación llegó a pedirle al LLM
 
 
 def test_cap_does_not_block_cache_hits(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 1
     c = _chart()
     acc = _account()
-    svc.get_or_create_interpretation(c, "es", acc)
-    again = svc.get_or_create_interpretation(c, "es", acc)
-    assert again.text == "una interpretación"
-    assert fake_client.calls == 1
+    first = _generar(c, "es", acc)
+    again = _generar(c, "es", acc)
+    assert again.text == first.text
+    assert fake_client.calls == SECCIONES_POR_INFORME
 
 
-def test_lock_held_raises_without_llm(fake_client, settings, db_cache):
-    # db_cache: el lock vive en DatabaseCache en producción, no en LocMem.
-    settings.INTERPRETATION_DAILY_CAP = 100
-    c = _chart()
-    cache.add(f"interp:lock:{c.id}:{PROMPT_VERSION}", "1", timeout=30)
-    # Distinguible de una falla real: la lectura se está escribiendo, y quien
-    # la pidió tiene que esperar en vez de ver un error.
-    with pytest.raises(svc.GenerationInProgress):
-        svc.get_or_create_interpretation(c, "es", _account())
-    assert fake_client.calls == 0
-
-
-def _chart_with_data(data):
-    bd = BirthData.objects.create(
-        date=datetime.date(1989, 7, 14),
-        time=datetime.time(23, 45),
-        time_known=True,
-        lat=-34.5,
-        lng=-58.4,
-        tz_name="America/Argentina/Buenos_Aires",
-    )
-    return Chart.objects.create(birth_data=bd, data=data, engine_version="test")
-
-
-def test_dedup_reuses_text_across_identical_charts_without_llm(fake_client, settings):
-    settings.INTERPRETATION_DAILY_CAP = 100
-    data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z", "placements": [1, 2]}
-    a = _chart_with_data(dict(data))
-    b = _chart_with_data(dict(data))
-    first = svc.get_or_create_interpretation(a, "es", _account())
-    second = svc.get_or_create_interpretation(b, "es", _account())
-    assert fake_client.calls == 1
-    assert second.text == first.text
-    assert Interpretation.objects.count() == 2  # cada carta conserva su fila
-
-
-def test_dedup_still_charges_credit(fake_client, settings):
-    settings.INTERPRETATION_DAILY_CAP = 100
-    data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z"}
-    svc.get_or_create_interpretation(_chart_with_data(dict(data)), "es", _account())
-    acc = _account(free_balance=1)
-    svc.get_or_create_interpretation(_chart_with_data(dict(data)), "es", acc)
-    acc.refresh_from_db()
-    assert svc.credits_available(acc) == 0
-
-
-def test_dedup_requires_credit_even_with_donor(fake_client, settings):
-    settings.INTERPRETATION_DAILY_CAP = 100
-    data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z"}
-    svc.get_or_create_interpretation(_chart_with_data(dict(data)), "es", _account())
-    broke = _account(free_balance=0, paid_balance=0)
-    with pytest.raises(svc.QuotaExceeded):
-        svc.get_or_create_interpretation(_chart_with_data(dict(data)), "es", broke)
-    assert Interpretation.objects.count() == 1
-
-
-def test_dedup_does_not_consume_daily_cap(fake_client, settings):
-    settings.INTERPRETATION_DAILY_CAP = 1
-    settings.INSTALL_FREE_CREDITS = 5
-    data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z"}
-    svc.get_or_create_interpretation(_chart_with_data(dict(data)), "es", _account())
-    # hit de dedup: gratis en LLM, no debe contar contra el cap
-    svc.get_or_create_interpretation(_chart_with_data(dict(data)), "es", _account())
-    assert fake_client.calls == 1
-    # una carta realmente distinta todavía entra (el cap solo contó 1 llamada real)
-    with pytest.raises(svc.CapReached):
-        svc.get_or_create_interpretation(
-            _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}),
-            "es",
-            _account(),
-        )
-
-
-def test_different_data_or_lang_does_not_dedup(fake_client, settings):
-    settings.INTERPRETATION_DAILY_CAP = 100
-    data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z"}
-    svc.get_or_create_interpretation(_chart_with_data(dict(data)), "es", _account())
-    svc.get_or_create_interpretation(
-        _chart_with_data({"time_known": True, "utc_iso": "1989-07-15T02:46:00Z"}), "es", _account()
-    )
-    svc.get_or_create_interpretation(_chart_with_data(dict(data)), "en", _account())
-    assert fake_client.calls == 3
-
-
-def test_llm_error_does_not_persist(monkeypatch, settings):
+def test_llm_error_no_deja_interpretacion_persistida(monkeypatch, settings):
+    """Contrapunto del flujo viejo: ahí el error del LLM se propagaba
+    sincrónicamente como `InterpretationError` hasta quien llamaba a
+    `get_or_create_interpretation`. Desde la Tarea 10 la generación real
+    corre en `completar_generacion`, que atrapa y loguea cualquier excepción
+    en vez de relanzarla (es la función que corre en el hilo de fondo; ver
+    su docstring). Lo que sigue valiendo acá no es "se levanta la
+    excepción" sino la garantía de plata: si el LLM falla, no queda ninguna
+    `Interpretation` a medias ni se pierde el crédito cobrado."""
     settings.INTERPRETATION_DAILY_CAP = 100
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
     c = _chart()
-    with pytest.raises(InterpretationError):
-        svc.get_or_create_interpretation(c, "es", _account())
+    acc = _account()
+    antes = acc.free_balance + acc.paid_balance
+    svc.generar_en_segundo_plano(c, "es", acc)
     assert Interpretation.objects.count() == 0
+    acc.refresh_from_db()
+    assert acc.free_balance + acc.paid_balance == antes
 
 
-def test_missing_api_key_raises_interpretation_error(settings):
+def test_missing_api_key_no_deja_interpretacion_persistida(settings):
+    """Mismo comportamiento que el error del LLM (arriba) para el otro
+    disparador que ya cubría el flujo viejo: sin `ANTHROPIC_API_KEY`,
+    `_build_client` levanta `InterpretationError` dentro de
+    `completar_generacion`, que la atrapa sin dejar nada a medias."""
     settings.INTERPRETATION_DAILY_CAP = 100
     settings.ANTHROPIC_API_KEY = ""
-    with pytest.raises(InterpretationError):
-        svc.get_or_create_interpretation(_chart(), "es", _account())
+    c = _chart()
+    acc = _account()
+    antes = acc.free_balance + acc.paid_balance
+    svc.generar_en_segundo_plano(c, "es", acc)
     assert Interpretation.objects.count() == 0
+    acc.refresh_from_db()
+    assert acc.free_balance + acc.paid_balance == antes
+
+
+def test_missing_api_key_sigue_levantando_interpretation_error_desde_build_client():
+    """`_build_client` en sí (no el flujo completo) sigue levantando un
+    error prolijo y no un `TypeError` crudo del SDK: eso es lo que
+    `completar_generacion` necesita poder atrapar como excepción conocida."""
+    from django.test import override_settings
+
+    with override_settings(ANTHROPIC_API_KEY=""):
+        with pytest.raises(InterpretationError):
+            svc._build_client()
 
 
 # --- una interpretación por carta; otros idiomas = traducción gratis ---
@@ -238,9 +223,14 @@ def test_missing_api_key_raises_interpretation_error(settings):
 
 @pytest.fixture
 def fake_translator(monkeypatch):
+    """El camino nuevo traduce sección por sección
+    (`informe_service.traducir_informe`), que importa `translate_interpretation`
+    directo de `interpret.generator` — no a través de `interpretation_service`.
+    Por eso el mock va sobre `informe_service`, no sobre `svc` (a diferencia
+    del flujo viejo, que traducía el texto entero en una sola llamada propia)."""
     calls = []
     monkeypatch.setattr(
-        svc, "translate_interpretation",
+        informe_service, "translate_interpretation",
         lambda text, lang, client: calls.append((text, lang)) or f"[{lang}] {text}",
     )
     return calls
@@ -250,12 +240,16 @@ def test_second_lang_translates_without_new_generation_nor_charge(fake_client, f
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
     acc = _account(free_balance=1)
-    svc.get_or_create_interpretation(c, "es", acc)  # cobra el único crédito
-    second = svc.get_or_create_interpretation(c, "en", acc)
-    assert fake_client.calls == 1  # una sola generación real
-    assert fake_translator == [("una interpretación", "en")]
+    _generar(c, "es", acc)  # cobra el único crédito
+    llamadas_generacion = fake_client.calls
+    second = _generar(c, "en", acc)
+    assert fake_client.calls == llamadas_generacion  # ninguna generación real nueva
+    # Una traducción por sección (ocho), no una por informe entero como en
+    # el flujo viejo: `traducir_informe` traduce de a un texto por llamada.
+    assert len(fake_translator) == SECCIONES_POR_INFORME
+    assert all(texto == "una interpretación" and lang == "en" for texto, lang in fake_translator)
     assert second.lang == "en"
-    assert second.text == "[en] una interpretación"
+    assert "[en] una interpretación" in second.text
     acc.refresh_from_db()
     assert svc.credits_available(acc) == 0  # no cobró el segundo idioma
 
@@ -264,20 +258,20 @@ def test_translation_available_with_zero_credits(fake_client, fake_translator, s
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
     acc = _account(free_balance=1)
-    svc.get_or_create_interpretation(c, "es", acc)  # gasta el último crédito
+    _generar(c, "es", acc)  # gasta el último crédito
     # ya sin saldo, el cambio de idioma sigue funcionando (la carta ya se pagó)
-    out = svc.get_or_create_interpretation(c, "pt", acc)
-    assert out.text == "[pt] una interpretación"
+    out = _generar(c, "pt", acc)
+    assert "[pt] una interpretación" in out.text
 
 
 def test_translation_does_not_consume_daily_cap(fake_client, fake_translator, settings):
     settings.INTERPRETATION_DAILY_CAP = 1
     settings.INSTALL_FREE_CREDITS = 5
     c = _chart()
-    svc.get_or_create_interpretation(c, "es", _account())
-    svc.get_or_create_interpretation(c, "en", _account(free_balance=1))
+    _generar(c, "es", _account())
+    _generar(c, "en", _account(free_balance=1))
     with pytest.raises(svc.CapReached):
-        svc.get_or_create_interpretation(
+        svc.iniciar_generacion(
             _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", _account()
         )
 
@@ -287,8 +281,8 @@ def test_interpretation_langs_helper(fake_client, fake_translator, settings):
     c = _chart()
     acc = _account()
     assert svc.interpretation_langs(c) == []
-    svc.get_or_create_interpretation(c, "es", acc)
-    svc.get_or_create_interpretation(c, "en", acc)
+    _generar(c, "es", acc)
+    _generar(c, "en", acc)
     assert sorted(svc.interpretation_langs(c)) == ["en", "es"]
 
 
@@ -303,3 +297,40 @@ def test_interpretation_langs_excluye_incompletas(settings):
     acc = _account()
     svc.iniciar_generacion(c, "es", acc)
     assert svc.interpretation_langs(c) == []
+
+
+# --- CONCERN (Task 0): dedup por content_key entre cartas idénticas ---
+#
+# El flujo viejo (`get_or_create_interpretation`, borrado acá) buscaba un
+# "donante" por `content_key` antes de llamarle al LLM: dos cartas con el
+# mismo input astrológico compartían el texto sin pagar una segunda
+# generación. Esa lógica de reutilización NUNCA se migró a
+# `iniciar_generacion`/`completar_generacion`/`informe_service.generar_informe`
+# — ninguno de los tres calcula ni consulta `content_key` hoy; las filas que
+# crea `iniciar_generacion` ni siquiera lo completan (queda en su default
+# `""`). El pre-flight scan de la Task 2 (`content_key(chart_data, lang,
+# prompt_version, tier)`) asume que ya existe un llamador de `content_key`
+# "donde lo use el flujo de informe" — hoy no lo hay.
+#
+# No se migró una versión "equivalente" de este comportamiento contra el
+# camino nuevo porque implementarla es una decisión de diseño fuera del
+# alcance de esta tarea (¿el donante se busca por el `content_key` del
+# informe entero, como antes, o por sección, ahora que la generación es
+# seccionada?) — no un renombre mecánico de una llamada existente. Se
+# reporta como concern en vez de inventar el mecanismo acá. Mientras tanto
+# sólo se prueba la función hash en sí (que Task 2 va a extender con
+# `tier`), no su integración: eso es lo que se perdió respecto de la
+# cobertura del flujo viejo.
+
+
+def test_content_key_es_estable_para_el_mismo_input():
+    data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z", "placements": [1, 2]}
+    assert svc.content_key(data, "es", "v1") == svc.content_key(dict(data), "es", "v1")
+
+
+def test_content_key_cambia_con_datos_lang_o_prompt_version_distintos():
+    data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z"}
+    base = svc.content_key(data, "es", "v1")
+    assert svc.content_key({**data, "utc_iso": "1989-07-15T02:46:00Z"}, "es", "v1") != base
+    assert svc.content_key(data, "en", "v1") != base
+    assert svc.content_key(data, "es", "v2") != base

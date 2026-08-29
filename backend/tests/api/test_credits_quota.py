@@ -6,7 +6,6 @@ from api import interpretation_service as svc
 from api.interpretation_service import (
     QuotaExceeded,
     credits_available,
-    get_or_create_interpretation,
 )
 from api.models import Account, BirthData, Chart, Interpretation
 
@@ -36,7 +35,7 @@ def test_quota_exceeded_blocks_new_generation(settings):
     settings.INSTALL_FREE_CREDITS = 0
     acc = _account()  # free_balance=0, paid_balance=0
     with pytest.raises(QuotaExceeded):
-        get_or_create_interpretation(_chart(), "es", acc)
+        svc.iniciar_generacion(_chart(), "es", acc)
 
 
 def test_cache_hit_served_with_zero_credits(settings):
@@ -45,43 +44,34 @@ def test_cache_hit_served_with_zero_credits(settings):
     chart = _chart()
     from interpret.prompts import PROMPT_VERSION
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="cached", account=acc
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="cached", account=acc,
+        completa=True,  # una fila `completa=False` es "en curso", no una lectura servible
     )
-    # 0 créditos pero ya existe: se sirve sin error
-    out = get_or_create_interpretation(chart, "es", acc)
+    # 0 créditos pero ya existe: `iniciar_generacion` la encuentra
+    # (`get_or_create` con `created=False`) y la devuelve sin volver a
+    # consultar el ledger.
+    out = svc.iniciar_generacion(chart, "es", acc)
     assert out.text == "cached"
 
 
-def test_paid_generation_bypasses_daily_cap(monkeypatch, settings):
-    """RF9: a paid generation bypasses the global daily cap and does not increment it."""
+def test_paid_generation_bypasses_daily_cap(settings):
+    """RF9: a paid generation bypasses the global daily cap and does not increment it.
+
+    El cap se chequea (y, si corresponde, se incrementa) enteramente dentro
+    de `iniciar_generacion` — no hace falta mockear el cliente del LLM ni
+    completar la generación para probar esta garantía, a diferencia del
+    flujo viejo (que armaba el texto entero en la misma llamada que cobraba)."""
     settings.INSTALL_FREE_CREDITS = 0
     settings.INTERPRETATION_DAILY_CAP = 0  # cap at its limit for free generations
 
     acc = Account.objects.create(free_balance=0, paid_balance=1)
     chart = _chart()
 
-    class _Stream:
-        def __enter__(self): return self
-        def __exit__(self, *exc): return False
-        def get_final_message(self):
-            class R:
-                content = [type("B", (), {"type": "text", "text": "paid interp"})()]
-                stop_reason = "end_turn"
-            return R()
-
-    class _FakeClient:
-        class _M:
-            def stream(self, **kw): return _Stream()
-        @property
-        def messages(self): return _FakeClient._M()
-
-    monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
-
     cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
     cache.clear()
 
     before = cache.get(cap_key)
-    interp = get_or_create_interpretation(chart, "es", acc)
+    interp = svc.iniciar_generacion(chart, "es", acc)
     after = cache.get(cap_key)
 
     assert isinstance(interp, Interpretation)

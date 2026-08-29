@@ -20,7 +20,10 @@ def test_interpretation_scoped_to_account(monkeypatch, settings):
 
     settings.INTERPRETATION_DAILY_CAP = 100
     # Prevent actual LLM call; if the scoping bug exists B would reach this and get 200.
-    monkeypatch.setattr(svc, "build_interpretation", lambda *a, **kw: "fake text")
+    # (Antes mockeaba `build_interpretation`, del flujo viejo de interpretación
+    # que la Task 0 retiró — la generación real corre en `completar_generacion`,
+    # que arma el cliente con `_build_client`, no con ese nombre.)
+    monkeypatch.setattr(svc, "_build_client", lambda: object())
 
     a = Account.objects.create()
     b = Account.objects.create()

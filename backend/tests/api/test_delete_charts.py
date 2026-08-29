@@ -44,8 +44,10 @@ def test_delete_charts_preserva_ledger(monkeypatch, settings):
     import api.interpretation_service as svc
 
     settings.INTERPRETATION_DAILY_CAP = 100
+    # (El segundo mock era de `build_interpretation`, del flujo viejo de
+    # interpretación que la Task 0 retiró: la generación real ya no pasa por
+    # ahí, sólo por `_build_client` dentro de `completar_generacion`.)
     monkeypatch.setattr(svc, "_build_client", lambda: object())
-    monkeypatch.setattr(svc, "build_interpretation", lambda *a, **kw: "fake text")
 
     a = Account.objects.create()
     resp = _client(a).post("/api/charts/", PAYLOAD, format="json")

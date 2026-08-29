@@ -13,7 +13,7 @@ TOKEN = "tok-test"
 @pytest.fixture(autouse=True)
 def lock_tomado(chart):
     """Simula que ya se tomó el lock de esta carta con TOKEN, como hace
-    `get_or_create_interpretation` antes de generar. Sin esto, el
+    `completar_generacion` antes de generar. Sin esto, el
     `renovar_lock` real (no mockeado) siempre devuelve False porque no hay
     ningún lock que renovar, y los tests de arriba abortarían en la primera
     sección por una razón ajena a lo que están probando."""

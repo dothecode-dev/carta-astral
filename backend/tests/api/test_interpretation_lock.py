@@ -9,12 +9,26 @@ from interpret.prompts import PROMPT_VERSION
 pytestmark = pytest.mark.django_db
 
 
-def test_una_generacion_en_curso_bloquea_tambien_los_otros_idiomas(db_cache, chart, account):
-    # Pedir el informe en español y cambiar a inglés a mitad disparaba dos
-    # generaciones de cuatro minutos y cobraba dos créditos por la misma carta.
-    cache.set(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "1", timeout=600)
+def test_interpretacion_en_curso_con_lock_vivo_bloquea_otro_idioma(db_cache, chart, account):
+    """Contrapunto de `test_interpretacion_abandonada_sin_lock_no_bloquea_otro_idioma`
+    (más abajo): con el lock realmente tomado —generación en curso de
+    verdad, no una abandonada— pedir el otro idioma sí se rechaza.
+
+    Reemplaza, contra el camino nuevo, a
+    `test_una_generacion_en_curso_bloquea_tambien_los_otros_idiomas`
+    (retirado junto con `get_or_create_interpretation` en la Task 0): aquel
+    test tomaba el lock sin que existiera ninguna `Interpretation` en curso,
+    una escena que ya no puede darse — en este módulo el lock de la carta
+    sólo lo toma `completar_generacion`, siempre sobre una fila que
+    `iniciar_generacion` ya creó antes. El caso realista (fila + lock) ya
+    está cubierto con más detalle, incluido el saldo, por
+    `test_informe_endpoint.py::test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra`."""
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+    )
+    cache.set(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "token-vivo", timeout=600)
     with pytest.raises(GenerationInProgress):
-        interpretation_service.get_or_create_interpretation(chart, "en", account)
+        interpretation_service.iniciar_generacion(chart, "en", account)
 
 
 # --- HALLAZGO 2 de code review: `_sibling_en_curso` sin límite de antigüedad ---

@@ -131,8 +131,7 @@ def generar_informe(interpretacion, client, token: str) -> None:
     informe a medio hacer completa el resto sin repetir lo ya escrito.
 
     `token` es el mismo valor que `interpretation_service` guardó al tomar el
-    lock de esta carta (el token de `get_or_create_interpretation`, o el que
-    tome el flujo equivalente del informe). Después de persistir CADA sección
+    lock de esta carta en `completar_generacion`. Después de persistir CADA sección
     se llama a `renovar_lock(chart, token)`: un informe son ocho llamadas
     secuenciales de hasta 1000 palabras, unos 6 minutos contra un
     `LOCK_TTL = 600`, así que sin renovar el lock la generación sobrevive a su
@@ -158,7 +157,7 @@ def generar_informe(interpretacion, client, token: str) -> None:
       y persiste, no decide sobre plata. Ni siquiera cuando pierde el lock —
       perder el lock no es que el informe se haya arruinado, es que otro
       proceso lo sigue y probablemente lo termine.
-    - `get_or_create_interpretation` cobra un crédito la primera vez que la
+    - `iniciar_generacion` cobra un crédito la primera vez que la
       `Interpretation` de esta carta se crea, no por cada intento: un segundo
       pedido sobre una `Interpretation` que ya existe NO vuelve a cobrar,
       sólo reanuda. Por eso el crédito se devuelve *sólo si no quedó ninguna

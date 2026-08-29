@@ -1,7 +1,7 @@
 """Backfill de `completa` para interpretaciones que ya existían antes de la
 Tarea 10.
 
-El flujo viejo (`get_or_create_interpretation`) armaba el texto completo en
+El flujo viejo de interpretación armaba el texto completo en
 un solo paso y no persistía `InterpretationSection` — ese modelo no existía
 todavía. `0019` agrega `completa` con `default=False`: sin este backfill,
 toda esa fila queda marcada como "en curso" apenas se aplica la migración.
