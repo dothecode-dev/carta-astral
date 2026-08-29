@@ -32,3 +32,28 @@ def test_interpretation_unique_per_chart_lang_version():
     Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="a")
     with pytest.raises(IntegrityError):
         Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="b")
+
+
+def test_corto_y_largo_conviven_en_la_misma_carta():
+    """El upgrade (RF6) es el caso de negocio: leí la breve, pago, quiero el
+    completo de ESA carta. Si el tier no está en la clave única, el segundo
+    choca contra el unique y el usuario que pagó no puede generar."""
+    chart = _chart()
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version="v2", tier="corto", text="breve",
+    )
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version="v2", tier="largo", text="completo",
+    )
+    assert chart.interpretations.count() == 2
+
+
+def test_no_se_duplica_el_mismo_tier():
+    chart = _chart()
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version="v2", tier="corto", text="a",
+    )
+    with pytest.raises(IntegrityError):
+        Interpretation.objects.create(
+            chart=chart, lang="es", prompt_version="v2", tier="corto", text="b",
+        )

@@ -53,7 +53,9 @@ class GeoName(models.Model):
 
 class Interpretation(models.Model):
     """Interpretación LLM cacheada de una carta. Clave de cache: (chart, lang,
-    prompt_version) — cambiar prompt_version genera registros nuevos."""
+    prompt_version, tier) — cambiar prompt_version genera registros nuevos."""
+
+    TIERS = (("corto", "corto"), ("largo", "largo"))
 
     chart = models.ForeignKey(Chart, on_delete=models.CASCADE, related_name="interpretations")
     account = models.ForeignKey(
@@ -61,6 +63,12 @@ class Interpretation(models.Model):
     )
     lang = models.CharField(max_length=2)
     prompt_version = models.CharField(max_length=20)
+    # Qué producto es este texto: la lectura breve que compra un crédito free
+    # o el informe de ocho secciones que compra un crédito pago. Está en la
+    # clave única porque los dos conviven sobre la misma carta (RF6): quien
+    # leyó la breve y después paga tiene que poder generar el completo sin
+    # perder la breve.
+    tier = models.CharField(max_length=6, choices=TIERS, default="largo")
     text = models.TextField()
     # sha256 del input del LLM (chart.data canónico + lang + prompt_version).
     # Permite reutilizar el texto entre cartas idénticas sin llamar a la API.
@@ -72,7 +80,7 @@ class Interpretation(models.Model):
     completa = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ("chart", "lang", "prompt_version")
+        unique_together = ("chart", "lang", "prompt_version", "tier")
 
 
 class InterpretationSection(models.Model):
