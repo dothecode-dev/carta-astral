@@ -210,18 +210,19 @@ def interpretation_langs(chart) -> list[str]:
     )
 
 
-def content_key(chart_data: dict, lang: str, prompt_version: str) -> str:
-    """Hash canónico del input del LLM. Dos cartas con el mismo JSON astrológico
-    (mismo instante UTC, lugar, house system, engine) comparten lectura.
+def content_key(chart_data: dict, lang: str, prompt_version: str, tier: str) -> str:
+    """Hash canónico del input del LLM, incluyendo el tier del producto.
+    Dos cartas con el mismo JSON astrológico (mismo instante UTC, lugar,
+    house system, engine) Y el mismo tier pueden reutilizar lectura; tiers
+    distintos generan hashes distintos. Esto previene que un informe completo
+    pagado reciba el texto de una lectura breve de otra carta con los mismos
+    datos de nacimiento.
 
     INACTIVA: ningún camino la llama desde que el informe se genera por
     secciones (28-08-2026); las filas nuevas quedan con `content_key=""`.
-    Si alguien revive el dedup, el `tier` TIENE que seguir dentro del hash:
-    sin él, un informe completo pagado puede recibir el texto de una lectura
-    breve de otra carta con los mismos datos de nacimiento.
     """
     canonical = json.dumps(chart_data, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    return hashlib.sha256(f"{prompt_version}:{lang}:{canonical}".encode()).hexdigest()
+    return hashlib.sha256(f"{prompt_version}:{lang}:{tier}:{canonical}".encode()).hexdigest()
 
 
 def iniciar_generacion(chart, lang: str, account) -> Interpretation:

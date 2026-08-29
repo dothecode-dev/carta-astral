@@ -27,6 +27,18 @@ def test_interpretation_persists():
     assert c.interpretations.count() == 1
 
 
+def test_tier_default_es_largo():
+    """Las filas que ya existen en producción (generadas antes de que existiera
+    `tier`) son informes completos de ocho secciones, no lecturas breves. El
+    default="largo" las etiqueta correctamente sin necesidad de backfill.
+    Si alguien cambiera el default a "corto", toda la suite pasaría en verde
+    pero las filas viejas se leerían como lecturas breves. Este test falla si
+    eso sucede."""
+    c = _chart()
+    interp = Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="hola")
+    assert interp.tier == "largo"
+
+
 def test_interpretation_unique_per_chart_lang_version():
     c = _chart()
     Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="a")
@@ -49,6 +61,10 @@ def test_corto_y_largo_conviven_en_la_misma_carta():
 
 
 def test_no_se_duplica_el_mismo_tier():
+    """La clave única incluye tier: el mismo tier sobre la misma carta falla.
+    Protege contra generación duplicada del mismo producto: si dos requests
+    concurrentes intentan generar la lectura breve de la misma carta, solo uno
+    gana la carrera y cobra; el segundo recupera la fila existente."""
     chart = _chart()
     Interpretation.objects.create(
         chart=chart, lang="es", prompt_version="v2", tier="corto", text="a",
