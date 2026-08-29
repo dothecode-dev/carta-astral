@@ -106,6 +106,18 @@ def test_sin_free_la_breve_falla_diciendo_que_falto_free(make_account):
     assert exc.value.lote == "free"
 
 
+def test_sin_paid_el_completo_falla_diciendo_que_falto_paid(make_account):
+    """Contrapunto (fix round 1, Important 3): sin crédito paid, pedir el
+    informe completo no cae a free_balance aunque sobre saldo ahí —
+    `QuotaExceeded.lote` dice "paid", no el default "free" que tenía la
+    excepción antes de este fix (que hubiera mentido acá, justo en el caso
+    que este test cubre)."""
+    acc = make_account(free_balance=5, paid_balance=0)
+    with pytest.raises(QuotaExceeded) as exc:
+        svc.iniciar_generacion(_chart(), "es", acc, tier="largo")
+    assert exc.value.lote == "paid"
+
+
 def test_la_interpretacion_vacia_se_borra_si_no_hay_credito(make_account):
     """Sin esto queda una fila completa=False que hace que el próximo intento
     crea que hay una generación en curso y no arranque nunca."""

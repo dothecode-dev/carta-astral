@@ -27,11 +27,12 @@ class QuotaExceeded(Exception):
 
     `lote` dice cuál faltó ("free" o "paid"): la web muestra "te quedaste
     sin lecturas gratis" o "comprá el informe completo" según el caso, que
-    son dos pantallas distintas. El default "free" es sólo compatibilidad
-    con quien instancie la excepción sin decir cuál lote faltó (no debería
-    quedar ninguno tras esta tarea); `ledger.charge` siempre lo pasa
-    explícito con el lote que realmente rechazó."""
+    son dos pantallas distintas. Sin default a propósito (fix round 1,
+    Important 3): `ledger.charge` es el único emisor y siempre sabe cuál
+    lote rechazó, así que un default no da compatibilidad con nada — sólo
+    dejaría que un `raise QuotaExceeded()` futuro, sin argumento, mienta
+    "free" en silencio (justo lo que pasaba acá hasta este fix)."""
 
-    def __init__(self, lote: str = "free"):
+    def __init__(self, lote: str) -> None:
         self.lote = lote
         super().__init__(f"sin créditos del lote {lote}")

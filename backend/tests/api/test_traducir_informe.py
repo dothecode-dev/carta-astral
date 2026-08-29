@@ -5,7 +5,7 @@ from django.db import connection, connections
 
 from api import informe_service
 from api.models import Account, BirthData, Chart, Interpretation, InterpretationSection
-from interpret.prompts import PROMPT_VERSION, SECCIONES
+from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES
 
 pytestmark = pytest.mark.django_db
 
@@ -93,6 +93,44 @@ def test_traduce_seccion_por_seccion_y_no_de_una(interpretacion):
     assert destino.secciones.count() == 8
     assert destino.completa is True
     assert "texto traducido" in destino.text
+
+
+def test_traduce_al_tier_correcto_cuando_hay_dos_productos_en_la_carta(chart, account):
+    """Fix round 1, Important 2: el `get_or_create` de `destino` filtraba
+    sólo por (chart, lang, prompt_version), sin tier. Con dos productos ese
+    filtro puede matchear DOS filas —una por tier— y Django levanta
+    `MultipleObjectsReturned`, que el `except Exception` de
+    `completar_generacion` traga y loguea sin dejar rastro (y sin borrar la
+    fila vacía que `iniciar_generacion` había creado). Reproduce: existe un
+    `largo/en` completo, se traduce un `corto/es` hacia "en" — tiene que
+    crear/encontrar el `corto/en`, sin tocar el `largo/en`."""
+    largo_en = Interpretation.objects.create(
+        chart=chart, lang="en", prompt_version=PROMPT_VERSION, tier="largo",
+        account=account, completa=True,
+    )
+    for i, s in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=largo_en, slug=s.slug, orden=i, texto="ya estaba",
+        )
+
+    corto_es = Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        account=account, completa=True,
+    )
+    InterpretationSection.objects.create(
+        interpretation=corto_es, slug=SECCION_BREVE.slug, orden=0, texto="texto " * 200,
+    )
+
+    informe_service.traducir_informe(corto_es, "en", ClienteFalso())
+
+    corto_en = Interpretation.objects.get(
+        chart=chart, lang="en", tier="corto", prompt_version=PROMPT_VERSION,
+    )
+    assert corto_en.secciones.count() == 1
+    assert corto_en.completa is True
+
+    largo_en.refresh_from_db()
+    assert largo_en.secciones.count() == 8  # intacto: la traducción del corto no lo tocó
 
 
 def test_no_debita_ni_devuelve_creditos(interpretacion, monkeypatch):

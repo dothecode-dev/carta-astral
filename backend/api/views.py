@@ -152,8 +152,15 @@ class InterpretationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        # tier=TIER_LARGO explícito (fix round 1, Important 2): sin filtrar
+        # por tier, con RF9 dos productos pueden convivir en el mismo
+        # (chart, lang) y cuál de los dos sirve `.first()` queda a criterio
+        # del motor — entregar el informe completo a quien pidió la breve
+        # (o al revés) es entregar el producto equivocado. Mismo puente que
+        # el POST, de abajo, hasta que la Task 7 sume el tier por query
+        # param (RF20).
         interp = chart.interpretations.filter(
-            lang=lang, prompt_version=PROMPT_VERSION
+            lang=lang, prompt_version=PROMPT_VERSION, tier=TIER_LARGO,
         ).first()
         if interp is None or not interp.completa:
             # Incluye el caso de una lectura escrita con un prompt viejo (ya no

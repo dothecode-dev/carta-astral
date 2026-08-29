@@ -17,7 +17,10 @@ def lock_tomado(chart):
     `renovar_lock` real (no mockeado) siempre devuelve False porque no hay
     ningún lock que renovar, y los tests de arriba abortarían en la primera
     sección por una razón ajena a lo que están probando."""
-    key = f"interp:lock:{chart.id}:{PROMPT_VERSION}"
+    # :largo — el fixture `interpretacion` (que usan los tests de este
+    # archivo salvo los que arman su propio tier vía `_interpretacion`,
+    # abajo) crea su fila con el tier default del modelo, "largo".
+    key = f"interp:lock:{chart.id}:{PROMPT_VERSION}:largo"
     cache.set(key, TOKEN, timeout=600)
     yield
     cache.delete(key)
@@ -197,7 +200,7 @@ def test_el_resumen_previo_crece_con_cada_seccion(interpretacion):
 def test_renueva_el_lock_despues_de_cada_seccion_persistida(interpretacion, monkeypatch):
     llamadas = []
 
-    def _renovar(chart, token):
+    def _renovar(chart, tier, token):
         llamadas.append((chart.id, token))
         return True
 
@@ -218,7 +221,7 @@ def test_si_pierde_el_lock_justo_tras_la_ultima_seccion_igual_marca_completa(int
     total = len(informe_service.secciones_aplicables(interpretacion.chart, interpretacion.tier))
     llamadas = []
 
-    def _renovar(chart, token):
+    def _renovar(chart, tier, token):
         llamadas.append(1)
         return len(llamadas) < total  # falla justo en la renovación de la última
 
@@ -234,7 +237,7 @@ def test_si_pierde_el_lock_justo_tras_la_ultima_seccion_igual_marca_completa(int
 def test_si_pierde_el_lock_aborta_sin_completar_ni_seguir_pidiendo(interpretacion, monkeypatch):
     cliente = ClienteFalso()
 
-    monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, token: False)
+    monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: False)
     informe_service.generar_informe(interpretacion, cliente, TOKEN)
     interpretacion.refresh_from_db()
     # La sección que ya se había generado antes de perder el lock queda

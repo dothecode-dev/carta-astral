@@ -112,7 +112,7 @@ def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monke
     account.refresh_from_db()
     antes = account.free_balance + account.paid_balance
 
-    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "otro-token", timeout=30)
+    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}:largo", "otro-token", timeout=30)
 
     svc.completar_generacion(interpretacion, chart, account)
 
@@ -331,9 +331,9 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
     interpretacion_es = svc.iniciar_generacion(chart, "es", account, tier="largo")
     assert interpretacion_es.completa is False
 
-    # El hilo de "es" ya tomó el lock de la carta y sigue generando (igual
+    # El hilo de "es" ya tomó el lock de SU tier y sigue generando (igual
     # que haría `completar_generacion` en segundo plano durante ~6 minutos).
-    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}", "token-es-en-curso", timeout=600)
+    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}:largo", "token-es-en-curso", timeout=600)
 
     account.refresh_from_db()
     antes = account.free_balance + account.paid_balance
@@ -346,6 +346,68 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
     assert not Interpretation.objects.filter(
         chart=chart, lang="en", prompt_version=PROMPT_VERSION
     ).exists()  # no queda una fila "en" vacía y cobrada
+
+
+# --- Fix round 1, Important 1: el lock era por carta, no por (carta, tier) ---
+# `_sibling_en_curso` (Task 6) filtra por tier — correcto, un `corto` en
+# curso no es sibling de un `largo` en curso, son productos distintos. Pero
+# el LOCK que toma `completar_generacion` seguía siendo uno solo por carta
+# (`_lock_key` sin tier). Consecuencia: pedir el `corto` mientras el `largo`
+# de la MISMA carta y MISMO idioma está en curso no encontraba sibling (tier
+# distinto), cobraba el crédito free normal, y al llegar a
+# `completar_generacion` chocaba con el lock ajeno del `largo` —
+# `got_lock=False`— así que hacía `return` sin generar NI devolver (el
+# `finally` sólo calcula `consumo` si `got_lock` es `True`). El crédito
+# quedaba cobrado y sin informe, para siempre.
+
+
+def test_pedir_el_corto_con_el_largo_en_curso_mismo_idioma_no_pierde_el_credito(
+    chart, account, db_cache, monkeypatch, settings
+):
+    """El lock pasa a ser por (chart, tier): dos productos de la misma carta
+    se generan en paralelo sin pisarse — son dos pedidos separados del
+    usuario, no la misma sección escribiéndose dos veces (eso es lo que el
+    lock existe para impedir, y las filas de corto y largo son distintas)."""
+    from api import informe_service, interpretation_service as svc
+    from api.models import InterpretationSection
+    from interpret.prompts import PROMPT_VERSION
+
+    settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
+
+    interpretacion_largo = svc.iniciar_generacion(chart, "es", account, tier="largo")
+    assert interpretacion_largo.completa is False
+
+    # El "largo" ya tomó SU lock y sigue generando.
+    cache.add(f"interp:lock:{chart.id}:{PROMPT_VERSION}:largo", "token-largo-en-curso", timeout=600)
+
+    account.refresh_from_db()
+    antes = account.free_balance + account.paid_balance
+
+    # Mismo idioma, tier distinto: no es sibling (ni completo ni en curso) del
+    # largo, así que cobra normal (free) y arranca su propia generación.
+    interpretacion_corto = svc.iniciar_generacion(chart, "es", account, tier="corto")
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes - 1  # cobró el free normal
+
+    def _generar_fake(interpretacion, client, token):
+        InterpretationSection.objects.create(
+            interpretation=interpretacion, slug="resumen", orden=0, texto="listo",
+        )
+        interpretacion.text = "listo"
+        interpretacion.completa = True
+        interpretacion.save(update_fields=["text", "completa"])
+
+    monkeypatch.setattr(informe_service, "generar_informe", _generar_fake)
+
+    svc.completar_generacion(interpretacion_corto, chart, account)
+
+    interpretacion_corto.refresh_from_db()
+    # Antes del fix esto daba completa=False para siempre: el lock ajeno del
+    # largo bloqueaba al corto, que ni generaba ni devolvía el crédito.
+    assert interpretacion_corto.completa is True
+    assert interpretacion_corto.secciones.exists()
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes - 1  # el crédito se cobró Y se entregó
 
 
 # --- HALLAZGO 3 de code review: la devolución infiere "se cobró" en vez de saberlo ---

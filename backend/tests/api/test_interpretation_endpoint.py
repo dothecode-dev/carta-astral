@@ -137,7 +137,7 @@ def test_lock_tomado_no_bloquea_el_202(account_client, fake_client, db_cache):
     db_cache: el lock vive en DatabaseCache en producción, no en LocMem.
     """
     c = _chart(account=account_client.account)
-    cache.add(f"interp:lock:{c.id}:{svc.PROMPT_VERSION}", "otro-token", timeout=30)
+    cache.add(f"interp:lock:{c.id}:{svc.PROMPT_VERSION}:largo", "otro-token", timeout=30)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
     assert resp.status_code == 202
 
@@ -170,6 +170,31 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fak
 # fondea) o 402 (sin él) pero nunca un cap alcanzado. Es exactamente lo que
 # prueba `test_paid_generation_bypasses_cap_via_endpoint`, ahí abajo, que ya
 # cubría este mismo escenario desde el lado "sí bypassea".
+#
+# Fix round 1, Important 4: retirar ese test dejó el `except CapReached:
+# return 503` de la vista (`views.py`) sin ningún test en todo el repo —ni
+# siquiera indirecto, porque ya no hay forma de alcanzar `CapReached` por
+# HTTP con el endpoint fijado a paid. La cobertura se repone mockeando
+# `iniciar_generacion` para que lo levante directo: no prueba que el cap se
+# alcance (eso es responsabilidad de `interpretation_service`, ya cubierto
+# en sus propios tests), prueba que la vista traduce esa excepción a 503.
+
+
+def test_cap_reached_503(account_client, monkeypatch):
+    """El 503 de la vista es el mismo caso de siempre —`CapReached` cortando
+    el POST antes de aceptar el 202— pero ya no se puede disparar con el cap
+    real (ver el retiro de arriba): se fuerza directo, como hacen los tests
+    de `QuotaExceeded`/`GenerationInProgress` para 402/409 en este mismo
+    archivo."""
+    from api.exceptions import CapReached
+
+    def _levanta_cap(*a, **kw):
+        raise CapReached()
+
+    monkeypatch.setattr(svc, "iniciar_generacion", _levanta_cap)
+    c = _chart(account=account_client.account)
+    resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"lang": "es"}, format="json")
+    assert resp.status_code == 503
 
 
 @pytest.mark.django_db(transaction=True)

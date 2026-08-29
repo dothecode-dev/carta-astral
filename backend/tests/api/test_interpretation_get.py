@@ -49,6 +49,31 @@ def test_devuelve_la_interpretacion_existente(cliente, carta):
 
 
 @pytest.mark.django_db
+def test_con_dos_productos_en_el_mismo_idioma_sirve_el_informe_completo(cliente, carta):
+    """Fix round 1, Important 2: el filtro (`lang`, `prompt_version`) sin
+    `tier` puede matchear DOS filas cuando la carta tiene la lectura breve Y
+    el informe completo en el mismo idioma — RF9 los deja convivir a
+    propósito. Sin filtrar por tier, cuál de las dos sirve el `.first()`
+    queda a criterio del motor: entregar el informe completo a quien pidió
+    la breve (o al revés) es entregar el producto equivocado. Este endpoint
+    está fijado a `tier="largo"` (mismo puente que el POST) hasta que la
+    Task 7 le sume el tier por query param."""
+    Interpretation.objects.create(
+        chart=carta, lang="es", text="Lectura breve.", prompt_version=PROMPT_VERSION,
+        tier="corto", completa=True,
+    )
+    Interpretation.objects.create(
+        chart=carta, lang="es", text="Informe completo.", prompt_version=PROMPT_VERSION,
+        tier="largo", completa=True,
+    )
+
+    resp = cliente.get(f"/api/charts/{carta.uuid}/interpretation/?lang=es")
+
+    assert resp.status_code == 200
+    assert resp.json()["text"] == "Informe completo."
+
+
+@pytest.mark.django_db
 def test_no_devuelve_200_vacio_mientras_se_genera(cliente, carta):
     """Task 10: `iniciar_generacion` crea la fila de entrada (completa=False,
     text="") apenas arranca la generación en el hilo de fondo. Antes de este

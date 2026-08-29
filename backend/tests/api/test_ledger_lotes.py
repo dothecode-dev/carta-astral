@@ -57,3 +57,4 @@ def test_sin_paid_no_cae_al_free():
         ledger.charge(acc, lambda: None, lot="paid")
     acc.refresh_from_db()
     assert acc.free_balance == 3
+    assert CreditTransaction.objects.count() == 0

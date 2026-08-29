@@ -156,10 +156,19 @@ def test_daily_cap_blocks_new_generation(fake_client, settings):
     de tocar el lote free, así que el cap se ejercita ahí, no con
     `tier="largo"` (que siempre cobra paid y siempre bypassea el cap, ver
     `test_paid_generation_bypasses_daily_cap` en `test_credits_quota.py`)."""
+    from django.utils import timezone
+
     settings.INTERPRETATION_DAILY_CAP = 1
     settings.INSTALL_FREE_CREDITS = 5  # both generations are free, to isolate the cap
     acc = _account()  # free_balance=5 (reads settings at call time)
     _generar(_chart(), "es", acc, tier="corto")
+    # El contador se mueve exactamente una vez por generación free, no una
+    # vez por sección (minor 5, fix round 1): la breve hace una sola llamada
+    # al LLM, así que esto no distingue "una vez" de "una por llamada" tan
+    # claramente como el informe completo, pero sigue siendo la única forma
+    # de ejercitar el contador ahora que sólo el lote free lo toca.
+    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
+    assert cache.get(cap_key) == 1
     llamadas_tras_la_primera = fake_client.calls
     with pytest.raises(svc.CapReached):
         # el cap se chequea (y cuenta) en `iniciar_generacion`, antes de

@@ -71,12 +71,23 @@ def _seconds_until_midnight() -> int:
     return int((tomorrow - now).total_seconds())
 
 
-def _lock_key(chart) -> str:
-    return f"interp:lock:{chart.id}:{PROMPT_VERSION}"
+def _lock_key(chart, tier: str) -> str:
+    # Por (chart, tier), no sólo por chart (fix round 1, Important 1): el
+    # corto y el largo de la misma carta son dos `Interpretation` distintas
+    # (RF9, cada una con su propio set de secciones) que un usuario puede
+    # pedir por separado y esperar que avancen en paralelo — hacer esperar
+    # al que pagó US$ 29 mientras corre la lectura gratis (o viceversa)
+    # sería peor que la carrera que el lock existe para evitar, que es dos
+    # procesos escribiendo LAS MISMAS secciones. Con un lock compartido entre
+    # tiers, `completar_generacion` del segundo tier pedido encontraba el
+    # lock del primero tomado, hacía `return` con `got_lock=False` y ni
+    # generaba ni devolvía el crédito ya cobrado por `iniciar_generacion`
+    # — quedaba cobrado y sin informe, para siempre.
+    return f"interp:lock:{chart.id}:{PROMPT_VERSION}:{tier}"
 
 
-def renovar_lock(chart, token: str) -> bool:
-    """Repone el TTL del lock de esta carta mientras hay progreso real.
+def renovar_lock(chart, tier: str, token: str) -> bool:
+    """Repone el TTL del lock de esta carta y este tier mientras hay progreso real.
 
     Un informe son ocho llamadas secuenciales al LLM: la Tarea 6 llama a esto
     después de persistir cada sección para que el lock nunca expire en medio
@@ -94,20 +105,20 @@ def renovar_lock(chart, token: str) -> bool:
     medio; el peor caso ahí es extender un lock propio recién vencido, nunca
     resucitar ni pisar el de otro proceso.
     """
-    key = _lock_key(chart)
+    key = _lock_key(chart, tier)
     if cache.get(key) != token:
         return False
     return bool(cache.touch(key, LOCK_TTL))
 
 
-def soltar_lock(chart, token: str) -> None:
-    """Libera el lock sólo si sigue siendo el propio.
+def soltar_lock(chart, tier: str, token: str) -> None:
+    """Libera el lock de esta carta y este tier sólo si sigue siendo el propio.
 
     Sin este chequeo, un proceso cuyo lock ya expiró y fue tomado por otro
     borraría el lock ajeno al terminar (o fallar) tarde. Mismo principio que
     `renovar_lock`: nunca tocar una clave cuyo token no es el nuestro.
     """
-    key = _lock_key(chart)
+    key = _lock_key(chart, tier)
     if cache.get(key) == token:
         cache.delete(key)
 
@@ -204,8 +215,12 @@ def _sibling_en_curso(chart, lang: str, tier: str) -> Interpretation | None:
 
     El filtro por `tier` (Task 6, RF9) es el mismo que en `_sibling_completo`
     y por la misma razón: una lectura breve en curso no es sibling de un
-    informe completo en curso en otro idioma, son productos distintos."""
-    if cache.get(_lock_key(chart)) is None:
+    informe completo en curso en otro idioma, son productos distintos. El
+    lock que se consulta acá es el del MISMO tier (`_lock_key(chart, tier)`,
+    fix round 1): el lock es por (chart, tier) desde que dos tiers de la
+    misma carta pueden generarse en paralelo — mirar el lock de OTRO tier
+    acá no diría nada sobre si hay una generación en curso de ESTE."""
+    if cache.get(_lock_key(chart, tier)) is None:
         return None
     return (
         Interpretation.objects.filter(
@@ -399,13 +414,15 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     if interpretacion.completa:
         return
 
-    lock_key = _lock_key(chart)
+    lock_key = _lock_key(chart, interpretacion.tier)
     token = uuid.uuid4().hex
     got_lock = cache.add(lock_key, token, timeout=LOCK_TTL)
 
     from api import informe_service  # import diferido: ver nota al tope del módulo
 
-    sibling = _sibling_completo(chart, interpretacion.lang, interpretacion.tier) if got_lock else None
+    sibling = (
+        _sibling_completo(chart, interpretacion.lang, interpretacion.tier) if got_lock else None
+    )
 
     try:
         if not got_lock:
@@ -453,7 +470,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
                 lot=lot,
             )
         if got_lock:
-            soltar_lock(chart, token)
+            soltar_lock(chart, interpretacion.tier, token)
 
 
 def generar_en_segundo_plano(chart, lang: str, account, tier: str) -> None:

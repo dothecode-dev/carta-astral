@@ -14,7 +14,8 @@ def _make_interp(chart):
 def chart(db):
     from api.models import Account, BirthData, Chart
     # free_balance=1 explícito: lo que prueban estos tests es la mecánica del
-    # ledger (consumir el lote free antes que el paid), no el valor de
+    # ledger al cobrar un lote dado (el descuento, el registro en
+    # CreditTransaction, QuotaExceeded sin saldo), no el valor de
     # INSTALL_FREE_CREDITS — que puede cambiar sin que esto se rompa.
     acc = Account.objects.create(free_balance=1)
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")

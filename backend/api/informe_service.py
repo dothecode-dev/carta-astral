@@ -149,7 +149,7 @@ def generar_informe(interpretacion, client, token: str) -> None:
 
     `token` es el mismo valor que `interpretation_service` guardó al tomar el
     lock de esta carta en `completar_generacion`. Después de persistir CADA sección
-    se llama a `renovar_lock(chart, token)`: un informe son ocho llamadas
+    se llama a `renovar_lock(chart, tier, token)`: un informe son ocho llamadas
     secuenciales de hasta 1000 palabras, unos 6 minutos contra un
     `LOCK_TTL = 600`, así que sin renovar el lock la generación sobrevive a su
     propio candado. Si `renovar_lock` devuelve `False` el lock YA NO ES
@@ -220,7 +220,7 @@ def generar_informe(interpretacion, client, token: str) -> None:
             orden=orden_por_slug[seccion.slug],
             texto=texto,
         )
-        lock_renovado = renovar_lock(interpretacion.chart, token)
+        lock_renovado = renovar_lock(interpretacion.chart, interpretacion.tier, token)
         queda_trabajo = indice < len(pendientes) - 1
         # El lock se renueva siempre (arriba), pero sólo importa su
         # resultado cuando falta al menos otra sección (HALLAZGO 4): perder
@@ -273,12 +273,21 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
     El `get_or_create` de `destino` no necesita ese mismo `except`: el
     `get_or_create` de Django ya envuelve su `create()` en un `atomic()`
     propio y, si choca contra el `unique_together` de `Interpretation`
-    (`chart`, `lang`, `prompt_version`), vuelve a hacer el `get()` con esos
-    mismos campos antes de relanzar — la carrera ahí ya está resuelta por el
-    ORM, no hace falta repetirlo a mano.
+    (`chart`, `lang`, `prompt_version`, `tier`), vuelve a hacer el `get()`
+    con esos mismos campos antes de relanzar — la carrera ahí ya está
+    resuelta por el ORM, no hace falta repetirlo a mano.
+
+    `tier=origen.tier` en el filtro (fix round 1, Important 2) no es
+    opcional: sin él, con dos productos sobre la misma carta, el filtro
+    (chart, lang, prompt_version) puede matchear la `Interpretation` del
+    OTRO tier en ese idioma si ya existe —no una excepción, algo peor— y
+    esta función le escribiría las secciones traducidas del `origen` encima
+    de esa fila ajena, corrompiendo el informe pagado con el contenido de la
+    lectura breve (o viceversa).
     """
     destino, _ = Interpretation.objects.get_or_create(
         chart=origen.chart, lang=destino_lang, prompt_version=origen.prompt_version,
+        tier=origen.tier,
         defaults={"text": "", "account": origen.account},
     )
     hechas = set(destino.secciones.values_list("slug", flat=True))
