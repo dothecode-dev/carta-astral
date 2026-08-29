@@ -7,11 +7,11 @@ cache (la clave de cache incluye prompt_version).
 from dataclasses import dataclass
 
 PROMPT_VERSION = "v2"
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-sonnet-5"
 MAX_TOKENS = 1500
 
 # Traducción de lecturas ya generadas: tarea fácil, modelo barato.
-TRANSLATE_MODEL = "claude-haiku-4-5-20251001"
+TRANSLATE_MODEL = "claude-haiku-4-5"
 # Por sección, no por informe entero: 6.400 palabras no entran en una sola
 # llamada de traducción, así que `traducir_informe` traduce de a una sección
 # (hasta 1000 palabras nominales, la de "tensiones"). NO se revisó como parte

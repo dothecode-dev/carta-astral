@@ -13,8 +13,8 @@ from django.db import IntegrityError, transaction
 
 from api.interpretation_service import renovar_lock
 from api.models import Interpretation, InterpretationSection
-from interpret.generator import build_seccion, translate_interpretation
-from interpret.prompts import SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO, Seccion
+from interpret.generator import build_interpretation, build_seccion, translate_interpretation
+from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO, Seccion
 
 logger = logging.getLogger(__name__)
 
@@ -198,13 +198,22 @@ def generar_informe(interpretacion, client, token: str) -> None:
 
     pendientes = secciones_pendientes(interpretacion)
     for indice, seccion in enumerate(pendientes):
-        texto = build_seccion(
-            interpretacion.chart.data,
-            seccion,
-            interpretacion.lang,
-            resumen_previo(interpretacion),
-            client,
-        )
+        if seccion.slug == SECCION_BREVE.slug:
+            # La breve es un informe entero corto, no un recorte del largo:
+            # SYSTEM_PROMPTS_SECCION le diría al modelo que está escribiendo
+            # una parte de algo mayor y produciría un texto que remite a
+            # secciones que nadie va a leer (ver interpret/prompts.py).
+            texto = build_interpretation(
+                interpretacion.chart.data, interpretacion.lang, PROMPT_VERSION, client,
+            )
+        else:
+            texto = build_seccion(
+                interpretacion.chart.data,
+                seccion,
+                interpretacion.lang,
+                resumen_previo(interpretacion),
+                client,
+            )
         InterpretationSection.objects.create(
             interpretation=interpretacion,
             slug=seccion.slug,

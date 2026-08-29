@@ -2,7 +2,7 @@ import pytest
 from django.core.cache import cache
 
 from api import informe_service
-from api.models import InterpretationSection
+from api.models import Account, BirthData, Chart, Interpretation, InterpretationSection
 from interpret.prompts import PROMPT_VERSION
 
 pytestmark = pytest.mark.django_db
@@ -115,6 +115,18 @@ def _chart(hora):
     return _ChartFalso(hora)
 
 
+def _interpretacion(tier):
+    """Una `Interpretation` real (con cuenta y carta propias), del tier
+    pedido. A diferencia del fixture `interpretacion` (siempre "largo"),
+    esto permite probar la rama del tier corto sin tocar ese fixture."""
+    account = Account.objects.create(free_balance=0, paid_balance=0)
+    bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
+    chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
+    return Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account, tier=tier,
+    )
+
+
 def test_el_tier_corto_es_una_sola_seccion():
     """La lectura breve corre por la misma maquinaria que el informe completo
     (lock, persistencia por sección, reanudabilidad): lo único que cambia es
@@ -135,6 +147,27 @@ def test_sin_hora_el_largo_pierde_las_de_casas_y_el_corto_no():
     sin_hora = _chart(hora=False)
     assert len(informe_service.secciones_aplicables(sin_hora, "largo")) == 7
     assert len(informe_service.secciones_aplicables(sin_hora, "corto")) == 1
+
+
+def test_la_breve_usa_el_system_del_informe_entero(monkeypatch):
+    """SYSTEM_PROMPTS_SECCION le dice al modelo que está escribiendo una parte
+    de un informe mayor. Para la breve eso es mentira: produciría un texto que
+    remite a secciones que nadie va a leer."""
+    llamadas = []
+    monkeypatch.setattr(
+        informe_service, "build_interpretation",
+        lambda *a, **k: llamadas.append("entero") or "texto breve",
+    )
+    monkeypatch.setattr(
+        informe_service, "build_seccion",
+        lambda *a, **k: llamadas.append("seccion") or "texto seccion",
+    )
+    interp = _interpretacion(tier="corto")
+    informe_service.generar_informe(interp, client=object(), token="tok")
+    assert llamadas == ["entero"]
+    assert interp.secciones.count() == 1
+    interp.refresh_from_db()
+    assert interp.completa is True
 
 
 def test_sin_hora_de_nacimiento_se_omite_la_seccion_de_casas(interpretacion):

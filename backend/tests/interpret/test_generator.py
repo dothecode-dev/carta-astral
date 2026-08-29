@@ -160,3 +160,11 @@ def test_translate_uses_cheap_model_and_target_lang():
     assert "English" in call["system"][0]["text"]
     assert "## Título" in call["messages"][0]["content"]
     assert out == "Sos una persona..."
+
+
+def test_el_modelo_es_sonnet_5():
+    # Fija el identificador exacto del modelo del informe: un typo o un
+    # sufijo de fecha de más rompería la generación en producción sin que
+    # ningún otro test lo note (los fakes no validan el nombre del modelo).
+    from interpret.prompts import MODEL
+    assert MODEL == "claude-sonnet-5"
