@@ -22,7 +22,7 @@ from api.deletion import delete_account, delete_charts
 from api.chart_service import create_chart
 from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
 from api.interpretation_service import DISCLAIMERS
-from interpret.prompts import PROMPT_VERSION
+from interpret.prompts import PROMPT_VERSION, TIER_LARGO
 from api import apple
 from api.ledger import credits_available as account_credits_available
 from api.models import Chart, Interpretation, ProviderIdentity
@@ -251,10 +251,15 @@ class InterpretationEstadoView(APIView):
     def get(self, request, uuid):
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
         lang = request.query_params.get("lang", "es")
-        total = len(informe_service.secciones_aplicables(chart))
         interpretacion = Interpretation.objects.filter(
             chart=chart, lang=lang, prompt_version=PROMPT_VERSION
         ).first()
+        # Sin interpretación todavía no hay tier que leer: el único producto
+        # que hoy pide este endpoint es el informe completo, así que se asume
+        # "largo" (mismo default que `Interpretation.tier`). Con una
+        # interpretación en curso se usa su tier real, no el default.
+        tier = interpretacion.tier if interpretacion is not None else TIER_LARGO
+        total = len(informe_service.secciones_aplicables(chart, tier))
         if interpretacion is None:
             return Response({"completa": False, "hechas": 0, "total": total})
         return Response(

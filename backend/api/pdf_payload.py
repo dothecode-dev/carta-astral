@@ -195,12 +195,12 @@ def build(chart: Chart, interpretacion: Interpretation) -> dict[str, Any]:
     """La lectura para el PDF: título y texto de cada sección ya escrita, más
     el índice completo del informe.
 
-    El índice sale de `secciones_aplicables(chart)` —el catálogo, filtrado
-    por si hay hora de nacimiento—, no de `interpretacion.secciones.all()`:
-    nombra las que corresponden aunque alguna todavía no se haya escrito
-    (mismo criterio que `informe_service.resumen_gratis`). `secciones` en
-    cambio sólo trae las que ya están: no hay texto que mostrar para una que
-    falta.
+    El índice sale de `secciones_aplicables(chart, interpretacion.tier)` —el
+    catálogo, filtrado por si hay hora de nacimiento—, no de
+    `interpretacion.secciones.all()`: nombra las que corresponden aunque
+    alguna todavía no se haya escrito (mismo criterio que
+    `informe_service.resumen_gratis`). `secciones` en cambio sólo trae las
+    que ya están: no hay texto que mostrar para una que falta.
 
     Quien llama decide si `interpretacion` corresponde a un informe
     terminado (`completa=True`); acá no se vuelve a chequear.
@@ -219,7 +219,7 @@ def build(chart: Chart, interpretacion: Interpretation) -> dict[str, Any]:
     capítulos, y prometerlos sería mentir sobre una estructura que el texto
     no tiene.
     """
-    aplicables = secciones_aplicables(chart)
+    aplicables = secciones_aplicables(chart, interpretacion.tier)
     lang = interpretacion.lang
     escritas = {s.slug: s.texto for s in interpretacion.secciones.all()}
 

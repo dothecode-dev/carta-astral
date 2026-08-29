@@ -215,3 +215,23 @@ SECCIONES: tuple[Seccion, ...] = (
         palabras=700,
     ),
 )
+
+# La lectura breve es un informe entero de una sola pieza, no un recorte del
+# largo: no requiere hora (habla de lo que haya) y su `foco` describe la carta
+# completa. Se genera con SYSTEM_PROMPTS —el system del informe entero—, no con
+# SYSTEM_PROMPTS_SECCION, que le diría al modelo que está escribiendo una parte
+# de algo más grande y produciría un texto que se refiere a secciones que no
+# existen.
+SECCION_BREVE = Seccion(
+    slug="breve",
+    titulo={"es": "Tu lectura", "en": "Your reading", "pt": "Sua leitura"},
+    foco={
+        "es": "La carta entera en una lectura corta: lo esencial de quién sos.",
+        "en": "The whole chart in a short reading: the essentials of who you are.",
+        "pt": "O mapa inteiro em uma leitura curta: o essencial de quem você é.",
+    },
+    palabras=600,
+)
+
+TIER_CORTO = "corto"
+TIER_LARGO = "largo"

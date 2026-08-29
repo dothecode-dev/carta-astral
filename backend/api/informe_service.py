@@ -14,7 +14,7 @@ from django.db import IntegrityError, transaction
 from api.interpretation_service import renovar_lock
 from api.models import Interpretation, InterpretationSection
 from interpret.generator import build_seccion, translate_interpretation
-from interpret.prompts import SECCIONES, Seccion
+from interpret.prompts import SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO, Seccion
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +35,29 @@ PRESUPUESTO_GRATIS = 400
 _PUNTUACION_COLGANTE = " ,;:.!?¡¿-—"
 
 
-def secciones_aplicables(chart) -> list[Seccion]:
-    """Las ocho, menos las que dependen de una hora de nacimiento que no está."""
+def secciones_aplicables(chart, tier: str) -> list[Seccion]:
+    """El catálogo del informe pedido.
+
+    El corto es una sola sección; el largo son las ocho, menos las que dependen
+    de una hora de nacimiento que no está. El tier no abre un camino de
+    generación nuevo: cambia esta lista, y todo lo demás (lock, persistencia,
+    reanudabilidad, estado, PDF) sigue igual.
+
+    Sin valor por defecto a propósito: un default convertiría "me olvidé de
+    pasar el tier" en "le muestro ocho secciones a quien compró una", en
+    silencio. Los llamadores son `secciones_pendientes`, `resumen_gratis`
+    (siempre `largo`: describe el informe completo), `generar_informe`,
+    `pdf_payload` y la vista de estado."""
+    if tier == TIER_CORTO:
+        return [SECCION_BREVE]
     hora = chart.data.get("time_known", True)
     return [s for s in SECCIONES if hora or not s.requiere_hora]
 
 
 def secciones_pendientes(interpretacion) -> list[Seccion]:
     hechas = set(interpretacion.secciones.values_list("slug", flat=True))
-    return [s for s in secciones_aplicables(interpretacion.chart) if s.slug not in hechas]
+    aplicables = secciones_aplicables(interpretacion.chart, interpretacion.tier)
+    return [s for s in aplicables if s.slug not in hechas]
 
 
 def resumen_previo(interpretacion) -> str:
@@ -90,13 +104,16 @@ def resumen_gratis(interpretacion) -> list[dict]:
     Ascendente —justo lo que más le importa a la gente—, y regalarla entera
     hace que quien la lee ya no tenga por qué pagar.
 
-    El índice sale de `secciones_aplicables(chart)` —el catálogo, filtrado
-    por si hay hora de nacimiento—, no de `interpretacion.secciones.all()`.
-    La generación corre fuera del request y es reanudable (RF10): este
-    resumen tiene que poder mostrarse con el informe a medio generar, y
-    tiene que nombrar las ocho secciones (o las siete que aplican sin hora)
-    aunque todavía falten por escribirse. Las que no están generadas
-    todavía aparecen con su título y sin párrafo.
+    El índice sale de `secciones_aplicables(chart, "largo")` —el catálogo,
+    filtrado por si hay hora de nacimiento—, no de
+    `interpretacion.secciones.all()`. Siempre `"largo"`, no
+    `interpretacion.tier`: este resumen describe el informe completo que se
+    compra, no el tier de la interpretación (gratis, todavía sin comprar) que
+    lo está generando. La generación corre fuera del request y es reanudable
+    (RF10): este resumen tiene que poder mostrarse con el informe a medio
+    generar, y tiene que nombrar las ocho secciones (o las siete que aplican
+    sin hora) aunque todavía falten por escribirse. Las que no están
+    generadas todavía aparecen con su título y sin párrafo.
 
     El párrafo de apertura de cada sección generada se recorta a
     `_tope_por_seccion(...)` palabras: el modelo escribe secciones de 700 a
@@ -104,7 +121,7 @@ def resumen_gratis(interpretacion) -> list[dict]:
     apertura, así que sin este recorte el resumen entero podía superar
     ampliamente las 400 palabras que promete RF3.
     """
-    aplicables = secciones_aplicables(interpretacion.chart)
+    aplicables = secciones_aplicables(interpretacion.chart, TIER_LARGO)
     tope = _tope_por_seccion(len(aplicables))
     generadas = {s.slug: s for s in interpretacion.secciones.all()}
     salida = []
@@ -176,7 +193,7 @@ def generar_informe(interpretacion, client, token: str) -> None:
       redundante: estas garantías se sostienen en la base de datos, no en la
       disciplina de quien llama.
     """
-    aplicables = secciones_aplicables(interpretacion.chart)
+    aplicables = secciones_aplicables(interpretacion.chart, interpretacion.tier)
     orden_por_slug = {seccion.slug: indice for indice, seccion in enumerate(aplicables)}
 
     pendientes = secciones_pendientes(interpretacion)

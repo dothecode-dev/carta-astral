@@ -103,6 +103,40 @@ def test_al_reanudar_no_vuelve_a_pedir_las_secciones_ya_escritas(interpretacion)
     assert interpretacion.completa is True
 
 
+class _ChartFalso:
+    """Un chart minimo, sin base de datos: `secciones_aplicables` sólo lee
+    `chart.data.get("time_known", ...)`."""
+
+    def __init__(self, hora):
+        self.data = {"time_known": hora}
+
+
+def _chart(hora):
+    return _ChartFalso(hora)
+
+
+def test_el_tier_corto_es_una_sola_seccion():
+    """La lectura breve corre por la misma maquinaria que el informe completo
+    (lock, persistencia por sección, reanudabilidad): lo único que cambia es
+    cuántas secciones tiene el catálogo."""
+    assert len(informe_service.secciones_aplicables(_chart(hora=True), "corto")) == 1
+
+
+def test_el_tier_largo_sigue_teniendo_ocho():
+    # El catálogo del informe completo no cambió con el agregado del tier:
+    # sigue siendo el mismo que antes de esta tarea.
+    assert len(informe_service.secciones_aplicables(_chart(hora=True), "largo")) == 8
+
+
+def test_sin_hora_el_largo_pierde_las_de_casas_y_el_corto_no():
+    # El filtro por hora de nacimiento sigue aplicando sólo al largo: la
+    # lectura breve (`SECCION_BREVE`) no tiene `requiere_hora`, así que el
+    # corto siempre da una sola sección, con o sin hora.
+    sin_hora = _chart(hora=False)
+    assert len(informe_service.secciones_aplicables(sin_hora, "largo")) == 7
+    assert len(informe_service.secciones_aplicables(sin_hora, "corto")) == 1
+
+
 def test_sin_hora_de_nacimiento_se_omite_la_seccion_de_casas(interpretacion):
     interpretacion.chart.data["time_known"] = False
     interpretacion.chart.save()
@@ -148,7 +182,7 @@ def test_si_pierde_el_lock_justo_tras_la_ultima_seccion_igual_marca_completa(int
     ausente del PDF). Sólo importa perder el lock cuando todavía hay
     secciones por pedir: ahí sí hay que abortar para no escribir en paralelo
     con el proceso que tomó el lock."""
-    total = len(informe_service.secciones_aplicables(interpretacion.chart))
+    total = len(informe_service.secciones_aplicables(interpretacion.chart, interpretacion.tier))
     llamadas = []
 
     def _renovar(chart, token):
