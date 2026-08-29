@@ -325,12 +325,12 @@ def test_interpretation_langs_excluye_incompletas(settings):
 
 def test_content_key_es_estable_para_el_mismo_input():
     data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z", "placements": [1, 2]}
-    assert svc.content_key(data, "es", "v1") == svc.content_key(dict(data), "es", "v1")
+    assert svc.content_key(data, "es", "v1", "largo") == svc.content_key(dict(data), "es", "v1", "largo")
 
 
 def test_content_key_cambia_con_datos_lang_o_prompt_version_distintos():
     data = {"time_known": True, "utc_iso": "1989-07-15T02:45:00Z"}
-    base = svc.content_key(data, "es", "v1")
-    assert svc.content_key({**data, "utc_iso": "1989-07-15T02:46:00Z"}, "es", "v1") != base
-    assert svc.content_key(data, "en", "v1") != base
-    assert svc.content_key(data, "es", "v2") != base
+    base = svc.content_key(data, "es", "v1", "largo")
+    assert svc.content_key({**data, "utc_iso": "1989-07-15T02:46:00Z"}, "es", "v1", "largo") != base
+    assert svc.content_key(data, "en", "v1", "largo") != base
+    assert svc.content_key(data, "es", "v2", "largo") != base
