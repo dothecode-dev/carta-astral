@@ -1040,6 +1040,13 @@ body {
   font-size: var(--step-3);
 }
 
+/* Único título de sección que trae un salto de línea real en el copy (los
+   dos productos van en renglones separados): sin esto el navegador colapsa
+   el "\n" a un espacio y las dos frases quedan corridas en una sola línea. */
+.creditsTitle {
+  white-space: pre-line;
+}
+
 .caption {
   font-size: 0.8125rem;
   color: var(--ink-soft);

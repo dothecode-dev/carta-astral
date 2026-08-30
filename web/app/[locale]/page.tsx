@@ -133,7 +133,7 @@ export default async function Home({
           <section>
             <div className="sectionHead">
               <p className="eyebrow">{dict.credits.eyebrow}</p>
-              <h2 className="display sectionTitle">{dict.credits.title}</h2>
+              <h2 className="display sectionTitle creditsTitle">{dict.credits.title}</h2>
             </div>
 
             <p className="priceTag">
