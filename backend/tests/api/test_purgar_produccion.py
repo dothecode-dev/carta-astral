@@ -14,6 +14,7 @@ from api.models import (
     BirthData,
     Chart,
     CreditTransaction,
+    Device,
     GeoName,
     Interpretation,
     InterpretationSection,
@@ -25,9 +26,10 @@ from interpret.prompts import PROMPT_VERSION, SECCIONES
 
 
 def _sembrar_cuenta_con_cartas_y_ledger(account):
-    """Puebla los siete modelos que el comando debe purgar, más `BirthData`
-    (huérfana de la carta): sin sembrar cada uno, un `count() == 0` después
-    de purgar no prueba que el comando lo haya tocado."""
+    """Puebla los siete modelos que el comando debe purgar, más `BirthData` y
+    `Device` (huérfanos, con FK SET_NULL a la cuenta): sin sembrar cada uno,
+    un `count() == 0` después de purgar no prueba que el comando lo haya
+    tocado."""
     bd = BirthData.objects.create(date="1990-05-20", lat=-34.6, lng=-58.4, tz_name="UTC")
     chart = Chart.objects.create(
         birth_data=bd, data={}, engine_version="test", account=account,
@@ -42,6 +44,7 @@ def _sembrar_cuenta_con_cartas_y_ledger(account):
         account=account, kind="consumption", lot="paid", amount=-1, interpretation=interpretacion,
     )
     ProviderIdentity.objects.create(provider="google", sub="sub-de-prueba", account=account)
+    Device.objects.create(account=account, platform="ios", push_token="tok-de-prueba")
 
 
 @pytest.mark.django_db
@@ -67,11 +70,15 @@ def test_con_el_flag_borra_todo_incluidos_los_tombstones(make_account):
         CreditTransaction, ProviderIdentity, SubTombstone,
     ):
         assert modelo.objects.count() == 0
-    # BirthData no está en la lista del RF16, pero contiene el mismo dato
-    # personal (nombre, fecha, coordenadas de nacimiento) que `Chart`, y
-    # `api.deletion.delete_charts` ya la trata como parte del borrado de una
-    # cuenta: dejarla huérfana en la purga sería un olvido, no una decisión.
+    # BirthData y Device no están en la lista del RF16, pero las dos quedan
+    # huérfanas si no se nombran explícitamente (FK SET_NULL a Account):
+    # BirthData contiene el mismo dato personal (nombre, fecha, coordenadas
+    # de nacimiento) que `Chart`, y `api.deletion.delete_charts` ya la trata
+    # como parte del borrado de una cuenta; Device sobreviviría con
+    # account_id=NULL y su platform/push_token intactos. Dejarlas huérfanas
+    # en la purga sería un olvido, no una decisión.
     assert BirthData.objects.count() == 0
+    assert Device.objects.count() == 0
 
 
 @pytest.mark.django_db

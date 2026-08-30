@@ -6,6 +6,7 @@ from api.models import (
     BirthData,
     Chart,
     CreditTransaction,
+    Device,
     Interpretation,
     InterpretationSection,
     ProviderIdentity,
@@ -13,16 +14,24 @@ from api.models import (
 )
 
 # De hoja a raíz: los FK a Account son SET_NULL (Chart, Interpretation,
-# CreditTransaction), no CASCADE, así que borrar la cuenta primero no se
-# lleva puesto lo demás y hay que nombrar cada modelo.
+# CreditTransaction, Device), no CASCADE, así que borrar la cuenta primero no
+# se lleva puesto lo demás y hay que nombrar cada modelo.
 #
-# BirthData no es uno de los siete modelos del RF16 (Account, Chart,
+# BirthData y Device no son de los siete modelos del RF16 (Account, Chart,
 # Interpretation, InterpretationSection, CreditTransaction, ProviderIdentity,
-# SubTombstone), pero guarda el mismo dato personal que Chart —nombre, fecha
-# y coordenadas de nacimiento— y queda huérfana en cuanto se borran las
-# cartas (el FK va de Chart a BirthData, no al revés). `api.deletion.
-# delete_charts` ya la trata como parte del borrado de una cuenta
-# individual; dejarla afuera de la purga sería un olvido, no una decisión.
+# SubTombstone), pero los dos quedan huérfanos con datos de usuario si no se
+# nombran:
+# - BirthData guarda el mismo dato personal que Chart —nombre, fecha y
+#   coordenadas de nacimiento— y queda huérfana en cuanto se borran las
+#   cartas (el FK va de Chart a BirthData, no al revés). `api.deletion.
+#   delete_charts` ya la trata como parte del borrado de una cuenta
+#   individual.
+# - Device cuelga de Account con SET_NULL: sin borrado explícito, sobrevive
+#   a la purga con account_id=NULL y su platform/push_token intactos. Hoy no
+#   la usa ningún código (tabla vacía en producción), pero el día que se
+#   cablee push o telemetría sin acordarse de este comando, "purga total"
+#   dejaría de serlo en silencio.
+# Dejarlos afuera sería un olvido, no una decisión.
 MODELOS_A_BORRAR = (
     ("InterpretationSection", InterpretationSection),
     ("CreditTransaction", CreditTransaction),
@@ -31,6 +40,7 @@ MODELOS_A_BORRAR = (
     ("BirthData", BirthData),
     ("ProviderIdentity", ProviderIdentity),
     ("SubTombstone", SubTombstone),
+    ("Device", Device),
     ("Account", Account),
 )
 
