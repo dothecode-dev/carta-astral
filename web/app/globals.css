@@ -340,6 +340,12 @@ body {
   gap: 1.5rem;
 }
 
+.balances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+
 .buyBlock {
   display: flex;
   flex-direction: column;

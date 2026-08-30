@@ -12,7 +12,8 @@ import { Footer } from "@/components/Footer";
 
 /** Lo que devuelve /api/account/: no hay email ni nombre. */
 type AccountResponse = {
-  credits_available: number;
+  free_credits: number;
+  paid_credits: number;
   account_id: number;
 };
 
@@ -63,13 +64,22 @@ export default async function AccountPage({
         <section className="accountHead">
           <p className="eyebrow">{dict.auth.account}</p>
           <div className="balanceRow">
-            <p className="balance">
-              <span className="balanceGlyph" aria-hidden="true">
-                ☉
-              </span>
-              <span className="balanceNumber">{account.credits_available}</span>
-              <span className="balanceLabel">{dict.auth.credits}</span>
-            </p>
+            <div className="balances">
+              <p className="balance">
+                <span className="balanceGlyph" aria-hidden="true">
+                  ☉
+                </span>
+                <span className="balanceNumber">{account.free_credits}</span>
+                <span className="balanceLabel">{dict.auth.freeCredits}</span>
+              </p>
+              <p className="balance">
+                <span className="balanceGlyph" aria-hidden="true">
+                  ☾
+                </span>
+                <span className="balanceNumber">{account.paid_credits}</span>
+                <span className="balanceLabel">{dict.auth.paidCredits}</span>
+              </p>
+            </div>
             <div className="buyBlock">
               <button type="button" className="btn btnGhost" disabled>
                 {dict.auth.buyCredits}

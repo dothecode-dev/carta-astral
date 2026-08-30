@@ -194,7 +194,10 @@ export type Dict = {
     blocked: string;
     failed: string;
     legal: string;
-    credits: string;
+    /** Saldo de lecturas breves gratis (arranca en 3, no se compran). */
+    freeCredits: string;
+    /** Saldo de créditos pagos: cada uno compra un informe completo. */
+    paidCredits: string;
     account: string;
     signOut: string;
     buyCredits: string;
@@ -387,17 +390,16 @@ const es: Dict = {
   },
   credits: {
     eyebrow: "Créditos",
-    title: "Tus primeras tres cartas son gratis. Después, un crédito por carta.",
+    title: "Tus primeras tres lecturas son gratis.\nEl informe completo se compra aparte.",
     price: "US$ 29",
-    priceNote: "el informe, una vez que se te acaban los créditos gratis",
+    priceNote: "el informe completo de una carta: ocho secciones, unas 6.000 palabras",
     terms: [
-      { label: "Tus primeras 3 cartas", value: "Gratis", free: true },
-      { label: "Cada carta nueva", value: "1 crédito" },
-      { label: "La misma carta en otro idioma", value: "Sin costo", free: true },
-      { label: "Vencimiento de los créditos", value: "No vencen" },
+      { label: "Tus primeras 3 lecturas breves", value: "Gratis", free: true },
+      { label: "Informe completo de una carta", value: "US$ 29" },
+      { label: "El mismo informe en otro idioma", value: "Sin costo", free: true },
+      { label: "Vencimiento", value: "No vencen" },
     ],
-    note:
-      "Precios en dólares. Se paga directo en la web, no en la tienda de tu teléfono; el importe final puede incluir impuestos según tu país.",
+    note: "Precios en dólares. Se paga directo en la web; el importe final puede incluir impuestos según tu país.",
   },
   faq: {
     eyebrow: "Preguntas",
@@ -527,11 +529,12 @@ const es: Dict = {
     blocked: "No pudimos cargar el acceso de Google. Suele pasar con bloqueadores de rastreadores: desactivalo para este sitio y recargá.",
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
     legal: "Al entrar aceptás los términos y la política de privacidad.",
-    credits: "créditos",
+    freeCredits: "lecturas breves gratis",
+    paidCredits: "créditos para informes",
     account: "Tu cuenta",
     signOut: "Salir",
     buyCredits: "Sumar créditos",
-    buyInApp: "Por ahora los créditos se compran dentro de la app.",
+    buyInApp: "Por ahora no podés comprar créditos: el cobro en la web todavía no está activo.",
     chartsTitle: "Tus cartas",
     chartsEmpty: "Todavía no calculaste ninguna.",
     chartsEmptyCta: "Calcular mi carta",
@@ -625,17 +628,16 @@ const en: Dict = {
   },
   credits: {
     eyebrow: "Credits",
-    title: "Your first three charts are free. After that, one credit per chart.",
+    title: "Your first three readings are free.\nThe full report is a separate purchase.",
     price: "US$ 29",
-    priceNote: "per report, once your free credits run out",
+    priceNote: "the full report for one chart: eight sections, about 6,000 words",
     terms: [
-      { label: "Your first 3 charts", value: "Free", free: true },
-      { label: "Each new chart", value: "1 credit" },
-      { label: "The same chart in another language", value: "No charge", free: true },
-      { label: "Credit expiry", value: "They don't expire" },
+      { label: "Your first 3 short readings", value: "Free", free: true },
+      { label: "Full report for one chart", value: "US$ 29" },
+      { label: "The same report in another language", value: "No charge", free: true },
+      { label: "Expiry", value: "They don't expire" },
     ],
-    note:
-      "Prices in US dollars. You pay directly on the web, not through your phone's store; the final amount may include tax depending on your country.",
+    note: "Prices in US dollars. You pay directly on the web; the final amount may include tax depending on your country.",
   },
   faq: {
     eyebrow: "Questions",
@@ -765,11 +767,12 @@ const en: Dict = {
     blocked: "We couldn't load Google sign-in. This usually comes from a tracker blocker: allow this site and reload.",
     failed: "We couldn't sign you in. Try again.",
     legal: "By signing in you accept the terms and the privacy policy.",
-    credits: "credits",
+    freeCredits: "free short readings",
+    paidCredits: "report credits",
     account: "Your account",
     signOut: "Sign out",
     buyCredits: "Add credits",
-    buyInApp: "For now, credits are purchased inside the app.",
+    buyInApp: "You can't buy credits yet: web checkout isn't live.",
     chartsTitle: "Your charts",
     chartsEmpty: "You haven't computed any yet.",
     chartsEmptyCta: "Compute my chart",
@@ -863,17 +866,16 @@ const pt: Dict = {
   },
   credits: {
     eyebrow: "Créditos",
-    title: "Seus primeiros três mapas são grátis. Depois, um crédito por mapa.",
+    title: "Suas primeiras três leituras são grátis.\nO relatório completo é comprado à parte.",
     price: "US$ 29",
-    priceNote: "o relatório, quando seus créditos grátis acabarem",
+    priceNote: "o relatório completo de um mapa: oito seções, cerca de 6.000 palavras",
     terms: [
-      { label: "Seus primeiros 3 mapas", value: "Grátis", free: true },
-      { label: "Cada mapa novo", value: "1 crédito" },
-      { label: "O mesmo mapa em outro idioma", value: "Sem custo", free: true },
-      { label: "Validade dos créditos", value: "Não expiram" },
+      { label: "Suas primeiras 3 leituras breves", value: "Grátis", free: true },
+      { label: "Relatório completo de um mapa", value: "US$ 29" },
+      { label: "O mesmo relatório em outro idioma", value: "Sem custo", free: true },
+      { label: "Validade", value: "Não expiram" },
     ],
-    note:
-      "Preços em dólares. O pagamento é feito direto pela web, não pela loja do seu celular; o valor final pode incluir impostos conforme o seu país.",
+    note: "Preços em dólares. O pagamento é feito direto pela web; o valor final pode incluir impostos conforme o seu país.",
   },
   faq: {
     eyebrow: "Perguntas",
@@ -1003,11 +1005,12 @@ const pt: Dict = {
     blocked: "Não conseguimos carregar o acesso do Google. Costuma ser um bloqueador de rastreadores: libere este site e recarregue.",
     failed: "Não conseguimos entrar. Tente de novo.",
     legal: "Ao entrar você aceita os termos e a política de privacidade.",
-    credits: "créditos",
+    freeCredits: "leituras breves grátis",
+    paidCredits: "créditos para relatórios",
     account: "Sua conta",
     signOut: "Sair",
     buyCredits: "Adicionar créditos",
-    buyInApp: "Por enquanto os créditos são comprados dentro do app.",
+    buyInApp: "Por enquanto não é possível comprar créditos: o pagamento pela web ainda não está ativo.",
     chartsTitle: "Seus mapas",
     chartsEmpty: "Você ainda não calculou nenhum.",
     chartsEmptyCta: "Calcular meu mapa",
