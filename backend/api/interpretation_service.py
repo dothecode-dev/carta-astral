@@ -239,21 +239,6 @@ def _sibling_en_curso(chart, lang: str, tier: str) -> Interpretation | None:
     )
 
 
-def interpretation_langs(chart) -> list[str]:
-    """Idiomas en los que esta carta ya tiene lectura completa (prompt
-    actual). `completa=True` es la condición: desde la Tarea 10,
-    `iniciar_generacion` crea la fila de entrada (vacía) apenas arranca el
-    hilo de fondo, antes de escribir ninguna sección. Una fila así no es un
-    idioma disponible, es un trabajo en curso — listarla igual es lo que
-    hacía que la web pidiera un texto que todavía no existe."""
-    return list(
-        Interpretation.objects.filter(
-            chart=chart, prompt_version=PROMPT_VERSION, completa=True,
-        )
-        .values_list("lang", flat=True)
-    )
-
-
 def content_key(chart_data: dict, lang: str, prompt_version: str, tier: str) -> str:
     """Hash canónico del input del LLM, incluyendo el tier del producto.
     Dos cartas con el mismo JSON astrológico (mismo instante UTC, lugar,
@@ -444,6 +429,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         _sibling_completo(chart, interpretacion.lang, interpretacion.tier) if got_lock else None
     )
 
+    lock_perdido = False
     try:
         if not got_lock:
             logger.info(
@@ -461,10 +447,25 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         if sibling is not None:
             informe_service.traducir_informe(sibling, interpretacion.lang, _build_client())
         else:
-            informe_service.generar_informe(interpretacion, _build_client(), token)
+            # Fix wave final / Important: `generar_informe` devuelve `False`
+            # cuando abortó de forma LIMPIA porque perdió el lock (otro
+            # proceso lo tomó y sigue escribiendo esta MISMA interpretación
+            # ahora mismo) — eso no es que este intento haya fracasado, es
+            # que se lo cedimos a quien lo tiene. Sin distinguirlo, tres
+            # abortos así agotaban `INTENTOS_MAXIMOS` como si fueran tres
+            # fallos reales y devolvían + borraban una fila que el otro
+            # proceso estaba terminando de verdad.
+            lock_perdido = not informe_service.generar_informe(interpretacion, _build_client(), token)
     except Exception:
         logger.exception("la generación del informe %s falló", interpretacion.pk)
     finally:
+        if lock_perdido:
+            # Se descuenta el intento que se cargó preventivamente arriba,
+            # antes de saber cómo terminaba: un aborto por lock perdido no
+            # cuenta contra `INTENTOS_MAXIMOS`.
+            interpretacion.intentos = max(interpretacion.intentos - 1, 0)
+            interpretacion.save(update_fields=["intentos"])
+
         # `got_lock` es la guarda: sin lock propio esta llamada nunca cobró
         # ni generó nada (ver el docstring), así que no hay crédito que
         # devolver ni lock propio que soltar.
@@ -486,40 +487,68 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
             if got_lock
             else None
         )
+        # Critical de la revisión final: `interpretacion.completa` en
+        # MEMORIA no ve una traducción exitosa. `informe_service.
+        # traducir_informe` resuelve su `destino` con un `get_or_create`
+        # PROPIO — la MISMA fila por el `unique_together (chart, lang,
+        # prompt_version, tier)`, pero OTRO objeto Python — y escribe
+        # `completa=True` AHÍ, nunca sobre `interpretacion`. Sin este
+        # chequeo fresco, un intento que traduce con éxito (porque mientras
+        # tanto terminó un sibling en otro idioma) veía `interpretacion.
+        # completa` stale en `False` y, si además agotaba los intentos,
+        # devolvía el crédito y borraba un informe que se acababa de
+        # entregar.
+        completo_ahora = (
+            Interpretation.objects.filter(pk=interpretacion.pk, completa=True).exists()
+            if got_lock
+            else False
+        )
         # Task 10 / RF21: ya no "sin secciones" sino "sin completar tras
         # agotar los intentos" — devolver antes de agotarlos regalaría el
         # reintento gratis (el crédito ya compró el trabajo hecho hasta
         # acá) y no devolver nunca dejaría cobrado un informe que jamás
         # puede terminar de generarse.
-        if (
-            got_lock
-            and consumo is not None
-            and not interpretacion.completa
-            and interpretacion.intentos >= INTENTOS_MAXIMOS
-        ):
-            pk = interpretacion.pk
-            lot = consumo.lot
-            chart_uuid = str(chart.uuid)
-            tier = interpretacion.tier
-            lang = interpretacion.lang
-            ledger.devolver(
-                account,
-                external_id=f"informe:{pk}:devolucion",
-                note=f"informe {pk} sin completar tras {INTENTOS_MAXIMOS} intentos",
-                lot=lot,
-            )
-            # No se muestran las secciones sueltas de un informe que no se
-            # pudo entregar (decisión del dueño del producto): se borra
-            # entero, no sólo se marca. `InterpretationSection.interpretation`
-            # es CASCADE, así que esto se lleva las secciones puestas.
-            interpretacion.delete()
-            notificaciones.notificar(
-                account, "informe_no_entregado",
-                {"chart": chart_uuid, "tier": tier},
-                lang=lang,
-            )
-        if got_lock:
-            soltar_lock(chart, interpretacion.tier, token)
+        try:
+            if (
+                got_lock
+                and consumo is not None
+                and not completo_ahora
+                and interpretacion.intentos >= INTENTOS_MAXIMOS
+            ):
+                pk = interpretacion.pk
+                lot = consumo.lot
+                chart_uuid = str(chart.uuid)
+                tier = interpretacion.tier
+                lang = interpretacion.lang
+                ledger.devolver(
+                    account,
+                    external_id=f"informe:{pk}:devolucion",
+                    note=f"informe {pk} sin completar tras {INTENTOS_MAXIMOS} intentos",
+                    lot=lot,
+                )
+                # No se muestran las secciones sueltas de un informe que no
+                # se pudo entregar (decisión del dueño del producto): se
+                # borra entero, no sólo se marca. `InterpretationSection.
+                # interpretation` es CASCADE, así que esto se lleva las
+                # secciones puestas.
+                interpretacion.delete()
+                notificaciones.notificar(
+                    account, "informe_no_entregado",
+                    {"chart": chart_uuid, "tier": tier},
+                    lang=lang,
+                )
+        finally:
+            # Minor de la revisión final: `soltar_lock` va en el `finally`
+            # MÁS INTERNO, no después de todo el bloque de devolución — así
+            # se libera el lock aunque `ledger.devolver` (u otra cosa acá
+            # arriba) reviente, en vez de quedar colgado hasta que venza el
+            # TTL. Sigue corriendo DESPUÉS de intentar el `delete()` (no
+            # antes): soltarlo antes abriría una ventana para que otro
+            # proceso tome el lock y empiece a escribir sobre una fila que
+            # esta misma llamada está por borrar — la misma clase de
+            # carrera que el hallazgo Critical de arriba.
+            if got_lock:
+                soltar_lock(chart, interpretacion.tier, token)
 
 
 def generar_en_segundo_plano(chart, lang: str, account, tier: str) -> None:

@@ -9,12 +9,13 @@ nunca las secciones sueltas.
 """
 
 import pytest
+from django.core.cache import cache
 
 from api import informe_service, notificaciones
 from api import interpretation_service as svc
 from api.models import CreditTransaction, Interpretation, InterpretationSection
 from interpret.exceptions import InterpretationError
-from interpret.prompts import SECCIONES
+from interpret.prompts import PROMPT_VERSION, SECCIONES
 
 pytestmark = pytest.mark.django_db
 
@@ -180,3 +181,110 @@ def test_la_devolucion_no_se_duplica(make_account, chart, monkeypatch, build_sec
     acc.refresh_from_db()
     assert acc.paid_balance == 1  # sólo una devolución prosperó
     assert CreditTransaction.objects.filter(kind="adjustment").count() == 1
+
+
+def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
+    make_account, chart, build_seccion_falla, monkeypatch,
+):
+    """Critical de la revisión final: la guarda de devolución miraba
+    `interpretacion.completa` EN MEMORIA, que el camino de traducción nunca
+    refresca — `informe_service.traducir_informe` resuelve su `destino` con
+    un `get_or_create` PROPIO (la MISMA fila por el `unique_together`, pero
+    OTRO objeto Python) y escribe `completa=True` ahí, nunca sobre el
+    objeto que tiene `completar_generacion`.
+
+    Reproduce la secuencia real: "es" falla generando dos veces (todavía no
+    hay sibling en "en"); mientras tanto "en" termina; el tercer intento
+    —el que agota `INTENTOS_MAXIMOS`— encuentra ese sibling y TRADUCE CON
+    ÉXITO. Eso no puede devolver el crédito ni borrar el informe que se
+    acaba de entregar."""
+    acc = make_account(free_balance=0, paid_balance=1)
+    interp_es = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+
+    # Dos intentos de generación DIRECTA fallan: todavía no existe sibling en "en".
+    svc.completar_generacion(interp_es, chart, acc)
+    svc.completar_generacion(interp_es, chart, acc)
+    interp_es.refresh_from_db()
+    assert interp_es.intentos == 2
+    assert interp_es.completa is False
+
+    # Mientras tanto, "en" termina (sibling completo: mismo chart y tier).
+    interp_en = Interpretation.objects.create(
+        chart=chart, lang="en", prompt_version=PROMPT_VERSION,
+        tier="largo", account=acc, completa=True,
+    )
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=interp_en, slug=seccion.slug, orden=orden,
+            texto=f"[en] {seccion.slug}",
+        )
+    monkeypatch.setattr(
+        informe_service, "translate_interpretation",
+        lambda texto, lang, client: f"[es] {texto}",
+    )
+
+    svc.completar_generacion(interp_es, chart, acc)  # 3er intento: encuentra el sibling y traduce
+
+    acc.refresh_from_db()
+    assert acc.paid_balance == 0  # sigue cobrado: el informe SE ENTREGÓ, no hay nada que devolver
+    assert Interpretation.objects.filter(pk=interp_es.pk).exists()  # no se borró
+    interp_es.refresh_from_db()
+    assert interp_es.completa is True
+    assert interp_es.secciones.count() == len(SECCIONES)
+
+
+def test_lock_perdido_repetido_no_devuelve_ni_borra(make_account, chart, fake_client, monkeypatch):
+    """Important de la revisión final: perder el lock es un aborto LIMPIO
+    (`informe_service.generar_informe` devuelve `False`), no un fallo real
+    — otro proceso vivo tomó el lock porque el nuestro venció y sigue
+    escribiendo esta MISMA interpretación ahora mismo. Contarlo contra
+    `INTENTOS_MAXIMOS` podía devolver el crédito y borrar una fila que ese
+    otro proceso estaba terminando de verdad.
+
+    Simulamos la pérdida de lock en CADA llamada (`renovar_lock` siempre
+    `False`): `INTENTOS_MAXIMOS` abortos así no pueden agotar el contador —
+    cada uno se descuenta apenas se detecta."""
+    monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: False)
+    acc = make_account(free_balance=0, paid_balance=1)
+    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+
+    for _ in range(svc.INTENTOS_MAXIMOS):
+        svc.completar_generacion(interp, chart, acc)
+
+    acc.refresh_from_db()
+    assert acc.paid_balance == 0  # sigue cobrado: nunca hubo un fallo real
+    assert Interpretation.objects.filter(pk=interp.pk).exists()  # no se borró
+    interp.refresh_from_db()
+    assert interp.intentos == 0  # cada aborto por lock perdido se descontó
+    assert interp.completa is False
+    # Cada llamada alcanza a escribir UNA sección más (la de antes de perder
+    # el lock) antes de abortar: tres llamadas, tres secciones.
+    assert interp.secciones.count() == svc.INTENTOS_MAXIMOS
+
+
+def test_soltar_lock_no_queda_colgado_si_notificar_revienta(
+    make_account, chart, build_seccion_falla, monkeypatch,
+):
+    """Minor de la revisión final: `soltar_lock` vivía después de
+    `notificar` en el `finally` — si `ledger.devolver` o `notificar`
+    reventaban, el lock quedaba colgado hasta que venciera el TTL en vez de
+    liberarse. Ahora vive en un `finally` interno que corre pase lo que
+    pase dentro del bloque de devolución (después de intentar el `delete`,
+    no antes: soltarlo antes abriría una ventana para que otro proceso
+    tome el lock y escriba sobre una fila que esta misma llamada está por
+    borrar)."""
+    monkeypatch.setattr(
+        notificaciones, "notificar",
+        lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("el proveedor de mail está caído")),
+    )
+    acc = make_account(free_balance=0, paid_balance=1)
+    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+
+    svc.completar_generacion(interp, chart, acc)
+    svc.completar_generacion(interp, chart, acc)
+    with pytest.raises(RuntimeError):
+        svc.completar_generacion(interp, chart, acc)  # agota los intentos; notificar revienta
+
+    assert cache.get(svc._lock_key(chart, "largo")) is None  # el lock no quedó colgado
+    acc.refresh_from_db()
+    assert acc.paid_balance == 1  # la devolución ya había corrido antes de que reventara notificar

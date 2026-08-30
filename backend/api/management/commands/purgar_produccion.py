@@ -10,6 +10,7 @@ from api.models import (
     Interpretation,
     InterpretationSection,
     ProviderIdentity,
+    Session,
     SubTombstone,
 )
 
@@ -32,6 +33,14 @@ from api.models import (
 #   cablee push o telemetría sin acordarse de este comando, "purga total"
 #   dejaría de serlo en silencio.
 # Dejarlos afuera sería un olvido, no una decisión.
+#
+# Session SÍ es CASCADE (a diferencia de los seis de arriba): borrar Account
+# se la lleva puesta igual sin nombrarla acá (fix wave final / Minor de la
+# revisión final). Se la nombra de todas formas, ANTES de Account en el
+# orden de borrado, para que el conteo y el reporte de este comando no
+# omitan un modelo con datos de sesión (token_hash) que el comando SÍ borra
+# — "esto es lo que se borraría" tiene que decir la verdad completa, no sólo
+# la parte que se borra por `.delete()` explícito.
 MODELOS_A_BORRAR = (
     ("InterpretationSection", InterpretationSection),
     ("CreditTransaction", CreditTransaction),
@@ -41,6 +50,7 @@ MODELOS_A_BORRAR = (
     ("ProviderIdentity", ProviderIdentity),
     ("SubTombstone", SubTombstone),
     ("Device", Device),
+    ("Session", Session),
     ("Account", Account),
 )
 

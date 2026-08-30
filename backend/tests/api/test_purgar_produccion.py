@@ -9,6 +9,7 @@ import pytest
 from django.core.management import call_command
 from wagtail.models import Page
 
+from api.auth import create_session
 from api.models import (
     Account,
     BirthData,
@@ -19,6 +20,7 @@ from api.models import (
     Interpretation,
     InterpretationSection,
     ProviderIdentity,
+    Session,
     SubTombstone,
 )
 from cms.models import NoteIndexPage
@@ -45,6 +47,11 @@ def _sembrar_cuenta_con_cartas_y_ledger(account):
     )
     ProviderIdentity.objects.create(provider="google", sub="sub-de-prueba", account=account)
     Device.objects.create(account=account, platform="ios", push_token="tok-de-prueba")
+    # Session es CASCADE (fix wave final / Minor de la revisión final): sin
+    # sembrarla acá, un `count() == 0` de más abajo no distingue "el comando
+    # la cuenta y la borra" de "nadie la mira y el CASCADE de Account la
+    # limpia atrás, sin que el reporte lo diga".
+    create_session(account)
 
 
 @pytest.mark.django_db
@@ -53,6 +60,26 @@ def test_sin_el_flag_no_borra_nada(make_account, capsys):
     call_command("purgar_produccion")
     assert Account.objects.count() == 1
     assert "no se borró nada" in capsys.readouterr().out
+
+
+@pytest.mark.django_db
+def test_el_reporte_cuenta_session_aunque_se_borre_por_cascade(make_account, capsys):
+    """Fix wave final / Minor: `Session` cuelga de `Account` con CASCADE, no
+    con SET_NULL como los demás — borrar `Account` se la lleva puesta sin
+    que el comando la nombre. Sin contarla, "esto es lo que se borraría" (y
+    después "esto es lo que se borró") mentía por omisión sobre un modelo
+    con datos de sesión que el comando sí destruye."""
+    cuenta = make_account()
+    create_session(cuenta)
+
+    call_command("purgar_produccion")
+    salida = capsys.readouterr().out
+    assert "Session: 1" in salida
+
+    call_command("purgar_produccion", "--si-estoy-seguro")
+    salida = capsys.readouterr().out
+    assert "Session: 1" in salida
+    assert Session.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -67,7 +94,7 @@ def test_con_el_flag_borra_todo_incluidos_los_tombstones(make_account):
 
     for modelo in (
         Account, Chart, Interpretation, InterpretationSection,
-        CreditTransaction, ProviderIdentity, SubTombstone,
+        CreditTransaction, ProviderIdentity, SubTombstone, Session,
     ):
         assert modelo.objects.count() == 0
     # BirthData y Device no están en la lista del RF16, pero las dos quedan

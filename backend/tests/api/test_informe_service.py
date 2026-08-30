@@ -227,18 +227,23 @@ def test_si_pierde_el_lock_justo_tras_la_ultima_seccion_igual_marca_completa(int
 
     monkeypatch.setattr(informe_service, "renovar_lock", _renovar)
     cliente = ClienteFalso()
-    informe_service.generar_informe(interpretacion, cliente, TOKEN)
+    terminado = informe_service.generar_informe(interpretacion, cliente, TOKEN)
     interpretacion.refresh_from_db()
     assert interpretacion.secciones.count() == total
     assert interpretacion.completa is True
     assert cliente.generadas == total
+    # Fix wave final: `True` es "terminó de intentar", no "está completo" —
+    # acá coinciden, pero el contrato de retorno es el que necesita
+    # `completar_generacion` para NO tratar esto como un aborto por lock
+    # perdido (ver el contrapunto de abajo).
+    assert terminado is True
 
 
 def test_si_pierde_el_lock_aborta_sin_completar_ni_seguir_pidiendo(interpretacion, monkeypatch):
     cliente = ClienteFalso()
 
     monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: False)
-    informe_service.generar_informe(interpretacion, cliente, TOKEN)
+    terminado = informe_service.generar_informe(interpretacion, cliente, TOKEN)
     interpretacion.refresh_from_db()
     # La sección que ya se había generado antes de perder el lock queda
     # persistida, pero no siguió pidiendo las demás ni marcó el informe
@@ -247,6 +252,11 @@ def test_si_pierde_el_lock_aborta_sin_completar_ni_seguir_pidiendo(interpretacio
     assert interpretacion.secciones.count() == 1
     assert interpretacion.completa is False
     assert cliente.generadas == 1
+    # Fix wave final / Important: `False` es la señal que `completar_generacion`
+    # necesita para NO contar este aborto limpio como un intento fallido —
+    # sin ella, tres abortos por lock perdido devolvían el crédito y borraban
+    # un informe que otro proceso seguía escribiendo de verdad.
+    assert terminado is False
 
 
 def test_nunca_llama_a_devolver_credito_ante_una_falla_parcial(interpretacion, monkeypatch):

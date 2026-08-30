@@ -308,29 +308,6 @@ def test_translation_does_not_consume_daily_cap(fake_client, fake_translator, se
         )
 
 
-def test_interpretation_langs_helper(fake_client, fake_translator, settings):
-    settings.INTERPRETATION_DAILY_CAP = 100
-    c = _chart()
-    acc = _account(paid_balance=1)
-    assert svc.interpretation_langs(c) == []
-    _generar(c, "es", acc)
-    _generar(c, "en", acc)
-    assert sorted(svc.interpretation_langs(c)) == ["en", "es"]
-
-
-def test_interpretation_langs_excluye_incompletas(settings):
-    """Task 10: `iniciar_generacion` crea la fila de entrada (completa=False,
-    text="") apenas arranca el hilo de fondo, antes de escribir ninguna
-    sección. Esa fila no es un idioma disponible: es un trabajo en curso, y
-    listarla como si ya hubiera una lectura es lo que dejaba a la web
-    pidiendo un texto que todavía no existe."""
-    settings.INTERPRETATION_DAILY_CAP = 100
-    c = _chart()
-    acc = _account(paid_balance=1)
-    svc.iniciar_generacion(c, "es", acc, tier="largo")
-    assert svc.interpretation_langs(c) == []
-
-
 # --- CONCERN (Task 0): dedup por content_key entre cartas idénticas ---
 #
 # El flujo viejo (`get_or_create_interpretation`, borrado acá) buscaba un

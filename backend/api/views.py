@@ -306,6 +306,18 @@ class InterpretationEstadoView(APIView):
 
     def get(self, request, uuid):
         lang = request.query_params.get("lang", "es")
+        # Fix wave final / Minor: las otras dos vistas de este mismo recurso
+        # (`InterpretationView.get/post`, `IndiceInformeView.get`) validan
+        # `lang` y devuelven 400 ante un valor que no es de las tres que el
+        # sistema conoce. Ésta no lo hacía: un `lang` inválido caía derecho a
+        # la consulta, no encontraba nada y devolvía 200 con `hechas: 0`
+        # como si el informe todavía no hubiera arrancado, en vez de avisar
+        # que el pedido está mal armado.
+        if lang not in _INTERPRETATION_LANGS:
+            return Response(
+                {"error": f"lang debe ser uno de {_INTERPRETATION_LANGS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         tier = request.query_params.get("tier")
         if tier not in _TIERS:
             return Response(

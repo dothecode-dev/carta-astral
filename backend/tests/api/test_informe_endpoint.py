@@ -86,6 +86,19 @@ def test_el_estado_sin_tier_es_400(client_autenticado, chart):
     assert r.status_code == 400
 
 
+def test_el_estado_con_lang_invalido_es_400(client_autenticado, chart):
+    """Fix wave final / Minor: esta vista era la única de las tres del mismo
+    recurso (`InterpretationView.get/post`, `IndiceInformeView.get`) que no
+    validaba `lang` — un valor inválido caía derecho a la consulta, no
+    encontraba nada, y devolvía 200 con `hechas: 0` como si el informe
+    simplemente no hubiera arrancado todavía, en vez de avisar que el
+    pedido está mal armado."""
+    r = client_autenticado.get(
+        f"/api/charts/{chart.uuid}/interpretation/estado/?tier=largo&lang=xx"
+    )
+    assert r.status_code == 400
+
+
 def test_el_estado_sin_barra_final_redirige_en_vez_de_404(client_autenticado, chart):
     """HALLAZGO 5 de code review: era la única ruta del archivo sin barra
     final. `APPEND_SLASH` agrega la barra pero nunca la saca, así que un
@@ -497,7 +510,14 @@ def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
     antes de `completar_generacion` (p. ej. se borra esa interpretación) y
     la generación de reemplazo falla sin persistir ninguna sección. El
     saldo no puede bajar: nunca se cobró nada, así que no hay nada que
-    devolver."""
+    devolver.
+
+    Fix wave final / Important: llama a `completar_generacion`
+    `INTENTOS_MAXIMOS` veces (no una sola). Con una sola llamada
+    `intentos=1 < INTENTOS_MAXIMOS` corta la rama de devolución ANTES de
+    llegar a la guarda `consumo is not None` que este test dice proteger —
+    pasaba igual aunque se la borrara. Agotando los intentos de verdad, la
+    única razón por la que sigue sin devolver es esa guarda."""
     from api import interpretation_service as svc, informe_service
 
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
@@ -514,7 +534,8 @@ def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
 
     monkeypatch.setattr(informe_service, "generar_informe", falla_sin_secciones)
 
-    svc.completar_generacion(interpretacion_en, chart, account)
+    for _ in range(svc.INTENTOS_MAXIMOS):
+        svc.completar_generacion(interpretacion_en, chart, account)
 
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes  # nunca se cobró: no hay nada que devolver

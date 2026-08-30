@@ -169,9 +169,17 @@ def indice_informe(chart, lang: str) -> list[dict]:
     ]
 
 
-def generar_informe(interpretacion, client, token: str) -> None:
+def generar_informe(interpretacion, client, token: str) -> bool:
     """Genera las secciones que falten. Reanudable: llamarla dos veces sobre un
     informe a medio hacer completa el resto sin repetir lo ya escrito.
+
+    Devuelve `True` si terminó de intentar (con el informe completo o no —
+    eso lo dice `interpretacion.completa`, no el valor de retorno) y `False`
+    únicamente cuando abortó de forma limpia porque perdió el lock a mitad
+    de camino (ver más abajo). Fix wave final / Important: `completar_generacion`
+    necesita distinguir ESE aborto de un fallo real para no contarlo como un
+    intento fallido — perder el lock no es que este intento haya fracasado,
+    es que otro proceso vivo se quedó con el trabajo.
 
     `token` es el mismo valor que `interpretation_service` guardó al tomar el
     lock de esta carta en `completar_generacion`. Después de persistir CADA sección
@@ -259,7 +267,7 @@ def generar_informe(interpretacion, client, token: str) -> None:
                 "generación; otro proceso lo tomó, se aborta sin tocar el ledger",
                 interpretacion.pk,
             )
-            return
+            return False
 
     with transaction.atomic():
         interpretacion.text = "\n\n".join(
@@ -267,6 +275,7 @@ def generar_informe(interpretacion, client, token: str) -> None:
         )
         interpretacion.completa = True
         interpretacion.save(update_fields=["text", "completa"])
+    return True
 
 
 def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
