@@ -45,6 +45,11 @@ class AccountView(APIView):
 
     def get(self, request):
         return Response({
+            "free_credits": request.user.free_balance,
+            "paid_credits": request.user.paid_balance,
+            # Suma de los dos lotes. Se mantiene sólo para la app RN, que está
+            # apagada por APP_AUTH_ENABLED: se saca cuando la app vuelva o se
+            # descarte, lo que pase primero.
             "credits_available": account_credits_available(request.user),
             "account_id": request.user.id,
         })
