@@ -161,6 +161,10 @@ def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monke
 
 
 def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
+    """Task 10 / RF21: la devolución ya no es instantánea al primer fallo —
+    hace falta agotar `INTENTOS_MAXIMOS` reintentos (cada uno reanuda la
+    MISMA `Interpretation`, `iniciar_generacion` no vuelve a cobrar) antes
+    de rendirse y devolver."""
     from api import interpretation_service
 
     def explota(*a, **kw):
@@ -168,7 +172,8 @@ def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
 
     monkeypatch.setattr("api.informe_service.generar_informe", explota)
     antes = account.free_balance + account.paid_balance
-    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+    for _ in range(interpretation_service.INTENTOS_MAXIMOS):
+        interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
     account.refresh_from_db()
     assert account.free_balance + account.paid_balance == antes
 
@@ -177,7 +182,10 @@ def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, acc
     """BUG 2: `ledger.devolver` fijaba `lot="paid"` siempre, así que un
     informe cobrado de `free_balance` devolvía el crédito a `paid_balance`.
     El test anterior (`test_si_la_generacion_muere_el_credito_vuelve`) sólo
-    compara el total y no lo distingue; éste mira cada lote por separado."""
+    compara el total y no lo distingue; éste mira cada lote por separado.
+
+    Task 10 / RF21: agota `INTENTOS_MAXIMOS` reintentos antes de esperar la
+    devolución (ver el test anterior)."""
     from api import interpretation_service
 
     def explota(*a, **kw):
@@ -193,7 +201,8 @@ def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, acc
     # completo ("largo") siempre cobra paid_balance, nunca free. Antes de
     # esta tarea cualquier `charge()` podía caer en cualquier lote según el
     # saldo disponible; ahora el lote lo decide el producto pedido.
-    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="corto")
+    for _ in range(interpretation_service.INTENTOS_MAXIMOS):
+        interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="corto")
 
     account.refresh_from_db()
     assert account.free_balance == 3
@@ -202,7 +211,8 @@ def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, acc
 
 def test_si_la_generacion_paga_muere_el_credito_vuelve_al_lote_paid(chart, account, monkeypatch):
     """Contrapunto del anterior: cobrado de `paid_balance`, tiene que volver
-    ahí y no a `free_balance`."""
+    ahí y no a `free_balance`. Task 10 / RF21: agota los intentos primero
+    (ver `test_si_la_generacion_muere_el_credito_vuelve`)."""
     from api import interpretation_service
 
     def explota(*a, **kw):
@@ -213,7 +223,8 @@ def test_si_la_generacion_paga_muere_el_credito_vuelve_al_lote_paid(chart, accou
     account.paid_balance = 3
     account.save()
 
-    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+    for _ in range(interpretation_service.INTENTOS_MAXIMOS):
+        interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
 
     account.refresh_from_db()
     assert account.free_balance == 0
@@ -221,13 +232,35 @@ def test_si_la_generacion_paga_muere_el_credito_vuelve_al_lote_paid(chart, accou
 
 
 def test_si_la_generacion_muere_no_queda_una_interpretacion_vacia(chart, account, monkeypatch):
+    """Task 10 / RF21: recién al agotar `INTENTOS_MAXIMOS` intentos se borra
+    la `Interpretation` — antes de eso sigue viva a propósito, para que el
+    siguiente reintento pueda reanudarla sin volver a cobrar."""
     from api.models import Interpretation
     from api import interpretation_service
     from interpret.prompts import PROMPT_VERSION
 
     monkeypatch.setattr("api.informe_service.generar_informe", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
-    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+    for _ in range(interpretation_service.INTENTOS_MAXIMOS):
+        interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
     assert not Interpretation.objects.filter(chart=chart, lang="es", prompt_version=PROMPT_VERSION).exists()
+
+
+def test_si_falla_una_sola_vez_la_interpretacion_sigue_viva_para_reintentar(chart, account, monkeypatch):
+    """Contrapunto de `test_si_la_generacion_muere_no_queda_una_interpretacion_vacia`:
+    con MENOS fallos que `INTENTOS_MAXIMOS`, la fila no se borra ni se
+    devuelve el crédito — sigue reanudable."""
+    from api.models import Interpretation
+    from api import interpretation_service
+    from interpret.prompts import PROMPT_VERSION
+
+    monkeypatch.setattr("api.informe_service.generar_informe", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
+    antes = account.free_balance + account.paid_balance
+    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+    account.refresh_from_db()
+    assert account.free_balance + account.paid_balance == antes - 1  # sigue cobrado
+    assert Interpretation.objects.filter(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, completa=False,
+    ).exists()
 
 
 def test_si_queda_una_seccion_no_se_devuelve_el_credito(chart, account, settings, monkeypatch):

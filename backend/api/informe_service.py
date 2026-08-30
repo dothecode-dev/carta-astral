@@ -177,21 +177,23 @@ def generar_informe(interpretacion, client, token: str) -> None:
     - `iniciar_generacion` cobra un crédito la primera vez que la
       `Interpretation` de esta carta se crea, no por cada intento: un segundo
       pedido sobre una `Interpretation` que ya existe NO vuelve a cobrar,
-      sólo reanuda. Por eso el crédito se devuelve *sólo si no quedó ninguna
-      sección persistida* (`not interpretacion.secciones.exists()`): con una
-      sección o más el trabajo ya está comprado, y un reintento lo termina
-      gratis — devolver ahí sería regalar el informe completo. Cuando no
-      quedó ninguna sección, además de devolver conviene borrar esa
-      `Interpretation` vacía, para que el estado quede como si el pedido
-      nunca hubiera existido.
+      sólo reanuda. Task 10 / RF21: mientras queden intentos
+      (`interpretacion.intentos < INTENTOS_MAXIMOS` en
+      `interpretation_service.completar_generacion`), un reintento sobre una
+      `Interpretation` con secciones ya persistidas la termina gratis —
+      devolver ahí sería regalar el informe completo. Sólo agotados los
+      intentos SIN llegar a `completa=True` se devuelve el crédito y se
+      borra la `Interpretation` entera (secciones incluidas): con el
+      informe pago (US$ 29) ya no alcanza con "algo se generó" para no
+      devolver — o se entrega completo, o se devuelve, y las secciones
+      sueltas de un intento fallido nunca se muestran.
     - Si de todas formas se devuelve el crédito, hacerlo con
       `external_id=f"informe:{interpretacion.pk}:devolucion"` — estable, por
-      informe y no por intento, para que dos llamadas (por ejemplo un
-      `except` por sección más otro por el informe entero) no dupliquen el
-      reembolso de un solo débito. La regla de "sólo con cero secciones" ya
-      hace el doble reembolso improbable, pero la clave estable no es
-      redundante: estas garantías se sostienen en la base de datos, no en la
-      disciplina de quien llama.
+      informe y no por intento, para que dos llamadas que lleguen a devolver
+      la MISMA `Interpretation` no dupliquen el reembolso de un solo débito.
+      Esta garantía se sostiene en la base de datos (la `UniqueConstraint`
+      parcial de `CreditTransaction.external_id`), no en la disciplina de
+      quien llama.
     """
     aplicables = secciones_aplicables(interpretacion.chart, interpretacion.tier)
     orden_por_slug = {seccion.slug: indice for indice, seccion in enumerate(aplicables)}

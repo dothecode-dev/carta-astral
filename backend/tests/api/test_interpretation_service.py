@@ -199,14 +199,16 @@ def test_llm_error_no_deja_interpretacion_persistida(monkeypatch, settings):
     corre en `completar_generacion`, que atrapa y loguea cualquier excepción
     en vez de relanzarla (es la función que corre en el hilo de fondo; ver
     su docstring). Lo que sigue valiendo acá no es "se levanta la
-    excepción" sino la garantía de plata: si el LLM falla, no queda ninguna
+    excepción" sino la garantía de plata: si el LLM falla SIEMPRE, agotados
+    `INTENTOS_MAXIMOS` reintentos (Task 10 / RF21) no queda ninguna
     `Interpretation` a medias ni se pierde el crédito cobrado."""
     settings.INTERPRETATION_DAILY_CAP = 100
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
     c = _chart()
     acc = _account(paid_balance=1)  # tier="largo" (informe completo) cobra paid, no free
     antes = acc.free_balance + acc.paid_balance
-    svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
+    for _ in range(svc.INTENTOS_MAXIMOS):
+        svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
     assert Interpretation.objects.count() == 0
     acc.refresh_from_db()
     assert acc.free_balance + acc.paid_balance == antes
@@ -216,13 +218,15 @@ def test_missing_api_key_no_deja_interpretacion_persistida(settings):
     """Mismo comportamiento que el error del LLM (arriba) para el otro
     disparador que ya cubría el flujo viejo: sin `ANTHROPIC_API_KEY`,
     `_build_client` levanta `InterpretationError` dentro de
-    `completar_generacion`, que la atrapa sin dejar nada a medias."""
+    `completar_generacion`, que la atrapa sin dejar nada a medias — recién
+    al agotar `INTENTOS_MAXIMOS` reintentos (Task 10 / RF21)."""
     settings.INTERPRETATION_DAILY_CAP = 100
     settings.ANTHROPIC_API_KEY = ""
     c = _chart()
     acc = _account(paid_balance=1)  # tier="largo" (informe completo) cobra paid, no free
     antes = acc.free_balance + acc.paid_balance
-    svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
+    for _ in range(svc.INTENTOS_MAXIMOS):
+        svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
     assert Interpretation.objects.count() == 0
     acc.refresh_from_db()
     assert acc.free_balance + acc.paid_balance == antes

@@ -15,7 +15,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from api import ledger
+from api import ledger, notificaciones
 from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
 from api.models import CreditTransaction, Interpretation
 from interpret.exceptions import InterpretationError
@@ -38,6 +38,14 @@ logger = logging.getLogger(__name__)
 # mientras el informe se seguía escribiendo, y dos pestañas generaban el mismo
 # informe dos veces cobrando dos créditos.
 LOCK_TTL = 600
+
+# RF21: cuántas veces `completar_generacion` reintenta un informe incompleto
+# antes de rendirse. El dueño del producto lo decidió así: si no se puede
+# entregar el informe de ocho secciones que se cobró entero, se devuelve el
+# crédito y no se muestran las secciones sueltas — un informe de US$ 29 no
+# es como la lectura gratis que originó la regla vieja ("devolvé sólo si no
+# quedó nada"), donde un informe trunco no le costaba nada al usuario.
+INTENTOS_MAXIMOS = 3
 
 DISCLAIMERS = {
     "es": "Esta interpretación fue generada con inteligencia artificial con fines "
@@ -410,7 +418,19 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     es "¿existe un sibling ahora?" sino "¿esta `Interpretation` tiene una
     `CreditTransaction` de consumo?" — el hecho que `iniciar_generacion`
     dejó escrito en la base cuando SÍ cobró (vía `ledger.charge`), y que no
-    cambia aunque cualquier otra fila de la base sí lo haga."""
+    cambia aunque cualquier otra fila de la base sí lo haga.
+
+    Task 10 / RF21: la guarda de devolución YA NO es "no quedó ninguna
+    sección" — con el informe pago (US$ 29), un intento que dejó tres
+    secciones escritas y después falla no puede tratarse como "sin
+    trabajo perdido" solo porque hay texto en la base; ese texto no se
+    muestra (`completa=False` sigue dando 404) y el usuario pagó el
+    informe entero, no tres octavos. La política nueva es contar intentos
+    (`interpretacion.intentos`, incrementado en cada llamada que sí toma el
+    lock) y, agotados `INTENTOS_MAXIMOS` sin llegar a `completa=True`,
+    rendirse: devolver el crédito, borrar la interpretación (y sus
+    secciones, `on_delete=CASCADE`) y avisar por `api.notificaciones` —
+    nunca dejar mostrable un informe a medias."""
     if interpretacion.completa:
         return
 
@@ -431,6 +451,13 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
                 chart.pk,
             )
             return
+        # Un intento más de terminar este informe, cuente como generación o
+        # como traducción de un sibling: las dos pueden fallar, y las dos
+        # cuentan contra `INTENTOS_MAXIMOS`. Dentro del `try` (no antes, ver
+        # el resto de esta función): si el `save` mismo revienta, lo atrapa
+        # el `except Exception` de abajo en vez de escapar sin loguear.
+        interpretacion.intentos += 1
+        interpretacion.save(update_fields=["intentos"])
         if sibling is not None:
             informe_service.traducir_informe(sibling, interpretacion.lang, _build_client())
         else:
@@ -459,15 +486,37 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
             if got_lock
             else None
         )
-        if got_lock and consumo is not None and not interpretacion.secciones.exists():
+        # Task 10 / RF21: ya no "sin secciones" sino "sin completar tras
+        # agotar los intentos" — devolver antes de agotarlos regalaría el
+        # reintento gratis (el crédito ya compró el trabajo hecho hasta
+        # acá) y no devolver nunca dejaría cobrado un informe que jamás
+        # puede terminar de generarse.
+        if (
+            got_lock
+            and consumo is not None
+            and not interpretacion.completa
+            and interpretacion.intentos >= INTENTOS_MAXIMOS
+        ):
             pk = interpretacion.pk
             lot = consumo.lot
-            interpretacion.delete()
+            chart_uuid = str(chart.uuid)
+            tier = interpretacion.tier
+            lang = interpretacion.lang
             ledger.devolver(
                 account,
                 external_id=f"informe:{pk}:devolucion",
-                note=f"informe {pk} sin secciones generadas",
+                note=f"informe {pk} sin completar tras {INTENTOS_MAXIMOS} intentos",
                 lot=lot,
+            )
+            # No se muestran las secciones sueltas de un informe que no se
+            # pudo entregar (decisión del dueño del producto): se borra
+            # entero, no sólo se marca. `InterpretationSection.interpretation`
+            # es CASCADE, así que esto se lleva las secciones puestas.
+            interpretacion.delete()
+            notificaciones.notificar(
+                account, "informe_no_entregado",
+                {"chart": chart_uuid, "tier": tier},
+                lang=lang,
             )
         if got_lock:
             soltar_lock(chart, interpretacion.tier, token)

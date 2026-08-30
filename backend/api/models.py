@@ -84,6 +84,12 @@ class Interpretation(models.Model):
     # entrega ni se considera pago.
     completa = models.BooleanField(default=False)
 
+    # Cuántas veces `completar_generacion` intentó terminar este informe
+    # (Task 10, RF21). Agotados `INTENTOS_MAXIMOS` sin completarlo, la
+    # política es devolver el crédito y borrar la fila: no se entrega un
+    # informe a medias por lo que costó el completo.
+    intentos = models.PositiveSmallIntegerField(default=0)
+
     class Meta:
         unique_together = ("chart", "lang", "prompt_version", "tier")
 
