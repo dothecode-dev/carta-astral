@@ -18,7 +18,7 @@ import pytest
 
 from api.chart_service import create_chart
 from api.models import Interpretation, InterpretationSection
-from interpret.prompts import PROMPT_VERSION, SECCIONES
+from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO
 
 pytestmark = pytest.mark.django_db
 
@@ -121,6 +121,20 @@ def _informe_legacy(chart, texto, lang="es", completa=True):
     return Interpretation.objects.create(
         chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=completa, text=texto,
     )
+
+
+def _informe_corto(chart, texto, lang="es", completa=True):
+    """La lectura breve gratis (tier="corto"): una sola sección, la que marca
+    `SECCION_BREVE`. Convive con un informe completo sobre la misma carta
+    (RF6), así que necesita su propio helper y no reusar `_informe`, que
+    siempre arma tier="largo"."""
+    interp = Interpretation.objects.create(
+        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=TIER_CORTO, completa=completa,
+    )
+    InterpretationSection.objects.create(
+        interpretation=interp, slug=SECCION_BREVE.slug, orden=0, texto=texto,
+    )
+    return interp
 
 
 def _informe_completo(chart, lang="es"):
@@ -353,9 +367,45 @@ def test_la_lectura_empieza_en_hoja_nueva(account_client):
 def test_el_pdf_trae_las_ocho_secciones_con_indice(interpretacion_completa):
     from api import pdf_payload
 
-    payload = pdf_payload.build(interpretacion_completa.chart, interpretacion_completa)
+    payload = pdf_payload.build(interpretacion_completa.chart, interpretacion_completa.lang)
     assert len(payload["reading"]["secciones"]) == 8
     assert payload["reading"]["indice"] == [s.titulo["es"] for s in SECCIONES]
+
+
+def test_el_pdf_de_una_lectura_breve_trae_su_texto(account_client):
+    """Una carta con sólo la lectura breve (tier="corto", sin informe
+    completo) también arma el PDF: antes de esta tarea `pdf_payload.build`
+    asumía una única interpretación por (chart, lang), sin contemplar que
+    ahora puede haber sólo la breve escrita para ese idioma."""
+    chart = _chart(account_client)
+    _informe_corto(chart, "Tu Sol en Piscis abre la lectura breve.")
+
+    resp = account_client.post(URL.format(chart.uuid), _payload(reading_lang="es"), format="json")
+    assert resp.status_code == 200
+    assert resp["Content-Type"] == "application/pdf"
+
+    html = _html(chart, reading_lang="es")
+    assert "Tu Sol en Piscis abre la lectura breve." in html
+
+
+def test_el_pdf_prefiere_el_informe_completo_si_existe(account_client):
+    """Con la lectura breve Y el informe completo escritos en el mismo
+    idioma sobre la misma carta (RF6: los dos tiers conviven), el PDF tiene
+    que traer el informe completo —el que se pagó US$29— y no la lectura
+    breve gratis. La breve se crea primero a propósito: con un `.first()`
+    sin orden explícito por tier, el motor podía devolverla a ella."""
+    chart = _chart(account_client)
+    _informe_corto(chart, "Texto de la lectura breve: no debería aparecer en el PDF.")
+    _informe_completo(chart)
+
+    from api import pdf_payload
+
+    payload = pdf_payload.build(chart, "es")
+    assert payload["reading"]["tier"] == TIER_LARGO
+
+    html = _html(chart, reading_lang="es")
+    assert "Texto de la lectura breve: no debería aparecer en el PDF." not in html
+    assert "Texto de la sección" in html
 
 
 def test_la_hoja_de_estilos_evita_titulos_huerfanos():

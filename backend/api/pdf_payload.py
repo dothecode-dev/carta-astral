@@ -24,7 +24,8 @@ from typing import Any
 from rest_framework import serializers
 
 from api.informe_service import secciones_aplicables
-from api.models import Chart, Interpretation
+from api.models import Chart
+from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 
 
 class _Number(serializers.FloatField):
@@ -191,9 +192,23 @@ class ChartPdfSerializer(_Strict):
     )
 
 
-def build(chart: Chart, interpretacion: Interpretation) -> dict[str, Any]:
+def build(chart: Chart, reading_lang: str | None) -> dict[str, Any] | None:
     """La lectura para el PDF: título y texto de cada sección ya escrita, más
-    el índice completo del informe.
+    el índice completo del informe. `None` si no hay ningún informe
+    terminado para `reading_lang` (incluido el caso `reading_lang=None`: el
+    PDF de la carta sola).
+
+    Con los dos tiers conviviendo sobre la misma carta (RF6) puede haber dos
+    interpretaciones para el mismo `(chart, lang, prompt_version)` —una por
+    tier, la `unique_together` de `Interpretation` no permite más—, y acá se
+    elige el informe completo (tier="largo") si existe; si no, la lectura
+    breve (tier="corto"). La preferencia se resuelve en Python y no con
+    `.order_by(...).first()` en la query a propósito: con dos filas y sin un
+    orden explícito el motor decide cuál sale, y quien pagó el informe
+    completo podía recibir el PDF de su lectura gratis.
+
+    Sólo entran informes terminados (`completa=True`): una generación en
+    curso no es un informe que se pueda imprimir.
 
     El índice sale de `secciones_aplicables(chart, interpretacion.tier)` —el
     catálogo, filtrado por si hay hora de nacimiento—, no de
@@ -201,9 +216,6 @@ def build(chart: Chart, interpretacion: Interpretation) -> dict[str, Any]:
     alguna todavía no se haya escrito (mismo criterio que
     `informe_service.resumen_gratis`). `secciones` en cambio sólo trae las
     que ya están: no hay texto que mostrar para una que falta.
-
-    Quien llama decide si `interpretacion` corresponde a un informe
-    terminado (`completa=True`); acá no se vuelve a chequear.
 
     Caso legacy: `0020_backfill_completa` preserva a propósito las filas de
     antes de la Tarea 2 —`completa=True`, `text` poblado, cero
@@ -219,6 +231,19 @@ def build(chart: Chart, interpretacion: Interpretation) -> dict[str, Any]:
     capítulos, y prometerlos sería mentir sobre una estructura que el texto
     no tiene.
     """
+    if not reading_lang:
+        return None
+
+    candidatas = {
+        interp.tier: interp
+        for interp in chart.interpretations.filter(
+            lang=reading_lang, prompt_version=PROMPT_VERSION, completa=True,
+        )
+    }
+    interpretacion = candidatas.get(TIER_LARGO) or candidatas.get(TIER_CORTO)
+    if interpretacion is None:
+        return None
+
     aplicables = secciones_aplicables(chart, interpretacion.tier)
     lang = interpretacion.lang
     escritas = {s.slug: s.texto for s in interpretacion.secciones.all()}
@@ -234,4 +259,6 @@ def build(chart: Chart, interpretacion: Interpretation) -> dict[str, Any]:
         ]
         indice = [seccion.titulo[lang] for seccion in aplicables]
 
-    return {"reading": {"secciones": secciones, "indice": indice}}
+    return {
+        "reading": {"secciones": secciones, "indice": indice, "tier": interpretacion.tier},
+    }

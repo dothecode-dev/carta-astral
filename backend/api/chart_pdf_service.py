@@ -25,7 +25,6 @@ from urllib.parse import quote
 from api import pdf_payload
 from api.interpretation_service import DISCLAIMERS
 from api.models import Chart
-from interpret.prompts import PROMPT_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -306,17 +305,16 @@ def _reading_for(chart: Chart, lang: str | None) -> tuple[dict, str] | None:
 
     Una interpretación con `completa=False` no se sirve —mismo criterio que
     `InterpretationView.get`—: un informe a medio generar no tiene por qué
-    salir en un PDF como si estuviera terminado.
+    salir en un PDF como si estuviera terminado. Cuál de los dos tiers gana
+    si hay más de uno lo decide `pdf_payload.build`.
     """
-    if not lang:
-        return None
-    interp = chart.interpretations.filter(
-        lang=lang, prompt_version=PROMPT_VERSION, completa=True
-    ).first()
-    if interp is None:
+    resultado = pdf_payload.build(chart, lang)
+    if resultado is None:
         # No es un error: la carta se baja igual, sin la lectura.
         return None
-    return pdf_payload.build(chart, interp)["reading"], DISCLAIMERS[interp.lang]
+    # `lang` no puede ser None acá: pdf_payload.build ya devolvió algo, y con
+    # `reading_lang=None` devuelve siempre None (ver su docstring).
+    return resultado["reading"], DISCLAIMERS[lang]
 
 
 def build_document_html(chart: Chart, data: dict) -> str:
