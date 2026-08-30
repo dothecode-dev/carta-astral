@@ -186,6 +186,30 @@ describe("/api/charts/[id]/interpretation", () => {
     expect((await readingPost(post("http://x", { lang: "es" }), params)).status).toBe(503);
   });
 
+  it("manda el tier al backend, no sólo el idioma", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({}, 202));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await readingPost(post("http://x", { lang: "es", tier: "corto" }), params);
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
+      lang: "es",
+      tier: "corto",
+    });
+  });
+
+  // El 402 trae `code: "sin_free" | "sin_paid"` para que el botón sepa cuál
+  // de los dos mensajes mostrar. Sin reenviarlo, la web no puede distinguirlos.
+  it("reenvía el code del 402 para distinguir sin_free de sin_paid", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ code: "sin_free" }, 402)));
+
+    const res = await readingPost(post("http://x", { lang: "es", tier: "corto" }), params);
+
+    expect(res.status).toBe(402);
+    expect((await res.json()).code).toBe("sin_free");
+  });
+
   it("consulta la lectura sin generarla", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ text: "tu carta dice..." }));
     vi.stubGlobal("fetch", fetchMock);
@@ -215,11 +239,22 @@ describe("/api/charts/[id]/interpretation/estado", () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ completa: false, hechas: 1, total: 8 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await estadoGet(new Request("http://x?lang=en"), params);
+    const res = await estadoGet(new Request("http://x?lang=en&tier=largo"), params);
 
     expect(res.status).toBe(200);
     const [url] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/interpretation/estado/?lang=en");
+  });
+
+  it("manda el tier al backend, no sólo el idioma", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ completa: false, hechas: 0, total: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await estadoGet(new Request("http://x?lang=es&tier=corto"), params);
+
+    expect(res.status).toBe(200);
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("tier=corto");
   });
 });
 

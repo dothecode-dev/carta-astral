@@ -7,50 +7,94 @@ import { SolarSystem } from "@/components/SolarSystem";
 import type { Dict, Locale } from "@/lib/i18n";
 import { track } from "@/lib/telemetry";
 
-// El botón que gasta el crédito, y la espera mientras se escribe el informe.
+// Los dos botones de la carta, y la espera mientras se escribe el producto
+// elegido.
 //
-// El informe tiene ocho secciones (RF1) y el backend las escribe en un hilo
-// aparte (RF10): el POST devuelve 202 al instante y esto sondea
-// `interpretation/estado` hasta que están todas. Tarda unos seis minutos:
-// ocho llamadas secuenciales de hasta 1000 palabras cada una
-// (`informe_service.py`, docstring de `generar_informe`).
+// Hay dos productos por carta (RF1, RF2): una lectura breve gratis (tier
+// "corto", la paga un crédito del lote free) y un informe completo de ocho
+// secciones a US$ 29 (tier "largo", lo paga un crédito pago). Conviven: leer
+// la breve no consume ni bloquea el completo, y al revés.
+//
+// El backend las escribe en un hilo aparte (RF10): el POST devuelve 202 al
+// instante y esto sondea `interpretation/estado` hasta que están todas. El
+// completo tarda unos seis minutos (ocho llamadas secuenciales de hasta 1000
+// palabras cada una, `informe_service.py`); la breve, una sola sección.
 
 /** Cada cuánto se pregunta cuánto avanzó el informe mientras se escribe. */
 export const POLL_MS = 5000;
 /**
  * Tope de esa espera, en consultas: once minutos.
  *
- * El informe tarda ~6; el tope viejo (24 intentos × 5 s = 2 minutos) se
- * quedaba corto y la web se rendía en medio de una generación normal.
+ * El informe completo tarda ~6; el tope viejo (24 intentos × 5 s = 2 minutos)
+ * se quedaba corto y la web se rendía en medio de una generación normal.
  */
 export const POLL_TRIES = 132;
 
 const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
+type Tier = "corto" | "largo";
+
 type Estado = { completa: boolean; hechas: number; total: number };
 
 /**
- * Si ya se reintentó el POST de recuperación (HALLAZGO 3) para esta carta e
- * idioma en esta pestaña. `sessionStorage` —no una variable en memoria— para
- * que sobreviva a la recarga completa que da lugar al reintento: es
- * exactamente el caso que hay que frenar en la SEGUNDA recarga en adelante.
+ * Qué tier se pidió para esta carta e idioma en esta pestaña, si alguno.
+ *
+ * `sessionStorage` —no una variable en memoria— para que sobreviva a la
+ * recarga completa que da lugar al reintento (HALLAZGO 3): es exactamente el
+ * caso que hay que cubrir. Guardar el TIER acá, no sólo un booleano, es lo
+ * que evita el bug caro (RF24): sin esto, una recarga a mitad de la lectura
+ * breve gratis no tendría forma de saber que lo que hay que retomar es la
+ * breve, y adivinar "largo" cobraría el informe de US$ 29 que nadie pidió.
+ *
+ * Se escribe al hacer el click que arranca la generación (`interpret`), no
+ * al reintentar: para cuando el efecto de recuperación la necesita, ya tiene
+ * que estar.
  *
  * Envuelto en try/catch porque un navegador en modo privado puede bloquear
- * `sessionStorage`: en ese caso, el peor resultado es reintentar el POST en
- * cada recarga, que sigue siendo seguro (no cobra dos veces), sólo menos
- * prolijo con la cuota diaria de la ruta.
+ * `sessionStorage`: en ese caso, el peor resultado es que una recarga a
+ * mitad de una generación no se recupere sola y vuelva a mostrar los
+ * botones — no que cobre el producto equivocado.
  */
-function yaReintentoEstaSesion(chartId: string, locale: string): boolean {
+function tierPedido(chartId: string, locale: string): Tier | null {
   try {
-    return window.sessionStorage.getItem(`astra:retomo:${chartId}:${locale}`) === "1";
+    const v = window.sessionStorage.getItem(`interpret:${chartId}:${locale}`);
+    return v === "corto" || v === "largo" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function recordarTier(chartId: string, locale: string, tier: Tier): void {
+  try {
+    window.sessionStorage.setItem(`interpret:${chartId}:${locale}`, tier);
+  } catch {
+    // ver comentario de tierPedido
+  }
+}
+
+/**
+ * Si ya se reintentó el POST de recuperación (HALLAZGO 3) para este tier de
+ * esta carta e idioma en esta pestaña. Sin este freno, cada recarga mientras
+ * el proceso murió dispararía un POST nuevo: inofensivo para el crédito
+ * (`iniciar_generacion` no cobra dos veces), pero gasta sin necesidad la
+ * cuota diaria de la ruta.
+ *
+ * Con el tier en la clave: la breve y el completo pueden generarse en la
+ * misma pestaña (uno detrás del otro), y sin distinguirlos acá, reintentar
+ * la breve marcaría también "ya reintentado" al completo — si el proceso del
+ * completo muriera después, esta red de seguridad no se activaría para él.
+ */
+function yaReintentoEstaSesion(chartId: string, locale: string, tier: Tier): boolean {
+  try {
+    return window.sessionStorage.getItem(`astra:retomo:${chartId}:${locale}:${tier}`) === "1";
   } catch {
     return false;
   }
 }
 
-function marcarReintentado(chartId: string, locale: string): void {
+function marcarReintentado(chartId: string, locale: string, tier: Tier): void {
   try {
-    window.sessionStorage.setItem(`astra:retomo:${chartId}:${locale}`, "1");
+    window.sessionStorage.setItem(`astra:retomo:${chartId}:${locale}:${tier}`, "1");
   } catch {
     // ver comentario de yaReintentoEstaSesion
   }
@@ -59,13 +103,30 @@ function marcarReintentado(chartId: string, locale: string): void {
 export function ChartActions({
   locale,
   chartId,
-  langs,
+  interpretations,
+  freeCredits,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ver el doc del tipo, más abajo
+  paidCredits,
   timeKnown,
   dict,
 }: {
   locale: Locale;
   chartId: string;
-  langs: string[];
+  /** Por idioma, qué tiers están completos. Sólo trae los idiomas con al
+   *  menos uno listo — un idioma sin nada no aparece con lista vacía. */
+  interpretations: Record<string, Tier[]>;
+  /** Créditos del lote gratis: pagan la lectura breve. */
+  freeCredits: number;
+  /**
+   * Créditos pagos: pagan el informe completo.
+   *
+   * El botón del completo no lo usa para habilitarse ni deshabilitarse — a
+   * diferencia de la breve, siempre queda clickeable, y si no hay crédito
+   * pago el 402 (`code: "sin_paid"`) es quien lo dice. Se recibe igual
+   * porque es parte del contrato de créditos de la cuenta (`GET
+   * /api/account/`) y una superficie futura (Task 16) lo va a mostrar acá.
+   */
+  paidCredits: number;
   /** RF12: si la carta no tiene hora, el informe sale sin la sección de casas. */
   timeKnown: boolean;
   dict: Dict;
@@ -79,48 +140,47 @@ export function ChartActions({
   const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const yaLeida = langs.includes(locale);
-  // Si ya existe en otro idioma, traducirla no cuesta: el backend no vuelve a
-  // cobrar. Decir "usa 1 crédito" ahí sería mentir, y es lo que hace la app.
-  const enOtroIdioma = !yaLeida && langs.length > 0;
+  const tiersAqui = interpretations[locale] ?? [];
+  const tieneBreve = tiersAqui.includes("corto");
+  const tieneCompleto = tiersAqui.includes("largo");
 
   /**
-   * Sondea cuántas de las ocho secciones ya están escritas, hasta que el
-   * informe está completo.
-   *
-   * El POST sólo arranca la generación (RF10): responde 202 y el texto real
-   * tarda varios minutos en un hilo de fondo. Sin este sondeo la web no
-   * tendría forma de saber cuándo terminó, ni nada real que mostrar mientras
-   * tanto.
+   * Sondea cuántas de las secciones de `tier` ya están escritas, hasta que
+   * ese producto está completo. La breve tiene una sola sección (`total`
+   * pasa a ser 1, no 8); el completo, ocho.
    *
    * `fetch` rechaza ante un corte de red — no resuelve con `ok: false` — y en
    * una espera de hasta once minutos un wifi que parpadea o una laptop que
    * suspende y despierta son cosa de todos los días. Sin el `try/catch`, esa
    * excepción aborta el bucle entero y deja el sistema solar girando para
    * siempre: acá se cuenta como un intento fallido más, no como el fin de la
-   * espera — la generación sigue corriendo en el servidor aunque esta
-   * consulta puntual no haya llegado.
+   * espera.
    */
-  const waitForReading = useCallback(async (): Promise<boolean> => {
-    for (let intento = 0; intento < POLL_TRIES; intento++) {
-      await sleep(POLL_MS);
-      try {
-        const res = await fetch(`/api/charts/${chartId}/interpretation/estado?lang=${locale}`);
-        if (!res.ok) continue;
-        const estado = (await res.json()) as Estado;
-        setProgreso({ hechas: estado.hechas, total: estado.total });
-        if (estado.completa) return true;
-      } catch (err) {
-        console.error(`sondeo del informe ${chartId}: falló la consulta`, err);
+  const waitForReading = useCallback(
+    async (tier: Tier): Promise<boolean> => {
+      for (let intento = 0; intento < POLL_TRIES; intento++) {
+        await sleep(POLL_MS);
+        try {
+          const res = await fetch(
+            `/api/charts/${chartId}/interpretation/estado?lang=${locale}&tier=${tier}`,
+          );
+          if (!res.ok) continue;
+          const estado = (await res.json()) as Estado;
+          setProgreso({ hechas: estado.hechas, total: estado.total });
+          if (estado.completa) return true;
+        } catch (err) {
+          console.error(`sondeo del informe ${chartId}: falló la consulta`, err);
+        }
       }
-    }
-    return false;
-  }, [chartId, locale]);
+      return false;
+    },
+    [chartId, locale],
+  );
 
-  /** Espera el resto del informe y, si termina, trae la lectura a la página. */
+  /** Espera el resto de `tier` y, si termina, trae la lectura a la página. */
   const seguirGenerando = useCallback(
-    async (contarEvento: boolean) => {
-      if (!(await waitForReading())) {
+    async (contarEvento: boolean, tier: Tier) => {
+      if (!(await waitForReading(tier))) {
         setBusy(false);
         setError(dict.chart.failed);
         return;
@@ -129,7 +189,7 @@ export function ChartActions({
       // Sin este flag, retomar una generación ajena tras recargar la pestaña
       // (ver el efecto de más abajo) contaría el mismo evento dos veces: el
       // costo por lectura se mide una vez por generación, no por pestaña.
-      if (contarEvento) track("interpretacion_generada", { lang: locale });
+      if (contarEvento) track("interpretacion_generada", { lang: locale, tier });
 
       // La lectura queda debajo de la carta, en esta misma página. La
       // animación sigue hasta que el refresh trae el texto, no hasta que el
@@ -140,86 +200,79 @@ export function ChartActions({
     [dict.chart.failed, locale, router, startTransition, waitForReading],
   );
 
-  // Si la pestaña se recarga a mitad de un informe, este componente vuelve a
-  // montar de cero y no tiene memoria de que ya lo pidió: sin este efecto
-  // mostraría el botón "Leer mi carta" como si nada estuviera pasando,
-  // aunque el backend siga escribiendo. Volver a apretarlo sería inofensivo
-  // (`iniciar_generacion` no cobra dos veces y el segundo hilo se retira si
-  // el lock de la carta ya está tomado) pero la experiencia es "se perdió".
+  // Si la pestaña se recarga a mitad de una generación, este componente
+  // vuelve a montar de cero y no tiene memoria de que ya la pidió. La única
+  // fuente de esa memoria es `sessionStorage` (`tierPedido`): sin un tier ahí,
+  // no hay nada que recuperar y se muestran los botones normales — es la
+  // lectura segura, porque volver a clickear es inofensivo (`iniciar_generacion`
+  // no cobra dos veces y el segundo hilo se retira si el lock ya está tomado).
   //
-  // `hechas > 0` sin `completa` es la única prueba inequívoca de que hay una
-  // generación en curso. `hechas === 0` es ambiguo —una fila recién creada
-  // pega la misma respuesta que "nunca se pidió nada"— y se trata como
-  // "nada en curso": es la lectura segura, porque el peor caso es el mismo
-  // reintento inofensivo de arriba.
+  // Que `sessionStorage` tenga un tier para esta carta+idioma, y que la carta
+  // (`interpretations`, la fuente de verdad del servidor) todavía no lo tenga
+  // completo, ES la prueba de que hay algo para recuperar: a diferencia del
+  // diseño de un solo producto, acá no hace falta mirar `hechas` para
+  // desambiguar, porque la breve tiene una sola sección y jamás pasa por un
+  // "hechas > 0 sin completar" observable — sondearla así la dejaría sin red
+  // de seguridad ante HALLAZGO 3 (el proceso que muere a mitad de camino).
   useEffect(() => {
-    if (yaLeida) return;
+    if (tieneBreve && tieneCompleto) return;
+    const tier = tierPedido(chartId, locale);
+    if (!tier) return;
+    if ((tier === "corto" && tieneBreve) || (tier === "largo" && tieneCompleto)) return;
+
     let cancelado = false;
 
     (async () => {
-      try {
-        const res = await fetch(`/api/charts/${chartId}/interpretation/estado?lang=${locale}`);
-        if (!res.ok || cancelado) return;
-        const estado = (await res.json()) as Estado;
-        if (cancelado || estado.completa || estado.hechas <= 0) return;
+      setBusy(true);
 
-        setProgreso({ hechas: estado.hechas, total: estado.total });
-        setBusy(true);
-
-        // HALLAZGO 3: si el proceso que generaba murió (deploy, worker
-        // reciclado, fallo) no queda nada corriendo del lado del servidor, y
-        // sondear sin volver a pedirlo deja el progreso congelado hasta el
-        // tope de `POLL_TRIES`. `iniciar_generacion` no cobra dos veces
-        // cuando la fila ya existe (backend/api/interpretation_service.py):
-        // este POST es seguro. Una sola vez por pestaña alcanza — si el
-        // proceso sigue vivo, el backend lo ignora porque el lock de la carta
-        // ya está tomado; repetirlo en cada recarga sólo gastaría la cuota
-        // diaria de la ruta sin necesidad.
-        //
-        // No puede chocar con el 409 del HALLAZGO 2 (esta carta en OTRO
-        // idioma en curso): ese código sólo lo lanza `iniciar_generacion` al
-        // CREAR una fila nueva, y acá la fila de este mismo idioma ya existe
-        // (por eso `hechas > 0`), así que el backend la devuelve tal cual sin
-        // volver a cobrar ni a chequear siblings.
-        if (!cancelado && !yaReintentoEstaSesion(chartId, locale)) {
-          marcarReintentado(chartId, locale);
-          try {
-            await fetch(`/api/charts/${chartId}/interpretation`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ lang: locale }),
-            });
-          } catch (err) {
-            // Un corte de red acá no es el fin: si el proceso seguía vivo, el
-            // sondeo de abajo lo encuentra igual.
-            console.error(`reintento del informe ${chartId} falló`, err);
-          }
+      // HALLAZGO 3: si el proceso que generaba murió (deploy, worker
+      // reciclado, fallo) no queda nada corriendo del lado del servidor, y
+      // sondear sin volver a pedirlo deja el progreso congelado hasta el
+      // tope de `POLL_TRIES`. `iniciar_generacion` no cobra dos veces cuando
+      // la fila ya existe (backend/api/interpretation_service.py): este POST
+      // es seguro. El tier es el que quedó guardado en `sessionStorage` al
+      // hacer click, nunca uno adivinado (RF24) — es la clave de este
+      // efecto: sin esto, retomar la breve gratis podría reintentar el
+      // completo pago.
+      if (!yaReintentoEstaSesion(chartId, locale, tier)) {
+        marcarReintentado(chartId, locale, tier);
+        try {
+          await fetch(`/api/charts/${chartId}/interpretation`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lang: locale, tier }),
+          });
+        } catch (err) {
+          // Un corte de red acá no es el fin: el sondeo de abajo lo
+          // encuentra igual si el proceso seguía vivo.
+          console.error(`reintento del informe ${chartId} falló`, err);
         }
-
-        if (!cancelado) await seguirGenerando(false);
-      } catch (err) {
-        // Si esta consulta falla, se muestra el botón: reintentar
-        // clickeando es inofensivo.
-        console.error(`consulta de arranque del informe ${chartId} falló`, err);
       }
+
+      if (!cancelado) await seguirGenerando(false, tier);
     })();
 
     return () => {
       cancelado = true;
     };
-  }, [chartId, locale, yaLeida, seguirGenerando]);
+  }, [chartId, locale, tieneBreve, tieneCompleto, seguirGenerando]);
 
-  async function interpret() {
+  async function interpret(tier: Tier) {
     setProgreso(null);
     setBusy(true);
     setError(null);
+
+    // Antes del fetch: si la pestaña se cierra o recarga mientras el POST
+    // todavía está en vuelo, el efecto de recuperación de arriba tiene que
+    // encontrar el tier igual (RF24).
+    recordarTier(chartId, locale, tier);
 
     let res: Response;
     try {
       res = await fetch(`/api/charts/${chartId}/interpretation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang: locale }),
+        body: JSON.stringify({ lang: locale, tier }),
       });
     } catch (err) {
       // Mismo motivo que en `waitForReading`: un corte de red acá no es un
@@ -233,32 +286,36 @@ export function ChartActions({
 
     if (!res.ok) {
       setBusy(false);
-      // HALLAZGO 2: el backend responde 409 cuando ya hay una generación en
-      // curso para esta carta en OTRO idioma (`_sibling_en_curso` en
-      // backend/api/interpretation_service.py: pedir "es" y, a mitad de su
-      // generación, pedir "en" cae acá). No es un fallo duro — es "esperá
-      // unos segundos y reintentá" — así que no comparte mensaje con
-      // `dict.chart.failed`.
-      //
-      // Elegido: mensaje específico + dejar el botón (mismo patrón que 402 y
-      // 503, arriba). La alternativa —enganchar el sondeo de `estado` para
-      // este idioma— no sirve acá: el backend borra la fila de ESTE idioma
-      // antes de devolver el 409 (`interpretacion.delete()` en
-      // `iniciar_generacion`), así que `estado` respondería `hechas: 0` como
-      // si nunca se hubiera pedido nada, indistinguible del caso "no hay
-      // nada en curso". Sondear ahí sería fingir un progreso que no existe.
       if (res.status === 409) {
+        // HALLAZGO 2: el backend responde 409 cuando ya hay una generación en
+        // curso para esta carta en OTRO idioma (`_sibling_en_curso`). No es
+        // un fallo duro — es "esperá unos segundos y reintentá".
         setError(dict.chart.generationInProgress);
+      } else if (res.status === 402) {
+        // El 402 trae `code: "sin_free" | "sin_paid"` para distinguir
+        // quedarse sin el lote gratis de no tener el informe comprado.
+        let code: string | undefined;
+        try {
+          code = ((await res.json()) as { code?: string }).code;
+        } catch {
+          // cuerpo no parseable: se cae al mensaje genérico de abajo.
+        }
+        setError(
+          code === "sin_free"
+            ? dict.chart.sinFree
+            : code === "sin_paid"
+              ? dict.chart.sinPaid
+              : dict.chart.noCredits,
+        );
       } else {
-        setError(res.status === 402 ? dict.chart.noCredits : dict.chart.failed);
+        setError(dict.chart.failed);
       }
       return;
     }
 
     // El POST arrancó el hilo de fondo y respondió 202: la lectura todavía no
-    // existe. Si el sondeo se agota, se avisa y se deja reintentar (RF7): un
-    // botón que desaparece para siempre sería peor que un informe tardío.
-    await seguirGenerando(true);
+    // existe. Si el sondeo se agota, se avisa y se deja reintentar (RF7).
+    await seguirGenerando(true, tier);
   }
 
   if (busy || refrescando) {
@@ -283,16 +340,40 @@ export function ChartActions({
     );
   }
 
-  if (yaLeida) return null;
+  if (tieneBreve && tieneCompleto) return null;
 
   return (
     <div className="chartActions">
-      <button type="button" className="btn btnPrimary" onClick={interpret}>
-        {dict.chart.interpret}
-      </button>
-      <p className="fieldNote">
-        {enOtroIdioma ? dict.chart.interpretFreeLang : dict.chart.interpretCost}
-      </p>
+      <div className="chartActionsRow">
+        {!tieneBreve && (
+          <div className="chartActionCol">
+            <button
+              type="button"
+              className="btn btnGhost"
+              disabled={freeCredits === 0 || busy}
+              onClick={() => interpret("corto")}
+            >
+              {dict.chart.interpretBreve}
+            </button>
+            <p className="fieldNote">
+              {dict.chart.interpretBreveNota.replace("{n}", String(freeCredits))}
+            </p>
+          </div>
+        )}
+        {!tieneCompleto && (
+          <div className="chartActionCol">
+            <button
+              type="button"
+              className="btn btnPrimary"
+              disabled={busy}
+              onClick={() => interpret("largo")}
+            >
+              {dict.chart.interpretCompleto}
+            </button>
+            <p className="fieldNote">{dict.chart.interpretCompletoNota}</p>
+          </div>
+        )}
+      </div>
       {!timeKnown && <p className="fieldNote">{dict.chart.noTimeWarning}</p>}
       {error && (
         <p className="formError" role="alert">

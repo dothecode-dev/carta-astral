@@ -37,7 +37,7 @@ export async function POST(
 ) {
   const { id } = await params;
 
-  let body: { lang?: unknown };
+  let body: { lang?: unknown; tier?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -52,7 +52,7 @@ export async function POST(
     // resultado. `callApiRaw` deja pasar el status real.
     const res = await callApiRaw(`/api/charts/${id}/interpretation/`, {
       method: "POST",
-      body: JSON.stringify({ lang: body.lang }),
+      body: JSON.stringify({ lang: body.lang, tier: body.tier }),
     });
     return new NextResponse(null, { status: res.status });
   } catch (error) {
@@ -60,8 +60,19 @@ export async function POST(
       // Sin esto, un fallo de generación llega al log como un 502 sin motivo.
       console.error(`interpretación ${id}: backend ${error.status} ${error.body}`);
       if (error.status === 401) return NextResponse.json({ error: "sin sesión" }, { status: 401 });
-      // El backend responde 402 cuando no alcanzan los créditos.
-      if (error.status === 402) return NextResponse.json({ error: "sin créditos" }, { status: 402 });
+      // El backend responde 402 cuando no alcanzan los créditos, con
+      // `code: "sin_free" | "sin_paid"` para distinguir cuál lote se quedó
+      // sin crédito. Se reenvía tal cual: es la única forma en que el botón
+      // sepa cuál de los dos mensajes mostrar.
+      if (error.status === 402) {
+        let code: string | undefined;
+        try {
+          code = (JSON.parse(error.body) as { code?: string }).code;
+        } catch {
+          // el cuerpo del backend no era JSON parseable: se sigue sin `code`.
+        }
+        return NextResponse.json({ error: "sin créditos", code }, { status: 402 });
+      }
       if (error.status === 404) return NextResponse.json({ error: "no existe" }, { status: 404 });
       // Otra petición ya está escribiendo esta misma lectura: no es un fallo.
       if (error.status === 409) {

@@ -15,17 +15,38 @@ vi.mock("next/navigation", () => ({ useRouter: () => routerMock }));
 const dict = getDict("es");
 const CHART = "89151d40-e263-4d34-81e0-2fb434f70243";
 
+type Tier = "corto" | "largo";
+
 function renderActions({
-  langs = [],
+  interpretations = {},
   timeKnown = true,
-}: { langs?: string[]; timeKnown?: boolean } = {}) {
+  freeCredits = 3,
+  paidCredits = 1,
+}: {
+  interpretations?: Record<string, Tier[]>;
+  timeKnown?: boolean;
+  freeCredits?: number;
+  paidCredits?: number;
+} = {}) {
   return render(
-    <ChartActions locale="es" chartId={CHART} timeKnown={timeKnown} langs={langs} dict={dict} />,
+    <ChartActions
+      locale="es"
+      chartId={CHART}
+      timeKnown={timeKnown}
+      interpretations={interpretations}
+      freeCredits={freeCredits}
+      paidCredits={paidCredits}
+      dict={dict}
+    />,
   );
 }
 
-/** Respuesta mínima de fetch al POST: sólo se usan `ok` y `status`. */
-const reply = (status: number) => ({ ok: status >= 200 && status < 300, status });
+/** Respuesta mínima de fetch al POST: `ok`, `status` y, si hace falta, `json`. */
+const reply = (status: number, body: unknown = {}) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => body,
+});
 
 /** Respuesta del sondeo de `interpretation/estado`. */
 const estado = (completa: boolean, hechas: number, total: number) => ({
@@ -34,20 +55,12 @@ const estado = (completa: boolean, hechas: number, total: number) => ({
   json: async () => ({ completa, hechas, total }),
 });
 
-/**
- * El efecto de montaje (retomar un informe en curso al recargar la pestaña)
- * consulta `estado` apenas se renderiza, antes de cualquier click: los tests
- * de la interacción con el botón encolan esta respuesta primero para que esa
- * consulta no se coma el valor que el test arma para el POST o el sondeo.
- */
-const sinGeneracionEnCurso = estado(false, 0, 8);
-
 beforeEach(() => {
   vi.useFakeTimers();
   refresh.mockClear();
-  // El reintento de POST al recargar (HALLAZGO 3) se recuerda en
-  // sessionStorage por pestaña: sin limpiarlo, un test contamina al
-  // siguiente porque todos usan el mismo CHART.
+  // El reintento de POST al recargar (HALLAZGO 3) y el tier pedido se
+  // recuerdan en sessionStorage por pestaña: sin limpiarlo, un test
+  // contamina al siguiente porque todos usan el mismo CHART.
   window.sessionStorage.clear();
 });
 
@@ -63,22 +76,92 @@ async function correr(ms = 0) {
   });
 }
 
-async function clickAndSettle() {
-  fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+/** Busca el botón por su nombre exacto — hay dos desde que la carta ofrece
+ *  dos productos, así que no alcanza con "el botón" a secas. */
+async function clickBoton(name: string) {
+  fireEvent.click(screen.getByRole("button", { name }));
   await correr();
 }
 
 describe("ChartActions", () => {
-  it("muestra la lectura cuando el informe termina", async () => {
+  it("ofrece la lectura breve gratis y el informe completo pago", () => {
+    renderActions({ freeCredits: 2, paidCredits: 0 });
+    expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeEnabled();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeEnabled();
+  });
+
+  it("manda el tier que se apretó", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(reply(202));
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions({ freeCredits: 2, paidCredits: 1 });
+
+    await clickBoton(dict.chart.interpretCompleto);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.tier).toBe("largo");
+  });
+
+  it("sin lecturas gratis deshabilita la breve pero no el completo", () => {
+    renderActions({ freeCredits: 0, paidCredits: 1 });
+    expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeDisabled();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeEnabled();
+  });
+
+  it("con la breve ya leída sigue ofreciendo el informe completo", () => {
+    renderActions({ interpretations: { es: ["corto"] } });
+    expect(screen.queryByRole("button", { name: dict.chart.interpretBreve })).toBeNull();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeEnabled();
+  });
+
+  it("no ofrece nada si los dos productos ya están leídos en este idioma", () => {
+    const { container } = renderActions({ interpretations: { es: ["corto", "largo"] } });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("una lectura en otro idioma no oculta los botones de este", () => {
+    // A diferencia de `interpretation_langs` (deprecado), `interpretations`
+    // es por idioma: que "en" tenga los dos tiers no dice nada de "es".
+    renderActions({ interpretations: { en: ["corto", "largo"] } });
+    expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
+  });
+
+  it("el 402 distingue quedarse sin gratis de no tener el informe comprado", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_paid" })));
+    renderActions();
+
+    await clickBoton(dict.chart.interpretCompleto);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinPaid);
+  });
+
+  it("el 402 avisa cuando se acabó el lote de lecturas gratis", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_free" })));
+    renderActions();
+
+    await clickBoton(dict.chart.interpretBreve);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinFree);
+  });
+
+  it("un 402 sin code reconocido cae al mensaje genérico de créditos", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, {})));
+    renderActions();
+
+    await clickBoton(dict.chart.interpretCompleto);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.noCredits);
+  });
+
+  it("muestra la lectura cuando el informe completo termina", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(sinGeneracionEnCurso) // el efecto de montaje
       .mockResolvedValueOnce(reply(202)) // el POST arranca la generación en un hilo
       .mockResolvedValue(estado(true, 8, 8)); // el sondeo la encuentra completa
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await clickBoton(dict.chart.interpretCompleto);
     await correr(POLL_MS);
 
     expect(refresh).toHaveBeenCalledOnce();
@@ -91,13 +174,12 @@ describe("ChartActions", () => {
     // estado de espera.
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(true, 8, 8));
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await clickBoton(dict.chart.interpretCompleto);
     await correr(POLL_MS);
 
     expect(screen.queryByText(dict.chart.waitTitle)).not.toBeInTheDocument();
@@ -107,14 +189,12 @@ describe("ChartActions", () => {
   it("mientras genera, muestra la espera", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(false, 0, 8));
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
-    await correr();
+    await clickBoton(dict.chart.interpretCompleto);
 
     expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
   });
@@ -124,13 +204,12 @@ describe("ChartActions", () => {
     // curso. Con 3 hechas, la sección en curso es la 4 (min(hechas+1, total)).
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(false, 3, 8));
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await clickBoton(dict.chart.interpretCompleto);
     await correr(POLL_MS);
 
     expect(screen.getByText(/4 de 8/)).toBeInTheDocument();
@@ -142,13 +221,12 @@ describe("ChartActions", () => {
     // ya está escribiendo la primera.
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(false, 0, 8));
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await clickBoton(dict.chart.interpretCompleto);
     await correr(POLL_MS);
 
     expect(screen.getByText(/1 de 8/)).toBeInTheDocument();
@@ -160,21 +238,11 @@ describe("ChartActions", () => {
     expect(POLL_TRIES * POLL_MS).toBeGreaterThanOrEqual(10 * 60 * 1000);
   });
 
-  it("avisa que faltan créditos ante un 402", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402)));
-    renderActions();
-
-    await clickAndSettle();
-
-    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.noCredits);
-    expect(refresh).not.toHaveBeenCalled();
-  });
-
   it("avisa del fallo ante un error del servidor", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(503)));
     renderActions();
 
-    await clickAndSettle();
+    await clickBoton(dict.chart.interpretCompleto);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
   });
@@ -187,41 +255,30 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(409)));
     renderActions();
 
-    await clickAndSettle();
+    await clickBoton(dict.chart.interpretCompleto);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.generationInProgress);
     // No es un callejón sin salida: el botón sigue ahí para reintentar.
-    expect(screen.getByRole("button", { name: dict.chart.interpret })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
 
   it("se rinde si el informe no aparece completo dentro del tope, y deja reintentar", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(sinGeneracionEnCurso)
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(false, 3, 8));
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await clickBoton(dict.chart.interpretCompleto);
     await correr(POLL_MS * POLL_TRIES);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
     expect(refresh).not.toHaveBeenCalled();
     // El botón vuelve: no es un callejón sin salida.
-    expect(screen.getByRole("button", { name: dict.chart.interpret })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
   }, 20000);
-
-  it("no ofrece el botón si la carta ya tiene lectura en este idioma", () => {
-    const { container } = renderActions({ langs: ["es"] });
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it("aclara que traducir no cuesta cuando ya existe en otro idioma", () => {
-    renderActions({ langs: ["en"] });
-    expect(screen.getByText(dict.chart.interpretFreeLang)).toBeInTheDocument();
-  });
 
   it("avisa que faltará una sección si la carta no tiene hora, antes de cobrar", () => {
     renderActions({ timeKnown: false });
@@ -241,14 +298,13 @@ describe("ChartActions", () => {
   it("un corte de red durante el sondeo no aborta la espera: sigue intentando", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(sinGeneracionEnCurso) // el efecto de montaje
       .mockResolvedValueOnce(reply(202)) // el POST arranca la generación
       .mockRejectedValueOnce(new TypeError("Failed to fetch")) // el wifi parpadea
       .mockResolvedValue(estado(true, 8, 8)); // vuelve la red y el informe ya está
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    fireEvent.click(screen.getByRole("button", { name: dict.chart.interpret }));
+    await clickBoton(dict.chart.interpretCompleto);
     await correr(POLL_MS * 2);
 
     expect(refresh).toHaveBeenCalledOnce();
@@ -259,36 +315,51 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     renderActions();
 
-    await clickAndSettle();
+    await clickBoton(dict.chart.interpretCompleto);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
     expect(refresh).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: dict.chart.interpret })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
   });
 
-  // Recargar la pestaña a mitad de un informe no debe mostrar el botón como
-  // si nada estuviera pasando: el componente vuelve a montar sin memoria de
-  // que ya lo pidió, y sólo el backend sabe que sigue escribiendo.
-  it("si la pestaña se recarga con un informe en curso, retoma el sondeo en vez del botón", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(estado(false, 3, 8)));
+  it("si no hay nada que recuperar en esta pestaña, muestra los botones sin llamar al backend", () => {
+    // Sin una entrada en sessionStorage para esta carta+idioma, el efecto de
+    // montaje no tiene forma segura de saber qué tier sondear (el GET de
+    // estado ahora lo exige) — así que no llama a nada y deja los botones.
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
     renderActions();
 
-    await correr(); // el efecto de montaje consulta el estado
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
+  it("si la pestaña se recarga con un informe completo en curso, retoma el sondeo", async () => {
+    sessionStorage.setItem(`interpret:${CHART}:es`, "largo");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply(202)) // el reintento del POST
+      .mockResolvedValue(estado(false, 3, 8)); // los sondeos
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions();
+
+    await correr(); // el efecto de montaje dispara el reintento
     expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
+
+    await correr(POLL_MS); // el primer sondeo trae el progreso real
     expect(screen.getByText(/4 de 8/)).toBeInTheDocument();
   });
 
   // HALLAZGO 3: si el proceso que generaba murió (deploy, worker reciclado,
-  // fallo) no hay nada corriendo del lado del servidor tras la recarga —
-  // sondear sin volver a pedirlo deja el progreso congelado hasta el tope.
+  // fallo) no hay nada corriendo del lado del servidor tras la recarga.
   // `iniciar_generacion` no cobra dos veces cuando la fila ya existe
   // (backend/api/interpretation_service.py), así que reintentar el POST es
   // seguro.
   it("al recargar con un informe en curso, vuelve a pedir la generación por si el proceso murió", async () => {
+    sessionStorage.setItem(`interpret:${CHART}:es`, "largo");
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(estado(false, 3, 8)) // el efecto de montaje ve progreso a medias
       .mockResolvedValueOnce(reply(202)) // el reintento del POST
       .mockResolvedValue(estado(false, 3, 8)); // los sondeos siguientes
     vi.stubGlobal("fetch", fetchMock);
@@ -296,7 +367,7 @@ describe("ChartActions", () => {
 
     await correr();
 
-    const [postUrl, postInit] = fetchMock.mock.calls[1];
+    const [postUrl, postInit] = fetchMock.mock.calls[0];
     expect(String(postUrl)).toContain(`/api/charts/${CHART}/interpretation`);
     expect(postInit).toMatchObject({ method: "POST" });
   });
@@ -306,9 +377,9 @@ describe("ChartActions", () => {
     // dispararía un POST por recarga: inofensivo para el crédito, pero gasta
     // sin necesidad la cuota diaria de la ruta (`INTERPRETATION_RATE`) y abre
     // hilos de más en el backend.
+    sessionStorage.setItem(`interpret:${CHART}:es`, "largo");
     const primeraTanda = vi
       .fn()
-      .mockResolvedValueOnce(estado(false, 3, 8))
       .mockResolvedValueOnce(reply(202))
       .mockResolvedValue(estado(false, 3, 8));
     vi.stubGlobal("fetch", primeraTanda);
@@ -328,12 +399,67 @@ describe("ChartActions", () => {
     expect(posts).toHaveLength(0);
   });
 
-  it("si al montar no hay ningún informe en curso, muestra el botón normal", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(estado(false, 0, 8)));
+  // RF24, el hallazgo más caro de esta tarea: el re-post de recuperación
+  // tiene que mandar el MISMO tier que se había pedido. Si esto defaulteara a
+  // "largo" (o a cualquier valor fijo), recargar la pestaña a mitad de una
+  // lectura breve gratis dispararía y cobraría el informe completo de US$ 29.
+  it("al recargar a mitad de una breve reintenta la breve, no el informe pago", async () => {
+    sessionStorage.setItem(`interpret:${CHART}:es`, "corto");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply(202)) // el reintento del POST
+      .mockResolvedValue(estado(false, 0, 1)); // la breve es una sola sección
+    vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
+    await correr(POLL_MS);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.tier).toBe("corto");
+  });
+
+  it("el reintento de un tier no apaga la red de seguridad del otro en la misma pestaña", async () => {
+    // El flag de "ya reintenté" está separado por tier a propósito: si no lo
+    // estuviera, reintentar la breve marcaría también al completo, y si el
+    // proceso del completo muriera después no habría reintento para él.
+    // Se simula con dos montajes reales (no escribiendo la clave a mano) para
+    // no acoplar el test al formato exacto de la clave.
+    sessionStorage.setItem(`interpret:${CHART}:es`, "corto");
+    const primeraTanda = vi
+      .fn()
+      .mockResolvedValueOnce(reply(202)) // reintento de la breve
+      .mockResolvedValue(estado(false, 0, 1));
+    vi.stubGlobal("fetch", primeraTanda);
+    const { unmount } = renderActions(); // interpretations={}: la breve no está completa
+    await correr();
+    unmount();
+
+    // La breve ya quedó lista; ahora se pidió el completo y la pestaña se
+    // recarga a mitad de esa segunda generación.
+    sessionStorage.setItem(`interpret:${CHART}:es`, "largo");
+    const segundaTanda = vi.fn().mockResolvedValue(estado(false, 3, 8));
+    vi.stubGlobal("fetch", segundaTanda);
+    renderActions({ interpretations: { es: ["corto"] } });
     await correr();
 
-    expect(screen.getByRole("button", { name: dict.chart.interpret })).toBeInTheDocument();
+    const posts = segundaTanda.mock.calls.filter((call) => {
+      const init = call[1] as RequestInit | undefined;
+      return init?.method === "POST";
+    });
+    expect(posts).toHaveLength(1);
+  });
+
+  it("no recupera un tier que la carta ya tiene completo", () => {
+    // Si `interpretations` ya trae "corto" para este idioma, no hay nada que
+    // recuperar aunque sessionStorage todavía diga "corto": la generación ya
+    // terminó (probablemente la vio otra pestaña) y sondearla de nuevo sería
+    // trabajo de más, no un bug de plata, pero sigue siendo ruido a evitar.
+    sessionStorage.setItem(`interpret:${CHART}:es`, "corto");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ interpretations: { es: ["corto"] } });
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

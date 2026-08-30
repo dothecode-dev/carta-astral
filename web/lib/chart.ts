@@ -10,6 +10,10 @@ import type { SampleChart } from "@/content/sample-chart";
 export type ApiChart = {
   id: string;
   interpretation_langs: string[];
+  /** Por idioma, qué tiers están completos. Sólo trae los idiomas con al
+   *  menos uno listo: uno sin nada no aparece con lista vacía, no aparece —
+   *  leerlo con `interpretations[lang] ?? []`. */
+  interpretations: Record<string, ("corto" | "largo")[]>;
   birth: {
     name: string | null;
     date: string;

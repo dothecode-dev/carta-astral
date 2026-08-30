@@ -56,14 +56,27 @@ export default async function ChartPage({
     throw error;
   }
 
-  // La lectura ya escrita, si la hay. El GET no genera ni cobra: cuando todavía
-  // no existe devuelve 404 y la página muestra el botón.
+  // Créditos del lote gratis (pagan la breve) y del pago (pagan el completo),
+  // por separado: los botones de abajo los necesitan para saber qué ofrecer.
+  let account: { free_credits: number; paid_credits: number };
+  try {
+    account = await callApi<{ free_credits: number; paid_credits: number }>(`/api/account/`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) redirect(`/${locale}/entrar`);
+    throw error;
+  }
+
+  // La lectura ya escrita en este idioma, si la hay: el completo si está, si
+  // no la breve. El GET no genera ni cobra: cuando ninguna existe devuelve
+  // 404 y la página muestra los botones.
+  const tiersAqui = chart.interpretations[locale] ?? [];
   let reading: { text: string; disclaimer: string } | null = null;
-  if (chart.interpretation_langs.includes(locale)) {
+  if (tiersAqui.length > 0) {
+    const tier = tiersAqui.includes("largo") ? "largo" : "corto";
     try {
-      reading = await callApi(`/api/charts/${id}/interpretation/?lang=${locale}`);
+      reading = await callApi(`/api/charts/${id}/interpretation/?lang=${locale}&tier=${tier}`);
     } catch {
-      // Si falla, la carta se muestra igual y el botón vuelve a estar.
+      // Si falla, la carta se muestra igual y los botones vuelven a estar.
     }
   }
 
@@ -186,7 +199,9 @@ export default async function ChartPage({
         <ChartActions
           locale={locale}
           chartId={chart.id}
-          langs={chart.interpretation_langs}
+          interpretations={chart.interpretations}
+          freeCredits={account.free_credits}
+          paidCredits={account.paid_credits}
           timeKnown={chart.birth.time_known}
           dict={dict}
         />

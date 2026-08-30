@@ -627,6 +627,22 @@ body {
   padding-top: clamp(1.5rem, 4vw, 2rem);
 }
 
+/* Los dos productos de la carta, uno al lado del otro: ninguno es un paso
+   del otro, son dos compras independientes. */
+.chartActionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.chartActionCol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
 /* Llevarse la carta. En fila, porque son hermanos: ninguno es la acción
    principal de la página —esa es leer la carta— y ponerlos en columna debajo del
    botón de lectura los hacía parecer pasos de un mismo trámite. */

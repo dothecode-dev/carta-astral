@@ -221,11 +221,21 @@ export type Dict = {
     noWheel: string;
     noWheelBody: string;
     incomplete: string;
-    interpret: string;
-    interpretCost: string;
+    /** Botón de la lectura breve gratis (tier "corto"). */
+    interpretBreve: string;
+    /** Nota bajo el botón de la breve. Lleva `{n}`: cuántos créditos gratis quedan. */
+    interpretBreveNota: string;
+    /** Botón del informe completo pago (tier "largo"). */
+    interpretCompleto: string;
+    /** Nota bajo el botón del completo: precio y qué trae. */
+    interpretCompletoNota: string;
     interpreting: string;
     readAgain: string;
     noCredits: string;
+    /** 402 con code "sin_free": se acabó el lote de lecturas breves gratis. */
+    sinFree: string;
+    /** 402 con code "sin_paid": el informe completo todavía no está comprado. */
+    sinPaid: string;
     failed: string;
     /** 409: ya hay una generación en curso para esta carta en otro idioma. */
     generationInProgress: string;
@@ -234,7 +244,6 @@ export type Dict = {
     aspects: string;
     axisNames: { AC: string; MC: string };
     aspectColumns: { pair: string; aspect: string; orb: string };
-    interpretFreeLang: string;
     show: string;
     hide: string;
     waitTitle: string;
@@ -420,11 +429,15 @@ const es: Dict = {
     noWheel: "Esta carta no tiene rueda.",
     noWheelBody: "Se cargó sin hora de nacimiento, así que no hay Ascendente ni casas para orientarla. Las posiciones planetarias sí están.",
     incomplete: "Falta algún cuerpo: su efeméride no cubre esa fecha.",
-    interpret: "Leer mi carta",
-    interpretCost: "Usa 1 crédito. Después podés leerla en otros idiomas sin costo.",
+    interpretBreve: "Leer la lectura breve",
+    interpretBreveNota: "Gratis. Te quedan {n}.",
+    interpretCompleto: "Comprar el informe completo",
+    interpretCompletoNota: "US$ 29 · ocho secciones",
     interpreting: "Escribiendo tu lectura…",
     readAgain: "Ver la lectura",
     noCredits: "Te quedaste sin créditos.",
+    sinFree: "Te quedaste sin lecturas breves gratis.",
+    sinPaid: "Todavía no compraste el informe completo.",
     failed: "No pudimos generar la lectura. Probá de nuevo en un rato.",
     generationInProgress:
       "Ya hay una generación en curso para esta carta en otro idioma. Esperá unos segundos y volvé a intentar.",
@@ -433,7 +446,6 @@ const es: Dict = {
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Medio Cielo" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
-    interpretFreeLang: "Sin costo: ya la leíste en otro idioma.",
     show: "Ver",
     hide: "Ocultar",
     waitTitle: "Leyendo tu cielo",
@@ -651,11 +663,15 @@ const en: Dict = {
     noWheel: "This chart has no wheel.",
     noWheelBody: "It was entered without a birth time, so there's no Ascendant or houses to orient it. The planetary positions are there.",
     incomplete: "A body is missing: its ephemeris doesn't cover that date.",
-    interpret: "Read my chart",
-    interpretCost: "Uses 1 credit. After that you can read it in other languages at no cost.",
+    interpretBreve: "Read the short reading",
+    interpretBreveNota: "Free. You have {n} left.",
+    interpretCompleto: "Buy the full report",
+    interpretCompletoNota: "US$ 29 · eight sections",
     interpreting: "Writing your reading…",
     readAgain: "See the reading",
     noCredits: "You've run out of credits.",
+    sinFree: "You're out of free short readings.",
+    sinPaid: "You haven't bought the full report yet.",
     failed: "We couldn't generate the reading. Try again in a while.",
     generationInProgress:
       "There's already a generation in progress for this chart in another language. Wait a few seconds and try again.",
@@ -664,7 +680,6 @@ const en: Dict = {
     aspects: "Aspects",
     axisNames: { AC: "Ascendant", MC: "Midheaven" },
     aspectColumns: { pair: "Between", aspect: "Aspect", orb: "Orb" },
-    interpretFreeLang: "No cost: you already read it in another language.",
     show: "Show",
     hide: "Hide",
     waitTitle: "Reading your sky",
@@ -882,11 +897,15 @@ const pt: Dict = {
     noWheel: "Este mapa não tem roda.",
     noWheelBody: "Foi criado sem hora de nascimento, então não há Ascendente nem casas para orientá-la. As posições planetárias estão.",
     incomplete: "Falta algum corpo: a efeméride dele não cobre essa data.",
-    interpret: "Ler meu mapa",
-    interpretCost: "Usa 1 crédito. Depois você pode lê-lo em outros idiomas sem custo.",
+    interpretBreve: "Ler a leitura breve",
+    interpretBreveNota: "Grátis. Restam {n}.",
+    interpretCompleto: "Comprar o relatório completo",
+    interpretCompletoNota: "US$ 29 · oito seções",
     interpreting: "Escrevendo sua leitura…",
     readAgain: "Ver a leitura",
     noCredits: "Você ficou sem créditos.",
+    sinFree: "Você ficou sem leituras breves grátis.",
+    sinPaid: "Você ainda não comprou o relatório completo.",
     failed: "Não conseguimos gerar a leitura. Tente de novo daqui a pouco.",
     generationInProgress:
       "Já há uma geração em andamento para este mapa em outro idioma. Espere alguns segundos e tente de novo.",
@@ -895,7 +914,6 @@ const pt: Dict = {
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Meio do Céu" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
-    interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     show: "Ver",
     hide: "Ocultar",
     waitTitle: "Lendo o seu céu",

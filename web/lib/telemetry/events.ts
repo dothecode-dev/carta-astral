@@ -21,7 +21,7 @@ export type EventoProps = {
   pagina_vista: { locale: string; ruta: string };
   login: { provider: "google" | "apple" };
   carta_creada: Record<string, never>;
-  interpretacion_generada: { lang: string };
+  interpretacion_generada: { lang: string; tier: "corto" | "largo" };
   carta_descargada: { formato: "pdf" | "imagen" };
   /** Cuántos aceptan el banner. Sin esto no se sabe cuánto sesga el resto:
    *  si acepta el 40%, todos los números de arriba son el 40% de la verdad. */

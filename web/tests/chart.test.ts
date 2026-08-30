@@ -16,6 +16,7 @@ function chart(over: Partial<ApiChart["data"]> = {}): ApiChart {
   return {
     id: "x",
     interpretation_langs: [],
+    interpretations: {},
     birth: { name: null, date: "1989-07-14", time: "23:45", time_known: true, place_label: "Rosario" },
     data: {
       placements: [
