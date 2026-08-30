@@ -230,8 +230,15 @@ export type Dict = {
     interpretBreveNota: string;
     /** Botón del informe completo pago (tier "largo"). */
     interpretCompleto: string;
-    /** Nota bajo el botón del completo: precio y qué trae. */
+    /** Nota bajo el botón del completo: precio y qué trae, con hora conocida (ocho secciones). */
     interpretCompletoNota: string;
+    /**
+     * Misma nota, pero para una carta sin hora de nacimiento (RF12): el
+     * informe sale con siete secciones, sin la de casas. Sin esta variante,
+     * el botón prometía ocho secciones y `noTimeWarning`, debajo, admitía
+     * que salían siete — las dos a la vista al mismo tiempo.
+     */
+    interpretCompletoNotaSinHora: string;
     /**
      * Nota de cualquiera de los dos botones cuando ESE tier ya está completo
      * en otro idioma: traducirlo no cuesta (el backend lo resuelve sin tocar
@@ -257,8 +264,17 @@ export type Dict = {
     show: string;
     hide: string;
     waitTitle: string;
+    /** Texto de espera mientras se genera el informe completo (ocho secciones). */
     waitBody: string;
-    /** Con `{hechas}` y `{total}`: cuántas de las ocho secciones ya están. */
+    /**
+     * Texto de espera para la lectura breve: una sola llamada al modelo, no
+     * "ocho secciones". Sin esto, los primeros ~5 segundos de la ÚNICA
+     * espera de la breve (antes de que llegue el primer sondeo de progreso)
+     * mostraban `waitBody`, que describe un informe que no se está
+     * escribiendo.
+     */
+    waitBodyBreve: string;
+    /** Con `{hechas}` y `{total}`: cuántas de las secciones de este tier ya están. */
     waitProgress: string;
     /** RF12: aviso previo, antes de gastar el crédito, si la carta no tiene hora. */
     noTimeWarning: string;
@@ -448,6 +464,7 @@ const es: Dict = {
     interpretBreveNota: "Gratis. Te quedan {n}.",
     interpretCompleto: "Comprar el informe completo",
     interpretCompletoNota: "US$ 29 · ocho secciones",
+    interpretCompletoNotaSinHora: "US$ 29 · siete secciones",
     interpretFreeLang: "Sin costo: ya lo leíste en otro idioma.",
     interpreting: "Escribiendo tu lectura…",
     readAgain: "Ver la lectura",
@@ -466,6 +483,7 @@ const es: Dict = {
     hide: "Ocultar",
     waitTitle: "Leyendo tu cielo",
     waitBody: "Estamos escribiendo tu informe, en ocho secciones. Tarda unos minutos: no hace falta que te quedes en esta pantalla.",
+    waitBodyBreve: "Estamos escribiendo tu lectura breve. Tarda un momento: no hace falta que te quedes en esta pantalla.",
     waitProgress: "Vamos por la sección {hechas} de {total}.",
     noTimeWarning: "Esta carta quedó sin hora de nacimiento: el informe sale con siete secciones, sin la de casas.",
     reading: "Tu lectura",
@@ -686,6 +704,7 @@ const en: Dict = {
     interpretBreveNota: "Free. You have {n} left.",
     interpretCompleto: "Buy the full report",
     interpretCompletoNota: "US$ 29 · eight sections",
+    interpretCompletoNotaSinHora: "US$ 29 · seven sections",
     interpretFreeLang: "No cost: you already read it in another language.",
     interpreting: "Writing your reading…",
     readAgain: "See the reading",
@@ -704,6 +723,7 @@ const en: Dict = {
     hide: "Hide",
     waitTitle: "Reading your sky",
     waitBody: "We're writing your report, in eight sections. It takes a few minutes: no need to stay on this screen.",
+    waitBodyBreve: "We're writing your short reading. It takes a moment: no need to stay on this screen.",
     waitProgress: "We're on section {hechas} of {total}.",
     noTimeWarning: "This chart has no birth time: the report comes out with seven sections, without the houses one.",
     reading: "Your reading",
@@ -924,6 +944,7 @@ const pt: Dict = {
     interpretBreveNota: "Grátis. Restam {n}.",
     interpretCompleto: "Comprar o relatório completo",
     interpretCompletoNota: "US$ 29 · oito seções",
+    interpretCompletoNotaSinHora: "US$ 29 · sete seções",
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     interpreting: "Escrevendo sua leitura…",
     readAgain: "Ver a leitura",
@@ -942,6 +963,7 @@ const pt: Dict = {
     hide: "Ocultar",
     waitTitle: "Lendo o seu céu",
     waitBody: "Estamos escrevendo seu relatório, em oito seções. Leva alguns minutos: não precisa ficar nesta tela.",
+    waitBodyBreve: "Estamos escrevendo sua leitura breve. Leva um instante: não precisa ficar nesta tela.",
     waitProgress: "Vamos na seção {hechas} de {total}.",
     noTimeWarning: "Este mapa ficou sem hora de nascimento: o relatório sai com sete seções, sem a de casas.",
     reading: "Sua leitura",

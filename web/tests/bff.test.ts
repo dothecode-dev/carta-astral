@@ -187,7 +187,7 @@ describe("/api/charts/[id]/interpretation", () => {
     expect((await readingPost(post("http://x", { lang: "es" }), params)).status).toBe(503);
   });
 
-  it("manda el tier al backend, no sólo el idioma", async () => {
+  it("manda el tier al backend en el body del POST, no sólo el idioma", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({}, 202));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -227,7 +227,7 @@ describe("/api/charts/[id]/interpretation", () => {
   // avisa que está pensada para consumirse desde el cliente) reintroduciría
   // el 400 silencioso que tapa la lectura: el backend exige `tier` desde la
   // Task 7 y, sin reenviarlo, este proxy nunca se lo manda.
-  it("manda el tier al backend, no sólo el idioma", async () => {
+  it("manda el tier al backend en la URL del GET, no sólo el idioma", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ text: "tu carta dice..." }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -261,7 +261,7 @@ describe("/api/charts/[id]/interpretation/estado", () => {
     expect(String(url)).toContain("/interpretation/estado/?lang=en");
   });
 
-  it("manda el tier al backend, no sólo el idioma", async () => {
+  it("manda el tier al backend en la URL del sondeo, no sólo el idioma", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ completa: false, hechas: 0, total: 1 }));
     vi.stubGlobal("fetch", fetchMock);
 

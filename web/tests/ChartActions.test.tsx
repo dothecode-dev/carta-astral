@@ -118,6 +118,16 @@ describe("ChartActions", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  // La página siempre prioriza el tier largo al elegir qué lectura mostrar
+  // (page.tsx): una vez comprado el completo, generar la breve gasta uno de
+  // los tres créditos de por vida en una lectura que nadie va a ver nunca.
+  it("no ofrece la breve para quien ya tiene el completo, aunque nunca la haya leído", () => {
+    const { container } = renderActions({ interpretations: { es: ["largo"] } });
+    expect(screen.queryByRole("button", { name: dict.chart.interpretBreve })).toBeNull();
+    expect(screen.queryByRole("button", { name: dict.chart.interpretCompleto })).toBeNull();
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("una lectura en otro idioma no oculta los botones de este", () => {
     // A diferencia de `interpretation_langs` (deprecado), `interpretations`
     // es por idioma: que "en" tenga los dos tiers no dice nada de "es".
@@ -221,6 +231,39 @@ describe("ChartActions", () => {
     expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
   });
 
+  // Los primeros ~5 segundos de cualquier generación, antes del primer
+  // sondeo, `progreso` todavía es `null` y se muestra el texto genérico.
+  // Para la breve —una sola llamada al modelo— ese puede ser el único texto
+  // que alguien vea en toda su primera espera: no puede seguir diciendo
+  // "en ocho secciones".
+  it("mientras genera la breve, la espera no habla de ocho secciones", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(false, 0, 1));
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions();
+
+    await clickBoton(dict.chart.interpretBreve);
+
+    expect(screen.getByText(dict.chart.waitBodyBreve)).toBeInTheDocument();
+    expect(screen.queryByText(dict.chart.waitBody)).not.toBeInTheDocument();
+  });
+
+  it("mientras genera el completo, la espera sigue hablando de las ocho secciones", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(false, 0, 8));
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions();
+
+    await clickBoton(dict.chart.interpretCompleto);
+
+    expect(screen.getByText(dict.chart.waitBody)).toBeInTheDocument();
+    expect(screen.queryByText(dict.chart.waitBodyBreve)).not.toBeInTheDocument();
+  });
+
   it("muestra en qué sección va, no una animación ciega", async () => {
     // HALLAZGO 4: `hechas` son las secciones YA terminadas, no la que está en
     // curso. Con 3 hechas, la sección en curso es la 4 (min(hechas+1, total)).
@@ -310,6 +353,22 @@ describe("ChartActions", () => {
   it("no avisa de la hora cuando la carta ya la tiene", () => {
     renderActions({ timeKnown: true });
     expect(screen.queryByText(/sin hora de nacimiento/i)).not.toBeInTheDocument();
+  });
+
+  // Sin esto, para cualquier carta sin hora la pantalla prometía "ocho
+  // secciones" en la nota del botón y admitía, en la misma pantalla, que el
+  // informe sale con siete (`noTimeWarning`, debajo).
+  it("sin hora de nacimiento, la nota del completo dice siete secciones, no ocho", () => {
+    renderActions({ timeKnown: false });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNotaSinHora);
+    expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretCompletoNota);
+  });
+
+  it("con hora de nacimiento, la nota del completo sigue diciendo ocho secciones", () => {
+    renderActions({ timeKnown: true });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNota);
   });
 
   // `fetch` rechaza ante un corte de red; no resuelve con `ok: false`. En una

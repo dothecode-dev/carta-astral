@@ -139,6 +139,12 @@ export function ChartActions({
   const [refrescando, startTransition] = useTransition();
   const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Qué tier se está esperando ahora mismo. Sólo importa para elegir el
+  // texto de espera (`waitBody` vs `waitBodyBreve`) en los ~5 segundos antes
+  // del primer sondeo, cuando `progreso` todavía es `null` y no hay otra
+  // forma de saber si se está escribiendo un informe de ocho secciones o una
+  // sola lectura breve.
+  const [tierEnCurso, setTierEnCurso] = useState<Tier | null>(null);
 
   const tiersAqui = interpretations[locale] ?? [];
   const tieneBreve = tiersAqui.includes("corto");
@@ -236,6 +242,7 @@ export function ChartActions({
 
     (async () => {
       setBusy(true);
+      setTierEnCurso(tier);
 
       // HALLAZGO 3: si el proceso que generaba murió (deploy, worker
       // reciclado, fallo) no queda nada corriendo del lado del servidor, y
@@ -272,6 +279,7 @@ export function ChartActions({
   async function interpret(tier: Tier) {
     setProgreso(null);
     setBusy(true);
+    setTierEnCurso(tier);
     setError(null);
 
     // Antes del fetch: si la pestaña se cierra o recarga mientras el POST
@@ -345,14 +353,26 @@ export function ChartActions({
                 dict.chart.waitProgress
                   .replace("{hechas}", String(Math.min(progreso.hechas + 1, progreso.total)))
                   .replace("{total}", String(progreso.total))
-              : dict.chart.waitBody}
+              : // Antes del primer sondeo (`progreso` todavía null, los primeros
+                // ~5 segundos de cualquier generación) no hay otra pista de qué
+                // se está escribiendo: sin distinguir acá, la breve —una sola
+                // llamada al modelo— mostraba "en ocho secciones", que puede
+                // ser el único texto que alguien vea en toda esa espera.
+                tierEnCurso === "corto"
+                  ? dict.chart.waitBodyBreve
+                  : dict.chart.waitBody}
           </p>
         </div>
       </section>
     );
   }
 
-  if (tieneBreve && tieneCompleto) return null;
+  // Con el completo ya comprado no queda nada para ofrecer: ni la breve
+  // (aunque no se haya leído nunca) ni el completo. La página siempre
+  // prioriza el tier largo al elegir qué lectura mostrar (`page.tsx`), así
+  // que una breve generada después de esto es contenido que nadie ve nunca
+  // — gastar uno de los tres créditos de por vida en eso es puro desperdicio.
+  if (tieneCompleto) return null;
 
   return (
     <div className="chartActions">
@@ -385,7 +405,16 @@ export function ChartActions({
               {dict.chart.interpretCompleto}
             </button>
             <p className="fieldNote">
-              {enOtroIdioma("largo") ? dict.chart.interpretFreeLang : dict.chart.interpretCompletoNota}
+              {enOtroIdioma("largo")
+                ? dict.chart.interpretFreeLang
+                : // RF12: sin hora de nacimiento el informe sale con siete
+                  // secciones, sin la de casas (`noTimeWarning`, debajo). Sin
+                  // esta rama, el botón prometía "ocho secciones" para
+                  // cualquier carta, contradiciendo ese aviso en la misma
+                  // pantalla.
+                  timeKnown
+                  ? dict.chart.interpretCompletoNota
+                  : dict.chart.interpretCompletoNotaSinHora}
             </p>
           </div>
         )}
