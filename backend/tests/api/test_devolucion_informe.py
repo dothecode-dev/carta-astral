@@ -10,7 +10,7 @@ nunca las secciones sueltas.
 
 import pytest
 
-from api import informe_service
+from api import informe_service, notificaciones
 from api import interpretation_service as svc
 from api.models import CreditTransaction, Interpretation, InterpretationSection
 from interpret.exceptions import InterpretationError
@@ -71,12 +71,22 @@ def fake_client(monkeypatch):
 
 
 @pytest.fixture
-def build_seccion_falla(monkeypatch):
+def build_seccion_falla(monkeypatch, settings):
+    """El fallo tiene que venir de `build_seccion`, no de `_build_client()`:
+    sin una API key en el entorno (el default en tests, salvo que quien
+    corre pytest tenga la propia exportada — ver el mismo cuidado en
+    `test_informe_endpoint.py::_sin_api_key_real`), `_build_client()`
+    revienta ANTES de llegar a `build_seccion` y el mock de abajo queda sin
+    ejercitarse: el test pasaría igual, pero no por lo que dice proteger."""
+    settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
     monkeypatch.setattr(informe_service, "build_seccion", _que_siempre_falla)
 
 
 def test_un_informe_a_medias_se_reanuda_sin_cobrar_de_nuevo(make_account, chart, fake_client):
-    """Contrapunto de la política de devolución: mientras queden intentos,
+    """Test de REGRESIÓN del comportamiento previo a esta tarea (no de la
+    política nueva de intentos: ya pasaba con la guarda vieja de
+    `generar_informe`, "reanuda si hay secciones"). Se deja acá porque sigue
+    siendo un comportamiento que vale proteger: mientras queden intentos,
     un reintento sobre secciones ya persistidas TERMINA el informe gratis en
     vez de devolver — el crédito ya compró el trabajo, no hay nada que
     reembolsar."""
@@ -95,15 +105,27 @@ def test_un_informe_a_medias_se_reanuda_sin_cobrar_de_nuevo(make_account, chart,
     assert acc.paid_balance == 0  # no volvió a cobrar
 
 
-def test_agotados_los_intentos_devuelve_credito_y_borra_el_informe(
-    make_account, chart, build_seccion_falla,
+def test_agotados_los_intentos_devuelve_credito_borra_secciones_y_avisa(
+    make_account, chart, build_seccion_falla, monkeypatch,
 ):
-    """El corazón de RF21: si el informe nunca se puede completar, después
-    de `INTENTOS_MAXIMOS` intentos se devuelve el crédito cobrado y se borra
-    la interpretación entera (secciones incluidas) — no queda un informe
-    trunco visible ni el crédito perdido."""
+    """El corazón de RF21 — y el escenario exacto que motivó la tarea: un
+    usuario que pagó los ocho secciones y se quedó con tres octavos de
+    informe. `_generar_solo_tres_secciones` deja esas tres YA persistidas
+    (no una fila vacía: si no hubiera nada que borrar, el assert sobre
+    `InterpretationSection` de abajo pasaría aunque el cascade no
+    funcionara). Con los intentos restantes fallando, agotado
+    `INTENTOS_MAXIMOS` se devuelve el crédito cobrado, se borra la
+    interpretación ENTERA (las tres secciones ya escritas incluidas — no
+    queda un informe trunco visible) y se avisa por
+    `api.notificaciones.notificar` con el evento `informe_no_entregado`."""
+    avisos = []
+    monkeypatch.setattr(
+        notificaciones, "notificar",
+        lambda account, evento, contexto, lang: avisos.append((account.pk, evento, contexto, lang)),
+    )
     acc = make_account(free_balance=0, paid_balance=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    _generar_solo_tres_secciones(interp)
     interp_pk = interp.pk
 
     for _ in range(svc.INTENTOS_MAXIMOS):
@@ -113,6 +135,9 @@ def test_agotados_los_intentos_devuelve_credito_y_borra_el_informe(
     assert acc.paid_balance == 1  # devuelto
     assert not Interpretation.objects.filter(pk=interp_pk).exists()
     assert not InterpretationSection.objects.filter(interpretation_id=interp_pk).exists()
+    assert len(avisos) == 1
+    cuenta_avisada, evento, _contexto, _lang = avisos[0]
+    assert (cuenta_avisada, evento) == (acc.pk, "informe_no_entregado")
 
 
 def test_mientras_quedan_intentos_no_devuelve_ni_borra(make_account, chart, build_seccion_falla):
