@@ -75,10 +75,21 @@ def _chart_repr(chart: Chart) -> dict:
     # `langs` arriba (completa=True y prompt_version vigente) y misma pasada
     # sobre `chart.interpretations.all()`, ya resuelta por el
     # prefetch_related del listado: no agrega queries por carta.
+    #
+    # Sólo aparecen los idiomas con al menos un tier completo —`setdefault`
+    # no crea la clave para un idioma sin nada listo—, no los tres idiomas
+    # soportados con lista vacía. La web lo lee como
+    # `interpretations[lang] ?? []`, así que el resultado es el mismo sin
+    # cargar el payload de claves vacías por cada carta.
     tiers_por_lang: dict[str, list[str]] = {}
     for i in chart.interpretations.all():
         if i.completa and i.prompt_version == PROMPT_VERSION:
             tiers_por_lang.setdefault(i.lang, []).append(i.tier)
+    # `Interpretation` no tiene `Meta.ordering`: sin esto el orden depende del
+    # plan de consulta de Postgres y no está garantizado entre corridas — a
+    # diferencia de `langs` arriba, que ya fuerza orden con `sorted(...)`.
+    for tiers in tiers_por_lang.values():
+        tiers.sort()
     return {
         "id": str(chart.uuid),
         "house_system": chart.house_system,

@@ -137,3 +137,18 @@ def test_listar_cartas_no_agrega_una_consulta_por_carta(client_autenticado, acco
         client_autenticado.get("/api/charts/")
 
     assert len(muchas.captured_queries) == len(pocas.captured_queries)
+
+
+@pytest.mark.django_db
+def test_una_version_vieja_del_prompt_no_se_anuncia_como_lista(client_autenticado, chart, account):
+    """Análogo a `test_ignora_una_version_vieja_del_prompt`
+    (tests/api/test_interpretation_get.py), aplicado a `interpretations` de
+    la representación de la carta: si el prompt cambió, el texto guardado ya
+    no es lo que el sistema generaría hoy y no cuenta como lectura lista,
+    aunque `completa=True`."""
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version="viejo", tier="corto",
+        text="x", completa=True, account=account,
+    )
+    datos = client_autenticado.get(f"/api/charts/{chart.uuid}/").json()
+    assert datos["interpretations"].get("es", []) == []
