@@ -143,6 +143,32 @@ def resumen_gratis(interpretacion) -> list[dict]:
     return salida
 
 
+def indice_informe(chart, lang: str) -> list[dict]:
+    """El índice del informe completo (RF3): los títulos de las ocho
+    secciones (o las siete que aplican sin hora de nacimiento) y, si ya hay
+    algo generado, el arranque de cada una. Es lo que ve quien todavía no
+    compró, para decidir si compra.
+
+    Si ya existe una `Interpretation` tier=largo vigente (mismo
+    `PROMPT_VERSION`) para este `(chart, lang)`, delega en `resumen_gratis`,
+    que arma el índice con el arranque recortado de cada sección ya escrita
+    —el informe puede estar a medio generar (RF10) y el índice tiene que
+    poder mostrarse igual. Si no existe —el caso más común: nadie generó
+    (ni pagó) este informe todavía— arma el mismo índice a mano desde el
+    catálogo, con `parrafo` vacío y `restante` igual al objetivo de palabras
+    de cada sección: sirve igual como vidriera de lo que se compra.
+    """
+    interpretacion = chart.interpretations.filter(
+        lang=lang, prompt_version=PROMPT_VERSION, tier=TIER_LARGO,
+    ).first()
+    if interpretacion is not None:
+        return resumen_gratis(interpretacion)
+    return [
+        {"slug": seccion.slug, "titulo": seccion.titulo[lang], "parrafo": "", "restante": seccion.palabras}
+        for seccion in secciones_aplicables(chart, TIER_LARGO)
+    ]
+
+
 def generar_informe(interpretacion, client, token: str) -> None:
     """Genera las secciones que falten. Reanudable: llamarla dos veces sobre un
     informe a medio hacer completa el resto sin repetir lo ya escrito.

@@ -332,6 +332,27 @@ class InterpretationEstadoView(APIView):
         )
 
 
+class IndiceInformeView(APIView):
+    """El índice del informe completo (RF3): títulos de sus secciones y, si ya
+    hay algo generado, el arranque de cada una. Se puede pedir sin haber
+    comprado el informe — es justamente lo que decide la compra — así que no
+    exige créditos ni dispara generación, sólo delega en
+    `informe_service.indice_informe`."""
+
+    authentication_classes = [AccountTokenAuthentication]
+    permission_classes = [HasAccount]
+
+    def get(self, request, uuid):
+        lang = request.query_params.get("lang", "es")
+        if lang not in _INTERPRETATION_LANGS:
+            return Response(
+                {"error": f"lang debe ser uno de {_INTERPRETATION_LANGS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        return Response(informe_service.indice_informe(chart, lang))
+
+
 class _BaseAuthView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]

@@ -8,6 +8,7 @@ from api.views import (
     ChartDetailView,
     GeocodeView,
     GoogleAuthView,
+    IndiceInformeView,
     InterpretationEstadoView,
     InterpretationView,
 )
@@ -21,6 +22,7 @@ urlpatterns = [
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
     path("charts/<uuid:uuid>/interpretation/estado/", InterpretationEstadoView.as_view()),
+    path("charts/<uuid:uuid>/informe/indice/", IndiceInformeView.as_view()),
     path("charts/<uuid:uuid>/pdf/", ChartPdfView.as_view()),
     path("geocode/", GeocodeView.as_view()),
     path("sky/", SkyView.as_view()),
