@@ -68,6 +68,17 @@ def _chart_repr(chart: Chart) -> dict:
             if i.prompt_version == PROMPT_VERSION and i.completa
         }
     )
+    # Por idioma, qué informes están listos. `interpretation_langs` (un set de
+    # idiomas) alcanzaba con un solo producto; con dos, la web necesita saber
+    # si ofrecer el informe completo sobre una carta que ya tiene la breve, o
+    # si ya tiene ambos y no ofrecer de nuevo la breve. Mismo criterio que
+    # `langs` arriba (completa=True y prompt_version vigente) y misma pasada
+    # sobre `chart.interpretations.all()`, ya resuelta por el
+    # prefetch_related del listado: no agrega queries por carta.
+    tiers_por_lang: dict[str, list[str]] = {}
+    for i in chart.interpretations.all():
+        if i.completa and i.prompt_version == PROMPT_VERSION:
+            tiers_por_lang.setdefault(i.lang, []).append(i.tier)
     return {
         "id": str(chart.uuid),
         "house_system": chart.house_system,
@@ -75,6 +86,7 @@ def _chart_repr(chart: Chart) -> dict:
         "data": chart.data,
         "engine_version": chart.engine_version,
         "interpretation_langs": langs,
+        "interpretations": tiers_por_lang,
         "birth": {
             "name": birth.name,
             "date": birth.date.isoformat(),

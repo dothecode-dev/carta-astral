@@ -1,7 +1,8 @@
 import pytest
 from rest_framework.test import APIClient
 from api.auth import create_session
-from api.models import Account
+from api.models import Account, Interpretation
+from interpret.prompts import PROMPT_VERSION
 
 
 def _client(acc):
@@ -67,3 +68,72 @@ def test_chart_list_scoped_to_account():
     _client(b).post("/api/charts/", PAYLOAD, format="json")
     assert len(_client(a).get("/api/charts/").data["results"]) == 1
     assert len(_client(b).get("/api/charts/").data["results"]) == 1
+
+
+@pytest.mark.django_db
+def test_la_carta_expone_los_tiers_completos(client_autenticado, chart, account):
+    """`interpretations` agrupa por idioma sólo los tiers COMPLETOS: una fila
+    `completa=False` es la generación en curso que crea `iniciar_generacion`
+    (Tarea 10), no una lectura disponible — anunciarla haría que la web
+    ofrezca leer algo que todavía no existe.
+
+    Usa `client_autenticado`/`chart` (comparten `account`), no `account_client`
+    del brief: ese fixture crea su PROPIA cuenta, distinta de la dueña de
+    `chart`, así que el GET siempre daba 404 sin importar los tiers —el test
+    tal cual estaba escrito no podía pasar nunca, con o sin el fix.
+    """
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        text="x", completa=True, account=account,
+    )
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        text="", completa=False, account=account,      # en curso: no se anuncia
+    )
+    datos = client_autenticado.get(f"/api/charts/{chart.uuid}/").json()
+    assert datos["interpretations"]["es"] == ["corto"]
+
+
+@pytest.mark.django_db
+def test_un_tier_completo_en_un_idioma_no_se_filtra_a_otro(client_autenticado, chart, account):
+    """Un tier completo en "es" no debe aparecer bajo "en": si se armara la
+    estructura con un solo set/list compartido entre idiomas en vez de un
+    dict por idioma, este test lo detecta."""
+    Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        text="x", completa=True, account=account,
+    )
+    datos = client_autenticado.get(f"/api/charts/{chart.uuid}/").json()
+    assert datos["interpretations"]["es"] == ["corto"]
+    assert datos["interpretations"].get("en", []) == []
+
+
+@pytest.mark.django_db
+def test_listar_cartas_no_agrega_una_consulta_por_carta(client_autenticado, account):
+    """El listado usa `prefetch_related("interpretations")` para no pagar una
+    query por carta. Si `_chart_repr` arma `interpretations` con una consulta
+    propia (en vez de iterar `chart.interpretations.all()`, que reusa el
+    prefetch), el número de queries crece con la cantidad de cartas y el
+    endpoint se degrada en silencio a medida que la cuenta acumula cartas."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from api.chart_service import create_chart
+
+    def crear_cartas_con_interpretacion(n):
+        for _ in range(n):
+            c = create_chart(PAYLOAD, account=account)
+            Interpretation.objects.create(
+                chart=c, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+                text="x", completa=True, account=account,
+            )
+
+    crear_cartas_con_interpretacion(2)
+    with CaptureQueriesContext(connection) as pocas:
+        client_autenticado.get("/api/charts/")
+
+    crear_cartas_con_interpretacion(5)
+    with CaptureQueriesContext(connection) as muchas:
+        client_autenticado.get("/api/charts/")
+
+    assert len(muchas.captured_queries) == len(pocas.captured_queries)
