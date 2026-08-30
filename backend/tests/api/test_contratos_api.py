@@ -185,6 +185,30 @@ def test_el_402_dice_cual_credito_falto_sin_paid(cliente_sin_paid_con_carta):
 
 
 @pytest.mark.django_db
+def test_post_con_tier_corto_devuelve_202_y_cobra_free(cliente_con_carta, settings):
+    """Camino feliz de la breve: hasta ahora sólo estaba probado el 402
+    (`test_el_402_dice_cual_credito_falto_sin_free`) — nada verificaba que
+    con crédito free disponible el POST aceptara "corto" y cobrara el lote
+    correcto. Es el único endpoint de esta tarea que cobra, y el que
+    atraparía una regresión si algún día alguien mete una condición por
+    tier acá."""
+    settings.ANTHROPIC_API_KEY = ""  # el hilo de fondo no debe pegarle a la API real en un test
+    cuenta = cliente_con_carta.account
+    free_antes, paid_antes = cuenta.free_balance, cuenta.paid_balance
+
+    r = cliente_con_carta.post(
+        f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/",
+        {"lang": "es", "tier": "corto"},
+        format="json",
+    )
+
+    assert r.status_code == 202
+    cuenta.refresh_from_db()
+    assert cuenta.free_balance == free_antes - 1  # cobró del lote free...
+    assert cuenta.paid_balance == paid_antes  # ...y no tocó el paid
+
+
+@pytest.mark.django_db
 def test_el_estado_reporta_una_sola_seccion_para_la_breve(cliente_con_carta):
     """La barra de progreso de la lectura breve no puede decir "1 de 8": ese
     catálogo es de una sola sección (`SECCION_BREVE`), no las ocho del
@@ -197,6 +221,9 @@ def test_el_estado_reporta_una_sola_seccion_para_la_breve(cliente_con_carta):
 
 @pytest.mark.django_db
 def test_el_estado_sin_tier_es_400(cliente_con_carta):
+    """Sin tier no hay catálogo de secciones que calcular
+    (`secciones_aplicables` lo exige): el estado no puede asumir cuál de los
+    dos productos está sondeando la web."""
     r = cliente_con_carta.get(
         f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/estado/?lang=es"
     )
@@ -204,7 +231,20 @@ def test_el_estado_sin_tier_es_400(cliente_con_carta):
 
 
 @pytest.mark.django_db
+def test_el_estado_con_tier_desconocido_es_400(cliente_con_carta):
+    """Contrapunto de arriba: no sólo ausente, tampoco un valor que no sea
+    ninguno de los dos productos."""
+    r = cliente_con_carta.get(
+        f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/estado/?lang=es&tier=premium"
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
 def test_el_get_de_lectura_sin_tier_es_400(cliente_con_carta):
+    """Mismo motivo que en el POST: sin tier, el GET no sabe si buscar la
+    lectura breve o el informe completo, y devolver cualquiera de los dos
+    adivinando sería entregar el producto equivocado."""
     r = cliente_con_carta.get(
         f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/?lang=es"
     )
