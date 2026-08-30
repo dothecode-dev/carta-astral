@@ -229,6 +229,13 @@ export type Dict = {
     interpretCompleto: string;
     /** Nota bajo el botón del completo: precio y qué trae. */
     interpretCompletoNota: string;
+    /**
+     * Nota de cualquiera de los dos botones cuando ESE tier ya está completo
+     * en otro idioma: traducirlo no cuesta (el backend lo resuelve sin tocar
+     * el ledger), así que reemplaza a `interpretBreveNota`/
+     * `interpretCompletoNota` — decir el precio ahí sería mentir.
+     */
+    interpretFreeLang: string;
     interpreting: string;
     readAgain: string;
     noCredits: string;
@@ -433,6 +440,7 @@ const es: Dict = {
     interpretBreveNota: "Gratis. Te quedan {n}.",
     interpretCompleto: "Comprar el informe completo",
     interpretCompletoNota: "US$ 29 · ocho secciones",
+    interpretFreeLang: "Sin costo: ya lo leíste en otro idioma.",
     interpreting: "Escribiendo tu lectura…",
     readAgain: "Ver la lectura",
     noCredits: "Te quedaste sin créditos.",
@@ -667,6 +675,7 @@ const en: Dict = {
     interpretBreveNota: "Free. You have {n} left.",
     interpretCompleto: "Buy the full report",
     interpretCompletoNota: "US$ 29 · eight sections",
+    interpretFreeLang: "No cost: you already read it in another language.",
     interpreting: "Writing your reading…",
     readAgain: "See the reading",
     noCredits: "You've run out of credits.",
@@ -901,6 +910,7 @@ const pt: Dict = {
     interpretBreveNota: "Grátis. Restam {n}.",
     interpretCompleto: "Comprar o relatório completo",
     interpretCompletoNota: "US$ 29 · oito seções",
+    interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     interpreting: "Escrevendo sua leitura…",
     readAgain: "Ver a leitura",
     noCredits: "Você ficou sem créditos.",

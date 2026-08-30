@@ -126,6 +126,28 @@ describe("ChartActions", () => {
     expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
   });
 
+  // El backend traduce una lectura ya escrita sin cobrar de nuevo (sin
+  // tocar el ledger): la nota del botón no puede seguir diciendo el precio o
+  // "te quedan {n}" en ese caso, sería mentir.
+  it("si la breve ya existe en otro idioma, la nota avisa que no cuesta", () => {
+    renderActions({ interpretations: { en: ["corto"] } });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretBreve });
+    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretFreeLang);
+  });
+
+  it("si el completo ya existe en otro idioma, la nota avisa que no cuesta", () => {
+    renderActions({ interpretations: { en: ["largo"] } });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretFreeLang);
+  });
+
+  it("sin lectura en otro idioma, la nota del completo sigue mostrando el precio", () => {
+    renderActions({ interpretations: {} });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNota);
+    expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretFreeLang);
+  });
+
   it("el 402 distingue quedarse sin gratis de no tener el informe comprado", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_paid" })));
     renderActions();

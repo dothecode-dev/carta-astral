@@ -214,12 +214,26 @@ describe("/api/charts/[id]/interpretation", () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ text: "tu carta dice..." }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await readingGet(new Request(`http://x?lang=pt`), params);
+    const res = await readingGet(new Request(`http://x?lang=pt&tier=largo`), params);
 
     expect(res.status).toBe(200);
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("lang=pt");
     expect(init.method).toBeUndefined();
+  });
+
+  // Sin esto, un caller que se cablee después (el docstring de esta ruta ya
+  // avisa que está pensada para consumirse desde el cliente) reintroduciría
+  // el 400 silencioso que tapa la lectura: el backend exige `tier` desde la
+  // Task 7 y, sin reenviarlo, este proxy nunca se lo manda.
+  it("manda el tier al backend, no sólo el idioma", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ text: "tu carta dice..." }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await readingGet(new Request(`http://x?lang=es&tier=corto`), params);
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("tier=corto");
   });
 
   it("responde 404 mientras la lectura no existe", async () => {

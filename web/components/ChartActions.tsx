@@ -145,6 +145,18 @@ export function ChartActions({
   const tieneCompleto = tiersAqui.includes("largo");
 
   /**
+   * Si `tier` ya está completo en algún OTRO idioma de esta carta. El
+   * backend traduce una lectura ya escrita sin tocar el ledger (no cobra de
+   * nuevo): decir el precio o "te quedan {n}" en ese caso sería mentir, así
+   * que la nota del botón cambia a `interpretFreeLang`.
+   */
+  function enOtroIdioma(tier: Tier): boolean {
+    return Object.entries(interpretations).some(
+      ([lang, tiers]) => lang !== locale && tiers.includes(tier),
+    );
+  }
+
+  /**
    * Sondea cuántas de las secciones de `tier` ya están escritas, hasta que
    * ese producto está completo. La breve tiene una sola sección (`total`
    * pasa a ser 1, no 8); el completo, ocho.
@@ -356,7 +368,9 @@ export function ChartActions({
               {dict.chart.interpretBreve}
             </button>
             <p className="fieldNote">
-              {dict.chart.interpretBreveNota.replace("{n}", String(freeCredits))}
+              {enOtroIdioma("corto")
+                ? dict.chart.interpretFreeLang
+                : dict.chart.interpretBreveNota.replace("{n}", String(freeCredits))}
             </p>
           </div>
         )}
@@ -370,7 +384,9 @@ export function ChartActions({
             >
               {dict.chart.interpretCompleto}
             </button>
-            <p className="fieldNote">{dict.chart.interpretCompletoNota}</p>
+            <p className="fieldNote">
+              {enOtroIdioma("largo") ? dict.chart.interpretFreeLang : dict.chart.interpretCompletoNota}
+            </p>
           </div>
         )}
       </div>

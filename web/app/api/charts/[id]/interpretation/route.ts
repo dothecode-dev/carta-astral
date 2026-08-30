@@ -18,10 +18,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const lang = new URL(request.url).searchParams.get("lang") ?? "es";
+  const url = new URL(request.url);
+  const lang = url.searchParams.get("lang") ?? "es";
+  // Sin default (RF20, mismo criterio que el POST y que `estado`): adivinar
+  // el tier es leer el producto equivocado.
+  const tier = url.searchParams.get("tier");
 
   try {
-    const data = await callApi(`/api/charts/${id}/interpretation/?lang=${lang}`);
+    const data = await callApi(
+      `/api/charts/${id}/interpretation/?lang=${lang}&tier=${tier}`,
+    );
     return NextResponse.json(data);
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 502;
