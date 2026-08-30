@@ -377,19 +377,25 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     traducción queda serializada contra otra generación de la misma carta
     igual que la generación.
 
-    El chequeo del lock vive DENTRO del `try/finally` (no antes, con un
-    `return` temprano) a propósito: la revisión de seguridad encontró que un
-    `return` antes de entrar al bloque protegido salteaba el `finally` que
-    devuelve el crédito, y ese es justo el tipo de bug que un refactor futuro
-    podría reintroducir si el chequeo volviera a vivir afuera. Con
-    `got_lock=False` el `finally` sigue corriendo igual, pero no hace nada —
-    esta llamada no tocó el ledger, así que no hay nada que devolver — y
-    `soltar_lock` no aplica (nunca se tomó el lock). No confundir con la
-    Tarea 10: cuando el lock está tomado por OTRO proceso, `iniciar_generacion`
-    ya cobró antes de lanzar este hilo, pero es una carga legítima —alguien
-    más lo está generando (u otro intento sobre la MISMA `Interpretation`,
-    ver `test_lock_tomado_no_genera_ni_cobra_de_nuevo`) y esa llamada, no
-    ésta, es responsable de terminarlo o de devolver si falla.
+    El chequeo `if not got_lock: return` vive ANTES del `try/finally` desde
+    la wave de fix final (post-review) — hasta ahí vivía DENTRO, porque la
+    revisión de seguridad había encontrado que un `return` temprano por
+    fuera del bloque protegido salteaba el `finally` que devuelve el
+    crédito. Eso seguía siendo cierto para un `return` que saltee trabajo
+    hecho CON el lock tomado; no aplica acá: `got_lock=False` significa que
+    esta llamada NUNCA tomó el lock (otro proceso lo tiene), así que no hay
+    nada que esta llamada haya cobrado, generado ni tomado que necesite
+    limpieza — es exactamente el caso que el propio código viejo ya
+    señalaba como "no hace nada" en su `finally`. Sacarlo afuera simplifica
+    todo lo que sigue: dentro del `try/finally` de acá abajo `got_lock` es
+    SIEMPRE `True`, así que no hace falta un `if got_lock:` en cada paso (el
+    lock recién adquirido, sin ambigüedad, es justo lo que ese `finally`
+    protege de punta a punta — ver más abajo). No confundir con la Tarea 10:
+    cuando el lock está tomado por OTRO proceso, `iniciar_generacion` ya
+    cobró antes de lanzar este hilo, pero es una carga legítima —alguien más
+    lo está generando (u otro intento sobre la MISMA `Interpretation`, ver
+    `test_lock_tomado_no_genera_ni_cobra_de_nuevo`) y esa llamada, no ésta,
+    es responsable de terminarlo o de devolver si falla.
 
     HALLAZGO 3 de code review: la guarda de la devolución (ver `finally`)
     NO usa `sibling is None`, aunque `sibling` sigue existiendo para decidir
@@ -425,40 +431,75 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
 
     from api import informe_service  # import diferido: ver nota al tope del módulo
 
-    sibling = (
-        _sibling_completo(chart, interpretacion.lang, interpretacion.tier) if got_lock else None
-    )
+    if not got_lock:
+        logger.info(
+            "ya hay una generación en curso para la carta %s; se ignora este pedido",
+            chart.pk,
+        )
+        return
 
     lock_perdido = False
+    # Hallazgo de la wave de fix final, post-review: TODO lo que corre desde
+    # acá hasta soltar el lock vive en ESTE `try/finally` único —no en un
+    # `finally` con múltiples pasos sueltos, aunque sea "sólo una consulta
+    # más"—. La versión anterior calculaba `sibling`, `consumo` y
+    # `completo_ahora` como sentencias sueltas (una antes del `try`, dos
+    # dentro del `finally` pero antes de su propio `try` interno): si
+    # CUALQUIERA de esas consultas reventaba —no hace falta que sea la
+    # generación en sí—, la excepción escapaba ANTES de llegar al
+    # `soltar_lock` de más abajo y el lock quedaba colgado hasta el TTL
+    # (600 s). Se reprodujo de verdad: un test preexistente
+    # (`test_delete_charts_preserva_ledger`) dispara esta función en un hilo
+    # de fondo que sigue vivo cuando el hilo principal del test ya está
+    # borrando la carta; bajo SQLite (no bajo Postgres, que sí soporta
+    # lectores/escritores concurrentes de verdad) eso da
+    # `sqlite3.OperationalError: database table is locked` justo en la
+    # consulta de `sibling`, ANTES de entrar al `try` que protegía sólo la
+    # generación — el lock de la carta quedaba tomado para siempre (dentro
+    # de la corrida de tests) y envenenaba cualquier test posterior que
+    # reusara la misma carta y el mismo tier. Ese SQLite `OperationalError`
+    # específico es un artefacto de test (un hilo de fondo sin esperar en un
+    # test que no es mío), pero el bug de fondo —una consulta cualquiera
+    # after `got_lock=True` puede tirar el lock a la basura— es real y
+    # existía en producción también, no sólo en el test.
     try:
-        if not got_lock:
-            logger.info(
-                "ya hay una generación en curso para la carta %s; se ignora este pedido",
-                chart.pk,
-            )
-            return
+        sibling = _sibling_completo(chart, interpretacion.lang, interpretacion.tier)
+
         # Un intento más de terminar este informe, cuente como generación o
         # como traducción de un sibling: las dos pueden fallar, y las dos
-        # cuentan contra `INTENTOS_MAXIMOS`. Dentro del `try` (no antes, ver
-        # el resto de esta función): si el `save` mismo revienta, lo atrapa
-        # el `except Exception` de abajo en vez de escapar sin loguear.
+        # cuentan contra `INTENTOS_MAXIMOS`.
         interpretacion.intentos += 1
         interpretacion.save(update_fields=["intentos"])
-        if sibling is not None:
-            informe_service.traducir_informe(sibling, interpretacion.lang, _build_client())
-        else:
-            # Fix wave final / Important: `generar_informe` devuelve `False`
-            # cuando abortó de forma LIMPIA porque perdió el lock (otro
-            # proceso lo tomó y sigue escribiendo esta MISMA interpretación
-            # ahora mismo) — eso no es que este intento haya fracasado, es
-            # que se lo cedimos a quien lo tiene. Sin distinguirlo, tres
-            # abortos así agotaban `INTENTOS_MAXIMOS` como si fueran tres
-            # fallos reales y devolvían + borraban una fila que el otro
-            # proceso estaba terminando de verdad.
-            lock_perdido = not informe_service.generar_informe(interpretacion, _build_client(), token)
-    except Exception:
-        logger.exception("la generación del informe %s falló", interpretacion.pk)
-    finally:
+        try:
+            if sibling is not None:
+                # Si ya existe un informe completo de esta carta en otro
+                # idioma, traduce ese informe (`informe_service.
+                # traducir_informe`, Tarea 9) en vez de generar desde cero:
+                # es gratis (RF8, ya lo decidió `iniciar_generacion` no
+                # cobrando) y evita pagarle al modelo ocho secciones que ya
+                # existen en otro idioma.
+                informe_service.traducir_informe(sibling, interpretacion.lang, _build_client())
+            else:
+                # Fix wave final / Important: `generar_informe` devuelve
+                # `False` cuando abortó de forma LIMPIA porque perdió el
+                # lock (otro proceso lo tomó y sigue escribiendo esta MISMA
+                # interpretación ahora mismo) — eso no es que este intento
+                # haya fracasado, es que se lo cedimos a quien lo tiene. Sin
+                # distinguirlo, tres abortos así agotaban
+                # `INTENTOS_MAXIMOS` como si fueran tres fallos reales y
+                # devolvían + borraban una fila que el otro proceso estaba
+                # terminando de verdad.
+                lock_perdido = not informe_service.generar_informe(interpretacion, _build_client(), token)
+        except Exception:
+            # Nunca deja una excepción sin loguear: si el hilo de fondo
+            # muere en silencio, el informe queda colgado con el crédito ya
+            # cobrado y nadie se entera hasta que el usuario se queja. Este
+            # `except` sólo cubre generar/traducir (no la devolución de más
+            # abajo, que si revienta necesita propagarse — ver el docstring
+            # de la función) por eso vive en su propio `try` interno, no en
+            # el externo que abarca hasta `soltar_lock`.
+            logger.exception("la generación del informe %s falló", interpretacion.pk)
+
         if lock_perdido:
             # Se descuenta el intento que se cargó preventivamente arriba,
             # antes de saber cómo terminaba: un aborto por lock perdido no
@@ -466,10 +507,6 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
             interpretacion.intentos = max(interpretacion.intentos - 1, 0)
             interpretacion.save(update_fields=["intentos"])
 
-        # `got_lock` es la guarda: sin lock propio esta llamada nunca cobró
-        # ni generó nada (ver el docstring), así que no hay crédito que
-        # devolver ni lock propio que soltar.
-        #
         # `consumo` (no `sibling is None`, HALLAZGO 3 de code review) es el
         # dato explícito: existe si y sólo si `iniciar_generacion` llegó a
         # llamar a `ledger.charge` para ESTA `Interpretation` — el hecho de
@@ -480,13 +517,9 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # falta el dato antes de que la fila deje de existir. Se devuelve al
         # MISMO lote del que se cobró (BUG de la revisión final: antes
         # `ledger.devolver` fijaba "paid" siempre).
-        consumo = (
-            CreditTransaction.objects.filter(
-                interpretation=interpretacion, kind="consumption",
-            ).first()
-            if got_lock
-            else None
-        )
+        consumo = CreditTransaction.objects.filter(
+            interpretation=interpretacion, kind="consumption",
+        ).first()
         # Critical de la revisión final: `interpretacion.completa` en
         # MEMORIA no ve una traducción exitosa. `informe_service.
         # traducir_informe` resuelve su `destino` con un `get_or_create`
@@ -498,57 +531,51 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # completa` stale en `False` y, si además agotaba los intentos,
         # devolvía el crédito y borraba un informe que se acababa de
         # entregar.
-        completo_ahora = (
-            Interpretation.objects.filter(pk=interpretacion.pk, completa=True).exists()
-            if got_lock
-            else False
-        )
+        completo_ahora = Interpretation.objects.filter(pk=interpretacion.pk, completa=True).exists()
         # Task 10 / RF21: ya no "sin secciones" sino "sin completar tras
         # agotar los intentos" — devolver antes de agotarlos regalaría el
         # reintento gratis (el crédito ya compró el trabajo hecho hasta
         # acá) y no devolver nunca dejaría cobrado un informe que jamás
         # puede terminar de generarse.
-        try:
-            if (
-                got_lock
-                and consumo is not None
-                and not completo_ahora
-                and interpretacion.intentos >= INTENTOS_MAXIMOS
-            ):
-                pk = interpretacion.pk
-                lot = consumo.lot
-                chart_uuid = str(chart.uuid)
-                tier = interpretacion.tier
-                lang = interpretacion.lang
-                ledger.devolver(
-                    account,
-                    external_id=f"informe:{pk}:devolucion",
-                    note=f"informe {pk} sin completar tras {INTENTOS_MAXIMOS} intentos",
-                    lot=lot,
-                )
-                # No se muestran las secciones sueltas de un informe que no
-                # se pudo entregar (decisión del dueño del producto): se
-                # borra entero, no sólo se marca. `InterpretationSection.
-                # interpretation` es CASCADE, así que esto se lleva las
-                # secciones puestas.
-                interpretacion.delete()
-                notificaciones.notificar(
-                    account, "informe_no_entregado",
-                    {"chart": chart_uuid, "tier": tier},
-                    lang=lang,
-                )
-        finally:
-            # Minor de la revisión final: `soltar_lock` va en el `finally`
-            # MÁS INTERNO, no después de todo el bloque de devolución — así
-            # se libera el lock aunque `ledger.devolver` (u otra cosa acá
-            # arriba) reviente, en vez de quedar colgado hasta que venza el
-            # TTL. Sigue corriendo DESPUÉS de intentar el `delete()` (no
-            # antes): soltarlo antes abriría una ventana para que otro
-            # proceso tome el lock y empiece a escribir sobre una fila que
-            # esta misma llamada está por borrar — la misma clase de
-            # carrera que el hallazgo Critical de arriba.
-            if got_lock:
-                soltar_lock(chart, interpretacion.tier, token)
+        if (
+            consumo is not None
+            and not completo_ahora
+            and interpretacion.intentos >= INTENTOS_MAXIMOS
+        ):
+            pk = interpretacion.pk
+            lot = consumo.lot
+            chart_uuid = str(chart.uuid)
+            tier = interpretacion.tier
+            lang = interpretacion.lang
+            ledger.devolver(
+                account,
+                external_id=f"informe:{pk}:devolucion",
+                note=f"informe {pk} sin completar tras {INTENTOS_MAXIMOS} intentos",
+                lot=lot,
+            )
+            # No se muestran las secciones sueltas de un informe que no se
+            # pudo entregar (decisión del dueño del producto): se borra
+            # entero, no sólo se marca. `InterpretationSection.interpretation`
+            # es CASCADE, así que esto se lleva las secciones puestas.
+            interpretacion.delete()
+            notificaciones.notificar(
+                account, "informe_no_entregado",
+                {"chart": chart_uuid, "tier": tier},
+                lang=lang,
+            )
+    finally:
+        # Soltar el lock es lo ÚLTIMO que hace esta función, en el `finally`
+        # MÁS EXTERNO posible sobre todo lo que corre con el lock tomado
+        # (sibling, intentos, generar/traducir, devolución) — no sólo sobre
+        # el tramo de devolución. Corre pase lo que pase arriba, incluida
+        # una excepción sin atrapar en `ledger.devolver`/`notificar` (que
+        # sigue propagándose después de este `finally`, igual que antes).
+        # Sigue corriendo DESPUÉS de intentar el `delete()` (no antes):
+        # soltarlo antes abriría una ventana para que otro proceso tome el
+        # lock y empiece a escribir sobre una fila que esta misma llamada
+        # está por borrar — la misma clase de carrera que el hallazgo
+        # Critical de arriba.
+        soltar_lock(chart, interpretacion.tier, token)
 
 
 def generar_en_segundo_plano(chart, lang: str, account, tier: str) -> None:

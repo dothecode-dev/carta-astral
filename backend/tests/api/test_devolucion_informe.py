@@ -20,6 +20,24 @@ from interpret.prompts import PROMPT_VERSION, SECCIONES
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def _cache_limpio():
+    """El lock de generación (`interp:lock:*`) vive en el cache de Django,
+    que es GLOBAL AL PROCESO de test —LocMemCache no se resetea entre
+    archivos ni entre tests salvo que alguien lo limpie explícitamente— no
+    en la base, que sí se revierte por test. Mismo patrón que
+    `test_informe_endpoint.py::_cache_limpio` y
+    `test_interpretation_service.py::_clear_cache`: sin esto, un lock que
+    otro archivo deja tomado (por la razón que sea) puede envenenar estos
+    tests, y viceversa. La causa real de que esto se manifestara una vez
+    (`test_delete_charts_preserva_ledger` dejaba un lock colgado por una
+    excepción no capturada) ya se corrigió en `completar_generacion`; esto
+    es la segunda red, no la primera."""
+    cache.clear()
+    yield
+    cache.clear()
+
+
 def _generar_solo_tres_secciones(interp):
     """Persiste las tres primeras secciones del catálogo directamente en la
     base, simulando una generación que se cortó a mitad (p. ej. un restart)
