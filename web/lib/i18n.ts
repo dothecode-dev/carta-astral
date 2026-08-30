@@ -260,6 +260,12 @@ export type Dict = {
     /** RF12: aviso previo, antes de gastar el crédito, si la carta no tiene hora. */
     noTimeWarning: string;
     reading: string;
+    /** Encabezado del pie que muestra qué trae el informe completo (Task 15). */
+    resumenTitulo: string;
+    /** Cuánto falta de cada sección todavía sin comprar. Lleva `{n}`: palabras. */
+    resumenRestante: string;
+    /** Cierre del pie, invitando a comprar el informe completo. */
+    resumenCta: string;
   };
   share: {
     /** Rótulo de la portada del documento y título de la tabla de posiciones. */
@@ -461,6 +467,9 @@ const es: Dict = {
     waitProgress: "Vamos por la sección {hechas} de {total}.",
     noTimeWarning: "Esta carta quedó sin hora de nacimiento: el informe sale con siete secciones, sin la de casas.",
     reading: "Tu lectura",
+    resumenTitulo: "Esto trae el informe completo",
+    resumenRestante: "+{n} palabras",
+    resumenCta: "Comprá el informe completo para leerlas todas.",
   },
   share: {
     chartEyebrow: "Carta natal",
@@ -696,6 +705,9 @@ const en: Dict = {
     waitProgress: "We're on section {hechas} of {total}.",
     noTimeWarning: "This chart has no birth time: the report comes out with seven sections, without the houses one.",
     reading: "Your reading",
+    resumenTitulo: "What the full report includes",
+    resumenRestante: "+{n} words",
+    resumenCta: "Buy the full report to read them all.",
   },
   share: {
     chartEyebrow: "Natal chart",
@@ -931,6 +943,9 @@ const pt: Dict = {
     waitProgress: "Vamos na seção {hechas} de {total}.",
     noTimeWarning: "Este mapa ficou sem hora de nascimento: o relatório sai com sete seções, sem a de casas.",
     reading: "Sua leitura",
+    resumenTitulo: "O que o relatório completo traz",
+    resumenRestante: "+{n} palavras",
+    resumenCta: "Compre o relatório completo para ler tudo.",
   },
   share: {
     chartEyebrow: "Mapa natal",

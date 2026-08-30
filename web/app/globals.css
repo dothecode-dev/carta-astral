@@ -1742,6 +1742,47 @@ body {
   color: var(--ink-soft);
 }
 
+/* --- El pie de la lectura breve ------------------------------------------ */
+/* Vidriera del informe completo (RF3): mismo ancho de columna que `.reading`,
+   para que se lea como su continuación natural. */
+.resumenCompleto {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: min(100%, 62ch);
+  margin-inline: auto;
+  padding-top: 2rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.resumenSecciones {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.resumenSeccion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.resumenSeccionTitulo {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.resumenSeccionParrafo {
+  margin: 0;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.resumenCta {
+  margin: 0;
+  font-weight: 600;
+}
+
 .disclaimer {
   font-size: 0.75rem;
   color: var(--ink-soft);

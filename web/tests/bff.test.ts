@@ -4,6 +4,7 @@ import { DELETE as accountDelete } from "@/app/api/account/route";
 import { DELETE as chartsDelete, POST as chartsPost } from "@/app/api/charts/route";
 import { GET as readingGet, POST as readingPost } from "@/app/api/charts/[id]/interpretation/route";
 import { GET as estadoGet } from "@/app/api/charts/[id]/interpretation/estado/route";
+import { GET as indiceGet } from "@/app/api/charts/[id]/informe/indice/route";
 import { POST as geocodePost } from "@/app/api/geocode/route";
 import { DELETE as sessionDelete, POST as sessionPost } from "@/app/api/session/route";
 import { SESSION_COOKIE } from "@/lib/session";
@@ -269,6 +270,32 @@ describe("/api/charts/[id]/interpretation/estado", () => {
     expect(res.status).toBe(200);
     const [url] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("tier=corto");
+  });
+});
+
+describe("/api/charts/[id]/informe/indice", () => {
+  // El pie de la lectura breve manda el idioma de la página, no el default
+  // del backend: sin reenviarlo, alguien leyendo en inglés vería el índice
+  // en español (mismo bug de las dos veces anteriores en este directorio).
+  it("reenvía lang a la URL del backend", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      json([{ slug: "firma", titulo: "Your signature", parrafo: "", restante: 900 }]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await indiceGet(new Request("http://x?lang=en"), params);
+
+    expect(res.status).toBe(200);
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain(`/charts/${CHART}/informe/indice/?lang=en`);
+  });
+
+  it("responde 404 si la carta no existe o es de otra cuenta", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
+
+    const res = await indiceGet(new Request("http://x?lang=es"), params);
+
+    expect(res.status).toBe(404);
   });
 });
 

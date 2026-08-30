@@ -9,6 +9,7 @@ import { ChartTables } from "@/components/ChartTables";
 import { Nav } from "@/components/Nav";
 import { NatalWheel } from "@/components/NatalWheel";
 import { Reading } from "@/components/Reading";
+import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import { signOf } from "@/lib/ephemeris";
 import { INTL_LOCALE, type Locale, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
@@ -77,6 +78,20 @@ export default async function ChartPage({
       reading = await callApi(`/api/charts/${id}/interpretation/?lang=${locale}&tier=${tier}`);
     } catch {
       // Si falla, la carta se muestra igual y los botones vuelven a estar.
+    }
+  }
+
+  // El pie de la lectura breve, con lo que trae el informe completo (RF3).
+  // Sólo tiene sentido bajo una lectura ya mostrada, y nunca para quien ya
+  // tiene el completo (`tiersAqui` incluye "largo"): no hay nada que
+  // venderle. En ese caso `secciones` queda vacío y `ResumenCompleto` no
+  // renderiza nada — la decisión de mostrarlo vive acá, no en el componente.
+  let secciones: SeccionIndice[] = [];
+  if (reading && !tiersAqui.includes("largo")) {
+    try {
+      secciones = await callApi(`/api/charts/${id}/informe/indice/?lang=${locale}`);
+    } catch {
+      // Si falla, el pie simplemente no se muestra.
     }
   }
 
@@ -224,6 +239,8 @@ export default async function ChartPage({
             <p className="disclaimer">{reading.disclaimer}</p>
           </section>
         )}
+
+        <ResumenCompleto secciones={secciones} dict={dict} />
 
         <Footer locale={locale} dict={dict} />
       </main>
