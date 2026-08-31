@@ -69,3 +69,29 @@ def test_el_mismo_evento_no_se_aplica_dos_veces(make_account):
     assert aplicar_compra(cuenta, "pack_5_natal", 14990, external_id="polar:8") is False
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
+
+
+def test_un_descuento_negativo_se_rechaza(make_account):
+    with pytest.raises(MontoInvalido):
+        aplicar_compra(
+            make_account(), "informe_natal", 3200, external_id="polar:9",
+            descuento_centavos=-300,
+        )
+
+
+def test_un_descuento_mayor_al_precio_se_rechaza(make_account):
+    with pytest.raises(MontoInvalido):
+        aplicar_compra(
+            make_account(), "informe_natal", 0, external_id="polar:10",
+            descuento_centavos=3000,
+        )
+
+
+def test_el_pack_no_canjea_aunque_llegue_con_carta(make_account, make_chart):
+    cuenta = make_account()
+    carta = make_chart(account=cuenta)
+
+    aplicar_compra(cuenta, "pack_5_natal", 14990, external_id="polar:11", chart=carta)
+
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
+    assert Movimiento.objects.filter(tipo="consumo").count() == 0

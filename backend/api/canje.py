@@ -113,6 +113,16 @@ def aplicar_compra(
     catálogo, y así agregar un pack es una línea allá y ninguna acá.
     """
     prod = producto(codigo_producto)
+    if not (0 <= descuento_centavos <= prod.precio_centavos):
+        # Sin esta cota, un descuento inventado en el payload hace pasar
+        # cualquier monto (incluido 0 o negativo) como si el catálogo lo
+        # avalara: el descuento tiene que achicar el precio, nunca invertirlo.
+        logger.error(
+            "descuento fuera de rango: producto=%s precio=%s descuento=%s external_id=%s",
+            codigo_producto, prod.precio_centavos, descuento_centavos, external_id,
+        )
+        raise MontoInvalido(codigo_producto)
+
     esperado = prod.precio_centavos - descuento_centavos
     if monto_centavos != esperado:
         # Hay dos fuentes de precio —este catálogo y el de Polar—: si divergen,
@@ -136,12 +146,12 @@ def aplicar_compra(
     carta = chart
     if carta is None and chart_id is not None:
         carta = Chart.objects.filter(pk=chart_id).first()
-    if carta is not None:
-        # Compra suelta desde una carta: se canjea al instante. Si la carta ya
-        # no existe, el derecho queda disponible para otra.
-        for capacidad in prod.capacidades:
-            canjear(account, capacidad, carta)
-            break
+    # Sólo canjea una compra suelta (otorga exactamente 1 unidad): un
+    # producto que otorga más de una es un pack por definición y nunca
+    # canjea al comprar, aunque el llamador le pase una carta. Si la carta ya
+    # no existe, el otorgamiento ya ocurrió y el canje se omite igual.
+    if carta is not None and prod.otorga[1] == 1 and prod.capacidades:
+        canjear(account, prod.capacidades[0], carta)
     return True
 
 
