@@ -261,6 +261,85 @@ def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
     assert interp_es.secciones.count() == len(SECCIONES)
 
 
+def test_traduccion_a_un_tercer_idioma_que_falla_no_devuelve_lo_ya_entregado(
+    make_account, chart, settings, monkeypatch,
+):
+    """Task 11, fix round 1 (Important 2): el caso que motivó ampliar
+    `completo_ahora` de "esta interpretación" a "cualquier idioma de esta
+    carta y tier".
+
+    Con la guarda vieja (una `CreditTransaction` por `Interpretation`,
+    Task 10) esto ya estaba resuelto por otro lado: `consumo` daba `None`
+    para una traducción que nunca se cobró, así que nunca llegaba a mirar
+    `completo_ahora`. Con la guarda nueva (Task 11: un `Movimiento` por
+    `(chart, tier)`, no por fila — `canje.canjear` compra por carta+tier,
+    no por idioma) el `Movimiento` del idioma que SÍ se cobró ("es") sigue
+    vinculado a esta carta, así que `consumo` da `True` TAMBIÉN para "pt".
+    Si `completo_ahora` mirara sólo `interpretacion.pk` (la fila de "pt",
+    que nunca se completa porque la traducción siempre falla), esto
+    devolvería el derecho de una carta que YA se entregó —en "es"— sólo
+    porque la traducción gratis a un TERCER idioma nunca prospera. Mirar
+    "cualquier idioma de esta carta y tier" es lo que cierra ese hueco."""
+    settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
+    acc = make_account(free_balance=0, paid_balance=1)
+
+    # "es" se cobra y se entrega de verdad: es el único Movimiento de
+    # consumo que existe para esta carta y tier.
+    interp_es = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp_es.completa = True
+    interp_es.save(update_fields=["completa"])
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=interp_es, slug=seccion.slug, orden=orden,
+            texto=f"[es] {seccion.slug}",
+        )
+    assert _restante(acc, "informe_natal") == 0  # se cobró al pedir "es"
+
+    # "pt" encuentra a "es" como sibling completo: no cobra nada (RF8), y
+    # su único camino es traducir — que en este test SIEMPRE falla.
+    interp_pt = svc.iniciar_generacion(chart, "pt", acc, tier="largo")
+    assert _restante(acc, "informe_natal") == 0  # "pt" no cobró nada
+
+    monkeypatch.setattr(
+        informe_service, "translate_interpretation",
+        lambda texto, lang, client: (_ for _ in ()).throw(InterpretationError("no traduce")),
+    )
+
+    for _ in range(svc.INTENTOS_MAXIMOS):
+        svc.completar_generacion(interp_pt, chart, acc)
+
+    # La carta YA entregó lo que se cobró (en "es"): no hay nada que
+    # devolver aunque la traducción gratis a "pt" nunca prospere.
+    assert _restante(acc, "informe_natal") == 0
+    assert Interpretation.objects.filter(pk=interp_pt.pk).exists()  # no se borró
+    interp_pt.refresh_from_db()
+    assert interp_pt.completa is False
+
+
+def test_devuelve_si_ningun_idioma_de_la_carta_y_tier_se_entrego(make_account, chart, build_seccion_falla):
+    """Contrapunto de la anterior (Task 11, fix round 1): que
+    `completo_ahora` mire "cualquier idioma de esta carta y tier" no puede
+    aflojar la guarda al punto de no devolver nunca. Acá hay DOS filas para
+    la misma carta y tier —"es", la que se reintenta, y "en", que quedó a
+    medias de otro pedido— y NINGUNA está completa: la sola EXISTENCIA de
+    un sibling no alcanza para frenar la devolución, hace falta que esté
+    COMPLETO (ver el test de arriba, donde si lo está)."""
+    acc = make_account(free_balance=0, paid_balance=1)
+    interp_es = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    # Otro idioma de la MISMA carta y tier, a medias: existe como fila pero
+    # no debe fingir que la carta ya se entregó en ningún idioma.
+    Interpretation.objects.create(
+        chart=chart, lang="en", prompt_version=PROMPT_VERSION,
+        tier="largo", account=acc, completa=False,
+    )
+
+    for _ in range(svc.INTENTOS_MAXIMOS):
+        svc.completar_generacion(interp_es, chart, acc)
+
+    assert _restante(acc, "informe_natal") == 1  # devuelto: la carta nunca se entregó en ningún idioma
+    assert not Interpretation.objects.filter(pk=interp_es.pk).exists()
+
+
 def test_lock_perdido_repetido_no_devuelve_ni_borra(make_account, chart, fake_client, monkeypatch):
     """Important de la revisión final: perder el lock es un aborto LIMPIO
     (`informe_service.generar_informe` devuelve `False`), no un fallo real

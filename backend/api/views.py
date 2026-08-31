@@ -20,7 +20,8 @@ from api.auth import (
 )
 from api.deletion import delete_account, delete_charts
 from api.chart_service import create_chart
-from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
+from api.canje import SinDerecho
+from api.exceptions import CapReached, GenerationInProgress
 from api.interpretation_service import DISCLAIMERS
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 from api import apple
@@ -248,12 +249,15 @@ class InterpretationView(APIView):
             interpretacion = interpretation_service.iniciar_generacion(
                 chart, lang, account, tier=tier
             )
-        except QuotaExceeded as exc:
-            # `.lote` dice cuál crédito faltó ("free" o "paid"): la web
-            # muestra dos pantallas distintas ("te quedaste sin lecturas
-            # gratis" no es lo mismo que "comprá el informe completo").
+        except SinDerecho as exc:
+            # `.capacidad` dice cuál faltó ("leer_breve" o "leer_informe"):
+            # la web muestra dos pantallas distintas ("te quedaste sin
+            # lecturas gratis" no es lo mismo que "comprá el informe
+            # completo"). Task 11 (fix round 1): reemplaza a `QuotaExceeded.
+            # lote` — `iniciar_generacion` cobra por capacidad
+            # (`canje.canjear`) desde esa tarea, no por lote.
             return Response(
-                {"error": "sin créditos disponibles", "code": f"sin_{exc.lote}"},
+                {"error": "sin créditos disponibles", "code": f"sin_{exc.capacidad}"},
                 status=status.HTTP_402_PAYMENT_REQUIRED,
             )
         except CapReached:

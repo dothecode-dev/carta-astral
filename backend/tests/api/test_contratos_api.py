@@ -159,29 +159,30 @@ def test_tier_desconocido_es_400(cliente_con_carta):
 
 @pytest.mark.django_db
 def test_el_402_dice_cual_credito_falto_sin_free(cliente_sin_free_con_carta):
-    """`QuotaExceeded.lote` viaja hasta la respuesta: la web muestra "te
-    quedaste sin lecturas gratis" en vez de "comprá el informe completo"."""
+    """`SinDerecho.capacidad` viaja hasta la respuesta (Task 11, fix round 1:
+    reemplaza a `QuotaExceeded.lote`): la web muestra "te quedaste sin
+    lecturas gratis" en vez de "comprá el informe completo"."""
     r = cliente_sin_free_con_carta.post(
         f"/api/charts/{cliente_sin_free_con_carta.chart.uuid}/interpretation/",
         {"lang": "es", "tier": "corto"},
         format="json",
     )
     assert r.status_code == 402
-    assert r.json()["code"] == "sin_free"
+    assert r.json()["code"] == "sin_leer_breve"
 
 
 @pytest.mark.django_db
 def test_el_402_dice_cual_credito_falto_sin_paid(cliente_sin_paid_con_carta):
     """Contrapunto: sin crédito paid, pedir el informe completo devuelve
-    "sin_paid", no "sin_free" — el `f"sin_{exc.lote}"` de la vista tiene que
-    reflejar el lote real, no un literal fijo."""
+    "sin_leer_informe", no "sin_leer_breve" — el `f"sin_{exc.capacidad}"` de
+    la vista tiene que reflejar la capacidad real, no un literal fijo."""
     r = cliente_sin_paid_con_carta.post(
         f"/api/charts/{cliente_sin_paid_con_carta.chart.uuid}/interpretation/",
         {"lang": "es", "tier": "largo"},
         format="json",
     )
     assert r.status_code == 402
-    assert r.json()["code"] == "sin_paid"
+    assert r.json()["code"] == "sin_leer_informe"
 
 
 @pytest.mark.django_db
