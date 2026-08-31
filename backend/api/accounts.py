@@ -19,14 +19,22 @@ from api.sso import VerifiedIdentity
 logger = logging.getLogger(__name__)
 
 
-def otorgar_bienvenida(account) -> None:
+def otorgar_bienvenida(account, cantidad: int) -> None:
     """Las lecturas breves de regalo, una sola vez por cuenta.
+
+    `cantidad` ya viene descontada por el tombstone del sub (RF10): quien
+    llama es responsable de pasar lo que falta, no `INSTALL_FREE_CREDITS` a
+    secas, o borrar la cuenta y volver a entrar regalaría lecturas sin límite.
+    Si no queda nada por regalar, no se crea ni derecho ni movimiento: cero
+    no es un regalo.
 
     El external_id determinístico es lo que hace idempotente al regalo: un
     reintento del SSO que vuelva a llamar acá no puede regalar el doble.
     """
+    if cantidad <= 0:
+        return
     otorgar(
-        account, "lectura_breve", settings.INSTALL_FREE_CREDITS,
+        account, "lectura_breve", cantidad,
         origen="regalo", external_id=f"bienvenida:{account.pk}",
         note="regalo de bienvenida",
     )
@@ -78,7 +86,7 @@ def _create_account(vid: VerifiedIdentity) -> Account:
                 CreditTransaction.objects.create(
                     account=account, kind="free_grant", lot="free", amount=free,
                 )
-            otorgar_bienvenida(account)
+            otorgar_bienvenida(account, free)
     except IntegrityError:  # carrera: el sub se creo en paralelo
         logger.info("race creating %s sub; re-reading existing account", vid.provider)
         return ProviderIdentity.objects.get(
