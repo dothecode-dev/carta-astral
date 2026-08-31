@@ -8,6 +8,7 @@ imposible de expresar y valía US$345 vendidos por US$150.
 
 import logging
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -177,6 +178,64 @@ def devolver(account, codigo_producto, external_id, chart=None, note="") -> bool
 
         derecho.cantidad_restante += 1
         derecho.save(update_fields=["cantidad_restante", "updated_at"])
+    return True
+
+
+def revocar(account, codigo_producto, cantidad, external_id, note="") -> bool:
+    """Reembolso: revoca primero lo que no se canjeó; lo que excede queda como deuda.
+
+    Nunca se le saca a nadie una interpretación ya entregada: si el derecho no
+    alcanza para cubrir el reembolso, la diferencia se anota como deuda de la
+    cuenta en vez de tocar el `Derecho` (que no puede bajar de 0) o el
+    `Movimiento` de consumo que dejó la lectura. Si la cuenta reincide y cruza
+    `REFUND_FLAG_THRESHOLD`, queda `flagged` para revisión manual. Idempotente
+    por external_id, como `otorgar` y `devolver`.
+    """
+    if account is None:
+        # Chargeback contra una cuenta ya borrada (spec RF22): llega meses
+        # después del borrado y no hay a quién cobrarle la deuda ni bajarle
+        # el derecho, pero el movimiento se registra igual para que la
+        # contabilidad cierre y no reviente el webhook.
+        try:
+            with transaction.atomic():
+                Movimiento.objects.create(
+                    account=None, codigo_producto=codigo_producto, tipo="revocacion",
+                    cantidad=-cantidad, origen="compra", external_id=external_id, note=note,
+                )
+        except IntegrityError:
+            if Movimiento.objects.filter(external_id=external_id).exists():
+                logger.info("revocación duplicada ignorada (external_id=%s)", external_id)
+                return False
+            raise
+        return True
+
+    with transaction.atomic():
+        acc = Account.objects.select_for_update().get(pk=account.pk)
+        try:
+            with transaction.atomic():
+                Movimiento.objects.create(
+                    account=acc, codigo_producto=codigo_producto, tipo="revocacion",
+                    cantidad=-cantidad, origen="compra", external_id=external_id, note=note,
+                )
+        except IntegrityError:
+            if Movimiento.objects.filter(external_id=external_id).exists():
+                logger.info("revocación duplicada ignorada (external_id=%s)", external_id)
+                return False
+            raise
+
+        derecho, _ = Derecho.objects.get_or_create(
+            account=acc, codigo_producto=codigo_producto, defaults={"cantidad_restante": 0},
+        )
+        del_saldo = min(derecho.cantidad_restante or 0, cantidad)
+        derecho.cantidad_restante -= del_saldo
+        derecho.save(update_fields=["cantidad_restante", "updated_at"])
+
+        acc.deuda += cantidad - del_saldo
+        acc.refund_count += 1
+        if acc.refund_count >= settings.REFUND_FLAG_THRESHOLD:
+            acc.flagged = True
+        acc.save(update_fields=["deuda", "refund_count", "flagged"])
+        account.deuda, account.refund_count, account.flagged = acc.deuda, acc.refund_count, acc.flagged
     return True
 
 
