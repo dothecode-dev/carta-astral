@@ -11,7 +11,7 @@ import logging
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from api.catalogo import ACCESO, producto
+from api.catalogo import ACCESO, producto, productos_con_capacidad
 from api.models import Account, Derecho, Movimiento
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,12 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
     Devuelve False si ese external_id ya se había aplicado, sin tocar nada.
     """
     prod = producto(codigo_producto)
+    # El derecho se otorga en el producto de destino, no en el que se compró:
+    # el pack de 5 informes natales (otorga=("informe_natal", 5)) tiene que
+    # dejar un derecho de informe_natal, no uno de pack_5_natal que nadie
+    # consulta. El Movimiento sí guarda el producto comprado: es el rastro
+    # de auditoría de lo que entró por Polar.
+    codigo_otorgado, multiplicador = prod.otorga
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
         try:
@@ -52,7 +58,7 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
             # vigente_hasta=None (sin default) lo viola.
             vigencia_nueva = timezone.now() + timezone.timedelta(days=prod.duracion_dias)
             derecho, created = Derecho.objects.get_or_create(
-                account=acc, codigo_producto=codigo_producto,
+                account=acc, codigo_producto=codigo_otorgado,
                 defaults={"cantidad_restante": None, "vigente_hasta": vigencia_nueva},
             )
             if not created:
@@ -61,16 +67,47 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
                 derecho.save(update_fields=["vigente_hasta", "updated_at"])
         else:
             derecho, _ = Derecho.objects.get_or_create(
-                account=acc, codigo_producto=codigo_producto,
+                account=acc, codigo_producto=codigo_otorgado,
                 defaults={"cantidad_restante": 0},
             )
+            otorgado = cantidad * multiplicador
             # La deuda se cancela antes de dar saldo: quien reembolsó algo que
             # ya usó y vuelve a comprar, primero salda lo que debe.
-            aplicado_a_deuda = min(acc.deuda, cantidad)
+            aplicado_a_deuda = min(acc.deuda, otorgado)
             if aplicado_a_deuda:
                 acc.deuda -= aplicado_a_deuda
                 acc.save(update_fields=["deuda"])
                 account.deuda = acc.deuda
-            derecho.cantidad_restante += cantidad - aplicado_a_deuda
+            derecho.cantidad_restante += otorgado - aplicado_a_deuda
             derecho.save(update_fields=["cantidad_restante", "updated_at"])
     return True
+
+
+def puede(account, capacidad: str) -> bool:
+    """¿La cuenta puede hacer esto?
+
+    Es la única pregunta que hacen las vistas y las pantallas. Preguntar por
+    producto obligaría a recorrerlas todas cada vez que se agrega un plan.
+    """
+    codigos = {p.otorga[0] for p in productos_con_capacidad(capacidad)}
+    if not codigos:
+        return False
+    ahora = timezone.now()
+    for derecho in Derecho.objects.filter(account=account, codigo_producto__in=codigos):
+        if derecho.cantidad_restante is not None and derecho.cantidad_restante > 0:
+            return True
+        if derecho.vigente_hasta is not None and derecho.vigente_hasta > ahora:
+            return True
+    return False
+
+
+def derechos_de(account) -> list[dict]:
+    """Lo que la cuenta tiene, tal como lo necesita `/api/account/`."""
+    return [
+        {
+            "codigo_producto": d.codigo_producto,
+            "cantidad_restante": d.cantidad_restante,
+            "vigente_hasta": d.vigente_hasta,
+        }
+        for d in Derecho.objects.filter(account=account).order_by("codigo_producto")
+    ]
