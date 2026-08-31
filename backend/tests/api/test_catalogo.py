@@ -55,3 +55,21 @@ def test_productos_con_capacidad_encuentra_los_dos_que_dan_leer_informe():
 def test_producto_desconocido_falla_con_su_codigo_en_el_mensaje():
     with pytest.raises(KeyError, match="pack_100"):
         producto("pack_100")
+
+
+def test_ningun_producto_pago_otorga_lectura_breve():
+    """Blinda la premisa del cálculo anti-abuso de `api.deletion.free_consumidas`.
+
+    Ese cálculo es `INSTALL_FREE_CREDITS - suma de los movimientos de
+    lectura_breve`, y sólo es correcto porque `lectura_breve` es exclusivamente
+    de regalo. Si mañana un producto pago lo otorgara, las unidades COMPRADAS
+    inflarían el restante, el tombstone quedaría por DEBAJO de lo realmente
+    consumido y borrar la cuenta para volver a entrar regalaría lecturas
+    gratis de nuevo. Que el catálogo cambie está bien; que lo haga en silencio
+    y abra ese agujero, no: si este test se pone rojo, hay que rehacer
+    `free_consumidas` (por ejemplo, filtrando por `origen="regalo"`) antes de
+    tocar el catálogo.
+    """
+    pagos = [p.codigo for p in CATALOGO.values()
+             if p.precio_centavos > 0 and p.otorga[0] == "lectura_breve"]
+    assert pagos == []

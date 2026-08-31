@@ -29,7 +29,11 @@ escribió, y un catálogo que se edite mañana no puede cambiar retroactivamente
 lo que esta migración hizo.
 """
 
+import logging
+
 from django.db import migrations
+
+logger = logging.getLogger(__name__)
 
 FREE = "lectura_breve"
 PAGO = "informe_natal"
@@ -41,12 +45,23 @@ def _traducir(Derecho, Movimiento, cuenta_id, codigo, cantidad) -> bool:
     Que ya esté significa que la cuenta se dio de alta con el código nuevo
     (`otorgar_bienvenida`) antes de que esta migración corriera: sumarle otra
     vez el `free_balance` sería regalar el doble.
+
+    El descarte se loguea cuando hay saldo que descartar. Esto corre UNA sola
+    vez contra datos reales y no se puede volver a correr para averiguar qué
+    pasó: para `lectura_breve` descartar es lo correcto (el derecho ya tiene
+    la verdad post-consumo), pero para `informe_natal` el número descartado es
+    plata, y sin esta línea no queda registro de cuánta ni de quién.
     """
     _, creado = Derecho.objects.get_or_create(
         account_id=cuenta_id, codigo_producto=codigo,
         defaults={"cantidad_restante": cantidad},
     )
     if not creado:
+        if cantidad > 0:
+            logger.warning(
+                "0024: la cuenta %s ya tenía derecho de %s; se descarta el saldo viejo de %s",
+                cuenta_id, codigo, cantidad,
+            )
         return False
     Movimiento.objects.create(
         account_id=cuenta_id, codigo_producto=codigo, tipo="otorgamiento",
@@ -72,6 +87,16 @@ def migrar(apps, schema_editor):
         # deuda la anotó el código nuevo y es la buena. Sin la guarda, una
         # segunda corrida —o una reversa seguida de una re-aplicación—
         # pisaría lo que el canje viene registrando.
+        #
+        # El desvío que esto acepta a sabiendas: una cuenta con las dos cosas
+        # —`paid_balance` negativo del ledger viejo Y `deuda` del canje
+        # nuevo— conserva la deuda nueva y DESCARTA la vieja; la reversa
+        # devuelve entonces un `paid_balance` que no es el original (con
+        # `paid_balance=-2` y `deuda=1` preexistente, vuelve `-1`, no `-3`).
+        # Es intencional: preferimos perder una deuda vieja antes que pisar
+        # la que el canje viene registrando, que es la que sostiene el cobro
+        # de hoy. En producción el caso no existe (`deuda` se agregó en 0023,
+        # con default 0, y nada la escribió todavía).
         if deuda and not cuenta.deuda:
             cuenta.deuda = deuda
             cuenta.save(update_fields=["deuda"])

@@ -13,6 +13,7 @@ el registro real alcanza.
 """
 
 import importlib
+import logging
 
 import pytest
 from django.apps import apps as django_apps
@@ -103,6 +104,59 @@ def test_no_pisa_un_derecho_que_ya_existia():
     assert Movimiento.objects.filter(
         account=cuenta, codigo_producto="lectura_breve",
     ).count() == 0
+
+
+def test_avisa_por_log_del_saldo_que_descarta(caplog):
+    """El descarte tiene que dejar rastro: la migración corre UNA vez contra
+    datos reales y no se puede re-correr para averiguar qué se perdió. En
+    `informe_natal` el número descartado es plata."""
+    cuenta = Account.objects.create(email="log@y.z", free_balance=0, paid_balance=4)
+    Derecho.objects.create(account=cuenta, codigo_producto="informe_natal", cantidad_restante=1)
+
+    with caplog.at_level(logging.WARNING, logger=_migracion.__name__):
+        _migrar()
+
+    assert [r.getMessage() for r in caplog.records] == [
+        f"0024: la cuenta {cuenta.pk} ya tenía derecho de informe_natal; "
+        f"se descarta el saldo viejo de 4",
+    ]
+
+
+def test_no_avisa_cuando_no_hay_saldo_que_descartar(caplog):
+    """Contrapunto: el derecho de `lectura_breve` en cero de una cuenta ya
+    migrada no descarta nada, y un warning por cada cuenta y cada producto
+    ahogaría al que sí importa."""
+    cuenta = Account.objects.create(email="nolog@y.z", free_balance=0, paid_balance=0)
+    Derecho.objects.create(account=cuenta, codigo_producto="lectura_breve", cantidad_restante=0)
+
+    with caplog.at_level(logging.WARNING, logger=_migracion.__name__):
+        _migrar()
+
+    assert caplog.records == []
+
+
+def test_no_pisa_una_deuda_que_el_canje_ya_habia_anotado():
+    """La guarda `if deuda and not cuenta.deuda`.
+
+    Si la cuenta ya debe algo, esa deuda la anotó el código nuevo (`revocar`)
+    y es la que sostiene el cobro de hoy: la del `paid_balance` negativo del
+    ledger viejo se descarta. El desvío que eso acepta está anotado en la
+    migración: la reversa devuelve `-1`, no el `-3` que sumaría las dos.
+    """
+    cuenta = Account.objects.create(email="deu@y.z", free_balance=0, paid_balance=-2)
+    Account.objects.filter(pk=cuenta.pk).update(deuda=1)
+
+    _migrar()
+
+    cuenta.refresh_from_db()
+    assert cuenta.deuda == 1
+    assert _derecho(cuenta, "informe_natal").cantidad_restante == 0
+
+    _revertir()
+
+    cuenta.refresh_from_db()
+    assert cuenta.paid_balance == -1  # desvío conocido y documentado, no un bug nuevo
+    assert cuenta.deuda == 0
 
 
 def test_la_reversa_reconstruye_los_saldos_desde_los_derechos():

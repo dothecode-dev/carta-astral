@@ -45,6 +45,12 @@ def free_consumidas(account) -> int:
       esa lectura tiene 1 consumo, pero consumió 3 contando la vida anterior;
       el tombstone se PISA, no se acumula.
 
+    La fórmula descansa en que `lectura_breve` NUNCA se vende: si un producto
+    pago lo otorgara, las unidades compradas inflarían el restante y el
+    tombstone quedaría por debajo de lo consumido — el lado que regala gratis.
+    Esa premisa es un gate, no un supuesto:
+    `tests/api/test_catalogo.py::test_ningun_producto_pago_otorga_lectura_breve`.
+
     La suma completa arrastra las dos cosas sola: el otorgamiento ya viene
     descontado por el tombstone anterior, y una devolución (generación que
     falló) vuelve a sumar, que es lo correcto — no se le cobra al usuario una
