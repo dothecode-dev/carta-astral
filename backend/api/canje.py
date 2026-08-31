@@ -83,6 +83,49 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
     return True
 
 
+def canjear(account, capacidad: str, chart, build=None):
+    """Consume una unidad de la capacidad y la vincula a esa carta.
+
+    Si la carta ya tiene canjeada esa capacidad, es un no-op: NO se consume
+    nada y el derecho queda disponible. El mismo camino lo recorre alguien que
+    pagó por una carta ya ampliada (dos pestañas, o usó el pack mientras el
+    checkout estaba abierto), y cobrar sin entregar es el único error que
+    una superficie de plata no puede cometer.
+
+    `build`, si se pasa, corre dentro de la misma transacción que el
+    descuento: lo que construya queda atado al mismo commit que el
+    `Movimiento`, así nunca se cobra sin dejar el objeto construido.
+    """
+    codigos = {p.otorga[0] for p in productos_con_capacidad(capacidad)}
+    with transaction.atomic():
+        acc = Account.objects.select_for_update().get(pk=account.pk)
+
+        ya = Movimiento.objects.filter(
+            account=acc, chart=chart, tipo="consumo", codigo_producto__in=codigos,
+        ).first()
+        if ya is not None:
+            return None, ya.codigo_producto
+
+        derecho = (
+            Derecho.objects.filter(
+                account=acc, codigo_producto__in=codigos, cantidad_restante__gt=0,
+            )
+            .order_by("codigo_producto")
+            .first()
+        )
+        if derecho is None:
+            raise SinDerecho(capacidad)
+
+        derecho.cantidad_restante -= 1
+        derecho.save(update_fields=["cantidad_restante", "updated_at"])
+        construido = build() if build is not None else None
+        Movimiento.objects.create(
+            account=acc, codigo_producto=derecho.codigo_producto, tipo="consumo",
+            cantidad=-1, origen="compra", chart=chart,
+        )
+    return construido, derecho.codigo_producto
+
+
 def puede(account, capacidad: str) -> bool:
     """¿La cuenta puede hacer esto?
 

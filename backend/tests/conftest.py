@@ -72,10 +72,17 @@ def client_autenticado(account):
 
 
 @pytest.fixture
-def chart(db, account):
-    from api.models import BirthData, Chart
-    bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
-    return Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
+def make_chart(db):
+    def _make(account):
+        from api.models import BirthData, Chart
+        bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
+        return Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
+    return _make
+
+
+@pytest.fixture
+def chart(make_chart, account):
+    return make_chart(account=account)
 
 
 @pytest.fixture
