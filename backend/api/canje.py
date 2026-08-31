@@ -13,7 +13,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from api.catalogo import ACCESO, producto, productos_con_capacidad
-from api.models import Account, Derecho, Movimiento
+from api.models import Account, Chart, Derecho, Movimiento
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,10 @@ class SinDerecho(Exception):
     def __init__(self, capacidad: str):
         self.capacidad = capacidad
         super().__init__(f"sin derecho para {capacidad}")
+
+
+class MontoInvalido(Exception):
+    """El monto pagado no coincide con el precio del catálogo."""
 
 
 def _movimiento_idempotente(**campos) -> bool:
@@ -96,6 +100,48 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
                 account.deuda = acc.deuda
             derecho.cantidad_restante += otorgado - aplicado_a_deuda
             derecho.save(update_fields=["cantidad_restante", "updated_at"])
+    return True
+
+
+def aplicar_compra(
+    account, codigo_producto, monto_centavos, external_id,
+    chart=None, chart_id=None, descuento_centavos=0,
+) -> bool:
+    """Traduce un pago a derechos, con lo que el producto declara en el catálogo.
+
+    Quien llama no sabe cuántas unidades da cada producto: eso lo dice el
+    catálogo, y así agregar un pack es una línea allá y ninguna acá.
+    """
+    prod = producto(codigo_producto)
+    esperado = prod.precio_centavos - descuento_centavos
+    if monto_centavos != esperado:
+        # Hay dos fuentes de precio —este catálogo y el de Polar—: si divergen,
+        # todos los pagos de este producto se rechazan. Sin este error a la
+        # vista, es caja cerrada en silencio.
+        logger.error(
+            "monto no coincide con el catálogo: producto=%s esperado=%s recibido=%s external_id=%s",
+            codigo_producto, esperado, monto_centavos, external_id,
+        )
+        raise MontoInvalido(codigo_producto)
+
+    # Se otorga el producto COMPRADO, no el que ese producto otorga: `otorgar`
+    # ya traduce por `Producto.otorga` (Task 3), y así el Movimiento guarda
+    # `pack_5_natal` —qué se pagó— mientras el Derecho queda en informe_natal.
+    if not otorgar(
+        account, codigo_producto, 1, origen="compra",
+        external_id=external_id, note=f"compra:{codigo_producto}",
+    ):
+        return False
+
+    carta = chart
+    if carta is None and chart_id is not None:
+        carta = Chart.objects.filter(pk=chart_id).first()
+    if carta is not None:
+        # Compra suelta desde una carta: se canjea al instante. Si la carta ya
+        # no existe, el derecho queda disponible para otra.
+        for capacidad in prod.capacidades:
+            canjear(account, capacidad, carta)
+            break
     return True
 
 
