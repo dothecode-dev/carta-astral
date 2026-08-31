@@ -340,6 +340,58 @@ def test_devuelve_si_ningun_idioma_de_la_carta_y_tier_se_entrego(make_account, c
     assert not Interpretation.objects.filter(pk=interp_es.pk).exists()
 
 
+def test_no_devuelve_si_hay_una_fila_completa_en_otro_prompt_version(make_account, chart, build_seccion_falla):
+    """Fix round 2 (Important 2): `completo_ahora` no puede filtrar por
+    `prompt_version` — `consumo` tampoco lo hace (el `Movimiento` no tiene
+    ese campo; la compra es por chart+tier, no por chart+tier+versión del
+    prompt), y esa asimetría regalaba un informe.
+
+    Reproduce el escenario real: alguien paga y recibe "es" con una versión
+    VIEJA del prompt; se bumpea `PROMPT_VERSION`; vuelve a pedir "es" —
+    `canjear` hace no-op (mismo chart+tier ya cobrado, `Movimiento` sin
+    campo de versión, no hay doble cobro) pero esa fila nueva, en la
+    versión ACTUAL, falla siempre y agota los intentos. El cobro real se
+    hace con `canje.canjear` directo (no con `iniciar_generacion`, que
+    siempre crea con la versión ACTUAL del módulo — no serviría para dejar
+    una fila completa en una versión distinta) y las dos filas se arman a
+    mano para poder fijar cada `prompt_version` por separado.
+
+    Con el filtro viejo (`prompt_version=PROMPT_VERSION` en `completo_
+    ahora`, que compara contra la versión ACTUAL, no contra la de
+    `interpretacion`) la fila vieja quedaba invisible pese a estar
+    completa y entregada, y esto devolvía un derecho nunca cobrado además
+    de desvincular el consumo real, dejando la carta como "no comprada"."""
+    from api.canje import canjear
+
+    acc = make_account(free_balance=0, paid_balance=1)
+
+    # Se cobra de verdad (Movimiento real, vinculado a esta carta) y se
+    # entrega con una versión VIEJA del prompt.
+    canjear(acc, "leer_informe", chart)
+    interp_vieja = Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version="prompt-version-vieja",
+        tier="largo", account=acc, completa=True,
+    )
+    assert _restante(acc, "informe_natal") == 0  # se cobró
+
+    # Fila nueva de la MISMA carta y tier, en la versión ACTUAL del
+    # prompt —lo que habría dejado `iniciar_generacion` tras el no-op de
+    # `canjear` si `PROMPT_VERSION` se hubiera bumpeado de verdad.
+    interp_nueva = Interpretation.objects.create(
+        chart=chart, lang="es", prompt_version=PROMPT_VERSION,
+        tier="largo", account=acc, completa=False,
+    )
+
+    for _ in range(svc.INTENTOS_MAXIMOS):
+        svc.completar_generacion(interp_nueva, chart, acc)
+
+    # No se devuelve nada: el chart+tier YA se entregó (con la versión
+    # vieja del prompt), y el `Movimiento` de consumo real sigue vinculado
+    # a esta carta.
+    assert _restante(acc, "informe_natal") == 0
+    assert Interpretation.objects.filter(pk=interp_vieja.pk).exists()
+
+
 def test_lock_perdido_repetido_no_devuelve_ni_borra(make_account, chart, fake_client, monkeypatch):
     """Important de la revisión final: perder el lock es un aborto LIMPIO
     (`informe_service.generar_informe` devuelve `False`), no un fallo real

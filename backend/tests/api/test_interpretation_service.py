@@ -25,6 +25,16 @@ def _account(free_balance=None, paid_balance=0):
     return acc
 
 
+def _restante(account, codigo_producto: str) -> int:
+    """El saldo de un `Derecho` puntual — hace falta filtrar por cuenta
+    (no global) porque cada test de este archivo crea la suya con
+    `_account()`, y más de una puede tener un `Derecho` con el mismo
+    `codigo_producto`."""
+    from api.models import Derecho
+
+    return Derecho.objects.get(account=account, codigo_producto=codigo_producto).cantidad_restante
+
+
 @pytest.fixture(autouse=True)
 def _clear_cache():
     cache.clear()
@@ -214,12 +224,11 @@ def test_llm_error_no_deja_interpretacion_persistida(monkeypatch, settings):
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
     c = _chart()
     acc = _account(paid_balance=1)  # tier="largo" (informe completo) cobra paid, no free
-    antes = acc.free_balance + acc.paid_balance
+    antes = _restante(acc, "informe_natal")
     for _ in range(svc.INTENTOS_MAXIMOS):
         svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
     assert Interpretation.objects.count() == 0
-    acc.refresh_from_db()
-    assert acc.free_balance + acc.paid_balance == antes
+    assert _restante(acc, "informe_natal") == antes
 
 
 def test_missing_api_key_no_deja_interpretacion_persistida(settings):
@@ -232,12 +241,11 @@ def test_missing_api_key_no_deja_interpretacion_persistida(settings):
     settings.ANTHROPIC_API_KEY = ""
     c = _chart()
     acc = _account(paid_balance=1)  # tier="largo" (informe completo) cobra paid, no free
-    antes = acc.free_balance + acc.paid_balance
+    antes = _restante(acc, "informe_natal")
     for _ in range(svc.INTENTOS_MAXIMOS):
         svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
     assert Interpretation.objects.count() == 0
-    acc.refresh_from_db()
-    assert acc.free_balance + acc.paid_balance == antes
+    assert _restante(acc, "informe_natal") == antes
 
 
 def test_missing_api_key_sigue_levantando_interpretation_error_desde_build_client():

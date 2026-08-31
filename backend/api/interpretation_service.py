@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from api import ledger, notificaciones
 from api.canje import SinDerecho, canjear, devolver
+from api.catalogo import productos_con_capacidad
 from api.exceptions import CapReached, GenerationInProgress
 from api.models import Interpretation, Movimiento
 from interpret.exceptions import InterpretationError
@@ -27,11 +28,6 @@ from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 # paga. Con dos productos la capacidad ES el producto — de acá sale lo que
 # `canje.canjear` busca entre los derechos de la cuenta.
 CAPACIDAD_POR_TIER = {TIER_CORTO: "leer_breve", TIER_LARGO: "leer_informe"}
-
-# Qué producto se acredita al devolver, por tier: tiene que ser el mismo
-# producto del que se cobró (mismo motivo que documentaba `ledger.devolver`
-# sobre el lote — devolver al producto equivocado descuadra la conciliación).
-CODIGO_POR_TIER = {TIER_CORTO: "lectura_breve", TIER_LARGO: "informe_natal"}
 
 # Import diferido (no al tope del módulo): `informe_service` importa
 # `renovar_lock` DESDE acá, así que un `import` a nivel de módulo en ambas
@@ -521,14 +517,29 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # `chart` (no de interpretación puntual, ver docstring de
         # `canjear`), así que el dato que sobrevive es "¿esta carta y este
         # tier tienen un consumo todavía vinculado?" en vez de "¿cobré ESTA
-        # fila?". `codigo` es el mismo producto del que `iniciar_generacion`
-        # cobró (Task 11, `CODIGO_POR_TIER`), así que `devolver` siempre
-        # acredita al derecho correcto (mismo cuidado que antes tenía
-        # `ledger.devolver` sobre el lote).
-        codigo = CODIGO_POR_TIER[interpretacion.tier]
+        # fila?".
+        #
+        # Fix round 2 (Important 1): `codigo` se LEE del `Movimiento` real,
+        # no se re-deriva de una constante `tier → producto`. `canjear` no
+        # elige el producto por tier: elige el primer derecho disponible
+        # entre los códigos que dan esa capacidad (`codigo_producto__in`,
+        # ver `canje.canjear`) — hoy da lo mismo porque `informe_natal` y
+        # `pack_5_natal` acreditan el mismo código al otorgar, pero apenas
+        # el catálogo tenga un segundo producto con la MISMA capacidad y
+        # OTRO código de acreditación (vínculo, año, suscripción), una
+        # constante por tier rompe en las dos direcciones: no encuentra el
+        # consumo real (un informe fallido nunca se devuelve) o apunta a un
+        # derecho que la cuenta no tiene (la devolución no acredita nada).
+        # Mismo principio que ya tenía `ledger.devolver` leyendo `consumo.
+        # lot` en vez de asumirlo — el refactor había cambiado ese
+        # read-back por una constante, y esto lo repone.
+        codigos = {
+            p.otorga[0] for p in productos_con_capacidad(CAPACIDAD_POR_TIER[interpretacion.tier])
+        }
         consumo = Movimiento.objects.filter(
-            chart=chart, tipo="consumo", codigo_producto=codigo,
-        ).exists()
+            account=account, chart=chart, tipo="consumo", codigo_producto__in=codigos,
+        ).first()
+        codigo = consumo.codigo_producto if consumo is not None else None
         # Critical de la revisión final: `interpretacion.completa` en
         # MEMORIA no ve una traducción exitosa. `informe_service.
         # traducir_informe` resuelve su `destino` con un `get_or_create`
@@ -548,8 +559,19 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # devolver aunque la traducción a ESTE idioma en particular siga
         # fallando — devolver ahí le sacaría a la cuenta un derecho por un
         # informe que sí se entregó, sólo en otro idioma.
+        #
+        # Fix round 2 (Important 2): SIN filtro por `prompt_version`. La
+        # compra es por (chart, tier), no por (chart, tier, prompt_version)
+        # — `consumo` tampoco lo filtra, y antes de este fix la asimetría
+        # regalaba un informe: alguien paga y recibe con v1; se bumpea
+        # PROMPT_VERSION a v2; pide de nuevo → `canjear` hace no-op (no
+        # cobra, bien, mismo chart+tier) pero la generación v2 agota
+        # intentos → con el filtro viejo `completo_ahora` daba `False`
+        # (sólo miraba filas de v2) aunque v1 siga ahí, completa y ya
+        # entregada — se devolvía +1 informe nunca pagado y de paso se
+        # desvinculaba el consumo real, dejando la carta como "no comprada".
         completo_ahora = Interpretation.objects.filter(
-            chart=chart, prompt_version=PROMPT_VERSION, tier=interpretacion.tier, completa=True,
+            chart=chart, tier=interpretacion.tier, completa=True,
         ).exists()
         # Task 10 / RF21: ya no "sin secciones" sino "sin completar tras
         # agotar los intentos" — devolver antes de agotarlos regalaría el
@@ -557,7 +579,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # acá) y no devolver nunca dejaría cobrado un informe que jamás
         # puede terminar de generarse.
         if (
-            consumo
+            consumo is not None
             and not completo_ahora
             and interpretacion.intentos >= INTENTOS_MAXIMOS
         ):

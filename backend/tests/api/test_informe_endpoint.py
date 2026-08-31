@@ -30,6 +30,17 @@ def _derechos_de_cobro(account) -> int:
     return sum(restante.values())
 
 
+def _restante(account, codigo_producto: str) -> int:
+    """El saldo de UN producto (no la suma de los dos): hace falta cuando lo
+    que se prueba no es "se cobró algo" sino "se cobró/devolvió el
+    PRODUCTO correcto" — `account.free_balance`/`paid_balance` medían esto
+    por separado antes de Task 11; `Derecho.cantidad_restante` es la fuente
+    de verdad ahora."""
+    from api.models import Derecho
+
+    return Derecho.objects.get(account=account, codigo_producto=codigo_producto).cantidad_restante
+
+
 @pytest.fixture(autouse=True)
 def _cache_limpio():
     """El lock de generación vive en el cache, no en la base: sin esto, el
@@ -174,8 +185,7 @@ def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monke
     monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas.append(1))
 
     interpretacion = svc.iniciar_generacion(chart, "es", account, tier="largo")
-    account.refresh_from_db()
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
 
     cache.add(svc._lock_key(chart, "largo"), "otro-token", timeout=30)
 
@@ -183,8 +193,7 @@ def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monke
 
     assert llamadas == []  # no generó en paralelo
     assert InterpretationSection.objects.filter(interpretation=interpretacion).count() == 0
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes  # no cobró ni devolvió de nuevo
+    assert _derechos_de_cobro(account) == antes  # no cobró ni devolvió de nuevo
     assert Interpretation.objects.filter(pk=interpretacion.pk).exists()  # no la tocó
 
 
@@ -199,11 +208,10 @@ def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
         raise RuntimeError("cayó la API")
 
     monkeypatch.setattr("api.informe_service.generar_informe", explota)
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
     for _ in range(interpretation_service.INTENTOS_MAXIMOS):
         interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes
+    assert _derechos_de_cobro(account) == antes
 
 
 def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, account, monkeypatch):
@@ -220,43 +228,42 @@ def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, acc
         raise RuntimeError("cayó la API")
 
     monkeypatch.setattr("api.informe_service.generar_informe", explota)
-    account.free_balance = 3
-    account.paid_balance = 0
-    account.save()
 
-    # tier="corto" (Task 6): con el lote atado al tier, un cobro de
-    # free_balance sólo puede venir de la lectura breve — el informe
-    # completo ("largo") siempre cobra paid_balance, nunca free. Antes de
-    # esta tarea cualquier `charge()` podía caer en cualquier lote según el
-    # saldo disponible; ahora el lote lo decide el producto pedido.
+    # tier="corto" (Task 6): con la capacidad atada al tier, un cobro del
+    # derecho de lectura_breve sólo puede venir de la lectura breve — el
+    # informe completo ("largo") siempre cobra el de informe_natal, nunca
+    # el de lectura_breve. Antes de esta tarea cualquier `charge()` podía
+    # caer en cualquier lote según el saldo disponible; ahora el producto
+    # lo decide el tier pedido.
+    antes_breve = _restante(account, "lectura_breve")
+    antes_informe = _restante(account, "informe_natal")
+
     for _ in range(interpretation_service.INTENTOS_MAXIMOS):
         interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="corto")
 
-    account.refresh_from_db()
-    assert account.free_balance == 3
-    assert account.paid_balance == 0
+    assert _restante(account, "lectura_breve") == antes_breve  # se cobró y se devolvió: neto sin cambios
+    assert _restante(account, "informe_natal") == antes_informe  # nunca se tocó
 
 
 def test_si_la_generacion_paga_muere_el_credito_vuelve_al_lote_paid(chart, account, monkeypatch):
-    """Contrapunto del anterior: cobrado de `paid_balance`, tiene que volver
-    ahí y no a `free_balance`. Task 10 / RF21: agota los intentos primero
-    (ver `test_si_la_generacion_muere_el_credito_vuelve`)."""
+    """Contrapunto del anterior: cobrado del derecho de informe_natal, tiene
+    que volver ahí y no al de lectura_breve. Task 10 / RF21: agota los
+    intentos primero (ver `test_si_la_generacion_muere_el_credito_vuelve`)."""
     from api import interpretation_service
 
     def explota(*a, **kw):
         raise RuntimeError("cayó la API")
 
     monkeypatch.setattr("api.informe_service.generar_informe", explota)
-    account.free_balance = 0
-    account.paid_balance = 3
-    account.save()
+
+    antes_breve = _restante(account, "lectura_breve")
+    antes_informe = _restante(account, "informe_natal")
 
     for _ in range(interpretation_service.INTENTOS_MAXIMOS):
         interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
 
-    account.refresh_from_db()
-    assert account.free_balance == 0
-    assert account.paid_balance == 3
+    assert _restante(account, "lectura_breve") == antes_breve  # nunca se tocó
+    assert _restante(account, "informe_natal") == antes_informe  # se cobró y se devolvió: neto sin cambios
 
 
 def test_si_la_generacion_muere_no_queda_una_interpretacion_vacia(chart, account, monkeypatch):
@@ -364,10 +371,9 @@ def test_iniciar_generacion_no_cobra_si_ya_hay_un_idioma_completo(chart, account
     sobre `chart`/`account`."""
     from api import interpretation_service as svc
 
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
     svc.iniciar_generacion(chart, "en", account, tier="largo")
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes
+    assert _derechos_de_cobro(account) == antes
 
 
 def test_iniciar_generacion_cobra_si_no_hay_ningun_idioma_completo(chart, account):
@@ -430,14 +436,12 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
     # que haría `completar_generacion` en segundo plano durante ~6 minutos).
     cache.add(svc._lock_key(chart, "largo"), "token-es-en-curso", timeout=600)
 
-    account.refresh_from_db()
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
 
     with pytest.raises(GenerationInProgress):
         svc.iniciar_generacion(chart, "en", account, tier="largo")
 
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes  # no se perdió ningún crédito
+    assert _derechos_de_cobro(account) == antes  # no se perdió ningún crédito
     assert not Interpretation.objects.filter(
         chart=chart, lang="en", prompt_version=PROMPT_VERSION
     ).exists()  # no queda una fila "en" vacía y cobrada
@@ -530,11 +534,10 @@ def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
     from api import interpretation_service as svc, informe_service
 
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
 
     interpretacion_en = svc.iniciar_generacion(chart, "en", account, tier="largo")
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes  # confirmado: no cobró
+    assert _derechos_de_cobro(account) == antes  # confirmado: no cobró
 
     interpretacion_completa.delete()  # el sibling desaparece antes de completar_generacion
 
@@ -546,5 +549,4 @@ def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
     for _ in range(svc.INTENTOS_MAXIMOS):
         svc.completar_generacion(interpretacion_en, chart, account)
 
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes  # nunca se cobró: no hay nada que devolver
+    assert _derechos_de_cobro(account) == antes  # nunca se cobró: no hay nada que devolver
