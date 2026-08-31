@@ -26,6 +26,11 @@ def test_no_se_puede_mezclar_cantidad_y_vigencia(make_account):
         )
 
 
+def test_no_se_puede_no_tener_ni_cantidad_ni_vigencia(make_account):
+    with pytest.raises(IntegrityError):
+        Derecho.objects.create(account=make_account(), codigo_producto="informe_natal")
+
+
 def test_la_cantidad_nunca_es_negativa(make_account):
     # La deuda vive en Account.deuda, no acá: saldo y deuda no son el mismo
     # número (spec RF5/RF6, hallazgo de la critique).
