@@ -20,9 +20,10 @@ class Command(BaseCommand):
         account = Account.objects.filter(id=opts["account_id"]).first()
         if account is None:
             raise CommandError(f"cuenta {opts['account_id']} no existe")
-        # external_id único por invocación: `otorgar` es idempotente por
-        # external_id, así que sin uno propio dos recargas seguidas de la
-        # misma cantidad se pisarían en vez de sumar.
+        # external_id único por invocación: no es para idempotencia (este
+        # comando nunca la tuvo, es aditivo a propósito — correrlo dos veces
+        # es acreditar dos veces), sino para poder identificar cada recarga
+        # manual en el admin y en la auditoría.
         otorgar(
             account, "informe_natal", n, origen="ajuste",
             external_id=f"cli:{uuid4()}", note="grant_credits CLI",
