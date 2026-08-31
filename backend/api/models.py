@@ -184,6 +184,11 @@ class Account(models.Model):
     free_balance = models.PositiveIntegerField(default=_default_free_balance)
     paid_balance = models.IntegerField(default=0)  # signed: clawback de reembolso puede dejarlo negativo
     refund_count = models.PositiveIntegerField(default=0)
+    # Lo que la cuenta debe tras un reembolso de algo que ya consumió. Vive
+    # separada del saldo a propósito: saldo es lo que se puede gastar, deuda es
+    # lo que se debe, y meterlos en la misma columna hacía imposible exigir que
+    # el saldo no fuera negativo.
+    deuda = models.PositiveIntegerField(default=0)
     flagged = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -238,3 +243,77 @@ class SubTombstone(models.Model):
     sub_hash = models.CharField(max_length=64, unique=True, db_index=True)
     free_credits_consumed = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Derecho(models.Model):
+    """Lo que una cuenta puede usar. Consumible: cantidad. Acceso: vigencia."""
+
+    account = models.ForeignKey("Account", on_delete=models.CASCADE, related_name="derechos")
+    codigo_producto = models.CharField(max_length=40)
+    cantidad_restante = models.PositiveIntegerField(null=True, blank=True)
+    vigente_hasta = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "codigo_producto"], name="uniq_derecho_cuenta_producto",
+            ),
+            # Un derecho es de una naturaleza o de la otra, nunca de las dos.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(cantidad_restante__isnull=False, vigente_hasta__isnull=True)
+                    | models.Q(cantidad_restante__isnull=True, vigente_hasta__isnull=False)
+                ),
+                name="derecho_es_consumible_o_acceso",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.codigo_producto} (acc={self.account_id})"
+
+
+class Movimiento(models.Model):
+    """Registro append-only de todo cambio de derechos o de deuda.
+
+    El invariante que sostiene cualquier discusión de plata con un usuario: la
+    cantidad de un derecho tiene que poder reconstruirse sumando sus movimientos.
+    """
+
+    TIPOS = (
+        ("otorgamiento", "otorgamiento"), ("consumo", "consumo"),
+        ("devolucion", "devolucion"), ("revocacion", "revocacion"),
+    )
+    ORIGENES = (
+        ("compra", "compra"), ("regalo", "regalo"), ("cupon", "cupon"), ("ajuste", "ajuste"),
+    )
+
+    account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos",
+    )
+    codigo_producto = models.CharField(max_length=40)
+    tipo = models.CharField(max_length=12, choices=TIPOS)
+    origen = models.CharField(max_length=8, choices=ORIGENES)
+    cantidad = models.IntegerField(help_text="firmado: + ingresa, - consume")
+    chart = models.ForeignKey(
+        "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos",
+    )
+    external_id = models.CharField(max_length=255, blank=True, default="")
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            # Misma idempotencia que ya sostiene el webhook de pagos hoy: el
+            # índice es parcial porque los movimientos sin origen externo
+            # (consumos) no tienen id que compartir.
+            models.UniqueConstraint(
+                fields=["external_id"], condition=models.Q(external_id__gt=""),
+                name="uniq_movimiento_external_id",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.tipo} {self.cantidad} (acc={self.account_id})"
