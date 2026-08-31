@@ -38,6 +38,10 @@ def test_dos_productos_dan_la_misma_capacidad_y_basta_uno(make_account):
     cuenta = make_account()
     otorgar(cuenta, "pack_5_natal", 1, origen="compra", external_id="p:2")
     assert puede(cuenta, "leer_informe") is True
+    # No alcanza con que el código quede bien: si el multiplicador de
+    # Producto.otorga se ignora, el pack de 5 otorgaría 1 sola unidad y
+    # puede() daría el mismo True sin que se note el faltante de plata.
+    assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 5
 
 
 def test_un_acceso_vigente_puede_y_uno_vencido_no(make_account, monkeypatch):
