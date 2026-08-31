@@ -1,11 +1,13 @@
+from uuid import uuid4
+
 from django.core.management.base import BaseCommand, CommandError
 
-from api.ledger import grant_paid
+from api.canje import otorgar
 from api.models import Account
 
 
 class Command(BaseCommand):
-    help = "Suma créditos pagados a una cuenta (recarga manual, sin IAP)."
+    help = "Otorga derechos de informe_natal a una cuenta (recarga manual, sin IAP)."
 
     def add_arguments(self, parser):
         parser.add_argument("account_id", type=int)
@@ -18,5 +20,13 @@ class Command(BaseCommand):
         account = Account.objects.filter(id=opts["account_id"]).first()
         if account is None:
             raise CommandError(f"cuenta {opts['account_id']} no existe")
-        grant_paid(account, n, note="grant_credits CLI")
-        self.stdout.write(self.style.SUCCESS(f"+{n} créditos a cuenta {opts['account_id']}"))
+        # external_id único por invocación: `otorgar` es idempotente por
+        # external_id, así que sin uno propio dos recargas seguidas de la
+        # misma cantidad se pisarían en vez de sumar.
+        otorgar(
+            account, "informe_natal", n, origen="ajuste",
+            external_id=f"cli:{uuid4()}", note="grant_credits CLI",
+        )
+        self.stdout.write(
+            self.style.SUCCESS(f"+{n} informe_natal a cuenta {opts['account_id']}")
+        )

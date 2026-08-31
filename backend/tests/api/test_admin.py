@@ -13,7 +13,7 @@ from django.urls import NoReverseMatch, clear_url_caches, reverse
 
 from api.admin import ChartAdmin, InterpretationAdmin
 from api.chart_service import create_chart
-from api.models import Account, BirthData, Chart, CreditTransaction, Interpretation
+from api.models import Account, BirthData, Chart, CreditTransaction, Interpretation, Movimiento
 
 
 # El admin sirve su CSS con CompressedManifestStaticFilesStorage, que exige el
@@ -46,7 +46,7 @@ def admin_montado(monkeypatch):
     clear_url_caches()
 
 
-@pytest.mark.parametrize("modelo", [Account, Chart, Interpretation, CreditTransaction])
+@pytest.mark.parametrize("modelo", [Account, Chart, Interpretation, CreditTransaction, Movimiento])
 def test_ningun_modelo_se_puede_crear_editar_ni_borrar(modelo):
     """Las mutaciones van por management command, no por el panel.
 
@@ -143,17 +143,18 @@ def test_un_staff_ve_las_cuentas_pero_no_los_datos_de_nacimiento(admin_montado):
 
 @pytest.mark.django_db
 @sin_manifiesto
-def test_el_ledger_se_ve_para_investigar_un_no_me_acreditaron(admin_montado):
+def test_el_canje_se_ve_para_investigar_un_no_me_acreditaron(admin_montado):
     acc = Account.objects.create(email="u@x.com")
-    from api import ledger
+    from api import canje
 
-    ledger.credit_purchase(acc, 10, external_id="evt_visible", note="revenuecat:credits_10")
+    canje.otorgar(acc, "informe_natal", 10, origen="compra",
+                  external_id="evt_visible", note="revenuecat:credits_10")
     staff2 = User.objects.create_superuser("staff2", "s2@x.com", "pw-de-test-12345")
     c = Client()
     # force_login: ver comentario en test_un_staff_ve_las_cuentas_pero_no_los_datos_de_nacimiento.
     c.force_login(staff2)
 
-    r = c.get("/panel-test/api/credittransaction/")
+    r = c.get("/panel-test/api/movimiento/")
 
     assert r.status_code == 200
     assert "evt_visible" in r.content.decode()

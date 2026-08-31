@@ -1,4 +1,4 @@
-"""Webhook de RevenueCat: acredita/revierte créditos IAP contra el ledger.
+"""Webhook de RevenueCat: acredita/revierte derechos IAP vía el canje.
 
 Idempotente por event.id. Autentica por header compartido. Ack (200) ante
 casos ignorados (cuenta/producto/tipo desconocido) para cortar reintentos;
@@ -22,7 +22,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api import ledger
+from api import canje
 from api.models import Account
 
 logger = logging.getLogger(__name__)
@@ -122,11 +122,15 @@ class RevenueCatWebhookView(APIView):
             return Response({"status": "ignored"}, status=status.HTTP_200_OK)
 
         if etype in PURCHASE_EVENTS:
-            applied = ledger.credit_purchase(account, credits, external_id=event_id,
-                                             note=f"revenuecat:{product_id}")
+            # No pasa por `canje.aplicar_compra` a propósito: las tiendas
+            # cobran con su propio precio y moneda, y validar el monto contra
+            # el catálogo propio rechazaría compras legítimas. `credits` (via
+            # REVENUECAT_PRODUCT_CREDITS) son unidades de informe_natal.
+            applied = canje.otorgar(account, "informe_natal", credits, origen="compra",
+                                    external_id=event_id, note=f"revenuecat:{product_id}")
         elif etype in REFUND_EVENTS:
-            applied = ledger.refund_credits(account, credits, external_id=event_id,
-                                            note=f"revenuecat-refund:{product_id}")
+            applied = canje.revocar(account, "informe_natal", credits,
+                                    external_id=event_id, note=f"revenuecat-refund:{product_id}")
         else:
             # CANCELLATION cae acá a propósito: en consumibles no implica
             # devolución de dinero, así que no descuenta. Queda registrado para

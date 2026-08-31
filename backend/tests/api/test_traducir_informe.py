@@ -134,13 +134,13 @@ def test_traduce_al_tier_correcto_cuando_hay_dos_productos_en_la_carta(chart, ac
 
 
 def test_no_debita_ni_devuelve_creditos(interpretacion, monkeypatch):
-    from api import ledger
+    from api import canje
 
     def _explota(*args, **kwargs):
-        raise AssertionError("traducir_informe no debe tocar el ledger")
+        raise AssertionError("traducir_informe no debe tocar el canje")
 
-    monkeypatch.setattr(ledger, "charge", _explota)
-    monkeypatch.setattr(ledger, "devolver", _explota)
+    monkeypatch.setattr(canje, "canjear", _explota)
+    monkeypatch.setattr(canje, "devolver", _explota)
     _crear_secciones(interpretacion)
 
     informe_service.traducir_informe(interpretacion, "en", ClienteFalso())

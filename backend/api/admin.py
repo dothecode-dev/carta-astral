@@ -18,7 +18,7 @@ aparte (`manage.py createsuperuser`).
 
 from django.contrib import admin
 
-from api.models import Account, Chart, CreditTransaction, Interpretation
+from api.models import Account, Chart, CreditTransaction, Interpretation, Movimiento
 
 
 class SoloLectura(admin.ModelAdmin):
@@ -95,12 +95,27 @@ class InterpretationAdmin(SoloLectura):
 
 @admin.register(CreditTransaction)
 class CreditTransactionAdmin(SoloLectura):
-    """El ledger completo: para cuadrar contra el dashboard de RevenueCat."""
+    """El ledger viejo, histórico: `SubTombstone` lo referencia y no se borra,
+    pero ya no se acredita nada acá — eso es `Movimiento`, abajo."""
 
     list_display = ("id", "account", "kind", "lot", "amount", "external_id", "created_at")
     list_filter = ("kind", "lot")
     search_fields = ("external_id", "account__id", "account__email")
     readonly_fields = list_display + ("interpretation", "note")
+
+
+@admin.register(Movimiento)
+class MovimientoAdmin(SoloLectura):
+    """El ledger del modelo de canje: para cuadrar contra el dashboard de
+    RevenueCat y para responder "no me acreditaron" sin la CLI."""
+
+    list_display = (
+        "id", "account", "codigo_producto", "tipo", "origen",
+        "cantidad", "external_id", "created_at",
+    )
+    list_filter = ("tipo", "origen", "codigo_producto")
+    search_fields = ("external_id", "account__id", "account__email")
+    readonly_fields = list_display + ("chart", "note")
 
 
 # GeoName y GeoNameToken NO se registran: son millones de filas de un dataset

@@ -10,6 +10,8 @@ Dos objetivos:
 import pytest
 from rest_framework.test import APIClient
 
+from api.models import Derecho
+
 URL = "/api/webhooks/revenuecat"
 AUTH = "secret-abc"
 
@@ -29,6 +31,11 @@ def _post(payload):
     return APIClient().post(URL, payload, format="json", HTTP_AUTHORIZATION=AUTH)
 
 
+def _restante(acc, codigo_producto="informe_natal") -> int:
+    d = Derecho.objects.filter(account=acc, codigo_producto=codigo_producto).first()
+    return d.cantidad_restante if d else 0
+
+
 @pytest.mark.django_db
 def test_acredita_con_event_id_en_vez_de_id(cfg, make_account):
     """Si el id del evento viniera como `event_id`, la compra no puede perderse."""
@@ -38,8 +45,7 @@ def test_acredita_con_event_id_en_vez_de_id(cfg, make_account):
         "app_user_id": str(acc.id), "product_id": "credits_10",
     }})
     assert r.status_code == 200
-    acc.refresh_from_db()
-    assert acc.paid_balance == 10
+    assert _restante(acc) == 10
 
 
 @pytest.mark.django_db
@@ -50,8 +56,7 @@ def test_acredita_con_product_identifier(cfg, make_account):
         "app_user_id": str(acc.id), "product_identifier": "credits_10",
     }})
     assert r.status_code == 200
-    acc.refresh_from_db()
-    assert acc.paid_balance == 10
+    assert _restante(acc) == 10
 
 
 @pytest.mark.django_db
@@ -63,8 +68,7 @@ def test_acredita_con_original_app_user_id(cfg, make_account):
         "original_app_user_id": str(acc.id), "product_id": "credits_10",
     }})
     assert r.status_code == 200
-    acc.refresh_from_db()
-    assert acc.paid_balance == 10
+    assert _restante(acc) == 10
 
 
 @pytest.mark.django_db
@@ -77,8 +81,7 @@ def test_la_idempotencia_sigue_valiendo_con_los_alias(cfg, make_account):
     }}
     assert _post(payload).status_code == 200
     assert _post(payload).status_code == 200
-    acc.refresh_from_db()
-    assert acc.paid_balance == 10  # una sola vez
+    assert _restante(acc) == 10  # una sola vez
 
 
 @pytest.mark.django_db
@@ -127,6 +130,5 @@ def test_cancellation_queda_registrada_aunque_no_descuente(cfg, make_account, ca
             "app_user_id": str(acc.id), "product_id": "credits_10",
         }})
     assert r.status_code == 200
-    acc.refresh_from_db()
-    assert acc.paid_balance == 10  # no se toca el saldo
+    assert _restante(acc) == 10  # no se toca el saldo
     assert any("CANCELLATION" in r.message for r in caplog.records)

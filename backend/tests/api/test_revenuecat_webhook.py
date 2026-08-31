@@ -2,6 +2,8 @@
 import pytest
 from rest_framework.test import APIClient
 
+from api.models import Derecho
+
 URL = "/api/webhooks/revenuecat"
 
 
@@ -11,6 +13,11 @@ def _event(**over):
           "store": "APP_STORE", "environment": "PRODUCTION"}
     ev.update(over)
     return {"api_version": "1.0", "event": ev}
+
+
+def _restante(acc, codigo_producto="informe_natal") -> int:
+    d = Derecho.objects.filter(account=acc, codigo_producto=codigo_producto).first()
+    return d.cantidad_restante if d else 0
 
 
 @pytest.fixture
@@ -39,8 +46,7 @@ def test_purchase_credits_account(cfg, make_account):
     r = APIClient().post(URL, _event(app_user_id=str(acc.id)), format="json",
                          HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200
-    acc.refresh_from_db()
-    assert acc.paid_balance == 10
+    assert _restante(acc) == 10
 
 
 @pytest.mark.django_db
@@ -50,8 +56,7 @@ def test_purchase_idempotent_on_retry(cfg, make_account):
     body = _event(app_user_id=str(acc.id), id="evt_dup")
     c.post(URL, body, format="json", HTTP_AUTHORIZATION="secret-abc")
     c.post(URL, body, format="json", HTTP_AUTHORIZATION="secret-abc")  # reintento
-    acc.refresh_from_db()
-    assert acc.paid_balance == 10  # una sola vez
+    assert _restante(acc) == 10  # una sola vez
 
 
 @pytest.mark.django_db
@@ -61,7 +66,7 @@ def test_refund_clawbacks(cfg, make_account):
                          format="json", HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200
     acc.refresh_from_db()
-    assert acc.paid_balance == 0
+    assert _restante(acc) == 0
     assert acc.refund_count == 1
 
 
@@ -78,8 +83,7 @@ def test_unknown_product_acked(cfg, make_account):
     r = APIClient().post(URL, _event(app_user_id=str(acc.id), product_id="mystery"),
                          format="json", HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200
-    acc.refresh_from_db()
-    assert acc.paid_balance == 0
+    assert _restante(acc) == 0
 
 
 @pytest.mark.django_db
@@ -116,8 +120,7 @@ def test_unhandled_event_type_acked(cfg, make_account):
     r = APIClient().post(URL, _event(type="RENEWAL", app_user_id=str(acc.id)),
                          format="json", HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200
-    acc.refresh_from_db()
-    assert acc.paid_balance == 0
+    assert _restante(acc) == 0
 
 
 @pytest.mark.django_db

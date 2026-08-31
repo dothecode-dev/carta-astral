@@ -483,15 +483,15 @@ def test_carta_sin_rueda_se_genera_igual(account_client):
     assert "<svg" not in html
 
 
-def test_no_toca_creditos_ni_ledger(account_client):
-    from api.ledger import credits_available
-    from api.models import CreditTransaction
+def test_no_toca_creditos_ni_canje(account_client):
+    from api.canje import derechos_de
+    from api.models import Movimiento
 
     chart = _chart(account_client)
-    antes = (credits_available(account_client.account), CreditTransaction.objects.count())
+    antes = (derechos_de(account_client.account), Movimiento.objects.count())
     account_client.post(URL.format(chart.uuid), _payload(), format="json")
     account_client.post(URL.format(chart.uuid), _payload(reading_lang="es"), format="json")
-    assert (credits_available(account_client.account), CreditTransaction.objects.count()) == antes
+    assert (derechos_de(account_client.account), Movimiento.objects.count()) == antes
 
 
 # --- lo que llega de afuera -------------------------------------------------

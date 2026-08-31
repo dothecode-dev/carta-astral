@@ -260,12 +260,12 @@ def test_si_pierde_el_lock_aborta_sin_completar_ni_seguir_pidiendo(interpretacio
 
 
 def test_nunca_llama_a_devolver_credito_ante_una_falla_parcial(interpretacion, monkeypatch):
-    from api import ledger
+    from api import canje
 
     def _explota(*args, **kwargs):
-        raise AssertionError("generar_informe no debe llamar a ledger.devolver")
+        raise AssertionError("generar_informe no debe llamar a canje.devolver")
 
-    monkeypatch.setattr(ledger, "devolver", _explota)
+    monkeypatch.setattr(canje, "devolver", _explota)
     with pytest.raises(RuntimeError):
         informe_service.generar_informe(interpretacion, ClienteFalso(falla_en=5), TOKEN)
 
