@@ -26,6 +26,26 @@ class SinDerecho(Exception):
         super().__init__(f"sin derecho para {capacidad}")
 
 
+def _movimiento_idempotente(**campos) -> bool:
+    """Crea el `Movimiento`; devuelve False si ese `external_id` ya estaba aplicado.
+
+    El savepoint anidado es lo que permite que el `IntegrityError` de un
+    duplicado no envenene la transacción externa cuando esto corre dentro de
+    otra (el `select_for_update` de quien llama). Cualquier `IntegrityError`
+    que no sea ese duplicado se relanza: no es un caso que este helper sepa
+    resolver.
+    """
+    external_id = campos.get("external_id", "")
+    try:
+        with transaction.atomic():
+            Movimiento.objects.create(**campos)
+    except IntegrityError:
+        if external_id and Movimiento.objects.filter(external_id=external_id).exists():
+            return False
+        raise
+    return True
+
+
 def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="") -> bool:
     """Da `cantidad` unidades (o vigencia) del producto. Idempotente por external_id.
 
@@ -40,17 +60,12 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
     codigo_otorgado, multiplicador = prod.otorga
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
-        try:
-            with transaction.atomic():
-                Movimiento.objects.create(
-                    account=acc, codigo_producto=codigo_producto, tipo="otorgamiento",
-                    cantidad=cantidad, origen=origen, external_id=external_id, note=note,
-                )
-        except IntegrityError:
-            if external_id and Movimiento.objects.filter(external_id=external_id).exists():
-                logger.info("otorgamiento duplicado ignorado (external_id=%s)", external_id)
-                return False
-            raise
+        if not _movimiento_idempotente(
+            account=acc, codigo_producto=codigo_producto, tipo="otorgamiento",
+            cantidad=cantidad, origen=origen, external_id=external_id, note=note,
+        ):
+            logger.info("otorgamiento duplicado ignorado (external_id=%s)", external_id)
+            return False
 
         if prod.naturaleza == ACCESO:
             # El default de creación ya tiene que traer vigente_hasta puesta:
@@ -137,18 +152,12 @@ def devolver(account, codigo_producto, external_id, chart=None, note="") -> bool
     """
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
-        try:
-            with transaction.atomic():
-                Movimiento.objects.create(
-                    account=acc, codigo_producto=codigo_producto, tipo="devolucion",
-                    cantidad=1, origen="ajuste", chart=chart,
-                    external_id=external_id, note=note,
-                )
-        except IntegrityError:
-            if Movimiento.objects.filter(external_id=external_id).exists():
-                logger.info("devolución duplicada ignorada (external_id=%s)", external_id)
-                return False
-            raise
+        if not _movimiento_idempotente(
+            account=acc, codigo_producto=codigo_producto, tipo="devolucion",
+            cantidad=1, origen="ajuste", chart=chart, external_id=external_id, note=note,
+        ):
+            logger.info("devolución duplicada ignorada (external_id=%s)", external_id)
+            return False
 
         derecho = Derecho.objects.filter(account=acc, codigo_producto=codigo_producto).first()
         if derecho is None:
@@ -196,32 +205,22 @@ def revocar(account, codigo_producto, cantidad, external_id, note="") -> bool:
         # después del borrado y no hay a quién cobrarle la deuda ni bajarle
         # el derecho, pero el movimiento se registra igual para que la
         # contabilidad cierre y no reviente el webhook.
-        try:
-            with transaction.atomic():
-                Movimiento.objects.create(
-                    account=None, codigo_producto=codigo_producto, tipo="revocacion",
-                    cantidad=-cantidad, origen="compra", external_id=external_id, note=note,
-                )
-        except IntegrityError:
-            if Movimiento.objects.filter(external_id=external_id).exists():
-                logger.info("revocación duplicada ignorada (external_id=%s)", external_id)
-                return False
-            raise
+        if not _movimiento_idempotente(
+            account=None, codigo_producto=codigo_producto, tipo="revocacion",
+            cantidad=-cantidad, origen="compra", external_id=external_id, note=note,
+        ):
+            logger.info("revocación duplicada ignorada (external_id=%s)", external_id)
+            return False
         return True
 
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
-        try:
-            with transaction.atomic():
-                Movimiento.objects.create(
-                    account=acc, codigo_producto=codigo_producto, tipo="revocacion",
-                    cantidad=-cantidad, origen="compra", external_id=external_id, note=note,
-                )
-        except IntegrityError:
-            if Movimiento.objects.filter(external_id=external_id).exists():
-                logger.info("revocación duplicada ignorada (external_id=%s)", external_id)
-                return False
-            raise
+        if not _movimiento_idempotente(
+            account=acc, codigo_producto=codigo_producto, tipo="revocacion",
+            cantidad=-cantidad, origen="compra", external_id=external_id, note=note,
+        ):
+            logger.info("revocación duplicada ignorada (external_id=%s)", external_id)
+            return False
 
         derecho, _ = Derecho.objects.get_or_create(
             account=acc, codigo_producto=codigo_producto, defaults={"cantidad_restante": 0},
