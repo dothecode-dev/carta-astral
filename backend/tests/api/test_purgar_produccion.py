@@ -10,15 +10,18 @@ from django.core.management import call_command
 from wagtail.models import Page
 
 from api.auth import create_session
+from api.canje import canjear, otorgar
 from api.models import (
     Account,
     BirthData,
     Chart,
     CreditTransaction,
+    Derecho,
     Device,
     GeoName,
     Interpretation,
     InterpretationSection,
+    Movimiento,
     ProviderIdentity,
     Session,
     SubTombstone,
@@ -28,9 +31,10 @@ from interpret.prompts import PROMPT_VERSION, SECCIONES
 
 
 def _sembrar_cuenta_con_cartas_y_ledger(account):
-    """Puebla los siete modelos que el comando debe purgar, más `BirthData` y
-    `Device` (huérfanos, con FK SET_NULL a la cuenta): sin sembrar cada uno,
-    un `count() == 0` después de purgar no prueba que el comando lo haya
+    """Puebla los siete modelos que el comando debe purgar, más `BirthData`,
+    `Device`, `Derecho` y `Movimiento` (los que quedan huérfanos por FK
+    SET_NULL a la cuenta, o que sólo se borran por cascade): sin sembrar cada
+    uno, un `count() == 0` después de purgar no prueba que el comando lo haya
     tocado."""
     bd = BirthData.objects.create(date="1990-05-20", lat=-34.6, lng=-58.4, tz_name="UTC")
     chart = Chart.objects.create(
@@ -46,6 +50,17 @@ def _sembrar_cuenta_con_cartas_y_ledger(account):
         account=account, kind="consumption", lot="paid", amount=-1, interpretation=interpretacion,
     )
     ProviderIdentity.objects.create(provider="google", sub="sub-de-prueba", account=account)
+    # Derecho y Movimiento son el ledger nuevo (modelo de canje) y tienen el
+    # mismo agujero que tenía `Device`: `Movimiento.account` es SET_NULL, así
+    # que sin borrado explícito la purga lo deja vivo con account_id=NULL y
+    # con qué compró y consumió una cuenta que ya no existe. `Derecho`
+    # cascadea con la cuenta, pero se nombra igual para que el reporte del
+    # comando no mienta por omisión sobre lo que destruye.
+    otorgar(
+        account, "informe_natal", 1, origen="compra",
+        external_id=f"purga-test:{account.pk}",
+    )
+    canjear(account, "leer_informe", chart)
     Device.objects.create(account=account, platform="ios", push_token="tok-de-prueba")
     # Session es CASCADE (fix wave final / Minor de la revisión final): sin
     # sembrarla acá, un `count() == 0` de más abajo no distingue "el comando
@@ -83,7 +98,7 @@ def test_el_reporte_cuenta_session_aunque_se_borre_por_cascade(make_account, cap
 
 
 @pytest.mark.django_db
-def test_con_el_flag_borra_todo_incluidos_los_tombstones(make_account):
+def test_con_el_flag_borra_todo_incluidos_los_tombstones(make_account, capsys):
     """Los tombstones también: al volver a entrar con el mismo Google se
     reciben los 3 créditos free y se puede probar el flujo gratis entero."""
     cuenta = make_account()
@@ -91,6 +106,13 @@ def test_con_el_flag_borra_todo_incluidos_los_tombstones(make_account):
     SubTombstone.objects.create(sub_hash="abc", free_credits_consumed=3)
 
     call_command("purgar_produccion", "--si-estoy-seguro")
+
+    # El reporte tiene que nombrarlos: `Derecho` cascadea con la cuenta y se
+    # borraría igual sin estar en la lista, pero entonces "esto es lo que se
+    # borró" callaría un modelo con lo que el usuario tenía comprado.
+    salida = capsys.readouterr().out
+    assert "Derecho: 1" in salida
+    assert "Movimiento: 2" in salida
 
     for modelo in (
         Account, Chart, Interpretation, InterpretationSection,
@@ -106,6 +128,12 @@ def test_con_el_flag_borra_todo_incluidos_los_tombstones(make_account):
     # en la purga sería un olvido, no una decisión.
     assert BirthData.objects.count() == 0
     assert Device.objects.count() == 0
+    # Derecho y Movimiento: mismo motivo que Device. `Movimiento` sobrevive
+    # con account_id=NULL si no se lo nombra (FK SET_NULL) y guarda el
+    # historial de compras y consumos de la cuenta borrada; `Derecho` es lo
+    # que la cuenta podía usar. Una purga que los deja es una purga a medias.
+    assert Derecho.objects.count() == 0
+    assert Movimiento.objects.count() == 0
 
 
 @pytest.mark.django_db
