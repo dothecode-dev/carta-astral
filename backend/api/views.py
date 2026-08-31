@@ -20,12 +20,11 @@ from api.auth import (
 )
 from api.deletion import delete_account, delete_charts
 from api.chart_service import create_chart
-from api.canje import SinDerecho
+from api.canje import SinDerecho, derechos_de
 from api.exceptions import CapReached, GenerationInProgress
 from api.interpretation_service import DISCLAIMERS
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 from api import apple
-from api.ledger import credits_available as account_credits_available
 from api.models import Chart, Interpretation, ProviderIdentity
 from api.permissions import HasAccount
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
@@ -46,12 +45,8 @@ class AccountView(APIView):
 
     def get(self, request):
         return Response({
-            "free_credits": request.user.free_balance,
-            "paid_credits": request.user.paid_balance,
-            # Suma de los dos lotes. Se mantiene sólo para la app RN, que está
-            # apagada por APP_AUTH_ENABLED: se saca cuando la app vuelva o se
-            # descarte, lo que pase primero.
-            "credits_available": account_credits_available(request.user),
+            "derechos": derechos_de(request.user),
+            "deuda": request.user.deuda,
             "account_id": request.user.id,
         })
 
@@ -394,7 +389,7 @@ class _BaseAuthView(APIView):
         token = create_session(account)
         return Response({
             "token": token,
-            "credits_available": account_credits_available(account),
+            "derechos": derechos_de(account),
             "account_id": account.id,
         })
 

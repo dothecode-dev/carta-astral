@@ -275,9 +275,9 @@ def test_la_respuesta_del_login_tiene_exactamente_estas_claves(monkeypatch, sett
     r = APIClient().post("/api/auth/apple", {"id_token": "tok"}, format="json")
 
     assert r.status_code == 200
-    assert set(r.data) == {"token", "credits_available", "account_id"}
+    assert set(r.data) == {"token", "derechos", "account_id"}
     assert isinstance(r.data["account_id"], int)
-    assert isinstance(r.data["credits_available"], int)
+    assert isinstance(r.data["derechos"], list)
 
 
 @pytest.mark.django_db
@@ -288,7 +288,7 @@ def test_la_cuenta_tiene_exactamente_estas_claves(make_account):
 
     r = c.get("/api/account/")
 
-    assert set(r.data) == {"free_credits", "paid_credits", "credits_available", "account_id"}
+    assert set(r.data) == {"derechos", "deuda", "account_id"}
 
 
 @pytest.mark.django_db

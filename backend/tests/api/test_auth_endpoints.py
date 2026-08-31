@@ -16,7 +16,11 @@ def test_apple_auth_creates_session(monkeypatch, settings):
     resp = APIClient().post("/api/auth/apple", {"id_token": "tok"}, format="json")
     assert resp.status_code == 200
     assert "token" in resp.data
-    assert resp.data["credits_available"] == settings.INSTALL_FREE_CREDITS
+    assert {
+        "codigo_producto": "lectura_breve",
+        "cantidad_restante": settings.INSTALL_FREE_CREDITS,
+        "vigente_hasta": None,
+    } in resp.data["derechos"]
     from api.identity import hash_token
     from api.models import Session
     assert Session.objects.filter(token_hash=hash_token(resp.data["token"])).exists()
