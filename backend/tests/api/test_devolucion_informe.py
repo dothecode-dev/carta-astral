@@ -392,6 +392,50 @@ def test_no_devuelve_si_hay_una_fila_completa_en_otro_prompt_version(make_accoun
     assert Interpretation.objects.filter(pk=interp_vieja.pk).exists()
 
 
+def test_la_devolucion_acredita_el_producto_real_no_una_constante_por_tier(
+    make_account, chart, build_seccion_falla, monkeypatch,
+):
+    """Fix round 2 (Important 1): `codigo` se lee del `Movimiento` de
+    consumo real, no se re-deriva de una constante tier→producto
+    (`CODIGO_POR_TIER`, ya retirada). Con el catálogo real de hoy esto no
+    se puede distinguir de la constante vieja: `informe_natal` y
+    `pack_5_natal` acreditan el mismo código al otorgar. Se inyecta acá un
+    segundo producto que da la MISMA capacidad (`leer_informe`) pero
+    acredita OTRO código —el caso real que el catálogo va a tener el día
+    que exista un vínculo, un año o una suscripción— con el mismo patrón
+    que ya usa el resto de la suite de canje (`test_canje_puede.py`,
+    `test_canje_otorgar.py`): `monkeypatch.setitem(catalogo.CATALOGO,
+    ...)`. `productos_con_capacidad` lee el diccionario del módulo en cada
+    llamada, así que la inyección funciona sin importar cómo la importe
+    `interpretation_service`.
+
+    Con la constante vieja (fija en "informe_natal" para tier="largo") la
+    cuenta de este test —que sólo tiene un derecho de "informe_vinculo",
+    nunca "informe_natal"— no deja ver el `Movimiento` real: la guarda de
+    devolución no encuentra consumo que devolver y no acredita nada, dejando
+    a la cuenta sin el derecho que sí pagó y sin el informe que nunca
+    recibió."""
+    from api import catalogo
+    from api.canje import otorgar
+
+    monkeypatch.setitem(catalogo.CATALOGO, "informe_vinculo", catalogo.Producto(
+        codigo="informe_vinculo", precio_centavos=3900, naturaleza=catalogo.CONSUMIBLE,
+        capacidades=("leer_informe",), otorga=("informe_vinculo", 1),
+    ))
+
+    acc = make_account(free_balance=0, paid_balance=0)
+    otorgar(acc, "informe_vinculo", 1, origen="compra", external_id="test:vinculo")
+
+    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    assert _restante(acc, "informe_vinculo") == 0  # se cobró de verdad
+
+    for _ in range(svc.INTENTOS_MAXIMOS):
+        svc.completar_generacion(interp, chart, acc)
+
+    assert _restante(acc, "informe_vinculo") == 1  # devuelto al producto real
+    assert not Interpretation.objects.filter(pk=interp.pk).exists()
+
+
 def test_lock_perdido_repetido_no_devuelve_ni_borra(make_account, chart, fake_client, monkeypatch):
     """Important de la revisión final: perder el lock es un aborto LIMPIO
     (`informe_service.generar_informe` devuelve `False`), no un fallo real
