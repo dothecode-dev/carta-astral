@@ -149,14 +149,32 @@ def devolver(account, codigo_producto, external_id, chart=None, note="") -> bool
                 return False
             raise
 
+        derecho = Derecho.objects.filter(account=acc, codigo_producto=codigo_producto).first()
+        if derecho is None:
+            # Para haberse consumido, el derecho tuvo que existir (queda en 0,
+            # no desaparece). Si no existe, no lo acuñamos de la nada: un
+            # codigo_producto equivocado del llamador inflaría saldo en
+            # silencio. El Movimiento de devolución ya quedó creado arriba:
+            # es el rastro de auditoría del intento.
+            logger.error(
+                "devolver sin derecho previo (account=%s, codigo_producto=%s, external_id=%s)",
+                acc.pk, codigo_producto, external_id,
+            )
+            return False
+
         if chart is not None:
             Movimiento.objects.filter(
                 account=acc, chart=chart, tipo="consumo", codigo_producto=codigo_producto,
             ).update(chart=None)
+        else:
+            # Rastro para diagnosticar una carta que quedó bloqueada porque
+            # quien llamó a `devolver` se olvidó de pasar la carta.
+            logger.debug(
+                "devolver sin carta (account=%s, codigo_producto=%s, external_id=%s): "
+                "no se desvinculó ningún movimiento de consumo",
+                acc.pk, codigo_producto, external_id,
+            )
 
-        derecho, _ = Derecho.objects.get_or_create(
-            account=acc, codigo_producto=codigo_producto, defaults={"cantidad_restante": 0},
-        )
         derecho.cantidad_restante += 1
         derecho.save(update_fields=["cantidad_restante", "updated_at"])
     return True
