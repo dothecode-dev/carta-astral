@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { API_URL } from "./config";
+import type { Locale } from "./i18n";
 
 // El token de sesión vive en una cookie httpOnly: el navegador lo manda solo en
 // cada pedido a este servidor, y ningún script de la página puede leerlo. El
@@ -28,6 +29,42 @@ export async function setSessionToken(token: string): Promise<void> {
     path: "/",
     maxAge: MAX_AGE_SECONDS,
   });
+}
+
+/**
+ * A dónde mandar a alguien cuya cookie el backend ya no reconoce.
+ *
+ * No alcanza con redirigirlo a /entrar: la cookie muerta seguiría ahí y
+ * /entrar lo devolvería a la página protegida, en un rebote infinito. Un
+ * Server Component puede leer cookies pero no borrarlas —sólo un Route
+ * Handler puede—, así que la limpieza pasa por esta ruta.
+ */
+export const RUTA_SESION_EXPIRADA = (locale: Locale | string) =>
+  `/api/session/expirada?locale=${encodeURIComponent(locale)}`;
+
+/**
+ * ¿El backend todavía reconoce esta sesión?
+ *
+ * Tener la cookie no es tener sesión: el token pudo vencer, la cuenta pudo
+ * borrarse. Ante cualquier error —401, backend caído, red cortada— la
+ * respuesta es "no": mostrar el login de más nunca deja a nadie trabado,
+ * redirigir de más sí.
+ */
+export async function sessionIsLive(): Promise<boolean> {
+  if (!(await getSessionToken())) return false;
+  try {
+    await callApi("/api/account/");
+    return true;
+  } catch (error) {
+    // Un 401 es la respuesta esperada de una sesión muerta y no es noticia.
+    // Cualquier otra cosa sí: sin este log, un backend caído se vería igual
+    // que una sesión vencida y mandaría a todo el mundo a loguearse de nuevo
+    // en silencio.
+    if (!(error instanceof ApiError) || error.status !== 401) {
+      console.error("no se pudo validar la sesión:", error);
+    }
+    return false;
+  }
 }
 
 export async function clearSessionToken(): Promise<void> {

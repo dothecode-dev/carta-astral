@@ -7,7 +7,7 @@ import { DangerZone } from "@/components/DangerZone";
 import { Nav } from "@/components/Nav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
-import { ApiError, callApi, getSessionToken } from "@/lib/session";
+import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
 import { Footer } from "@/components/Footer";
 
 /** Lo que devuelve /api/account/: no hay email ni nombre. */
@@ -51,8 +51,10 @@ export default async function AccountPage({
       callApi<{ results: ChartSummary[] }>("/api/charts/").then((r) => r.results),
     ]);
   } catch (error) {
-    // Sesión vencida o cuenta borrada desde otro lado: se vuelve a entrar.
-    if (error instanceof ApiError && error.status === 401) redirect(`/${locale}/entrar`);
+    // Sesión vencida o cuenta borrada desde otro lado: se vuelve a entrar, pero
+    // pasando por la ruta que borra la cookie muerta. Mandarlo derecho a
+    // /entrar dejaría la cookie viva y el navegador rebotaría entre las dos.
+    if (error instanceof ApiError && error.status === 401) redirect(RUTA_SESION_EXPIRADA(locale));
     throw error;
   }
 

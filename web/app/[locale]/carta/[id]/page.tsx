@@ -14,7 +14,7 @@ import { type ApiChart, toWheel } from "@/lib/chart";
 import { signOf } from "@/lib/ephemeris";
 import { INTL_LOCALE, type Locale, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
 import { buildPdfPayload } from "@/lib/pdfPayload";
-import { ApiError, callApi, getSessionToken } from "@/lib/session";
+import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
 import { Footer } from "@/components/Footer";
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
@@ -50,7 +50,7 @@ export default async function ChartPage({
     chart = await callApi<ApiChart>(`/api/charts/${id}/`);
   } catch (error) {
     if (error instanceof ApiError) {
-      if (error.status === 401) redirect(`/${locale}/entrar`);
+      if (error.status === 401) redirect(RUTA_SESION_EXPIRADA(locale));
       // La carta no existe, o es de otra cuenta: para quien mira es lo mismo.
       if (error.status === 404) notFound();
     }
@@ -63,7 +63,7 @@ export default async function ChartPage({
   try {
     account = await callApi<{ free_credits: number; paid_credits: number }>(`/api/account/`);
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) redirect(`/${locale}/entrar`);
+    if (error instanceof ApiError && error.status === 401) redirect(RUTA_SESION_EXPIRADA(locale));
     throw error;
   }
 

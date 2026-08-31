@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { Nav } from "@/components/Nav";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
-import { getSessionToken } from "@/lib/session";
+import { sessionIsLive } from "@/lib/session";
 import { Footer } from "@/components/Footer";
 
 export function generateStaticParams() {
@@ -34,8 +34,10 @@ export default async function SignInPage({
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
-  // Quien ya entró no tiene nada que hacer acá.
-  if (await getSessionToken()) redirect(`/${locale}/cuenta`);
+  // Quien ya entró no tiene nada que hacer acá. Se le pregunta al backend en
+  // vez de confiar en que exista la cookie: una cookie que él ya no reconoce
+  // mandaba a /cuenta, que rebotaba para acá, y así hasta la pantalla en blanco.
+  if (await sessionIsLive()) redirect(`/${locale}/cuenta`);
 
   const dict = getDict(locale);
 
