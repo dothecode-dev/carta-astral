@@ -11,11 +11,25 @@ import logging
 from django.conf import settings
 from django.db import IntegrityError, transaction
 
+from api.canje import otorgar
 from api.identity import sub_hash
 from api.models import Account, CreditTransaction, ProviderIdentity, SubTombstone
 from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
+
+
+def otorgar_bienvenida(account) -> None:
+    """Las lecturas breves de regalo, una sola vez por cuenta.
+
+    El external_id determinístico es lo que hace idempotente al regalo: un
+    reintento del SSO que vuelva a llamar acá no puede regalar el doble.
+    """
+    otorgar(
+        account, "lectura_breve", settings.INSTALL_FREE_CREDITS,
+        origen="regalo", external_id=f"bienvenida:{account.pk}",
+        note="regalo de bienvenida",
+    )
 
 
 def resolve_account(vid: VerifiedIdentity) -> Account:
@@ -64,6 +78,7 @@ def _create_account(vid: VerifiedIdentity) -> Account:
                 CreditTransaction.objects.create(
                     account=account, kind="free_grant", lot="free", amount=free,
                 )
+            otorgar_bienvenida(account)
     except IntegrityError:  # carrera: el sub se creo en paralelo
         logger.info("race creating %s sub; re-reading existing account", vid.provider)
         return ProviderIdentity.objects.get(
