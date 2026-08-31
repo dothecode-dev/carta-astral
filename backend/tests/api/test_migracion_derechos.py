@@ -302,6 +302,27 @@ def test_el_borrado_deja_pasar_la_deuda_que_la_0024_anoto(columnas_viejas):
     _verificar_borrado()  # no levanta
 
 
+def test_el_borrado_aborta_si_una_cuenta_endeudada_compro_despues_de_la_0024(columnas_viejas):
+    """El agujero que dejaba comparar la deuda con `>=` en vez de con `==`.
+
+    La cuenta debía 5 cuando corrió la `0024` (`paid_balance=-5` → `deuda=5`).
+    El código viejo sigue sirviendo y la cuenta COMPRA 3: el saldo sube a `-2`
+    y la deuda queda en 5, porque el canje nuevo todavía no la tocó. Con `>=`
+    la guarda evaluaba `5 >= 2`, daba el saldo por traducido y borraba la
+    columna: el usuario pagó 3 y no se le descontó nada de lo que debía.
+    """
+    cuenta = columnas_viejas.objects.create(email="deudor@y.z", free_balance=0, paid_balance=-5)
+
+    _migrar()
+    cuenta.refresh_from_db()
+    assert cuenta.deuda == 5
+    columnas_viejas.objects.filter(pk=cuenta.pk).update(paid_balance=-2)  # compró 3 por el camino viejo
+
+    with pytest.raises(RuntimeError) as exc:
+        _verificar_borrado()
+    assert f"cuenta {cuenta.pk}: paid_balance=-2" in str(exc.value)
+
+
 def test_el_borrado_aborta_si_entro_plata_despues_de_la_0024(columnas_viejas):
     """El caso que la guarda existe para atrapar: un despliegue parcial deja
     la `0024` aplicada y el código viejo sirviendo, así que el webhook

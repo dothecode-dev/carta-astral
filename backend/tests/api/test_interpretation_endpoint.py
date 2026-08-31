@@ -207,7 +207,7 @@ def test_cap_reached_503(account_client, monkeypatch):
     """El 503 de la vista es el mismo caso de siempre —`CapReached` cortando
     el POST antes de aceptar el 202— pero ya no se puede disparar con el cap
     real (ver el retiro de arriba): se fuerza directo, como hacen los tests
-    de `QuotaExceeded`/`GenerationInProgress` para 402/409 en este mismo
+    de `SinDerecho`/`GenerationInProgress` para 402/409 en este mismo
     archivo."""
     from api.exceptions import CapReached
 

@@ -72,12 +72,19 @@ def test_concurrent_create_of_same_new_sub_does_not_duplicate():
 
 @pytest.mark.django_db
 def test_new_sub_without_tombstone_gets_free_grant():
-    from api.accounts import resolve_account
-    from api.models import CreditTransaction
+    """El alta regala lecturas breves y lo anota UNA vez.
 
-    from api.models import Derecho
+    El regalo vive en el `Derecho` y su rastro en el `Movimiento`. La
+    `CreditTransaction` de `free_grant` que también se creaba acá era el
+    mismo hecho duplicado en el libro del modelo viejo, que quedó congelado:
+    este test afirma que ya no se escribe."""
+    from api.accounts import resolve_account
+    from api.models import CreditTransaction, Derecho, Movimiento
 
     acc = resolve_account(_vid())
     derecho = Derecho.objects.get(account=acc, codigo_producto="lectura_breve")
     assert derecho.cantidad_restante == settings.INSTALL_FREE_CREDITS
-    assert CreditTransaction.objects.filter(account=acc, kind="free_grant").count() == 1
+    assert Movimiento.objects.filter(
+        account=acc, codigo_producto="lectura_breve", origen="regalo",
+    ).count() == 1
+    assert not CreditTransaction.objects.filter(account=acc).exists()

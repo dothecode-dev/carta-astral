@@ -339,7 +339,8 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
                 )
         except IntegrityError:
             # Carrera: otra llamada concurrente ya tradujo y persistió esta
-            # misma sección primero (mismo patrón que api/ledger.py). Sólo es
+            # misma sección primero (mismo patrón que `canje._movimiento_
+            # idempotente`, que también distingue el duplicado real). Sólo es
             # "ya hecha" si la fila realmente está — cualquier otro
             # IntegrityError no es esta carrera y se relanza.
             if not destino.secciones.filter(slug=seccion.slug).exists():

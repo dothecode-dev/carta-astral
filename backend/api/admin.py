@@ -18,7 +18,7 @@ aparte (`manage.py createsuperuser`).
 
 from django.contrib import admin
 
-from api.models import Account, Chart, CreditTransaction, Interpretation, Movimiento
+from api.models import Account, Chart, CreditTransaction, Derecho, Interpretation, Movimiento
 
 
 class SoloLectura(admin.ModelAdmin):
@@ -34,29 +34,68 @@ class SoloLectura(admin.ModelAdmin):
         return False
 
 
-class CreditTransactionInline(admin.TabularInline):
-    """El ledger de la cuenta: para responder "no me acreditaron" sin la CLI."""
+class SoloLecturaInline(admin.TabularInline):
+    """Base de inline sin alta, edición ni borrado — el mismo criterio que
+    `SoloLectura`, que no aplica a los inlines por herencia."""
 
-    model = CreditTransaction
     extra = 0
     can_delete = False
-    fields = ("created_at", "kind", "lot", "amount", "external_id", "note")
-    readonly_fields = fields
-    ordering = ("-created_at",)
 
     def has_add_permission(self, request, obj=None):
         return False
 
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class DerechoInline(SoloLecturaInline):
+    """Lo que la cuenta PUEDE hacer hoy: la primera pregunta de cualquier
+    consulta de soporte, y la que el panel no podía responder desde que
+    salieron los dos contadores viejos de `Account`."""
+
+    model = Derecho
+    fields = ("codigo_producto", "cantidad_restante", "vigente_hasta", "updated_at")
+    readonly_fields = fields
+    ordering = ("codigo_producto",)
+
+
+class MovimientoInline(SoloLecturaInline):
+    """Por qué le queda eso: el libro que reconstruye cada `Derecho`."""
+
+    model = Movimiento
+    fields = ("created_at", "codigo_producto", "tipo", "origen", "cantidad", "external_id", "note")
+    readonly_fields = fields
+    ordering = ("-created_at",)
+
+
+class CreditTransactionInline(SoloLecturaInline):
+    """El libro del modelo de cobro viejo, congelado y sin escritores. Sigue
+    acá porque una consulta puede ser sobre algo que pasó antes del canje."""
+
+    model = CreditTransaction
+    fields = ("created_at", "kind", "lot", "amount", "external_id", "note")
+    readonly_fields = fields
+    ordering = ("-created_at",)
+
 
 @admin.register(Account)
 class AccountAdmin(SoloLectura):
+    # `deuda` en la lista: es lo que la cuenta debe tras un reembolso de algo
+    # que ya consumió, y desde que salieron los dos contadores viejos era el
+    # único número de plata que no se veía en ningún lado del panel.
     list_display = (
-        "id", "email", "email_verified", "refund_count", "flagged", "created_at",
+        "id", "email", "email_verified", "deuda", "refund_count", "flagged", "created_at",
     )
     list_filter = ("email_verified", "flagged")
     search_fields = ("email", "id")
     readonly_fields = list_display + ("proveedores",)
-    inlines = [CreditTransactionInline]
+    # `DerechoInline` primero: responder "no me acreditaron" empieza por ver
+    # qué le queda a la cuenta, y recién después por qué. `CreditTransaction`
+    # es el libro viejo, congelado, y queda al final por eso.
+    inlines = [DerechoInline, MovimientoInline, CreditTransactionInline]
 
     @admin.display(description="proveedores SSO")
     def proveedores(self, obj):
@@ -101,6 +140,19 @@ class CreditTransactionAdmin(SoloLectura):
     list_filter = ("kind", "lot")
     search_fields = ("external_id", "account__id", "account__email")
     readonly_fields = list_display + ("interpretation", "note")
+
+
+@admin.register(Derecho)
+class DerechoAdmin(SoloLectura):
+    """Lo que cada cuenta puede usar. Es la fuente de verdad del cobro desde
+    el modelo de canje: `canje.puede()` no mira nada más que esto."""
+
+    list_display = (
+        "id", "account", "codigo_producto", "cantidad_restante", "vigente_hasta", "updated_at",
+    )
+    list_filter = ("codigo_producto",)
+    search_fields = ("account__id", "account__email", "codigo_producto")
+    readonly_fields = list_display + ("created_at",)
 
 
 @admin.register(Movimiento)

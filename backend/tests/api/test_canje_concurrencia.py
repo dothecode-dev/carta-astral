@@ -201,6 +201,10 @@ def test_canjear_y_otorgar_a_la_vez_no_pierde_ninguna_operacion(make_account, ma
     _resultados, errores = _en_hilos(operar, 4)
 
     assert not [e for e in errores if not isinstance(e, SinDerecho)]
+    # El invariante de abajo se cumple solo si NADA corrió (1 == 1), así que
+    # primero se exige que al menos un canje haya pasado de verdad: sin esto
+    # el test queda verde con los cuatro hilos muertos.
+    assert Movimiento.objects.filter(tipo="consumo").count() >= 1
     movido = Movimiento.objects.filter(codigo_producto="informe_natal").aggregate(
         total=Sum("cantidad"),
     )["total"]

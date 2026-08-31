@@ -13,7 +13,15 @@ from django.urls import NoReverseMatch, clear_url_caches, reverse
 
 from api.admin import ChartAdmin, InterpretationAdmin
 from api.chart_service import create_chart
-from api.models import Account, BirthData, Chart, CreditTransaction, Interpretation, Movimiento
+from api.models import (
+    Account,
+    BirthData,
+    Chart,
+    CreditTransaction,
+    Derecho,
+    Interpretation,
+    Movimiento,
+)
 
 
 # El admin sirve su CSS con CompressedManifestStaticFilesStorage, que exige el
@@ -46,7 +54,9 @@ def admin_montado(monkeypatch):
     clear_url_caches()
 
 
-@pytest.mark.parametrize("modelo", [Account, Chart, Interpretation, CreditTransaction, Movimiento])
+@pytest.mark.parametrize(
+    "modelo", [Account, Chart, Interpretation, CreditTransaction, Derecho, Movimiento],
+)
 def test_ningun_modelo_se_puede_crear_editar_ni_borrar(modelo):
     """Las mutaciones van por management command, no por el panel.
 
@@ -60,6 +70,66 @@ def test_ningun_modelo_se_puede_crear_editar_ni_borrar(modelo):
     assert registrado.has_add_permission(None) is False
     assert registrado.has_change_permission(None) is False
     assert registrado.has_delete_permission(None) is False
+
+
+@pytest.mark.django_db
+@sin_manifiesto
+def test_la_ficha_de_una_cuenta_muestra_lo_que_puede_usar(admin_montado):
+    """Sin esto el panel quedó ciego: al salir los dos contadores viejos de
+    `AccountAdmin` no entró nada que respondiera "qué le queda a esta cuenta",
+    y contestar un "no me acreditaron" obligaba a sumar `Movimiento` a ojo.
+
+    Se RENDERIZA la ficha en vez de mirar la configuración: un inline mal
+    declarado (una FK ambigua, un campo que no existe) explota al dibujarse,
+    no al registrarse, y un test que sólo lea `inlines` no lo vería."""
+    from api import canje
+
+    acc = Account.objects.create(email="u@x.com")
+    canje.otorgar(acc, "informe_natal", 4, origen="compra", external_id="evt_ficha")
+    staff = User.objects.create_superuser("staff3", "s3@x.com", "pw-de-test-12345")
+    c = Client()
+    # force_login: ver comentario en test_un_staff_ve_las_cuentas_pero_no_los_datos_de_nacimiento.
+    c.force_login(staff)
+
+    r = c.get(f"/panel-test/api/account/{acc.pk}/change/")
+
+    assert r.status_code == 200
+    cuerpo = r.content.decode().lower()
+    # Los tres bloques por su encabezado, no por el contenido: `informe_natal`
+    # aparece igual en el movimiento, así que buscarlo no distinguiría si el
+    # inline de derechos se cayó.
+    assert "derechos" in cuerpo  # qué puede usar
+    assert "movimientos" in cuerpo  # por qué le quedó eso
+    assert "cantidad restante" in cuerpo  # la columna del derecho, ya dibujada
+    assert "evt_ficha" in cuerpo
+
+
+@pytest.mark.django_db
+@sin_manifiesto
+def test_los_derechos_se_pueden_buscar_por_producto(admin_montado):
+    """La otra pregunta: "¿quién tiene un pack sin usar?", que se contesta
+    desde el changelist de `Derecho` y no desde una cuenta puntual."""
+    from api import canje
+
+    acc = Account.objects.create(email="d@x.com")
+    canje.otorgar(acc, "informe_natal", 2, origen="compra", external_id="evt_lista")
+    staff = User.objects.create_superuser("staff4", "s4@x.com", "pw-de-test-12345")
+    c = Client()
+    c.force_login(staff)
+
+    r = c.get("/panel-test/api/derecho/")
+
+    assert r.status_code == 200
+    assert "informe_natal" in r.content.decode()
+
+
+def test_la_ficha_de_cuenta_muestra_la_deuda():
+    """`deuda` es lo que la cuenta debe tras un reembolso de algo que ya
+    consumió: desde que salieron los dos contadores viejos era el único
+    número de plata que no aparecía en ningún lado del panel."""
+    from django.contrib import admin as dj_admin
+
+    assert "deuda" in dj_admin.site._registry[Account].list_display
 
 
 def test_birthdata_no_esta_registrado():

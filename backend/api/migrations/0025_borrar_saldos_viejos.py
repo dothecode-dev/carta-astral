@@ -46,8 +46,16 @@ def verificar_sin_saldo_pago_huerfano(apps, schema_editor):
     for cuenta in Account.objects.exclude(paid_balance=0).iterator():
         if traducido.get(cuenta.pk) == cuenta.paid_balance:
             continue  # la 0024 lo copió tal cual a un derecho de informe_natal
-        if cuenta.paid_balance < 0 and cuenta.deuda >= -cuenta.paid_balance:
-            continue  # el clawback ya vive en Account.deuda
+        if cuenta.paid_balance < 0 and cuenta.deuda == -cuenta.paid_balance:
+            # El clawback ya vive en Account.deuda. La igualdad es EXACTA a
+            # propósito: con `>=` se colaba plata del usuario. Una cuenta con
+            # paid_balance=-5 cuando corrió la 0024 queda con deuda=5; si el
+            # código viejo sigue sirviendo y esa cuenta COMPRA 3, el saldo
+            # sube a -2 y la deuda sigue en 5. `5 >= 2` daba por traducido un
+            # pago que nadie tradujo, y borrar la columna lo perdía. En el
+            # deploy normal la 0024 deja `deuda == -paid_balance` exacto, así
+            # que la igualdad no le quita tolerancia a ningún caso legítimo.
+            continue
         huerfanos.append((cuenta.pk, cuenta.paid_balance))
 
     if huerfanos:

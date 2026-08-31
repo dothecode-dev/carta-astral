@@ -13,7 +13,7 @@ from django.db import IntegrityError, transaction
 
 from api.canje import otorgar
 from api.identity import sub_hash
-from api.models import Account, CreditTransaction, ProviderIdentity, SubTombstone
+from api.models import Account, ProviderIdentity, SubTombstone
 from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
@@ -81,10 +81,10 @@ def _create_account(vid: VerifiedIdentity) -> Account:
             ProviderIdentity.objects.create(
                 provider=vid.provider, sub=vid.sub, account=account,
             )
-            if free > 0:
-                CreditTransaction.objects.create(
-                    account=account, kind="free_grant", lot="free", amount=free,
-                )
+            # El regalo de bienvenida se registra UNA sola vez, como
+            # `Movimiento` (Task 10). La `CreditTransaction` de `free_grant`
+            # que había acá era el mismo hecho anotado por segunda vez en el
+            # libro del modelo viejo, que quedó congelado y sin escritores.
             otorgar_bienvenida(account, free)
     except IntegrityError:  # carrera: el sub se creo en paralelo
         logger.info("race creating %s sub; re-reading existing account", vid.provider)
