@@ -105,7 +105,7 @@ def test_el_panel_pide_login(admin_montado):
 @pytest.mark.django_db
 @sin_manifiesto
 def test_un_staff_ve_las_cuentas_pero_no_los_datos_de_nacimiento(admin_montado):
-    acc = Account.objects.create(email="u@x.com", free_balance=1)
+    acc = Account.objects.create(email="u@x.com")
     create_chart(
         {
             "name": "Ceci",

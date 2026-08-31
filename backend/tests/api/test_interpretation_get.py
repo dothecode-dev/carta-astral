@@ -16,7 +16,7 @@ from interpret.prompts import PROMPT_VERSION
 
 @pytest.fixture
 def cuenta(db):
-    return Account.objects.create(email="lectura@ejemplo.test", free_balance=2, paid_balance=0)
+    return Account.objects.create(email="lectura@ejemplo.test")
 
 
 @pytest.fixture
@@ -117,7 +117,7 @@ def test_no_devuelve_la_de_otro_idioma(cliente, carta):
 
 @pytest.mark.django_db
 def test_no_devuelve_la_carta_de_otra_cuenta(carta, db):
-    otra = Account.objects.create(email="ajena@ejemplo.test", free_balance=1, paid_balance=0)
+    otra = Account.objects.create(email="ajena@ejemplo.test")
     ajeno = APIClient(HTTP_AUTHORIZATION=f"Bearer {create_session(otra)}")
 
     assert ajeno.get(f"/api/charts/{carta.uuid}/interpretation/?lang=es&tier=largo").status_code == 404

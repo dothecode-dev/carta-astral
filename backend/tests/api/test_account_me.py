@@ -4,11 +4,14 @@ from rest_framework.test import APIClient
 
 @pytest.mark.django_db
 def test_la_cuenta_expone_sus_derechos_y_no_saldos(make_account):
-    """`/api/account/` deja de hablar de saldos (`free_credits`/`paid_credits`/
-    `credits_available`) y pasa a exponer derechos por producto (Task 12):
-    con dos contadores era imposible distinguir un pack de 5 informes
-    natales de una lectura breve, y la web necesita esa distinción para
-    decidir qué ofrecer."""
+    """`/api/account/` deja de hablar de saldos y pasa a exponer derechos por
+    producto (Task 12): con dos contadores era imposible distinguir un pack
+    de 5 informes natales de una lectura breve, y la web necesita esa
+    distinción para decidir qué ofrecer.
+
+    El contrato se afirma por el set COMPLETO de claves, no listando las que
+    ya no están: así, cualquier saldo suelto que alguien reintroduzca en el
+    serializer rompe este test, se llame como se llame."""
     from api.auth import create_session
     from api.canje import otorgar
 
@@ -25,6 +28,4 @@ def test_la_cuenta_expone_sus_derechos_y_no_saldos(make_account):
     assert {
         "codigo_producto": "informe_natal", "cantidad_restante": 1, "vigente_hasta": None,
     } in data["derechos"]
-    assert "free_credits" not in data
-    assert "paid_credits" not in data
-    assert "credits_available" not in data
+    assert set(data) == {"account_id", "deuda", "derechos"}

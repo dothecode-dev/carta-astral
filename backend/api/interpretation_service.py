@@ -15,7 +15,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from api import ledger, notificaciones
+from api import notificaciones
 from api.canje import SinDerecho, canjear, devolver
 from api.catalogo import productos_con_capacidad
 from api.exceptions import CapReached, GenerationInProgress
@@ -60,10 +60,6 @@ DISCLAIMERS = {
     "de entretenimento; não é conselho médico, legal ou financeiro e não tem "
     "valor preditivo comprovado.",
 }
-
-
-def credits_available(account) -> int:
-    return ledger.credits_available(account)
 
 
 def _build_client():
@@ -530,7 +526,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # constante por tier rompe en las dos direcciones: no encuentra el
         # consumo real (un informe fallido nunca se devuelve) o apunta a un
         # derecho que la cuenta no tiene (la devolución no acredita nada).
-        # Mismo principio que ya tenía `ledger.devolver` leyendo `consumo.
+        # Mismo principio que tenía el ledger viejo al leer `consumo.
         # lot` en vez de asumirlo — el refactor había cambiado ese
         # read-back por una constante, y esto lo repone.
         codigos = {

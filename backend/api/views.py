@@ -248,9 +248,9 @@ class InterpretationView(APIView):
             # `.capacidad` dice cuál faltó ("leer_breve" o "leer_informe"):
             # la web muestra dos pantallas distintas ("te quedaste sin
             # lecturas gratis" no es lo mismo que "comprá el informe
-            # completo"). Task 11 (fix round 1): reemplaza a `QuotaExceeded.
-            # lote` — `iniciar_generacion` cobra por capacidad
-            # (`canje.canjear`) desde esa tarea, no por lote.
+            # completo"). Reemplazó al lote de la excepción del ledger
+            # viejo: `iniciar_generacion` cobra por capacidad
+            # (`canje.canjear`) desde la Task 11, no por lote.
             return Response(
                 {"error": "sin créditos disponibles", "code": f"sin_{exc.capacidad}"},
                 status=status.HTTP_402_PAYMENT_REQUIRED,

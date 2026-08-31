@@ -37,9 +37,12 @@ def test_new_sub_with_tombstone_starts_without_free():
     SubTombstone.objects.create(
         sub_hash=sub_hash("apple", "S"), free_credits_consumed=settings.INSTALL_FREE_CREDITS,
     )
+    from api.canje import puede
+    from api.models import Derecho
+
     acc = resolve_account(_vid(provider="apple", sub="S"))
-    assert acc.free_balance == 0
-    assert acc.paid_balance == 0
+    assert not Derecho.objects.filter(account=acc).exists()
+    assert puede(acc, "leer_breve") is False
 
 
 @pytest.mark.django_db
@@ -72,6 +75,9 @@ def test_new_sub_without_tombstone_gets_free_grant():
     from api.accounts import resolve_account
     from api.models import CreditTransaction
 
+    from api.models import Derecho
+
     acc = resolve_account(_vid())
-    assert acc.free_balance == settings.INSTALL_FREE_CREDITS
+    derecho = Derecho.objects.get(account=acc, codigo_producto="lectura_breve")
+    assert derecho.cantidad_restante == settings.INSTALL_FREE_CREDITS
     assert CreditTransaction.objects.filter(account=acc, kind="free_grant").count() == 1

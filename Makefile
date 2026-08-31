@@ -135,10 +135,10 @@ staging-reset: ## Borra la base de staging y levanta de cero
 
 test-back-pg: .env.staging ## pytest contra el Postgres de staging (corre los tests que SQLite saltea)
 	# Por qué existe: `make test-back` usa el default de dj_database_url, que es
-	# SQLite. Ahí los 6 tests de tests/api/test_ledger_concurrencia.py se saltean
+	# SQLite. Ahí los 6 tests de tests/api/test_canje_concurrencia.py se saltean
 	# solos (`skipif connection.vendor != "postgresql"`), así que la idempotencia
 	# del cobro nunca se prueba en local — igual que advierte el CLAUDE.md.
-	# Medido el 28-08-2026: SQLite 1 passed + 6 skipped, Postgres 7 passed.
+	# Medido el 31-08-2026: SQLite 6 skipped, Postgres 6 passed.
 	# Necesita el staging arriba (`make staging-up`).
 	#
 	# Toma SÓLO las cuatro variables de conexión, no el .env.staging entero. La

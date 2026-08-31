@@ -39,7 +39,7 @@ def _restante(acc, codigo_producto="informe_natal") -> int:
 @pytest.mark.django_db
 def test_acredita_con_event_id_en_vez_de_id(cfg, make_account):
     """Si el id del evento viniera como `event_id`, la compra no puede perderse."""
-    acc = make_account(paid_balance=0)
+    acc = make_account(informes=0)
     r = _post({"event": {
         "type": "NON_RENEWING_PURCHASE", "event_id": "evt_alt",
         "app_user_id": str(acc.id), "product_id": "credits_10",
@@ -50,7 +50,7 @@ def test_acredita_con_event_id_en_vez_de_id(cfg, make_account):
 
 @pytest.mark.django_db
 def test_acredita_con_product_identifier(cfg, make_account):
-    acc = make_account(paid_balance=0)
+    acc = make_account(informes=0)
     r = _post({"event": {
         "type": "NON_RENEWING_PURCHASE", "id": "evt_2",
         "app_user_id": str(acc.id), "product_identifier": "credits_10",
@@ -62,7 +62,7 @@ def test_acredita_con_product_identifier(cfg, make_account):
 @pytest.mark.django_db
 def test_acredita_con_original_app_user_id(cfg, make_account):
     """RevenueCat manda original_app_user_id cuando hubo alias de usuario."""
-    acc = make_account(paid_balance=0)
+    acc = make_account(informes=0)
     r = _post({"event": {
         "type": "NON_RENEWING_PURCHASE", "id": "evt_3",
         "original_app_user_id": str(acc.id), "product_id": "credits_10",
@@ -74,7 +74,7 @@ def test_acredita_con_original_app_user_id(cfg, make_account):
 @pytest.mark.django_db
 def test_la_idempotencia_sigue_valiendo_con_los_alias(cfg, make_account):
     """El mismo evento por event_id no puede acreditar dos veces."""
-    acc = make_account(paid_balance=0)
+    acc = make_account(informes=0)
     payload = {"event": {
         "type": "NON_RENEWING_PURCHASE", "event_id": "evt_dup",
         "app_user_id": str(acc.id), "product_id": "credits_10",
@@ -123,7 +123,7 @@ def test_product_sin_mapeo_loguea_estructura_y_el_product_id(cfg, make_account, 
 @pytest.mark.django_db
 def test_cancellation_queda_registrada_aunque_no_descuente(cfg, make_account, caplog):
     """CANCELLATION se excluyó del clawback a propósito; que al menos se vea."""
-    acc = make_account(paid_balance=10)
+    acc = make_account(informes=10)
     with caplog.at_level("INFO"):
         r = _post({"event": {
             "type": "CANCELLATION", "id": "evt_5",

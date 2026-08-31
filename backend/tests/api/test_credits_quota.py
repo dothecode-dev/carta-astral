@@ -3,23 +3,22 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from api import interpretation_service as svc
-from api.interpretation_service import (
-    SinDerecho,
-    credits_available,
-)
+from api.interpretation_service import SinDerecho
 from api.models import Account, BirthData, Chart, Interpretation
 
 pytestmark = pytest.mark.django_db
 
 
-def _account(free_balance=None, paid_balance=0):
-    from tests.conftest import otorgar_derechos_de_balance
+def _account(lecturas_breves=None, informes=0):
+    """Una cuenta fondeada con derechos. `lecturas_breves=None` usa
+    `INSTALL_FREE_CREDITS`, que es lo que regala el alta real."""
     from django.conf import settings
-    fb = settings.INSTALL_FREE_CREDITS if free_balance is None else free_balance
-    acc = Account.objects.create(free_balance=fb, paid_balance=paid_balance)
-    # Task 11: el cobro pasó de lote a capacidad — sin esto la cuenta no
-    # tiene con qué canjear aunque los campos viejos sean positivos.
-    otorgar_derechos_de_balance(acc, fb, paid_balance)
+
+    from tests.conftest import otorgar_derechos
+
+    breves = settings.INSTALL_FREE_CREDITS if lecturas_breves is None else lecturas_breves
+    acc = Account.objects.create()
+    otorgar_derechos(acc, breves, informes)
     return acc
 
 
@@ -31,21 +30,16 @@ def _chart():
     return Chart.objects.create(birth_data=bd, data={"placements": []}, engine_version="test")
 
 
-def test_available_starts_at_free_credits(settings):
-    settings.INSTALL_FREE_CREDITS = 3
-    assert credits_available(_account()) == 3
-
-
 def test_quota_exceeded_blocks_new_generation(settings):
     settings.INSTALL_FREE_CREDITS = 0
-    acc = _account()  # free_balance=0, paid_balance=0 → sin derecho de lectura_breve
+    acc = _account()  # INSTALL_FREE_CREDITS=0 → sin derecho de lectura_breve
     with pytest.raises(SinDerecho):
         svc.iniciar_generacion(_chart(), "es", acc, tier="corto")
 
 
 def test_cache_hit_served_with_zero_credits(settings):
     settings.INSTALL_FREE_CREDITS = 0
-    acc = _account()  # free_balance=0, paid_balance=0
+    acc = _account()  # INSTALL_FREE_CREDITS=0 → sin derechos
     chart = _chart()
     from interpret.prompts import PROMPT_VERSION
     Interpretation.objects.create(
@@ -72,7 +66,7 @@ def test_paid_generation_bypasses_daily_cap(settings):
     settings.INSTALL_FREE_CREDITS = 0
     settings.INTERPRETATION_DAILY_CAP = 0  # cap at its limit for free generations
 
-    acc = Account.objects.create(free_balance=0, paid_balance=1)
+    acc = Account.objects.create()
     otorgar(acc, "informe_natal", 1, origen="compra", external_id="test:paid-bypasses-cap")
     chart = _chart()
 
@@ -96,7 +90,7 @@ def test_la_breve_cobra_free_y_el_completo_cobra_paid(make_account):
     veces."""
     from api.models import Derecho
 
-    acc = make_account(free_balance=1, paid_balance=1)
+    acc = make_account(lecturas_breves=1, informes=1)
     chart = _chart()
     svc.iniciar_generacion(chart, "es", acc, tier="corto")
     assert Derecho.objects.get(codigo_producto="lectura_breve").cantidad_restante == 0
@@ -111,7 +105,7 @@ def test_sin_free_la_breve_falla_diciendo_que_falto_free(make_account):
     informe_natal aunque sobre ahí: `SinDerecho.capacidad` dice cuál faltó
     ("leer_breve"), para que la vista pueda mostrar la pantalla correcta
     ("te quedaste sin lecturas gratis", no "comprá el informe")."""
-    acc = make_account(free_balance=0, paid_balance=5)
+    acc = make_account(lecturas_breves=0, informes=5)
     with pytest.raises(SinDerecho) as exc:
         svc.iniciar_generacion(_chart(), "es", acc, tier="corto")
     assert exc.value.capacidad == "leer_breve"
@@ -121,7 +115,7 @@ def test_sin_paid_el_completo_falla_diciendo_que_falto_paid(make_account):
     """Contrapunto: sin derecho de informe_natal, pedir el informe completo
     no cae al derecho de lectura_breve aunque sobre ahí — `SinDerecho.
     capacidad` dice "leer_informe", no la otra capacidad."""
-    acc = make_account(free_balance=5, paid_balance=0)
+    acc = make_account(lecturas_breves=5, informes=0)
     with pytest.raises(SinDerecho) as exc:
         svc.iniciar_generacion(_chart(), "es", acc, tier="largo")
     assert exc.value.capacidad == "leer_informe"
@@ -130,7 +124,7 @@ def test_sin_paid_el_completo_falla_diciendo_que_falto_paid(make_account):
 def test_la_interpretacion_vacia_se_borra_si_no_hay_credito(make_account):
     """Sin esto queda una fila completa=False que hace que el próximo intento
     crea que hay una generación en curso y no arranque nunca."""
-    acc = make_account(free_balance=0, paid_balance=0)
+    acc = make_account(lecturas_breves=0, informes=0)
     chart = _chart()
     with pytest.raises(SinDerecho):
         svc.iniciar_generacion(chart, "es", acc, tier="corto")

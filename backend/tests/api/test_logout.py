@@ -13,7 +13,7 @@ from api.models import Account, Session
 
 @pytest.fixture
 def account(db):
-    return Account.objects.create(email="quien@ejemplo.test", free_balance=1, paid_balance=0)
+    return Account.objects.create(email="quien@ejemplo.test")
 
 
 @pytest.mark.django_db

@@ -21,9 +21,9 @@ pytestmark = pytest.mark.django_db
 
 
 def _restante(account, codigo_producto: str) -> int:
-    """Task 11: el saldo que importa ahora es el del `Derecho`, no
-    `Account.paid_balance` — `canje.canjear`/`devolver` ya no tocan los
-    campos viejos. Por cuenta (no global): el fixture `chart` cuelga de
+    """El saldo que importa es el del `Derecho`: los contadores sueltos que
+    tenía `Account` no los tocaba nadie desde el modelo de canje, y la 0025
+    los borró. Por cuenta (no global): el fixture `chart` cuelga de
     `account` (conftest), que también fondea su propio derecho, así que más
     de una cuenta puede tener un `Derecho` con el mismo `codigo_producto`
     en el mismo test."""
@@ -119,7 +119,7 @@ def test_un_informe_a_medias_se_reanuda_sin_cobrar_de_nuevo(make_account, chart,
     un reintento sobre secciones ya persistidas TERMINA el informe gratis en
     vez de devolver — el crédito ya compró el trabajo, no hay nada que
     reembolsar."""
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
     _generar_solo_tres_secciones(interp)
     assert _restante(acc, "informe_natal") == 0  # ya se cobró al iniciar
@@ -150,7 +150,7 @@ def test_agotados_los_intentos_devuelve_credito_borra_secciones_y_avisa(
         notificaciones, "notificar",
         lambda account, evento, contexto, lang: avisos.append((account.pk, evento, contexto, lang)),
     )
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
     _generar_solo_tres_secciones(interp)
     interp_pk = interp.pk
@@ -171,7 +171,7 @@ def test_mientras_quedan_intentos_no_devuelve_ni_borra(make_account, chart, buil
     `INTENTOS_MAXIMOS`, la fila sigue viva (reanudable) y el crédito sigue
     cobrado — devolver antes de agotar los intentos regalaría el reintento
     Y el crédito."""
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
 
     for _ in range(svc.INTENTOS_MAXIMOS - 1):
@@ -201,7 +201,7 @@ def test_la_devolucion_no_se_duplica(make_account, chart, monkeypatch, build_sec
     `devolver` de nuevo. Cualquiera de las dos protecciones alcanza para
     que esto pase; lo que importa es el resultado observable: una sola
     devolución."""
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
     monkeypatch.setattr(Interpretation, "delete", lambda self, *a, **kw: None)
 
@@ -227,7 +227,7 @@ def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
     —el que agota `INTENTOS_MAXIMOS`— encuentra ese sibling y TRADUCE CON
     ÉXITO. Eso no puede devolver el crédito ni borrar el informe que se
     acaba de entregar."""
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     interp_es = svc.iniciar_generacion(chart, "es", acc, tier="largo")
 
     # Dos intentos de generación DIRECTA fallan: todavía no existe sibling en "en".
@@ -281,7 +281,7 @@ def test_traduccion_a_un_tercer_idioma_que_falla_no_devuelve_lo_ya_entregado(
     porque la traducción gratis a un TERCER idioma nunca prospera. Mirar
     "cualquier idioma de esta carta y tier" es lo que cierra ese hueco."""
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
 
     # "es" se cobra y se entrega de verdad: es el único Movimiento de
     # consumo que existe para esta carta y tier.
@@ -324,7 +324,7 @@ def test_devuelve_si_ningun_idioma_de_la_carta_y_tier_se_entrego(make_account, c
     medias de otro pedido— y NINGUNA está completa: la sola EXISTENCIA de
     un sibling no alcanza para frenar la devolución, hace falta que esté
     COMPLETO (ver el test de arriba, donde si lo está)."""
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     interp_es = svc.iniciar_generacion(chart, "es", acc, tier="largo")
     # Otro idioma de la MISMA carta y tier, a medias: existe como fila pero
     # no debe fingir que la carta ya se entregó en ningún idioma.
@@ -363,7 +363,7 @@ def test_no_devuelve_si_hay_una_fila_completa_en_otro_prompt_version(make_accoun
     de desvincular el consumo real, dejando la carta como "no comprada"."""
     from api.canje import canjear
 
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
 
     # Se cobra de verdad (Movimiento real, vinculado a esta carta) y se
     # entrega con una versión VIEJA del prompt.
@@ -423,7 +423,7 @@ def test_la_devolucion_acredita_el_producto_real_no_una_constante_por_tier(
         capacidades=("leer_informe",), otorga=("informe_vinculo", 1),
     ))
 
-    acc = make_account(free_balance=0, paid_balance=0)
+    acc = make_account(lecturas_breves=0, informes=0)
     otorgar(acc, "informe_vinculo", 1, origen="compra", external_id="test:vinculo")
 
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
@@ -448,7 +448,7 @@ def test_lock_perdido_repetido_no_devuelve_ni_borra(make_account, chart, fake_cl
     `False`): `INTENTOS_MAXIMOS` abortos así no pueden agotar el contador —
     cada uno se descuenta apenas se detecta."""
     monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: False)
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
 
     for _ in range(svc.INTENTOS_MAXIMOS):
@@ -479,7 +479,7 @@ def test_soltar_lock_no_queda_colgado_si_notificar_revienta(
         notificaciones, "notificar",
         lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("el proveedor de mail está caído")),
     )
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
 
     svc.completar_generacion(interp, chart, acc)

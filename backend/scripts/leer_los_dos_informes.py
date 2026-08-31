@@ -28,6 +28,7 @@ django.setup()
 
 from api import interpretation_service as svc  # noqa: E402
 from api.chart_service import create_chart  # noqa: E402
+from api.canje import otorgar  # noqa: E402
 from api.models import Account  # noqa: E402
 
 if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -41,7 +42,12 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
 # validó el motor de cálculo, así que el texto se puede comparar con lo que ya
 # conocés del producto viejo. Se arma por el mismo camino que la app (que
 # resuelve zona horaria y serializa igual), no a mano.
-cuenta = Account.objects.create(free_balance=1, paid_balance=1)
+cuenta = Account.objects.create()
+# Una lectura breve y un informe completo: los dos derechos que el script
+# canjea abajo. Sin esto `iniciar_generacion` levanta `SinDerecho` — desde
+# el modelo de canje una cuenta recién creada no puede canjear nada.
+otorgar(cuenta, "lectura_breve", 1, origen="regalo", external_id=f"script:leer:{cuenta.pk}:breve")
+otorgar(cuenta, "informe_natal", 1, origen="compra", external_id=f"script:leer:{cuenta.pk}:informe")
 chart = create_chart({
     "name": "Lectura de control",
     "date": "1989-07-14",

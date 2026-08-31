@@ -122,7 +122,7 @@ def _interpretacion(tier):
     """Una `Interpretation` real (con cuenta y carta propias), del tier
     pedido. A diferencia del fixture `interpretacion` (siempre "largo"),
     esto permite probar la rama del tier corto sin tocar ese fixture."""
-    account = Account.objects.create(free_balance=0, paid_balance=0)
+    account = Account.objects.create()
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
     return Interpretation.objects.create(

@@ -77,7 +77,6 @@ def _create_account(vid: VerifiedIdentity) -> Account:
         with transaction.atomic():
             account = Account.objects.create(
                 email=vid.email or "", email_verified=vid.email_verified,
-                free_balance=free, paid_balance=0,
             )
             ProviderIdentity.objects.create(
                 provider=vid.provider, sub=vid.sub, account=account,

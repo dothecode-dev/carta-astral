@@ -12,10 +12,10 @@ from api.sso import VerifiedIdentity
 def _gastar_lecturas_breves(cuenta, make_chart, n):
     """Consume `n` lecturas breves por el camino real (`canje.canjear`).
 
-    Antes acá se hacía `acc.free_balance = 0`, que ya no consume nada: desde
-    el modelo de canje el gasto vive en el `Derecho` y en sus `Movimiento`,
-    y el campo viejo quedó de adorno (lo borra la 13c). Un test que siga
-    tocando el campo prueba que el campo cambia, no que el usuario gastó.
+    Antes acá se ponía en cero el contador suelto de la cuenta, que ya no
+    consume nada: desde el modelo de canje el gasto vive en el `Derecho` y
+    en sus `Movimiento`. Un test que toque un contador prueba que el
+    contador cambia, no que el usuario gastó.
     """
     for _ in range(n):
         canjear(cuenta, "leer_breve", make_chart(account=cuenta))
@@ -58,16 +58,15 @@ def test_recreate_after_delete_has_no_free(make_chart):
 def test_el_tombstone_cuenta_lo_gastado_segun_los_movimientos(make_chart):
     """El número anti-abuso sale del libro de movimientos, no del campo viejo.
 
-    `canjear` no toca `free_balance`: con el cálculo viejo esta cuenta —que
-    gastó 2 de 3 lecturas— dejaba el tombstone en 0 y borrar la cuenta para
-    volver a entrar regalaba las 3 de nuevo.
+    Con el cálculo viejo —que miraba el contador suelto de la cuenta, y
+    `canjear` no lo tocaba— esta cuenta, que gastó 2 de 3 lecturas, dejaba
+    el tombstone en 0: borrarla y volver a entrar regalaba las 3 de nuevo.
     """
     from api.accounts import resolve_account
     from api.deletion import delete_account
 
     acc = resolve_account(VerifiedIdentity("apple", "MOV", "m@x.com", True))
     _gastar_lecturas_breves(acc, make_chart, 2)
-    assert acc.free_balance == 3  # el campo viejo quedó intacto: no es la fuente
 
     delete_account(acc)
 

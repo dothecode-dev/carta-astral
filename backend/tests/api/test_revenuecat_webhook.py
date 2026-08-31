@@ -42,7 +42,7 @@ def test_rejects_bad_auth(cfg, make_account):
 
 @pytest.mark.django_db
 def test_purchase_credits_account(cfg, make_account):
-    acc = make_account(paid_balance=0)
+    acc = make_account(informes=0)
     r = APIClient().post(URL, _event(app_user_id=str(acc.id)), format="json",
                          HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200
@@ -51,7 +51,7 @@ def test_purchase_credits_account(cfg, make_account):
 
 @pytest.mark.django_db
 def test_purchase_idempotent_on_retry(cfg, make_account):
-    acc = make_account(paid_balance=0)
+    acc = make_account(informes=0)
     c = APIClient()
     body = _event(app_user_id=str(acc.id), id="evt_dup")
     c.post(URL, body, format="json", HTTP_AUTHORIZATION="secret-abc")
@@ -61,7 +61,7 @@ def test_purchase_idempotent_on_retry(cfg, make_account):
 
 @pytest.mark.django_db
 def test_refund_clawbacks(cfg, make_account):
-    acc = make_account(paid_balance=10)
+    acc = make_account(informes=10)
     r = APIClient().post(URL, _event(type="REFUND", id="rf_1", app_user_id=str(acc.id)),
                          format="json", HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200
@@ -79,7 +79,7 @@ def test_unknown_account_acked_not_credited(cfg):
 
 @pytest.mark.django_db
 def test_unknown_product_acked(cfg, make_account):
-    acc = make_account(paid_balance=0)
+    acc = make_account(informes=0)
     r = APIClient().post(URL, _event(app_user_id=str(acc.id), product_id="mystery"),
                          format="json", HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200
@@ -116,7 +116,7 @@ def test_missing_app_user_id_acked(cfg):
 
 @pytest.mark.django_db
 def test_unhandled_event_type_acked(cfg, make_account):
-    acc = make_account(paid_balance=0)
+    acc = make_account(informes=0)
     r = APIClient().post(URL, _event(type="RENEWAL", app_user_id=str(acc.id)),
                          format="json", HTTP_AUTHORIZATION="secret-abc")
     assert r.status_code == 200

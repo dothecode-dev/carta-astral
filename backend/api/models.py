@@ -1,6 +1,5 @@
 import uuid
 
-from django.conf import settings
 from django.db import models
 
 from interpret.prompts import TIER_CORTO, TIER_LARGO
@@ -172,17 +171,16 @@ class GeoNameToken(models.Model):
         ]
 
 
-def _default_free_balance():
-    return settings.INSTALL_FREE_CREDITS
-
-
 class Account(models.Model):
-    """Cuenta real del usuario (identidad SSO). Sostiene créditos y cartas."""
+    """Cuenta real del usuario (identidad SSO). Sostiene derechos y cartas.
+
+    Lo que la cuenta puede hacer NO vive acá: vive en `Derecho` (uno por
+    producto) y su historia en `Movimiento`. Los dos contadores sueltos del
+    modelo de cobro viejo los borró la `0025`.
+    """
 
     email = models.EmailField(blank=True, default="")
     email_verified = models.BooleanField(default=False)
-    free_balance = models.PositiveIntegerField(default=_default_free_balance)
-    paid_balance = models.IntegerField(default=0)  # signed: clawback de reembolso puede dejarlo negativo
     refund_count = models.PositiveIntegerField(default=0)
     # Lo que la cuenta debe tras un reembolso de algo que ya consumió. Vive
     # separada del saldo a propósito: saldo es lo que se puede gastar, deuda es

@@ -260,7 +260,7 @@ def test_dos_traducciones_concurrentes_de_la_misma_carta_no_duplican_ni_explotan
     solo hilo/una sola transacción). El `unique_together` de
     `InterpretationSection` es la red de seguridad: esto prueba que la red
     no deja pasar un 500 sin atrapar cuando efectivamente hace su trabajo."""
-    acc = Account.objects.create(free_balance=1, paid_balance=0)
+    acc = Account.objects.create()
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=acc)
     origen = Interpretation.objects.create(

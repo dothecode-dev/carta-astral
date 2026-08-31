@@ -12,16 +12,17 @@ from interpret.exceptions import InterpretationError
 pytestmark = pytest.mark.django_db
 
 
-def _account(free_balance=None, paid_balance=0):
-    from tests.conftest import otorgar_derechos_de_balance
+def _account(lecturas_breves=None, informes=0):
+    """Una cuenta fondeada con derechos, que es lo único que se canjea.
 
-    fb = django_settings.INSTALL_FREE_CREDITS if free_balance is None else free_balance
-    acc = Account.objects.create(free_balance=fb, paid_balance=paid_balance)
-    # Task 11: el cobro pasó de lote a capacidad (`canje.canjear`) — sin
-    # esto la cuenta tiene los campos viejos en positivo pero ningún
-    # derecho con qué canjear, y todo test que genera algo se cae con
-    # `SinDerecho` aunque pida `paid_balance=1`.
-    otorgar_derechos_de_balance(acc, fb, paid_balance)
+    `lecturas_breves=None` usa `INSTALL_FREE_CREDITS`, que es lo que regala
+    el alta real. Sin derechos explícitos todo test que genere algo se cae
+    con `SinDerecho`."""
+    from tests.conftest import otorgar_derechos
+
+    breves = django_settings.INSTALL_FREE_CREDITS if lecturas_breves is None else lecturas_breves
+    acc = Account.objects.create()
+    otorgar_derechos(acc, breves, informes)
     return acc
 
 
@@ -147,9 +148,9 @@ SECCIONES_POR_INFORME = 8
 def test_miss_generates_and_persists(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    # paid_balance=1: `_generar` pide tier="largo" (informe completo) por
-    # default, que desde la Task 6 cobra del lote paid, no del free.
-    interp = _generar(c, "es", _account(paid_balance=1))
+    # informes=1: `_generar` pide tier="largo" (informe completo) por
+    # default, que desde la Task 6 canjea el derecho de informe_natal.
+    interp = _generar(c, "es", _account(informes=1))
     assert interp.completa is True
     assert "una interpretación" in interp.text
     assert Interpretation.objects.count() == 1
@@ -159,7 +160,7 @@ def test_miss_generates_and_persists(fake_client, settings):
 def test_hit_serves_without_llm(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    acc = _account(paid_balance=1)
+    acc = _account(informes=1)
     _generar(c, "es", acc)
     llamadas_tras_la_primera = fake_client.calls
     _generar(c, "es", acc)
@@ -178,7 +179,7 @@ def test_daily_cap_blocks_new_generation(fake_client, settings):
 
     settings.INTERPRETATION_DAILY_CAP = 1
     settings.INSTALL_FREE_CREDITS = 5  # both generations are free, to isolate the cap
-    acc = _account()  # free_balance=5 (reads settings at call time)
+    acc = _account()  # 5 lecturas breves (lee settings al llamar)
     _generar(_chart(), "es", acc, tier="corto")
     # El contador se mueve exactamente una vez por generación free, no una
     # vez por sección (minor 5, fix round 1): la breve hace una sola llamada
@@ -203,7 +204,7 @@ def test_daily_cap_blocks_new_generation(fake_client, settings):
 def test_cap_does_not_block_cache_hits(fake_client, settings):
     settings.INTERPRETATION_DAILY_CAP = 1
     c = _chart()
-    acc = _account(paid_balance=1)
+    acc = _account(informes=1)
     first = _generar(c, "es", acc)
     again = _generar(c, "es", acc)
     assert again.text == first.text
@@ -223,7 +224,7 @@ def test_llm_error_no_deja_interpretacion_persistida(monkeypatch, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     monkeypatch.setattr(svc, "_build_client", lambda: _Boom())
     c = _chart()
-    acc = _account(paid_balance=1)  # tier="largo" (informe completo) cobra paid, no free
+    acc = _account(informes=1)  # tier="largo" canjea informe_natal, no lectura_breve
     antes = _restante(acc, "informe_natal")
     for _ in range(svc.INTENTOS_MAXIMOS):
         svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
@@ -240,7 +241,7 @@ def test_missing_api_key_no_deja_interpretacion_persistida(settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     settings.ANTHROPIC_API_KEY = ""
     c = _chart()
-    acc = _account(paid_balance=1)  # tier="largo" (informe completo) cobra paid, no free
+    acc = _account(informes=1)  # tier="largo" canjea informe_natal, no lectura_breve
     antes = _restante(acc, "informe_natal")
     for _ in range(svc.INTENTOS_MAXIMOS):
         svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
@@ -280,9 +281,9 @@ def fake_translator(monkeypatch):
 def test_second_lang_translates_without_new_generation_nor_charge(fake_client, fake_translator, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    # free_balance=0, paid_balance=1: informe completo (tier="largo", el
-    # default de `_generar`) cobra paid desde la Task 6.
-    acc = _account(free_balance=0, paid_balance=1)
+    # Sin lecturas breves y con un informe: el completo (tier="largo", el
+    # default de `_generar`) canjea informe_natal desde la Task 6.
+    acc = _account(lecturas_breves=0, informes=1)
     _generar(c, "es", acc)  # cobra el único crédito
     llamadas_generacion = fake_client.calls
     second = _generar(c, "en", acc)
@@ -293,9 +294,7 @@ def test_second_lang_translates_without_new_generation_nor_charge(fake_client, f
     assert all(texto == "una interpretación" and lang == "en" for texto, lang in fake_translator)
     assert second.lang == "en"
     assert "[en] una interpretación" in second.text
-    # Task 11: `credits_available` sigue leyendo los campos viejos
-    # (`ledger.credits_available`), que `canje.canjear` ya no toca — el
-    # dato que sí prueba "no cobró el segundo idioma" es el derecho de
+    # El dato que prueba "no cobró el segundo idioma" es el derecho de
     # informe_natal, que se consumió una sola vez (con el primero).
     from api.models import Derecho
 
@@ -305,7 +304,7 @@ def test_second_lang_translates_without_new_generation_nor_charge(fake_client, f
 def test_translation_available_with_zero_credits(fake_client, fake_translator, settings):
     settings.INTERPRETATION_DAILY_CAP = 100
     c = _chart()
-    acc = _account(free_balance=0, paid_balance=1)
+    acc = _account(lecturas_breves=0, informes=1)
     _generar(c, "es", acc)  # gasta el último crédito
     # ya sin saldo, el cambio de idioma sigue funcionando (la carta ya se pagó)
     out = _generar(c, "pt", acc)
@@ -321,7 +320,7 @@ def test_translation_does_not_consume_daily_cap(fake_client, fake_translator, se
     settings.INSTALL_FREE_CREDITS = 5
     c = _chart()
     _generar(c, "es", _account(), tier="corto")
-    _generar(c, "en", _account(free_balance=1), tier="corto")
+    _generar(c, "en", _account(lecturas_breves=1), tier="corto")
     with pytest.raises(svc.CapReached):
         svc.iniciar_generacion(
             _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", _account(),
@@ -373,7 +372,7 @@ def test_la_lectura_breve_consume_el_derecho_de_lectura_breve(make_account, make
     from api.canje import otorgar
     from api.models import Derecho
 
-    cuenta = make_account(free_balance=0, paid_balance=0)
+    cuenta = make_account(lecturas_breves=0, informes=0)
     otorgar(cuenta, "lectura_breve", 1, origen="regalo")
     carta = make_chart(account=cuenta)
 
@@ -385,7 +384,7 @@ def test_la_lectura_breve_consume_el_derecho_de_lectura_breve(make_account, make
 def test_el_informe_completo_no_se_paga_con_una_lectura_breve(make_account, make_chart):
     from api.canje import SinDerecho, otorgar
 
-    cuenta = make_account(free_balance=0, paid_balance=0)
+    cuenta = make_account(lecturas_breves=0, informes=0)
     otorgar(cuenta, "lectura_breve", 3, origen="regalo")
     carta = make_chart(account=cuenta)
 
@@ -398,7 +397,7 @@ def test_el_cap_diario_solo_frena_lo_regalado(make_account, make_chart, settings
     from api.canje import otorgar
 
     settings.INTERPRETATION_DAILY_CAP = 0
-    cuenta = make_account(free_balance=0, paid_balance=0)
+    cuenta = make_account(lecturas_breves=0, informes=0)
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:cap")
     carta = make_chart(account=cuenta)
 

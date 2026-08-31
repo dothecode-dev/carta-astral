@@ -51,8 +51,7 @@ class CreditTransactionInline(admin.TabularInline):
 @admin.register(Account)
 class AccountAdmin(SoloLectura):
     list_display = (
-        "id", "email", "email_verified", "free_balance", "paid_balance",
-        "refund_count", "flagged", "created_at",
+        "id", "email", "email_verified", "refund_count", "flagged", "created_at",
     )
     list_filter = ("email_verified", "flagged")
     search_fields = ("email", "id")

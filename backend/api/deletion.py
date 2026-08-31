@@ -27,9 +27,9 @@ def free_consumidas(account) -> int:
     otras `INSTALL_FREE_CREDITS` lecturas. Si sale de menos, se abre esa
     puerta; `_create_account` le resta este número al regalo.
 
-    Se calcula sobre el libro de movimientos de `lectura_breve` y NO sobre
-    `free_balance`, que desde el modelo de canje ya no lo toca nadie (el
-    gasto vive en el `Derecho` y en sus `Movimiento`; la 13c borra el campo).
+    Se calcula sobre el libro de movimientos de `lectura_breve`, que es donde
+    vive el gasto desde el modelo de canje. El contador suelto que se usaba
+    antes ya no existe: lo borró la migración `0025`.
 
     La cuenta es `INSTALL_FREE_CREDITS - lo que le queda`, y lo que le queda
     es la suma firmada de TODOS sus movimientos de `lectura_breve`, no sólo

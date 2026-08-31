@@ -86,7 +86,7 @@ def cliente_sin_free_con_carta(db, make_account):
     crédito free: sólo sirve para probar el 402 de la lectura breve."""
     from api.chart_service import create_chart
 
-    acc = make_account(free_balance=0, paid_balance=5)
+    acc = make_account(lecturas_breves=0, informes=5)
     chart = create_chart(
         {
             "name": "Ceci",
@@ -112,7 +112,7 @@ def cliente_sin_paid_con_carta(db, make_account):
     informe completo."""
     from api.chart_service import create_chart
 
-    acc = make_account(free_balance=5, paid_balance=0)
+    acc = make_account(lecturas_breves=5, informes=0)
     chart = create_chart(
         {
             "name": "Ceci",
@@ -160,8 +160,8 @@ def test_tier_desconocido_es_400(cliente_con_carta):
 @pytest.mark.django_db
 def test_el_402_dice_cual_credito_falto_sin_free(cliente_sin_free_con_carta):
     """`SinDerecho.capacidad` viaja hasta la respuesta (Task 11, fix round 1:
-    reemplaza a `QuotaExceeded.lote`): la web muestra "te quedaste sin
-    lecturas gratis" en vez de "comprá el informe completo"."""
+    reemplazó al lote de la excepción del ledger viejo): la web muestra "te
+    quedaste sin lecturas gratis" en vez de "comprá el informe completo"."""
     r = cliente_sin_free_con_carta.post(
         f"/api/charts/{cliente_sin_free_con_carta.chart.uuid}/interpretation/",
         {"lang": "es", "tier": "corto"},

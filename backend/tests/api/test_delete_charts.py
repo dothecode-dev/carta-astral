@@ -56,9 +56,10 @@ def test_delete_charts_preserva_ledger(monkeypatch, settings):
     # ahí, sólo por `_build_client` dentro de `completar_generacion`.)
     monkeypatch.setattr(svc, "_build_client", lambda: object())
 
-    # paid_balance=1: este test pide tier="largo" (informe completo), que se
-    # cobra del lote paid (RF9), no del free que trae el default del modelo.
-    a = Account.objects.create(paid_balance=1)
+    # El derecho de informe_natal se otorga explícito: este test pide
+    # tier="largo" (informe completo), que canjea ese producto y no el de
+    # la lectura breve (RF9).
+    a = Account.objects.create()
     otorgar(a, "informe_natal", 1, origen="compra", external_id="test:delete-charts-preserva-ledger")
     resp = _client(a).post("/api/charts/", PAYLOAD, format="json")
     uuid = resp.data["id"]

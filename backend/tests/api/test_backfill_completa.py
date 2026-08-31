@@ -30,6 +30,20 @@ def _correr_backfill():
     _backfill(django_apps, None)
 
 
+def _derechos_de_cobro(account) -> int:
+    """Lo que le queda a la cuenta para canjear un informe, breve o completo.
+
+    Sustituye a la suma de los dos contadores sueltos que `Account` tenía
+    antes de la 0025: lo que se cobra (o no) hoy es un `Derecho`."""
+    from api.models import Derecho
+
+    return sum(
+        Derecho.objects.filter(
+            account=account, codigo_producto__in=("lectura_breve", "informe_natal"),
+        ).values_list("cantidad_restante", flat=True)
+    )
+
+
 def _interpretacion_legacy(chart, account):
     """Como quedaría en producción una interpretación del flujo viejo:
     texto completo, cero secciones persistidas, `completa=False` por el
@@ -111,11 +125,10 @@ def test_escenario_legacy_end_to_end(client_autenticado, chart, account, monkeyp
     assert detail.json()["interpretation_langs"] == ["es"]
 
     # 3) iniciar_generacion: encuentra la fila existente y NO cobra de nuevo.
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
     encontrada = svc.iniciar_generacion(chart, "es", account, tier="largo")
     assert encontrada.pk == legacy.pk
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes
+    assert _derechos_de_cobro(account) == antes
 
     # 4) completar_generacion: el guard de `completa` corta antes de tomar
     # el lock o de tocar el LLM — no regenera nada.
@@ -124,7 +137,6 @@ def test_escenario_legacy_end_to_end(client_autenticado, chart, account, monkeyp
     svc.completar_generacion(encontrada, chart, account)
     assert llamadas == []
     assert InterpretationSection.objects.filter(interpretation=encontrada).count() == 0
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes
+    assert _derechos_de_cobro(account) == antes
     encontrada.refresh_from_db()
     assert encontrada.text == "Un informe ya escrito antes de la Tarea 10."

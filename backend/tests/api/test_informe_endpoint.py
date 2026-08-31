@@ -15,11 +15,10 @@ pytestmark = pytest.mark.django_db
 
 
 def _derechos_de_cobro(account) -> int:
-    """Task 11: cuánto le queda a la cuenta para canjear un informe (breve o
-    completo), sumado. `account.free_balance + account.paid_balance` medía
-    esto mismo cuando el cobro era por lote; `canje.canjear`/`devolver` ya no
-    tocan esos campos, así que la suma equivalente hoy es la de los dos
-    derechos que `interpretation_service` puede canjear."""
+    """Cuánto le queda a la cuenta para canjear un informe (breve o
+    completo), sumado. La suma de los dos contadores sueltos de `Account`
+    medía esto mismo cuando el cobro era por lote; la suma equivalente hoy
+    es la de los dos derechos que `interpretation_service` puede canjear."""
     from api.models import Derecho
 
     restante = dict(
@@ -32,10 +31,9 @@ def _derechos_de_cobro(account) -> int:
 
 def _restante(account, codigo_producto: str) -> int:
     """El saldo de UN producto (no la suma de los dos): hace falta cuando lo
-    que se prueba no es "se cobró algo" sino "se cobró/devolvió el
-    PRODUCTO correcto" — `account.free_balance`/`paid_balance` medían esto
-    por separado antes de Task 11; `Derecho.cantidad_restante` es la fuente
-    de verdad ahora."""
+    que se prueba no es "se cobró algo" sino "se cobró/devolvió el PRODUCTO
+    correcto". Los dos contadores sueltos de `Account` medían esto por
+    separado; `Derecho.cantidad_restante` es la fuente de verdad ahora."""
     from api.models import Derecho
 
     return Derecho.objects.get(account=account, codigo_producto=codigo_producto).cantidad_restante
@@ -215,10 +213,10 @@ def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
 
 
 def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, account, monkeypatch):
-    """BUG 2: `ledger.devolver` fijaba `lot="paid"` siempre, así que un
-    informe cobrado de `free_balance` devolvía el crédito a `paid_balance`.
+    """BUG 2: la devolución del ledger viejo fijaba el lote pago siempre,
+    así que un informe cobrado del lote gratis devolvía el crédito al pago.
     El test anterior (`test_si_la_generacion_muere_el_credito_vuelve`) sólo
-    compara el total y no lo distingue; éste mira cada lote por separado.
+    compara el total y no lo distingue; éste mira cada producto por separado.
 
     Task 10 / RF21: agota `INTENTOS_MAXIMOS` reintentos antes de esperar la
     devolución (ver el test anterior)."""
@@ -347,9 +345,16 @@ def test_el_cap_no_se_toca_con_credito_pago(account, settings):
 
     settings.INTERPRETATION_DAILY_CAP = 0
     cache.clear()
-    account.free_balance = 0
-    account.paid_balance = 1
-    account.save()
+    # Sin derecho de lectura breve y con uno solo de informe: lo que se
+    # ejercita es el tier largo, que es el que bypassea el cap.
+    from api.models import Derecho
+
+    Derecho.objects.filter(account=account, codigo_producto="lectura_breve").update(
+        cantidad_restante=0
+    )
+    Derecho.objects.filter(account=account, codigo_producto="informe_natal").update(
+        cantidad_restante=1
+    )
 
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)

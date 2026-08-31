@@ -18,11 +18,11 @@ def _clear_cache():
 
 
 def _derechos_de_cobro(account) -> int:
-    """Task 11: `account.free_balance + account.paid_balance` medía cuánto le
-    quedaba a la cuenta para canjear un informe cuando el cobro era por
-    lote; `canje.canjear`/`devolver` ya no tocan esos campos, así que la
-    suma equivalente hoy es la de los dos derechos que `interpretation_
-    service` puede canjear."""
+    """Cuánto le queda a la cuenta para canjear un informe, breve o completo.
+
+    Cuando el cobro era por lote lo medía la suma de los dos contadores
+    sueltos de `Account`; hoy la suma equivalente es la de los dos derechos
+    que `interpretation_service` puede canjear."""
     from api.models import Derecho
 
     restante = dict(
@@ -188,9 +188,9 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fak
 # `test_cap_reached_503` (retirado en la Task 6): probaba que el cap diario
 # bloqueara este POST con un 503. El informe completo ("largo") se cobra
 # siempre del lote paid, que bypassea el cap por diseño (RF9): pedirlo con
-# INTERPRETATION_DAILY_CAP=0 no puede dar 503, va a dar 202 (con
-# paid_balance, que `account_client` fondea) o 402 (sin él) pero nunca un cap
-# alcanzado. Es exactamente lo que prueba
+# INTERPRETATION_DAILY_CAP=0 no puede dar 503, va a dar 202 (con el
+# derecho de informe_natal, que `account_client` fondea) o 402 (sin él)
+# pero nunca un cap alcanzado. Es exactamente lo que prueba
 # `test_paid_generation_bypasses_cap_via_endpoint`, ahí abajo, que ya cubría
 # este mismo escenario desde el lado "sí bypassea".
 #
@@ -231,7 +231,7 @@ def test_paid_generation_bypasses_cap_via_endpoint(make_account, monkeypatch, se
     settings.INTERPRETATION_DAILY_CAP = 0
     monkeypatch.setattr(svc, "_build_client", lambda: _FakeClient())
 
-    acc = make_account(free_balance=0, paid_balance=1)
+    acc = make_account(lecturas_breves=0, informes=1)
     token = create_session(acc)
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
@@ -248,7 +248,7 @@ def test_no_credits_returns_402(make_account, monkeypatch):
     from rest_framework.test import APIClient
     from api.auth import create_session
 
-    acc = make_account(free_balance=0, paid_balance=0)
+    acc = make_account(lecturas_breves=0, informes=0)
     token = create_session(acc)
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
