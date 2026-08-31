@@ -138,13 +138,13 @@ describe("GET /api/session/expirada", () => {
 
     expect(store.has(SESSION_COOKIE)).toBe(false);
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("https://astraguia.com/es/entrar");
+    expect(res.headers.get("location")).toBe("/es/entrar");
   });
 
   it("respeta el idioma en el que venía navegando", async () => {
     const res = await expiradaGet(new Request("https://astraguia.com/api/session/expirada?locale=pt"));
 
-    expect(res.headers.get("location")).toBe("https://astraguia.com/pt/entrar");
+    expect(res.headers.get("location")).toBe("/pt/entrar");
   });
 
   it("un locale inventado cae al idioma por defecto y nunca a un sitio ajeno", async () => {
@@ -153,7 +153,15 @@ describe("GET /api/session/expirada", () => {
     );
 
     expect(store.has(SESSION_COOKIE)).toBe(false);
-    expect(res.headers.get("location")).toBe("https://astraguia.com/es/entrar");
+    expect(res.headers.get("location")).toBe("/es/entrar");
+  });
+
+  it("el destino es relativo: detrás del proxy, request.url es la del contenedor", async () => {
+    // En producción `new URL(path, request.url)` armaba
+    // https://0.0.0.0:3000/es/entrar y el navegador no llegaba a ninguna parte.
+    const res = await expiradaGet(new Request("http://0.0.0.0:3000/api/session/expirada?locale=es"));
+
+    expect(res.headers.get("location")).toBe("/es/entrar");
   });
 
   it("sin cookie tampoco falla: entrar a la ruta a mano es inofensivo", async () => {
@@ -161,6 +169,6 @@ describe("GET /api/session/expirada", () => {
 
     const res = await expiradaGet(new Request("https://astraguia.com/api/session/expirada"));
 
-    expect(res.headers.get("location")).toBe("https://astraguia.com/es/entrar");
+    expect(res.headers.get("location")).toBe("/es/entrar");
   });
 });

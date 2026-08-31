@@ -21,5 +21,10 @@ export async function GET(request: Request) {
 
   await clearSessionToken();
 
-  return NextResponse.redirect(new URL(`/${locale}/entrar`, request.url));
+  // Location relativo a propósito. `NextResponse.redirect` exige una URL
+  // absoluta y la única base a mano es `request.url`, que detrás del proxy es
+  // la interna del contenedor: en producción eso mandaba al navegador a
+  // https://0.0.0.0:3000/es/entrar, un host que no existe. El destino relativo
+  // lo resuelve el navegador contra el dominio por el que entró.
+  return new NextResponse(null, { status: 307, headers: { Location: `/${locale}/entrar` } });
 }
