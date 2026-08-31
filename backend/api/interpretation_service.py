@@ -16,16 +16,22 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from api import ledger, notificaciones
-from api.exceptions import CapReached, GenerationInProgress, QuotaExceeded
-from api.models import CreditTransaction, Interpretation
+from api.canje import SinDerecho, canjear, devolver
+from api.exceptions import CapReached, GenerationInProgress
+from api.models import Interpretation, Movimiento
 from interpret.exceptions import InterpretationError
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 
-# Qué lote de créditos compra cada producto (RF9 dos tiers): la lectura breve
-# se paga con un crédito gratis, el informe completo con uno pago. Con dos
-# productos el lote ES el producto — de acá sale el `lot` que `ledger.charge`
-# ya no elige por su cuenta (ver su docstring).
-LOTE_POR_TIER = {TIER_CORTO: "free", TIER_LARGO: "paid"}
+# Qué capacidad cobra cada tier (RF9 dos tiers, Task 11 modelo de canje): la
+# lectura breve canjea la capacidad regalada, el informe completo la capacidad
+# paga. Con dos productos la capacidad ES el producto — de acá sale lo que
+# `canje.canjear` busca entre los derechos de la cuenta.
+CAPACIDAD_POR_TIER = {TIER_CORTO: "leer_breve", TIER_LARGO: "leer_informe"}
+
+# Qué producto se acredita al devolver, por tier: tiene que ser el mismo
+# producto del que se cobró (mismo motivo que documentaba `ledger.devolver`
+# sobre el lote — devolver al producto equivocado descuadra la conciliación).
+CODIGO_POR_TIER = {TIER_CORTO: "lectura_breve", TIER_LARGO: "informe_natal"}
 
 # Import diferido (no al tope del módulo): `informe_service` importa
 # `renovar_lock` DESDE acá, así que un `import` a nivel de módulo en ambas
@@ -264,16 +270,17 @@ def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
     `informe_service.secciones_aplicables`): un default silencioso
     convertiría "me olvidé de pasar el tier" en "le cobro/entrego el
     producto equivocado" en vez de un `TypeError` inmediato. Decide, vía
-    `LOTE_POR_TIER`, de qué lote se cobra — free para la lectura breve, paid
-    para el informe completo — porque con dos productos el lote ES el
-    producto: caer al otro lote sería cobrar el que no corresponde.
+    `CAPACIDAD_POR_TIER`, qué capacidad se canjea — leer_breve para la
+    lectura breve, leer_informe para el informe completo (Task 11) —
+    porque con dos productos la capacidad ES el producto: canjear la otra
+    sería cobrar el que no corresponde.
 
     Usa `get_or_create` (no un lock) para la creación: Django envuelve su
     `create()` en `atomic()` y reconsulta ante un choque de
     `unique_together`, así que sólo UNA llamada concurrente gana `created`
     (mismo mecanismo que ya validó la Tarea 9 para `traducir_informe`). Sólo
     esa llamada cobra; la que pierde la carrera devuelve la fila existente
-    sin tocar el ledger. El lock de `_lock_key` es para otra cosa —serializar
+    sin tocar los derechos. El lock de `_lock_key` es para otra cosa —serializar
     la GENERACIÓN de secciones sobre una misma carta— y lo toma quien sigue
     con `completar_generacion`, no esta función.
 
@@ -284,7 +291,7 @@ def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
     contara las ocho llamadas el mismo cap alcanzaría para 5 informes por día
     y el producto se apagaría a media mañana.
 
-    Lanza `QuotaExceeded` o `CapReached` si corresponde, y en ese caso borra
+    Lanza `SinDerecho` o `CapReached` si corresponde, y en ese caso borra
     la `Interpretation` vacía que `get_or_create` acababa de crear: si
     quedara, una llamada posterior (con crédito ya disponible) la
     encontraría con `created=False` y jamás cobraría nada.
@@ -304,7 +311,7 @@ def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
     contra el lock que "es" todavía tenía tomado (ver `_sibling_en_curso`
     para el detalle y la justificación de por qué se rechaza acá en vez de
     esperar). Se lanza `GenerationInProgress` ANTES de cobrar: no hay nada
-    que devolver porque nunca se llega a tocar el ledger."""
+    que devolver porque nunca se llega a tocar ningún derecho."""
     interpretacion, creada = Interpretation.objects.get_or_create(
         chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         defaults={"text": "", "account": account},
@@ -322,13 +329,14 @@ def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
             "reintentá en unos segundos"
         )
 
-    lote = LOTE_POR_TIER[tier]
-    # El cap diario protege el gasto de LLM que no tiene ingreso: aplica sólo
-    # al lote free, que ahora es exactamente la lectura breve (antes de los
-    # dos tiers se adivinaba con `account.free_balance > 0` si el cobro *iba*
-    # a caer en free; ahora no hace falta adivinar, el lote ya lo dice).
+    capacidad = CAPACIDAD_POR_TIER[tier]
+    # El cap diario protege el gasto de LLM sin ingreso: aplica sólo a lo
+    # regalado, que es exactamente la lectura breve (Task 11). Un cap
+    # pensado para eso no puede frenar un informe que alguien pagó — antes
+    # de esta tarea se gateaba con `lote == "free"`, mismo criterio, sin
+    # tener que adivinar de qué lote *iba* a cobrarse.
     cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
-    if lote == "free" and cache.get(cap_key, 0) >= settings.INTERPRETATION_DAILY_CAP:
+    if capacidad == "leer_breve" and cache.get(cap_key, 0) >= settings.INTERPRETATION_DAILY_CAP:
         interpretacion.delete()
         logger.warning(
             "interpretation daily cap reached (cap=%s)", settings.INTERPRETATION_DAILY_CAP
@@ -336,12 +344,12 @@ def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
         raise CapReached()
 
     try:
-        _, lot = ledger.charge(account, lambda: interpretacion, lot=lote)
-    except QuotaExceeded:
+        canjear(account, capacidad, chart, build=lambda: interpretacion)
+    except SinDerecho:
         interpretacion.delete()
         raise
 
-    if lot == "free":
+    if capacidad == "leer_breve":
         cache.add(cap_key, 0, timeout=_seconds_until_midnight())
         cache.incr(cap_key)
     return interpretacion
@@ -406,10 +414,11 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     de que corra esta función (p. ej. se borra esa interpretación), `sibling`
     recién calculado da `None` aunque acá nunca se cobró nada — devolver en
     ese caso acredita un crédito que nunca se debitó. La guarda correcta no
-    es "¿existe un sibling ahora?" sino "¿esta `Interpretation` tiene una
-    `CreditTransaction` de consumo?" — el hecho que `iniciar_generacion`
-    dejó escrito en la base cuando SÍ cobró (vía `ledger.charge`), y que no
-    cambia aunque cualquier otra fila de la base sí lo haga.
+    es "¿existe un sibling ahora?" sino "¿esta carta y este tier tienen un
+    `Movimiento` de consumo?" (Task 11: antes era "¿esta `Interpretation`
+    tiene una `CreditTransaction` de consumo?" — `canje.canjear` ya no deja
+    un rastro por fila, deja uno por (chart, tier); ver la nota de `consumo`
+    más abajo).
 
     Task 10 / RF21: la guarda de devolución YA NO es "no quedó ninguna
     sección" — con el informe pago (US$ 29), un intento que dejó tres
@@ -507,19 +516,19 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
             interpretacion.intentos = max(interpretacion.intentos - 1, 0)
             interpretacion.save(update_fields=["intentos"])
 
-        # `consumo` (no `sibling is None`, HALLAZGO 3 de code review) es el
-        # dato explícito: existe si y sólo si `iniciar_generacion` llegó a
-        # llamar a `ledger.charge` para ESTA `Interpretation` — el hecho de
-        # si se cobró, escrito en la base por quien lo decidió, en vez de
-        # re-derivado acá sobre una foto de la base que puede haber
-        # cambiado. El lote se lee ANTES de borrar: `CreditTransaction.
-        # interpretation` es SET_NULL, no CASCADE, pero de todas formas hace
-        # falta el dato antes de que la fila deje de existir. Se devuelve al
-        # MISMO lote del que se cobró (BUG de la revisión final: antes
-        # `ledger.devolver` fijaba "paid" siempre).
-        consumo = CreditTransaction.objects.filter(
-            interpretation=interpretacion, kind="consumption",
-        ).first()
+        # `consumo` (Task 11): ya no hay una `CreditTransaction` por
+        # `Interpretation` — `canje.canjear` deja un `Movimiento` de
+        # `chart` (no de interpretación puntual, ver docstring de
+        # `canjear`), así que el dato que sobrevive es "¿esta carta y este
+        # tier tienen un consumo todavía vinculado?" en vez de "¿cobré ESTA
+        # fila?". `codigo` es el mismo producto del que `iniciar_generacion`
+        # cobró (Task 11, `CODIGO_POR_TIER`), así que `devolver` siempre
+        # acredita al derecho correcto (mismo cuidado que antes tenía
+        # `ledger.devolver` sobre el lote).
+        codigo = CODIGO_POR_TIER[interpretacion.tier]
+        consumo = Movimiento.objects.filter(
+            chart=chart, tipo="consumo", codigo_producto=codigo,
+        ).exists()
         # Critical de la revisión final: `interpretacion.completa` en
         # MEMORIA no ve una traducción exitosa. `informe_service.
         # traducir_informe` resuelve su `destino` con un `get_or_create`
@@ -531,27 +540,36 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # completa` stale en `False` y, si además agotaba los intentos,
         # devolvía el crédito y borraba un informe que se acababa de
         # entregar.
-        completo_ahora = Interpretation.objects.filter(pk=interpretacion.pk, completa=True).exists()
+        #
+        # Task 11: el chequeo es por CHART+TIER (cualquier idioma), no sólo
+        # por `interpretacion.pk`. La compra es por chart+tier, no por
+        # idioma (RF8): si otro idioma de esta misma carta y tier ya se
+        # entregó, esta carta YA cobró lo que debía cobrar y no hay nada que
+        # devolver aunque la traducción a ESTE idioma en particular siga
+        # fallando — devolver ahí le sacaría a la cuenta un derecho por un
+        # informe que sí se entregó, sólo en otro idioma.
+        completo_ahora = Interpretation.objects.filter(
+            chart=chart, prompt_version=PROMPT_VERSION, tier=interpretacion.tier, completa=True,
+        ).exists()
         # Task 10 / RF21: ya no "sin secciones" sino "sin completar tras
         # agotar los intentos" — devolver antes de agotarlos regalaría el
         # reintento gratis (el crédito ya compró el trabajo hecho hasta
         # acá) y no devolver nunca dejaría cobrado un informe que jamás
         # puede terminar de generarse.
         if (
-            consumo is not None
+            consumo
             and not completo_ahora
             and interpretacion.intentos >= INTENTOS_MAXIMOS
         ):
             pk = interpretacion.pk
-            lot = consumo.lot
             chart_uuid = str(chart.uuid)
             tier = interpretacion.tier
             lang = interpretacion.lang
-            ledger.devolver(
-                account,
+            devolver(
+                account, codigo,
                 external_id=f"informe:{pk}:devolucion",
+                chart=chart,
                 note=f"informe {pk} sin completar tras {INTENTOS_MAXIMOS} intentos",
-                lot=lot,
             )
             # No se muestran las secciones sueltas de un informe que no se
             # pudo entregar (decisión del dueño del producto): se borra
@@ -568,7 +586,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # MÁS EXTERNO posible sobre todo lo que corre con el lock tomado
         # (sibling, intentos, generar/traducir, devolución) — no sólo sobre
         # el tramo de devolución. Corre pase lo que pase arriba, incluida
-        # una excepción sin atrapar en `ledger.devolver`/`notificar` (que
+        # una excepción sin atrapar en `devolver`/`notificar` (que
         # sigue propagándose después de este `finally`, igual que antes).
         # Sigue corriendo DESPUÉS de intentar el `delete()` (no antes):
         # soltarlo antes abriría una ventana para que otro proceso tome el

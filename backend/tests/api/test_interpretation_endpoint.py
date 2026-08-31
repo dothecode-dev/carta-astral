@@ -17,6 +17,22 @@ def _clear_cache():
     cache.clear()
 
 
+def _derechos_de_cobro(account) -> int:
+    """Task 11: `account.free_balance + account.paid_balance` medía cuánto le
+    quedaba a la cuenta para canjear un informe cuando el cobro era por
+    lote; `canje.canjear`/`devolver` ya no tocan esos campos, así que la
+    suma equivalente hoy es la de los dos derechos que `interpretation_
+    service` puede canjear."""
+    from api.models import Derecho
+
+    restante = dict(
+        Derecho.objects.filter(
+            account=account, codigo_producto__in=("lectura_breve", "informe_natal"),
+        ).values_list("codigo_producto", "cantidad_restante")
+    )
+    return sum(restante.values())
+
+
 def _chart(account=None):
     bd = BirthData.objects.create(
         date=datetime.date(1989, 7, 14),
@@ -88,15 +104,14 @@ def test_post_returns_interpretation(account_client, fake_client):
     commitear, así que no hay forma confiable de probar la generación en sí
     a través de HTTP)."""
     c = _chart(account=account_client.account)
-    antes = account_client.account.free_balance + account_client.account.paid_balance
+    antes = _derechos_de_cobro(account_client.account)
     resp = account_client.post(
         f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
     )
     assert resp.status_code == 202
     interp = Interpretation.objects.get(chart=c, lang="es", prompt_version=svc.PROMPT_VERSION)
     assert interp.completa is False
-    account_client.account.refresh_from_db()
-    assert account_client.account.free_balance + account_client.account.paid_balance == antes - 1
+    assert _derechos_de_cobro(account_client.account) == antes - 1
 
 
 def test_default_lang_es(account_client, fake_client):
@@ -155,7 +170,7 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fak
     código que ya espera la web (`web/app/api/charts/[id]/interpretation/
     route.ts`) para "generación en curso"— y no cobra nada."""
     c = _chart(account=account_client.account)
-    antes = account_client.account.free_balance + account_client.account.paid_balance
+    antes = _derechos_de_cobro(account_client.account)
 
     r1 = account_client.post(
         f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
@@ -167,8 +182,7 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fak
     )
     assert r2.status_code == 409
 
-    account_client.account.refresh_from_db()
-    assert account_client.account.free_balance + account_client.account.paid_balance == antes - 1
+    assert _derechos_de_cobro(account_client.account) == antes - 1
 
 
 # `test_cap_reached_503` (retirado en la Task 6): probaba que el cap diario

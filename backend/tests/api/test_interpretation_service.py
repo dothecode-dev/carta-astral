@@ -13,8 +13,16 @@ pytestmark = pytest.mark.django_db
 
 
 def _account(free_balance=None, paid_balance=0):
+    from tests.conftest import otorgar_derechos_de_balance
+
     fb = django_settings.INSTALL_FREE_CREDITS if free_balance is None else free_balance
-    return Account.objects.create(free_balance=fb, paid_balance=paid_balance)
+    acc = Account.objects.create(free_balance=fb, paid_balance=paid_balance)
+    # Task 11: el cobro pasó de lote a capacidad (`canje.canjear`) — sin
+    # esto la cuenta tiene los campos viejos en positivo pero ningún
+    # derecho con qué canjear, y todo test que genera algo se cae con
+    # `SinDerecho` aunque pida `paid_balance=1`.
+    otorgar_derechos_de_balance(acc, fb, paid_balance)
+    return acc
 
 
 @pytest.fixture(autouse=True)
@@ -277,8 +285,13 @@ def test_second_lang_translates_without_new_generation_nor_charge(fake_client, f
     assert all(texto == "una interpretación" and lang == "en" for texto, lang in fake_translator)
     assert second.lang == "en"
     assert "[en] una interpretación" in second.text
-    acc.refresh_from_db()
-    assert svc.credits_available(acc) == 0  # no cobró el segundo idioma
+    # Task 11: `credits_available` sigue leyendo los campos viejos
+    # (`ledger.credits_available`), que `canje.canjear` ya no toca — el
+    # dato que sí prueba "no cobró el segundo idioma" es el derecho de
+    # informe_natal, que se consumió una sola vez (con el primero).
+    from api.models import Derecho
+
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
 
 
 def test_translation_available_with_zero_credits(fake_client, fake_translator, settings):
@@ -343,3 +356,42 @@ def test_content_key_cambia_con_datos_lang_o_prompt_version_distintos():
     assert svc.content_key({**data, "utc_iso": "1989-07-15T02:46:00Z"}, "es", "v1", "largo") != base
     assert svc.content_key(data, "en", "v1", "largo") != base
     assert svc.content_key(data, "es", "v2", "largo") != base
+
+
+# --- Task 11: cobro por capacidad, no por lote ---
+
+
+def test_la_lectura_breve_consume_el_derecho_de_lectura_breve(make_account, make_chart):
+    from api.canje import otorgar
+    from api.models import Derecho
+
+    cuenta = make_account(free_balance=0, paid_balance=0)
+    otorgar(cuenta, "lectura_breve", 1, origen="regalo")
+    carta = make_chart(account=cuenta)
+
+    _generar(carta, "es", cuenta, tier="corto")
+
+    assert Derecho.objects.get(codigo_producto="lectura_breve").cantidad_restante == 0
+
+
+def test_el_informe_completo_no_se_paga_con_una_lectura_breve(make_account, make_chart):
+    from api.canje import SinDerecho, otorgar
+
+    cuenta = make_account(free_balance=0, paid_balance=0)
+    otorgar(cuenta, "lectura_breve", 3, origen="regalo")
+    carta = make_chart(account=cuenta)
+
+    with pytest.raises(SinDerecho):
+        _generar(carta, "es", cuenta, tier="largo")
+
+
+def test_el_cap_diario_solo_frena_lo_regalado(make_account, make_chart, settings):
+    # Un cap pensado para el free-tier no puede frenar un informe pagado.
+    from api.canje import otorgar
+
+    settings.INTERPRETATION_DAILY_CAP = 0
+    cuenta = make_account(free_balance=0, paid_balance=0)
+    otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:cap")
+    carta = make_chart(account=cuenta)
+
+    _generar(carta, "es", cuenta, tier="largo")  # no levanta CapReached

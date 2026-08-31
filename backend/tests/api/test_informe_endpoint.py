@@ -14,6 +14,22 @@ from django.utils import timezone
 pytestmark = pytest.mark.django_db
 
 
+def _derechos_de_cobro(account) -> int:
+    """Task 11: cuánto le queda a la cuenta para canjear un informe (breve o
+    completo), sumado. `account.free_balance + account.paid_balance` medía
+    esto mismo cuando el cobro era por lote; `canje.canjear`/`devolver` ya no
+    tocan esos campos, así que la suma equivalente hoy es la de los dos
+    derechos que `interpretation_service` puede canjear."""
+    from api.models import Derecho
+
+    restante = dict(
+        Derecho.objects.filter(
+            account=account, codigo_producto__in=("lectura_breve", "informe_natal"),
+        ).values_list("codigo_producto", "cantidad_restante")
+    )
+    return sum(restante.values())
+
+
 @pytest.fixture(autouse=True)
 def _cache_limpio():
     """El lock de generación vive en el cache, no en la base: sin esto, el
@@ -54,7 +70,7 @@ def test_el_post_cobra_y_crea_la_interpretacion_pendiente_sincronicamente(client
     from api.models import Interpretation
     from interpret.prompts import PROMPT_VERSION
 
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
     r = client_autenticado.post(
         f"/api/charts/{chart.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
     )
@@ -62,8 +78,7 @@ def test_el_post_cobra_y_crea_la_interpretacion_pendiente_sincronicamente(client
 
     interp = Interpretation.objects.get(chart=chart, lang="es", prompt_version=PROMPT_VERSION)
     assert interp.completa is False
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes - 1
+    assert _derechos_de_cobro(account) == antes - 1
 
 
 def test_el_estado_dice_cuantas_secciones_van(client_autenticado, chart, interpretacion):
@@ -267,10 +282,9 @@ def test_si_falla_una_sola_vez_la_interpretacion_sigue_viva_para_reintentar(char
     from interpret.prompts import PROMPT_VERSION
 
     monkeypatch.setattr("api.informe_service.generar_informe", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
     interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes - 1  # sigue cobrado
+    assert _derechos_de_cobro(account) == antes - 1  # sigue cobrado
     assert Interpretation.objects.filter(
         chart=chart, lang="es", prompt_version=PROMPT_VERSION, completa=False,
     ).exists()
@@ -294,10 +308,9 @@ def test_si_queda_una_seccion_no_se_devuelve_el_credito(chart, account, settings
     # `generar_informe` (que acá está mockeado y ni lo mira), así que igual
     # necesita una key no vacía para no explotar antes de llegar al mock.
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
     interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes - 1
+    assert _derechos_de_cobro(account) == antes - 1
 
 
 # `test_el_cap_diario_cuenta_un_informe_no_ocho_llamadas` (retirado en la
@@ -362,10 +375,9 @@ def test_iniciar_generacion_cobra_si_no_hay_ningun_idioma_completo(chart, accoun
     sigue cobrando y generando normal."""
     from api import interpretation_service as svc
 
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
     svc.iniciar_generacion(chart, "es", account, tier="largo")
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes - 1
+    assert _derechos_de_cobro(account) == antes - 1
 
 
 def test_completar_generacion_traduce_el_segundo_idioma_en_vez_de_regenerar(
@@ -462,14 +474,12 @@ def test_pedir_el_corto_con_el_largo_en_curso_mismo_idioma_no_pierde_el_credito(
     # El "largo" ya tomó SU lock y sigue generando.
     cache.add(svc._lock_key(chart, "largo"), "token-largo-en-curso", timeout=600)
 
-    account.refresh_from_db()
-    antes = account.free_balance + account.paid_balance
+    antes = _derechos_de_cobro(account)
 
     # Mismo idioma, tier distinto: no es sibling (ni completo ni en curso) del
     # largo, así que cobra normal (free) y arranca su propia generación.
     interpretacion_corto = svc.iniciar_generacion(chart, "es", account, tier="corto")
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes - 1  # cobró el free normal
+    assert _derechos_de_cobro(account) == antes - 1  # cobró el free normal
 
     def _generar_fake(interpretacion, client, token):
         InterpretationSection.objects.create(
@@ -488,8 +498,7 @@ def test_pedir_el_corto_con_el_largo_en_curso_mismo_idioma_no_pierde_el_credito(
     # largo bloqueaba al corto, que ni generaba ni devolvía el crédito.
     assert interpretacion_corto.completa is True
     assert interpretacion_corto.secciones.exists()
-    account.refresh_from_db()
-    assert account.free_balance + account.paid_balance == antes - 1  # el crédito se cobró Y se entregó
+    assert _derechos_de_cobro(account) == antes - 1  # el crédito se cobró Y se entregó
 
 
 # --- HALLAZGO 3 de code review: la devolución infiere "se cobró" en vez de saberlo ---

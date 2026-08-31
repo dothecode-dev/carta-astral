@@ -2,8 +2,9 @@ import pytest
 from rest_framework.test import APIClient
 
 from api.auth import create_session
+from api.canje import otorgar
 from api.deletion import delete_account
-from api.models import Account, BirthData, Chart, CreditTransaction
+from api.models import Account, BirthData, Chart, Movimiento
 
 
 def _client(acc):
@@ -40,7 +41,13 @@ def test_delete_charts_requires_auth():
 
 @pytest.mark.django_db
 def test_delete_charts_preserva_ledger(monkeypatch, settings):
-    """Borrar cartas cascadea interpretaciones pero NUNCA borra transacciones de créditos."""
+    """Borrar cartas cascadea interpretaciones pero NUNCA borra el rastro de
+    plata. Task 11: el cobro ya no deja `CreditTransaction` (eso lo hacía
+    `ledger.charge`, que `interpretation_service` dejó de usar) sino
+    `Movimiento` (`canje.canjear`) — el invariante que importa es el mismo:
+    el `Movimiento` de consumo sobrevive al borrado de la carta, sólo su FK
+    a `chart` queda en NULL (`SET_NULL`, igual que antes con
+    `CreditTransaction.interpretation`)."""
     import api.interpretation_service as svc
 
     settings.INTERPRETATION_DAILY_CAP = 100
@@ -52,21 +59,25 @@ def test_delete_charts_preserva_ledger(monkeypatch, settings):
     # paid_balance=1: este test pide tier="largo" (informe completo), que se
     # cobra del lote paid (RF9), no del free que trae el default del modelo.
     a = Account.objects.create(paid_balance=1)
+    otorgar(a, "informe_natal", 1, origen="compra", external_id="test:delete-charts-preserva-ledger")
     resp = _client(a).post("/api/charts/", PAYLOAD, format="json")
     uuid = resp.data["id"]
     resp = _client(a).post(
         f"/api/charts/{uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
     )
     assert resp.status_code == 202  # Task 10: se cobra sincrónico, se genera en un hilo aparte
-    txns_antes = CreditTransaction.objects.count()
-    assert txns_antes > 0
+    movs_antes = Movimiento.objects.count()
+    assert movs_antes > 0
+    assert Movimiento.objects.filter(tipo="consumo", codigo_producto="informe_natal").exists()
 
     assert _client(a).delete("/api/charts/").status_code == 204
 
     assert Chart.objects.filter(account=a).count() == 0
-    assert CreditTransaction.objects.count() == txns_antes
-    # el FK a la interpretación borrada queda en NULL, no arrastra la fila
-    assert CreditTransaction.objects.filter(kind="consumption", interpretation__isnull=True).exists()
+    assert Movimiento.objects.count() == movs_antes
+    # el FK a la carta borrada queda en NULL, no arrastra el movimiento
+    assert Movimiento.objects.filter(
+        tipo="consumo", codigo_producto="informe_natal", chart__isnull=True,
+    ).exists()
 
 
 @pytest.mark.django_db

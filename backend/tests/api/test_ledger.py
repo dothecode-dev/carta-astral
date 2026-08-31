@@ -40,7 +40,7 @@ def test_charge_raises_when_no_balance(chart):
     """Sin saldo en el lote pedido, `charge` no tiene a dónde caer: lanza
     QuotaExceeded en vez de mirar el otro lote."""
     from api import ledger
-    from api.interpretation_service import QuotaExceeded
+    from api.exceptions import QuotaExceeded
 
     ledger.charge(chart.account, _make_interp(chart), lot="free")  # gasta la única free
     # segunda carta de la misma cuenta, sin balance

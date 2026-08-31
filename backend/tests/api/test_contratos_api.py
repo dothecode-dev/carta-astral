@@ -192,9 +192,15 @@ def test_post_con_tier_corto_devuelve_202_y_cobra_free(cliente_con_carta, settin
     correcto. Es el único endpoint de esta tarea que cobra, y el que
     atraparía una regresión si algún día alguien mete una condición por
     tier acá."""
+    from api.canje import otorgar
+    from api.models import Derecho
+
     settings.ANTHROPIC_API_KEY = ""  # el hilo de fondo no debe pegarle a la API real en un test
     cuenta = cliente_con_carta.account
-    free_antes, paid_antes = cuenta.free_balance, cuenta.paid_balance
+    # `cliente_con_carta` fondea la cuenta con `make_account()` a secas (sin
+    # derechos: la fixture no traduce un pedido implícito, ver conftest), así
+    # que este test —el único que necesita canjear algo— lo pide explícito.
+    otorgar(cuenta, "lectura_breve", 1, origen="regalo", external_id="test:tier-corto-202")
 
     r = cliente_con_carta.post(
         f"/api/charts/{cliente_con_carta.chart.uuid}/interpretation/",
@@ -203,9 +209,9 @@ def test_post_con_tier_corto_devuelve_202_y_cobra_free(cliente_con_carta, settin
     )
 
     assert r.status_code == 202
-    cuenta.refresh_from_db()
-    assert cuenta.free_balance == free_antes - 1  # cobró del lote free...
-    assert cuenta.paid_balance == paid_antes  # ...y no tocó el paid
+    # cobró el derecho de lectura_breve... y no tocó el de informe_natal
+    assert Derecho.objects.get(account=cuenta, codigo_producto="lectura_breve").cantidad_restante == 0
+    assert not Derecho.objects.filter(account=cuenta, codigo_producto="informe_natal").exists()
 
 
 @pytest.mark.django_db

@@ -13,11 +13,21 @@ from django.core.cache import cache
 
 from api import informe_service, notificaciones
 from api import interpretation_service as svc
-from api.models import CreditTransaction, Interpretation, InterpretationSection
+from api.models import Derecho, Interpretation, InterpretationSection, Movimiento
 from interpret.exceptions import InterpretationError
 from interpret.prompts import PROMPT_VERSION, SECCIONES
 
 pytestmark = pytest.mark.django_db
+
+
+def _restante(account, codigo_producto: str) -> int:
+    """Task 11: el saldo que importa ahora es el del `Derecho`, no
+    `Account.paid_balance` — `canje.canjear`/`devolver` ya no tocan los
+    campos viejos. Por cuenta (no global): el fixture `chart` cuelga de
+    `account` (conftest), que también fondea su propio derecho, así que más
+    de una cuenta puede tener un `Derecho` con el mismo `codigo_producto`
+    en el mismo test."""
+    return Derecho.objects.get(account=account, codigo_producto=codigo_producto).cantidad_restante
 
 
 @pytest.fixture(autouse=True)
@@ -112,16 +122,14 @@ def test_un_informe_a_medias_se_reanuda_sin_cobrar_de_nuevo(make_account, chart,
     acc = make_account(free_balance=0, paid_balance=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
     _generar_solo_tres_secciones(interp)
-    acc.refresh_from_db()
-    assert acc.paid_balance == 0  # ya se cobró al iniciar
+    assert _restante(acc, "informe_natal") == 0  # ya se cobró al iniciar
 
     svc.completar_generacion(interp, chart, acc)  # reintento: retoma desde la 4ta sección
 
     interp.refresh_from_db()
     assert interp.completa is True
     assert interp.secciones.count() == len(SECCIONES)
-    acc.refresh_from_db()
-    assert acc.paid_balance == 0  # no volvió a cobrar
+    assert _restante(acc, "informe_natal") == 0  # no volvió a cobrar
 
 
 def test_agotados_los_intentos_devuelve_credito_borra_secciones_y_avisa(
@@ -150,8 +158,7 @@ def test_agotados_los_intentos_devuelve_credito_borra_secciones_y_avisa(
     for _ in range(svc.INTENTOS_MAXIMOS):
         svc.completar_generacion(interp, chart, acc)
 
-    acc.refresh_from_db()
-    assert acc.paid_balance == 1  # devuelto
+    assert _restante(acc, "informe_natal") == 1  # devuelto
     assert not Interpretation.objects.filter(pk=interp_pk).exists()
     assert not InterpretationSection.objects.filter(interpretation_id=interp_pk).exists()
     assert len(avisos) == 1
@@ -170,8 +177,7 @@ def test_mientras_quedan_intentos_no_devuelve_ni_borra(make_account, chart, buil
     for _ in range(svc.INTENTOS_MAXIMOS - 1):
         svc.completar_generacion(interp, chart, acc)
 
-    acc.refresh_from_db()
-    assert acc.paid_balance == 0  # todavía no se devolvió
+    assert _restante(acc, "informe_natal") == 0  # todavía no se devolvió
     assert Interpretation.objects.filter(pk=interp.pk).exists()
     interp.refresh_from_db()
     assert interp.intentos == svc.INTENTOS_MAXIMOS - 1
@@ -179,16 +185,22 @@ def test_mientras_quedan_intentos_no_devuelve_ni_borra(make_account, chart, buil
 
 
 def test_la_devolucion_no_se_duplica(make_account, chart, monkeypatch, build_seccion_falla):
-    """external_id estable por informe (`f"informe:{pk}:devolucion"`), no
-    por intento: dos caminos que llegan a devolver el crédito de la MISMA
-    interpretación sólo acreditan una vez.
+    """Dos caminos que llegan a devolver el derecho de la MISMA interpretación
+    sólo acreditan una vez.
 
     Para forzar que la rama de devolución se ejecute dos veces sobre la
     MISMA fila (en producción no pasa: `interpretacion.delete()` la saca de
     en medio la primera vez) se neutraliza el `delete()` de esa instancia.
-    Si `external_id` incluyera el número de intento en vez de sólo el pk del
-    informe, las dos devoluciones generarían claves distintas y las dos
-    prosperarían — este test está armado para fallar en ese caso."""
+
+    Task 11: la doble protección ya no depende sólo del `external_id`
+    estable (`f"informe:{pk}:devolucion"`, que `canje.devolver` sigue
+    respetando) — la guarda de `completar_generacion` misma deja de
+    intentarlo: `devolver` desvincula el `Movimiento` de consumo de esta
+    carta (`chart=None`) al acreditar, así que la SEGUNDA vuelta ya no
+    encuentra un consumo vigente para esta carta y ni siquiera llama a
+    `devolver` de nuevo. Cualquiera de las dos protecciones alcanza para
+    que esto pase; lo que importa es el resultado observable: una sola
+    devolución."""
     acc = make_account(free_balance=0, paid_balance=1)
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
     monkeypatch.setattr(Interpretation, "delete", lambda self, *a, **kw: None)
@@ -196,9 +208,8 @@ def test_la_devolucion_no_se_duplica(make_account, chart, monkeypatch, build_sec
     for _ in range(svc.INTENTOS_MAXIMOS + 1):
         svc.completar_generacion(interp, chart, acc)
 
-    acc.refresh_from_db()
-    assert acc.paid_balance == 1  # sólo una devolución prosperó
-    assert CreditTransaction.objects.filter(kind="adjustment").count() == 1
+    assert _restante(acc, "informe_natal") == 1  # sólo una devolución prosperó
+    assert Movimiento.objects.filter(codigo_producto="informe_natal", tipo="devolucion").count() == 1
 
 
 def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
@@ -243,8 +254,7 @@ def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
 
     svc.completar_generacion(interp_es, chart, acc)  # 3er intento: encuentra el sibling y traduce
 
-    acc.refresh_from_db()
-    assert acc.paid_balance == 0  # sigue cobrado: el informe SE ENTREGÓ, no hay nada que devolver
+    assert _restante(acc, "informe_natal") == 0  # sigue cobrado: el informe SE ENTREGÓ, no hay nada que devolver
     assert Interpretation.objects.filter(pk=interp_es.pk).exists()  # no se borró
     interp_es.refresh_from_db()
     assert interp_es.completa is True
@@ -269,8 +279,7 @@ def test_lock_perdido_repetido_no_devuelve_ni_borra(make_account, chart, fake_cl
     for _ in range(svc.INTENTOS_MAXIMOS):
         svc.completar_generacion(interp, chart, acc)
 
-    acc.refresh_from_db()
-    assert acc.paid_balance == 0  # sigue cobrado: nunca hubo un fallo real
+    assert _restante(acc, "informe_natal") == 0  # sigue cobrado: nunca hubo un fallo real
     assert Interpretation.objects.filter(pk=interp.pk).exists()  # no se borró
     interp.refresh_from_db()
     assert interp.intentos == 0  # cada aborto por lock perdido se descontó
@@ -284,7 +293,7 @@ def test_soltar_lock_no_queda_colgado_si_notificar_revienta(
     make_account, chart, build_seccion_falla, monkeypatch,
 ):
     """Minor de la revisión final: `soltar_lock` vivía después de
-    `notificar` en el `finally` — si `ledger.devolver` o `notificar`
+    `notificar` en el `finally` — si `devolver` o `notificar`
     reventaban, el lock quedaba colgado hasta que venciera el TTL en vez de
     liberarse. Ahora vive en un `finally` interno que corre pase lo que
     pase dentro del bloque de devolución (después de intentar el `delete`,
@@ -304,5 +313,4 @@ def test_soltar_lock_no_queda_colgado_si_notificar_revienta(
         svc.completar_generacion(interp, chart, acc)  # agota los intentos; notificar revienta
 
     assert cache.get(svc._lock_key(chart, "largo")) is None  # el lock no quedó colgado
-    acc.refresh_from_db()
-    assert acc.paid_balance == 1  # la devolución ya había corrido antes de que reventara notificar
+    assert _restante(acc, "informe_natal") == 1  # la devolución ya había corrido antes de que reventara notificar

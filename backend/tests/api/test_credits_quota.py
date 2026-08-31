@@ -4,7 +4,7 @@ from django.utils import timezone
 
 from api import interpretation_service as svc
 from api.interpretation_service import (
-    QuotaExceeded,
+    SinDerecho,
     credits_available,
 )
 from api.models import Account, BirthData, Chart, Interpretation
@@ -13,9 +13,14 @@ pytestmark = pytest.mark.django_db
 
 
 def _account(free_balance=None, paid_balance=0):
+    from tests.conftest import otorgar_derechos_de_balance
     from django.conf import settings
     fb = settings.INSTALL_FREE_CREDITS if free_balance is None else free_balance
-    return Account.objects.create(free_balance=fb, paid_balance=paid_balance)
+    acc = Account.objects.create(free_balance=fb, paid_balance=paid_balance)
+    # Task 11: el cobro pasó de lote a capacidad — sin esto la cuenta no
+    # tiene con qué canjear aunque los campos viejos sean positivos.
+    otorgar_derechos_de_balance(acc, fb, paid_balance)
+    return acc
 
 
 def _chart():
@@ -33,8 +38,8 @@ def test_available_starts_at_free_credits(settings):
 
 def test_quota_exceeded_blocks_new_generation(settings):
     settings.INSTALL_FREE_CREDITS = 0
-    acc = _account()  # free_balance=0, paid_balance=0
-    with pytest.raises(QuotaExceeded):
+    acc = _account()  # free_balance=0, paid_balance=0 → sin derecho de lectura_breve
+    with pytest.raises(SinDerecho):
         svc.iniciar_generacion(_chart(), "es", acc, tier="corto")
 
 
@@ -62,10 +67,13 @@ def test_paid_generation_bypasses_daily_cap(settings):
     de `iniciar_generacion` — no hace falta mockear el cliente del LLM ni
     completar la generación para probar esta garantía, a diferencia del
     flujo viejo (que armaba el texto entero en la misma llamada que cobraba)."""
+    from api.canje import otorgar
+
     settings.INSTALL_FREE_CREDITS = 0
     settings.INTERPRETATION_DAILY_CAP = 0  # cap at its limit for free generations
 
     acc = Account.objects.create(free_balance=0, paid_balance=1)
+    otorgar(acc, "informe_natal", 1, origen="compra", external_id="test:paid-bypasses-cap")
     chart = _chart()
 
     cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
@@ -81,41 +89,42 @@ def test_paid_generation_bypasses_daily_cap(settings):
 
 
 def test_la_breve_cobra_free_y_el_completo_cobra_paid(make_account):
-    """RF9: el tier decide el lote, no al revés. La breve ("corto") gasta
-    free_balance; el informe completo ("largo") gasta paid_balance — y son
-    dos `Interpretation` distintas sobre la misma carta e idioma, no la
-    misma fila cobrada dos veces."""
+    """RF9: el tier decide la capacidad, no al revés (Task 11). La breve
+    ("corto") gasta el derecho de lectura_breve; el informe completo
+    ("largo") gasta el de informe_natal — y son dos `Interpretation`
+    distintas sobre la misma carta e idioma, no la misma fila cobrada dos
+    veces."""
+    from api.models import Derecho
+
     acc = make_account(free_balance=1, paid_balance=1)
     chart = _chart()
     svc.iniciar_generacion(chart, "es", acc, tier="corto")
-    acc.refresh_from_db()
-    assert (acc.free_balance, acc.paid_balance) == (0, 1)
+    assert Derecho.objects.get(codigo_producto="lectura_breve").cantidad_restante == 0
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
     svc.iniciar_generacion(chart, "es", acc, tier="largo")
-    acc.refresh_from_db()
-    assert (acc.free_balance, acc.paid_balance) == (0, 0)
+    assert Derecho.objects.get(codigo_producto="lectura_breve").cantidad_restante == 0
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
 
 
 def test_sin_free_la_breve_falla_diciendo_que_falto_free(make_account):
-    """Sin crédito free, pedir la breve no cae a paid_balance aunque sobre
-    saldo ahí: `QuotaExceeded.lote` dice cuál faltó ("free"), para que la
-    vista pueda mostrar la pantalla correcta ("te quedaste sin lecturas
-    gratis", no "comprá el informe")."""
+    """Sin derecho de lectura_breve, pedir la breve no cae al derecho de
+    informe_natal aunque sobre ahí: `SinDerecho.capacidad` dice cuál faltó
+    ("leer_breve"), para que la vista pueda mostrar la pantalla correcta
+    ("te quedaste sin lecturas gratis", no "comprá el informe")."""
     acc = make_account(free_balance=0, paid_balance=5)
-    with pytest.raises(QuotaExceeded) as exc:
+    with pytest.raises(SinDerecho) as exc:
         svc.iniciar_generacion(_chart(), "es", acc, tier="corto")
-    assert exc.value.lote == "free"
+    assert exc.value.capacidad == "leer_breve"
 
 
 def test_sin_paid_el_completo_falla_diciendo_que_falto_paid(make_account):
-    """Contrapunto (fix round 1, Important 3): sin crédito paid, pedir el
-    informe completo no cae a free_balance aunque sobre saldo ahí —
-    `QuotaExceeded.lote` dice "paid", no el default "free" que tenía la
-    excepción antes de este fix (que hubiera mentido acá, justo en el caso
-    que este test cubre)."""
+    """Contrapunto: sin derecho de informe_natal, pedir el informe completo
+    no cae al derecho de lectura_breve aunque sobre ahí — `SinDerecho.
+    capacidad` dice "leer_informe", no la otra capacidad."""
     acc = make_account(free_balance=5, paid_balance=0)
-    with pytest.raises(QuotaExceeded) as exc:
+    with pytest.raises(SinDerecho) as exc:
         svc.iniciar_generacion(_chart(), "es", acc, tier="largo")
-    assert exc.value.lote == "paid"
+    assert exc.value.capacidad == "leer_informe"
 
 
 def test_la_interpretacion_vacia_se_borra_si_no_hay_credito(make_account):
@@ -123,6 +132,6 @@ def test_la_interpretacion_vacia_se_borra_si_no_hay_credito(make_account):
     crea que hay una generación en curso y no arranque nunca."""
     acc = make_account(free_balance=0, paid_balance=0)
     chart = _chart()
-    with pytest.raises(QuotaExceeded):
+    with pytest.raises(SinDerecho):
         svc.iniciar_generacion(chart, "es", acc, tier="corto")
     assert chart.interpretations.count() == 0
