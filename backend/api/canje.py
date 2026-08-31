@@ -126,6 +126,42 @@ def canjear(account, capacidad: str, chart, build=None):
     return construido, derecho.codigo_producto
 
 
+def devolver(account, codigo_producto, external_id, chart=None, note="") -> bool:
+    """Repone un derecho cuya entrega falló. Idempotente por external_id.
+
+    Desvincula el movimiento de consumo de esa carta (no lo borra: `Movimiento`
+    es un registro append-only) para que vuelva a estar libre: si el vínculo
+    quedara, el no-op de `canjear` la daría por entregada para siempre y el
+    usuario no podría regenerar el informe pese a tener el derecho repuesto.
+    """
+    with transaction.atomic():
+        acc = Account.objects.select_for_update().get(pk=account.pk)
+        try:
+            with transaction.atomic():
+                Movimiento.objects.create(
+                    account=acc, codigo_producto=codigo_producto, tipo="devolucion",
+                    cantidad=1, origen="ajuste", chart=chart,
+                    external_id=external_id, note=note,
+                )
+        except IntegrityError:
+            if Movimiento.objects.filter(external_id=external_id).exists():
+                logger.info("devolución duplicada ignorada (external_id=%s)", external_id)
+                return False
+            raise
+
+        if chart is not None:
+            Movimiento.objects.filter(
+                account=acc, chart=chart, tipo="consumo", codigo_producto=codigo_producto,
+            ).update(chart=None)
+
+        derecho, _ = Derecho.objects.get_or_create(
+            account=acc, codigo_producto=codigo_producto, defaults={"cantidad_restante": 0},
+        )
+        derecho.cantidad_restante += 1
+        derecho.save(update_fields=["cantidad_restante", "updated_at"])
+    return True
+
+
 def puede(account, capacidad: str) -> bool:
     """¿La cuenta puede hacer esto?
 
