@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi, clearSessionToken, getSessionToken, setSessionToken } from "@/lib/session";
+import type { Derecho } from "@/lib/derechos";
 
 // Punto único de entrada y salida de la sesión.
 //
@@ -15,7 +16,7 @@ type Provider = keyof typeof PROVIDERS;
 
 type LoginResponse = {
   token: string;
-  credits_available: number;
+  derechos: Derecho[];
   account_id: number;
 };
 
@@ -47,11 +48,11 @@ export async function POST(request: Request) {
 
     await setSessionToken(data.token);
 
-    // Sin el token: la pantalla necesita el saldo, y la analítica el id interno
-    // de la cuenta —nunca el email— para poder unir el embudo de una persona.
-    // Es lo que la política de privacidad declara que se manda.
+    // Sin el token: la pantalla necesita los derechos, y la analítica el id
+    // interno de la cuenta —nunca el email— para poder unir el embudo de una
+    // persona. Es lo que la política de privacidad declara que se manda.
     return NextResponse.json({
-      credits_available: data.credits_available,
+      derechos: data.derechos,
       account_id: data.account_id,
     });
   } catch (error) {

@@ -66,10 +66,10 @@ export async function POST(
       // Sin esto, un fallo de generación llega al log como un 502 sin motivo.
       console.error(`interpretación ${id}: backend ${error.status} ${error.body}`);
       if (error.status === 401) return NextResponse.json({ error: "sin sesión" }, { status: 401 });
-      // El backend responde 402 cuando no alcanzan los créditos, con
-      // `code: "sin_free" | "sin_paid"` para distinguir cuál lote se quedó
-      // sin crédito. Se reenvía tal cual: es la única forma en que el botón
-      // sepa cuál de los dos mensajes mostrar.
+      // El backend responde 402 cuando falta el derecho, con
+      // `code: "sin_leer_breve" | "sin_leer_informe"` para distinguir qué
+      // capacidad falta. Se reenvía tal cual: es la única forma en que el
+      // botón sepa cuál de los dos mensajes mostrar.
       if (error.status === 402) {
         let code: string | undefined;
         try {

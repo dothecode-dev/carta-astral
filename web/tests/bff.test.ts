@@ -51,9 +51,10 @@ afterEach(() => {
 describe("POST /api/session", () => {
   it("guarda el token en una cookie httpOnly y no lo devuelve", async () => {
     store.clear();
+    const derechos = [{ codigo_producto: "lectura_breve", cantidad_restante: 1, vigente_hasta: null }];
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(json({ token: "secreto", credits_available: 1, account_id: 7 })),
+      vi.fn().mockResolvedValue(json({ token: "secreto", derechos, account_id: 7 })),
     );
 
     const res = await sessionPost(
@@ -64,7 +65,7 @@ describe("POST /api/session", () => {
     expect(res.status).toBe(200);
     // El id de cuenta sí sale: la analítica lo usa para unir el embudo de una
     // persona sin conocer su email. El token no sale nunca.
-    expect(body).toEqual({ credits_available: 1, account_id: 7 });
+    expect(body).toEqual({ derechos, account_id: 7 });
     expect(JSON.stringify(body)).not.toContain("secreto");
     expect(store.get(SESSION_COOKIE)?.value).toBe("secreto");
     expect(store.get(SESSION_COOKIE)?.options?.httpOnly).toBe(true);
@@ -200,15 +201,16 @@ describe("/api/charts/[id]/interpretation", () => {
     });
   });
 
-  // El 402 trae `code: "sin_free" | "sin_paid"` para que el botón sepa cuál
-  // de los dos mensajes mostrar. Sin reenviarlo, la web no puede distinguirlos.
-  it("reenvía el code del 402 para distinguir sin_free de sin_paid", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ code: "sin_free" }, 402)));
+  // El 402 trae `code: "sin_leer_breve" | "sin_leer_informe"` para que el
+  // botón sepa cuál de los dos mensajes mostrar. Sin reenviarlo, la web no
+  // puede distinguirlos.
+  it("reenvía el code del 402 para distinguir sin_leer_breve de sin_leer_informe", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ code: "sin_leer_breve" }, 402)));
 
     const res = await readingPost(post("http://x", { lang: "es", tier: "corto" }), params);
 
     expect(res.status).toBe(402);
-    expect((await res.json()).code).toBe("sin_free");
+    expect((await res.json()).code).toBe("sin_leer_breve");
   });
 
   it("consulta la lectura sin generarla", async () => {

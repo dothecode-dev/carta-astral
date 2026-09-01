@@ -249,9 +249,9 @@ export type Dict = {
     interpreting: string;
     readAgain: string;
     noCredits: string;
-    /** 402 con code "sin_free": se acabó el lote de lecturas breves gratis. */
+    /** 402 con code "sin_leer_breve": se acabó el lote de lecturas breves gratis. */
     sinFree: string;
-    /** 402 con code "sin_paid": el informe completo todavía no está comprado. */
+    /** 402 con code "sin_leer_informe": el informe completo todavía no está comprado. */
     sinPaid: string;
     failed: string;
     /** 409: ya hay una generación en curso para esta carta en otro idioma. */

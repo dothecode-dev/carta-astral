@@ -11,6 +11,7 @@ import { NatalWheel } from "@/components/NatalWheel";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
 import { type ApiChart, toWheel } from "@/lib/chart";
+import { cantidad, type Derecho } from "@/lib/derechos";
 import { signOf } from "@/lib/ephemeris";
 import { INTL_LOCALE, type Locale, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
 import { buildPdfPayload } from "@/lib/pdfPayload";
@@ -57,11 +58,11 @@ export default async function ChartPage({
     throw error;
   }
 
-  // Créditos del lote gratis (pagan la breve) y del pago (pagan el completo),
-  // por separado: los botones de abajo los necesitan para saber qué ofrecer.
-  let account: { free_credits: number; paid_credits: number };
+  // Derechos de la cuenta: lectura_breve paga la breve, informe_natal paga
+  // el completo. Los botones de abajo los necesitan para saber qué ofrecer.
+  let account: { derechos: Derecho[] };
   try {
-    account = await callApi<{ free_credits: number; paid_credits: number }>(`/api/account/`);
+    account = await callApi<{ derechos: Derecho[] }>(`/api/account/`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) redirect(RUTA_SESION_EXPIRADA(locale));
     throw error;
@@ -215,8 +216,8 @@ export default async function ChartPage({
           locale={locale}
           chartId={chart.id}
           interpretations={chart.interpretations}
-          freeCredits={account.free_credits}
-          paidCredits={account.paid_credits}
+          freeCredits={cantidad(account.derechos, "lectura_breve")}
+          paidCredits={cantidad(account.derechos, "informe_natal")}
           timeKnown={chart.birth.time_known}
           dict={dict}
         />

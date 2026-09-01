@@ -9,11 +9,12 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
 import { Footer } from "@/components/Footer";
+import { cantidad, type Derecho } from "@/lib/derechos";
 
 /** Lo que devuelve /api/account/: no hay email ni nombre. */
 type AccountResponse = {
-  free_credits: number;
-  paid_credits: number;
+  derechos: Derecho[];
+  deuda: number;
   account_id: number;
 };
 
@@ -71,14 +72,14 @@ export default async function AccountPage({
                 <span className="balanceGlyph" aria-hidden="true">
                   ☉
                 </span>
-                <span className="balanceNumber">{account.free_credits}</span>
+                <span className="balanceNumber">{cantidad(account.derechos, "lectura_breve")}</span>
                 <span className="balanceLabel">{dict.auth.freeCredits}</span>
               </p>
               <p className="balance">
                 <span className="balanceGlyph" aria-hidden="true">
                   ☾
                 </span>
-                <span className="balanceNumber">{account.paid_credits}</span>
+                <span className="balanceNumber">{cantidad(account.derechos, "informe_natal")}</span>
                 <span className="balanceLabel">{dict.auth.paidCredits}</span>
               </p>
             </div>

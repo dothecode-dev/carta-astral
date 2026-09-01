@@ -29,12 +29,12 @@ afterEach(() => {
 
 describe("callApi", () => {
   it("manda el token de la sesión y devuelve el cuerpo", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json({ credits_available: 3 }));
+    const fetchMock = vi.fn().mockResolvedValue(json({ deuda: 3 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const data = await callApi<{ credits_available: number }>("/api/account/");
+    const data = await callApi<{ deuda: number }>("/api/account/");
 
-    expect(data.credits_available).toBe(3);
+    expect(data.deuda).toBe(3);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API_URL}/api/account/`);
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer un-token");
