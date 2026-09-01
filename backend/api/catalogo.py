@@ -2,9 +2,10 @@
 
 Es código y no una tabla a propósito: los precios no los edita nadie desde una
 UI, y en código quedan versionados y revisables en el diff. Un producto declara
-CAPACIDADES, no features sueltas: las pantallas preguntan por capacidad
-(`puede(cuenta, "leer_informe")`), así un plan nuevo es una línea acá y no una
-recorrida por todas las pantallas.
+CAPACIDADES, no features sueltas: las vistas canjean por capacidad
+(`canje.canjear(cuenta, "leer_informe", carta)`) y dejan que `SinDerecho` frene
+al que no tiene con qué —no hay un chequeo previo separado del cobro—, así un
+plan nuevo es una línea acá y no una recorrida por todas las vistas.
 """
 
 from dataclasses import dataclass

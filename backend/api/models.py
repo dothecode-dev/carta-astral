@@ -275,8 +275,23 @@ class Derecho(models.Model):
 class Movimiento(models.Model):
     """Registro append-only de todo cambio de derechos o de deuda.
 
-    El invariante que sostiene cualquier discusión de plata con un usuario: la
-    cantidad de un derecho tiene que poder reconstruirse sumando sus movimientos.
+    Es el rastro de auditoría de CADA operación (qué se compró, canjeó,
+    devolvió o revocó), no una contabilidad que sume sola al saldo exacto de
+    un `Derecho`. Dos caminos rompen esa suma directa, los dos correctos en
+    unidades:
+
+    - un pack registra el movimiento con el producto COMPRADO
+      (`pack_5_natal`, cantidad 1), pero acredita el derecho del producto que
+      `Producto.otorga` traduce (`informe_natal`, +5): sumando sólo los
+      movimientos de `informe_natal` faltan esas 5 unidades, que están en el
+      movimiento de `pack_5_natal`.
+    - `otorgar` cancela deuda antes de acreditar saldo, y esa cancelación no
+      deja movimiento propio: con deuda 3 y una compra de 5, el movimiento
+      dice +5 pero el derecho sube sólo 2.
+
+    Para reconstruir el saldo exacto de un producto hay que sumar sus
+    movimientos, traducir los de cualquier producto que lo `otorga`, y
+    restar lo que `otorgar` haya aplicado a deuda en el camino.
     """
 
     TIPOS = (

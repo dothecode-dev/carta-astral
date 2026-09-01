@@ -5,8 +5,16 @@ export type Derecho = {
 };
 
 // Espejo del catálogo del backend (api/catalogo.py). Si allá se agrega un
-// producto, acá se agrega su capacidad: son dos listas que tienen que
-// moverse juntas, y el test de contrato de la API es el que lo caza.
+// producto, acá se agrega su capacidad: son dos listas que se mantienen a
+// mano y que tienen que moverse juntas. Nada las verifica automáticamente
+// —`test_contratos_api.py` chequea los códigos del 402, no este mapa—, así
+// que una divergencia no la caza ningún test, la caza quien note que la
+// pantalla no refleja lo que el backend ya cobra o entrega.
+//
+// `puede()`, acá abajo, es la reimplementación de la web: el backend tiene
+// su propio `canje.puede()`, pero ninguna vista ni pantalla lo llama en
+// producción (las vistas dejan que `canje.canjear()` lance `SinDerecho`);
+// esta es la única que se usa de verdad, y sólo para decidir qué mostrar.
 //
 // `pack_5_natal` no aparece acá: es lo que se compra, pero lo que otorga es
 // un derecho de `informe_natal` (canje.py) — como Derecho no existe con ese

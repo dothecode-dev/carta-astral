@@ -1,7 +1,8 @@
 # backend — API de cartas natales
 
 Django 6 + DRF. Calcula la carta a partir de fecha, hora y lugar de nacimiento, genera la
-interpretación con Claude, lleva el ledger de créditos y sirve el blog desde Wagtail.
+interpretación con Claude, lleva los derechos de compra por producto (modelo de canje) y
+sirve el blog desde Wagtail.
 
 Dependencias con `uv`, Python ≥3.12.
 
@@ -24,7 +25,7 @@ Si hace falta cruzar una frontera, el problema es de diseño: se habla antes, no
 contrato.
 
 **`api/views.py` ya es grande.** La lógica nueva va en un módulo de servicio —
-`chart_service.py`, `interpretation_service.py`, `ledger.py`, `chart_pdf_service.py` son
+`chart_service.py`, `interpretation_service.py`, `canje.py`, `chart_pdf_service.py` son
 el patrón — nunca en `views.py`.
 
 ### El PDF de la carta
@@ -69,8 +70,8 @@ Desde la raíz del repo, `make test-back` corre los cinco gates: `pytest`, `ruff
 
 **Por defecto usan SQLite, y el CI usa Postgres 16.** La `UniqueConstraint` parcial que da
 idempotencia al webhook de pagos tiene otra semántica en SQLite, y los tests de
-concurrencia del ledger no corren ahí porque SQLite ignora `SELECT ... FOR UPDATE`. Para
-tocar cobro, créditos o ledger, apuntá a un Postgres real:
+concurrencia del canje no corren ahí porque SQLite ignora `SELECT ... FOR UPDATE`. Para
+tocar cobro, derechos o canje, apuntá a un Postgres real:
 
 ```bash
 DATABASE_URL=postgres://usuario:clave@localhost:5432/carta_test \

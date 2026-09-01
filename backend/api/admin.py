@@ -145,7 +145,9 @@ class CreditTransactionAdmin(SoloLectura):
 @admin.register(Derecho)
 class DerechoAdmin(SoloLectura):
     """Lo que cada cuenta puede usar. Es la fuente de verdad del cobro desde
-    el modelo de canje: `canje.puede()` no mira nada más que esto."""
+    el modelo de canje: `canje.canjear()` sólo consume de acá, dejando que
+    `SinDerecho` frene al que no alcanza. `canje.puede()` existe para tests,
+    no lo llama ninguna vista ni pantalla en producción."""
 
     list_display = (
         "id", "account", "codigo_producto", "cantidad_restante", "vigente_hasta", "updated_at",
