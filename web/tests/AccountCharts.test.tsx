@@ -90,6 +90,7 @@ function chartCon(data: Partial<ApiChart["data"]>): ApiChart {
     id: "x",
     interpretation_langs: [],
     interpretations: {},
+  en_curso: {},
     birth: { name: null, date: "1989-07-14", time: "23:45", time_known: true, place_label: "x" },
     data: {
       placements: [],

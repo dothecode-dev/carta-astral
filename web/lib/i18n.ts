@@ -285,6 +285,18 @@ export type Dict = {
     waitBodyBreve: string;
     /** Con `{hechas}` y `{total}`: cuántas de las secciones de este tier ya están. */
     waitProgress: string;
+    /**
+     * La frase que acompaña toda la espera, como segundo renglón. Nació el
+     * 02-08-2026 con la espera "que se parece a la app" y se perdió el 28-08,
+     * cuando la lectura de medio minuto pasó a ser un informe de varios
+     * minutos y el copy se volvió puramente operativo.
+     *
+     * Va aparte de `waitBody` a propósito: ese párrafo se reemplaza por
+     * `waitProgress` en cuanto llega el primer sondeo (~5 s), así que una
+     * frase puesta ahí se vería cinco segundos de los seis minutos que dura
+     * el informe completo.
+     */
+    waitColor: string;
     /** RF12: aviso previo, antes de gastar el derecho, si la carta no tiene hora. */
     noTimeWarning: string;
     reading: string;
@@ -492,9 +504,10 @@ const es: Dict = {
     show: "Ver",
     hide: "Ocultar",
     waitTitle: "Leyendo tu cielo",
-    waitBody: "Estamos escribiendo tu informe, en ocho secciones. Tarda unos minutos: no hace falta que te quedes en esta pantalla.",
-    waitBodyBreve: "Estamos escribiendo tu lectura breve. Tarda un momento: no hace falta que te quedes en esta pantalla.",
+    waitBody: "Estamos escribiendo tu informe, en ocho secciones. Demora unos seis minutos: podés cerrar esta página y volver más tarde, lo vas a encontrar acá.",
+    waitBodyBreve: "Estamos escribiendo tu lectura breve. Demora medio minuto: podés cerrar esta página y volver, la vas a encontrar acá.",
     waitProgress: "Vamos por la sección {hechas} de {total}.",
+    waitColor: "Los planetas no se apuran.",
     noTimeWarning: "Esta carta quedó sin hora de nacimiento: el informe sale con siete secciones, sin la de casas.",
     reading: "Tu lectura",
     resumenTitulo: "Esto trae el informe completo",
@@ -735,9 +748,10 @@ const en: Dict = {
     show: "Show",
     hide: "Hide",
     waitTitle: "Reading your sky",
-    waitBody: "We're writing your report, in eight sections. It takes a few minutes: no need to stay on this screen.",
-    waitBodyBreve: "We're writing your short reading. It takes a moment: no need to stay on this screen.",
+    waitBody: "We're writing your report, in eight sections. It takes about six minutes: you can close this page and come back later, it will be here.",
+    waitBodyBreve: "We're writing your short reading. It takes half a minute: you can close this page and come back, it will be here.",
     waitProgress: "We're on section {hechas} of {total}.",
+    waitColor: "Planets don't rush.",
     noTimeWarning: "This chart has no birth time: the report comes out with seven sections, without the houses one.",
     reading: "Your reading",
     resumenTitulo: "What the full report includes",
@@ -978,9 +992,10 @@ const pt: Dict = {
     show: "Ver",
     hide: "Ocultar",
     waitTitle: "Lendo o seu céu",
-    waitBody: "Estamos escrevendo seu relatório, em oito seções. Leva alguns minutos: não precisa ficar nesta tela.",
-    waitBodyBreve: "Estamos escrevendo sua leitura breve. Leva um instante: não precisa ficar nesta tela.",
+    waitBody: "Estamos escrevendo seu relatório, em oito seções. Leva uns seis minutos: você pode fechar esta página e voltar mais tarde, vai encontrá-lo aqui.",
+    waitBodyBreve: "Estamos escrevendo sua leitura breve. Leva meio minuto: você pode fechar esta página e voltar, vai encontrá-la aqui.",
     waitProgress: "Vamos na seção {hechas} de {total}.",
+    waitColor: "Os planetas não têm pressa.",
     noTimeWarning: "Este mapa ficou sem hora de nascimento: o relatório sai com sete seções, sem a de casas.",
     reading: "Sua leitura",
     resumenTitulo: "O que o relatório completo traz",

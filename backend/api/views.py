@@ -91,6 +91,27 @@ def _chart_repr(chart: Chart) -> dict:
     # diferencia de `langs` arriba, que ya fuerza orden con `sorted(...)`.
     for tiers in tiers_por_lang.values():
         tiers.sort()
+    # Qué se está escribiendo AHORA, por idioma. Sin esto, quien pide su informe,
+    # cierra la pestaña y vuelve más tarde encuentra la carta ofreciéndole
+    # generar de nuevo lo que ya pagó y se está escribiendo: `interpretations`
+    # sólo lista lo terminado, así que "no tiene" y "se está generando" eran el
+    # mismo payload.
+    #
+    # Va también en el listado, no sólo en el detalle: el propio contrato de la
+    # API advierte que cuando listado y detalle divergen la app rompe al navegar
+    # entre uno y otro (ya pasó con `interpretation_langs`). El costo es
+    # despreciable porque sólo se consulta el cache para las filas incompletas,
+    # que son la excepción: una carta sin nada a medio escribir no consulta nada.
+    en_curso: dict[str, list[str]] = {}
+    for i in chart.interpretations.all():
+        if i.completa or i.prompt_version != PROMPT_VERSION:
+            continue
+        if not interpretation_service.esta_generandose(chart, i.tier):
+            continue
+        en_curso.setdefault(i.lang, []).append(i.tier)
+    for tiers in en_curso.values():
+        tiers.sort()
+
     return {
         "id": str(chart.uuid),
         "house_system": chart.house_system,
@@ -109,6 +130,7 @@ def _chart_repr(chart: Chart) -> dict:
             "tz_name": birth.tz_name,
             "place_label": birth.place_label,
         },
+        "en_curso": en_curso,
     }
 
 

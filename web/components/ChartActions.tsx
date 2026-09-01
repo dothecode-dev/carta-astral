@@ -106,6 +106,7 @@ export function ChartActions({
   locale,
   chartId,
   interpretations,
+  enCurso,
   derechos,
   timeKnown,
   dict,
@@ -115,6 +116,13 @@ export function ChartActions({
   /** Por idioma, qué tiers están completos. Sólo trae los idiomas con al
    *  menos uno listo — un idioma sin nada no aparece con lista vacía. */
   interpretations: Record<string, Tier[]>;
+  /**
+   * Por idioma, qué tiers se están escribiendo AHORA (`en_curso` del payload
+   * de la carta). Lo dice el servidor mirando que el lock de generación siga
+   * vivo, así que es más confiable que `sessionStorage`: ese muere al cerrar
+   * la pestaña y no sirve para "cierro y vuelvo mañana".
+   */
+  enCurso: Record<string, Tier[]>;
   /**
    * Derechos de la cuenta (`GET /api/account/`). De acá salen tanto si la
    * breve está habilitada (`puede(derechos, "leer_breve")`) como cuántas
@@ -232,7 +240,15 @@ export function ChartActions({
   // de seguridad ante HALLAZGO 3 (el proceso que muere a mitad de camino).
   useEffect(() => {
     if (tieneBreve && tieneCompleto) return;
-    const tier = tierPedido(chartId, locale);
+    // Lo que el servidor declara en curso manda sobre `sessionStorage`: éste
+    // sobrevive un F5 pero muere al cerrar la pestaña, y el caso que importa
+    // es volver más tarde. Si hay dos tiers escribiéndose, el completo es el
+    // que la persona pagó y el que tarda seis minutos.
+    const enCursoAqui = enCurso[locale] ?? [];
+    const tierServidor = enCursoAqui.includes("largo")
+      ? "largo"
+      : (enCursoAqui[0] ?? null);
+    const tier = tierServidor ?? tierPedido(chartId, locale);
     if (!tier) return;
     if ((tier === "corto" && tieneBreve) || (tier === "largo" && tieneCompleto)) return;
 
@@ -251,7 +267,11 @@ export function ChartActions({
       // hacer click, nunca uno adivinado (RF24) — es la clave de este
       // efecto: sin esto, retomar la breve gratis podría reintentar el
       // completo pago.
-      if (!yaReintentoEstaSesion(chartId, locale, tier)) {
+      //
+      // Cuando el tier lo dijo el SERVIDOR, ese reintento sobra: `en_curso`
+      // sale de que el lock de generación siga vivo, o sea que hay un hilo
+      // escribiendo ahora mismo. Postear ahí sería ruido.
+      if (!tierServidor && !yaReintentoEstaSesion(chartId, locale, tier)) {
         marcarReintentado(chartId, locale, tier);
         try {
           await fetch(`/api/charts/${chartId}/interpretation`, {
@@ -272,7 +292,7 @@ export function ChartActions({
     return () => {
       cancelado = true;
     };
-  }, [chartId, locale, tieneBreve, tieneCompleto, seguirGenerando]);
+  }, [chartId, locale, enCurso, tieneBreve, tieneCompleto, seguirGenerando]);
 
   async function interpret(tier: Tier) {
     setProgreso(null);
@@ -361,6 +381,9 @@ export function ChartActions({
                   ? dict.chart.waitBodyBreve
                   : dict.chart.waitBody}
           </p>
+          {/* Aparte del párrafo de arriba, que a los ~5 segundos pasa a ser el
+              progreso: esta frase acompaña los seis minutos enteros. */}
+          <p className="waitingColor">{dict.chart.waitColor}</p>
         </div>
       </section>
     );

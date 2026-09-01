@@ -621,6 +621,15 @@ body {
   min-height: 2.5rem;
 }
 
+/* La frase que acompaña la espera entera. Más tenue que el párrafo de arriba:
+   ése informa (cuánto falta), ésta hace compañía. */
+.waitingColor {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  opacity: 0.75;
+}
+
 .chartActions {
   display: flex;
   flex-direction: column;

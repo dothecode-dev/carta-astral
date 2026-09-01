@@ -77,6 +77,22 @@ def _seconds_until_midnight() -> int:
     return int((tomorrow - now).total_seconds())
 
 
+def esta_generandose(chart, tier: str) -> bool:
+    """¿Hay un proceso escribiendo este tier de esta carta ahora mismo?
+
+    La fila con `completa=False` no alcanza para responder que sí: si el proceso
+    murió a mitad —un deploy, por ejemplo— esa fila queda así para siempre, y
+    quien mire la carta se quedaría esperando un informe que nadie va a
+    terminar. El lock es lo único que distingue "alguien está escribiendo esto"
+    de "esto se cayó": vive `LOCK_TTL` (600 s) y la generación tarda unos seis
+    minutos, así que un lock vivo es un hilo trabajando de verdad.
+
+    La usa `_chart_repr` para que la carta pueda decir qué se está generando
+    cuando alguien vuelve después de cerrar la pestaña.
+    """
+    return cache.get(_lock_key(chart, tier)) is not None
+
+
 def _lock_key(chart, tier: str) -> str:
     # Por (chart, tier), no sólo por chart (fix round 1, Important 1): el
     # corto y el largo de la misma carta son dos `Interpretation` distintas

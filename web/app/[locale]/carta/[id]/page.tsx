@@ -216,6 +216,7 @@ export default async function ChartPage({
           locale={locale}
           chartId={chart.id}
           interpretations={chart.interpretations}
+          enCurso={chart.en_curso}
           derechos={account.derechos}
           timeKnown={chart.birth.time_known}
           dict={dict}

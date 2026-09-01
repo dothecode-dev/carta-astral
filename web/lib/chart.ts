@@ -14,6 +14,11 @@ export type ApiChart = {
    *  menos uno listo: uno sin nada no aparece con lista vacía, no aparece —
    *  leerlo con `interpretations[lang] ?? []`. */
   interpretations: Record<string, ("corto" | "largo")[]>;
+  /** Por idioma, qué tiers se están escribiendo AHORA. Lo dice el servidor
+   *  mirando que el lock de generación siga vivo: una fila a medias cuyo
+   *  proceso murió NO aparece acá, para que la pantalla no espere para
+   *  siempre por un informe que nadie va a terminar. */
+  en_curso: Record<string, ("corto" | "largo")[]>;
   birth: {
     name: string | null;
     date: string;

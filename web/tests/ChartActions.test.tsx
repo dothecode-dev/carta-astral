@@ -25,11 +25,13 @@ function derecho(codigo: string, cantidad: number): DerechoTest {
 
 function renderActions({
   interpretations = {},
+  enCurso = {},
   timeKnown = true,
   freeCredits = 3,
   paidCredits = 1,
 }: {
   interpretations?: Record<string, Tier[]>;
+  enCurso?: Record<string, Tier[]>;
   timeKnown?: boolean;
   freeCredits?: number;
   paidCredits?: number;
@@ -40,6 +42,7 @@ function renderActions({
       chartId={CHART}
       timeKnown={timeKnown}
       interpretations={interpretations}
+      enCurso={enCurso}
       derechos={[derecho("lectura_breve", freeCredits), derecho("informe_natal", paidCredits)]}
       dict={dict}
     />,
@@ -548,5 +551,68 @@ describe("ChartActions", () => {
     renderActions({ interpretations: { es: ["corto"] } });
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("volver a la carta después de cerrar la pestaña", () => {
+  // `sessionStorage` sobrevive un F5 pero muere al cerrar la pestaña, así que
+  // no alcanza para "cierro y vuelvo mañana". El servidor ahora dice qué se
+  // está escribiendo (`en_curso` en el payload de la carta), y ese dato manda:
+  // sin él, la persona vuelve y la carta le ofrece generar otra vez lo que ya
+  // pagó y se está escribiendo.
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("muestra la espera cuando el servidor dice que hay algo en curso", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(estado(false, 3, 8));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ enCurso: { es: ["largo"] } });
+    await correr();
+
+    expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: dict.chart.interpretCompleto })).toBeNull();
+  });
+
+  it("sondea sin volver a pedir la generación: el servidor ya dijo que está viva", async () => {
+    // El POST de reintento existe para el caso en que el proceso murió. Si el
+    // servidor declara `en_curso`, su lock está vivo y hay alguien escribiendo:
+    // volver a postear sería ruido.
+    const fetchMock = vi.fn().mockResolvedValue(estado(false, 3, 8));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ enCurso: { es: ["largo"] } });
+    await correr();
+
+    const posts = fetchMock.mock.calls.filter((call) => {
+      const init = call[1] as RequestInit | undefined;
+      return init?.method === "POST";
+    });
+    expect(posts).toHaveLength(0);
+  });
+
+  it("ignora lo que está en curso en otro idioma", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ enCurso: { en: ["largo"] } });
+    await correr();
+
+    expect(screen.queryByText(dict.chart.waitTitle)).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("la frase de la espera acompaña todo el rato, no sólo los primeros segundos", async () => {
+    // El párrafo de arriba pasa a "Vamos por la sección 3 de 8" en cuanto llega
+    // el primer sondeo; la frase de color es un renglón aparte y se queda.
+    const fetchMock = vi.fn().mockResolvedValue(estado(false, 3, 8));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ enCurso: { es: ["largo"] } });
+    await correr(POLL_MS);
+
+    expect(screen.getByText(dict.chart.waitColor)).toBeInTheDocument();
+    expect(screen.getByText(/secci[óo]n 4 de 8/i)).toBeInTheDocument();
   });
 });

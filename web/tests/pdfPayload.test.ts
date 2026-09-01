@@ -22,6 +22,7 @@ function apiChart(over: Partial<ApiChart["data"]> = {}): ApiChart {
     id: "89151d40-e263-4d34-81e0-2fb434f70243",
     interpretation_langs: [],
     interpretations: {},
+  en_curso: {},
     birth: {
       name: "Camila",
       date: "1994-03-12",
