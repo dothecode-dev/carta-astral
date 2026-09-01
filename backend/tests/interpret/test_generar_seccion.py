@@ -95,15 +95,23 @@ def test_el_factor_de_tokens_por_palabra_alcanza_al_menos_el_ratio_de_build_inte
     cruza el techo con frecuencia y el fallo es terminal (ver
     `interpret/prompts.py::SECCION_TOKENS_POR_PALABRA`).
 
-    `build_interpretation`, ya en producción, da 1500 tokens para un
-    objetivo de 400-700 palabras: un factor de 2,1 a 3,75×. El factor de las
-    secciones tiene que igualar o superar ese máximo (3,75×), porque a
-    diferencia de `build_interpretation` el `system` de una sección no fija
-    ningún largo (lo fija sólo el pedido), así que no hay ninguna presión
-    adicional que mantenga a la sección corta."""
+    El factor de las secciones tiene que igualar o superar el que se le da a
+    `build_interpretation` en su peor caso, porque a diferencia de
+    `build_interpretation` el `system` de una sección no fija ningún largo (lo
+    fija sólo el pedido), así que no hay ninguna presión adicional que mantenga
+    a la sección corta.
+
+    El peor caso es el extremo LARGO del rango (700 palabras), que es donde el
+    techo se pone a prueba: si el texto sale en el extremo corto sobra techo, no
+    falta. Este test comparaba contra 400 —"el objetivo más corto: la mayor
+    exigencia"— y ese razonamiento estaba invertido; con `MAX_TOKENS` en 1500
+    pasaba igual, y la lectura breve fallaba el 100% de las veces en producción
+    (ver `tests/interpret/test_techo_lectura_breve.py`)."""
     from interpret.prompts import SECCION_TOKENS_POR_PALABRA
 
-    ratio_build_interpretation = MAX_TOKENS / 400  # el objetivo más corto: la mayor exigencia
+    # 700 palabras: el extremo largo del rango que pide el system, donde el
+    # techo de build_interpretation se pone a prueba de verdad.
+    ratio_build_interpretation = MAX_TOKENS / 700
     assert SECCION_TOKENS_POR_PALABRA >= ratio_build_interpretation
 
     c = ClienteFalso()
