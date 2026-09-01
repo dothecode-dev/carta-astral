@@ -8,7 +8,23 @@ from dataclasses import dataclass
 
 PROMPT_VERSION = "v2"
 MODEL = "claude-sonnet-5"
-MAX_TOKENS = 1500
+# Techo de la lectura breve. Sale del largo que pide el system —"400 a 700
+# palabras" en los tres idiomas— por los mismos 4 tokens/palabra que usa el
+# informe por secciones (`SECCION_TOKENS_POR_PALABRA`, más abajo, con el
+# razonamiento del factor).
+#
+# Estuvo en 1500 y rompió producción el 31-08-2026: el deploy de los dos tiers
+# estrenó claude-sonnet-5 para la lectura breve manteniendo el techo del
+# producto anterior, y con ese número ni el MÍNIMO del rango entraba
+# (400 x 4 = 1600). El modelo llegaba al límite a mitad de frase y
+# `build_interpretation` abortaba con "stop_reason inesperado: max_tokens", así
+# que la lectura breve falló el 100% de las veces durante 25 horas y dos
+# usuarios reales se quedaron sin su lectura y con el crédito descontado.
+#
+# `tests/interpret/test_techo_lectura_breve.py` ata este número al rango que
+# declara el prompt: si uno de los dos cambia sin el otro, ese test se pone en
+# rojo. Era justamente lo que faltaba.
+MAX_TOKENS = 2800
 
 # Traducción de lecturas ya generadas: tarea fácil, modelo barato.
 TRANSLATE_MODEL = "claude-haiku-4-5"

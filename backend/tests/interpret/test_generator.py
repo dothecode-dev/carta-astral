@@ -3,7 +3,7 @@ import pytest
 
 from interpret.exceptions import InterpretationError
 from interpret.generator import build_interpretation
-from interpret.prompts import MODEL
+from interpret.prompts import MAX_TOKENS, MODEL
 
 
 class _Block:
@@ -69,7 +69,9 @@ def test_returns_text_and_uses_sonnet():
     text = build_interpretation(CHART, "es", "v1", client)
     assert text == "Sos una persona..."
     assert client.calls[0]["model"] == MODEL
-    assert client.calls[0]["max_tokens"] == 1500
+    # Contra la constante, no contra el número: clavarlo acá fue lo que dejó
+    # pasar el techo desincronizado del prompt.
+    assert client.calls[0]["max_tokens"] == MAX_TOKENS
 
 
 def test_system_prompt_has_cache_control():
