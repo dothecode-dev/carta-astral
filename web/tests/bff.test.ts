@@ -180,7 +180,7 @@ describe("/api/charts/[id]/interpretation", () => {
     expect(res.status).toBe(409);
   });
 
-  it("distingue quedarse sin créditos de un fallo", async () => {
+  it("distingue quedarse sin derecho de un fallo", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({}, 402)));
     expect((await readingPost(post("http://x", { lang: "es" }), params)).status).toBe(402);
 

@@ -52,7 +52,7 @@ export function NewChartForm({ locale, dict }: { locale: string; dict: Dict }) {
 
     if (!res.ok) {
       setSending(false);
-      setError(res.status === 402 ? t.noCredits : t.failed);
+      setError(res.status === 402 ? t.sinLeerBreve : t.failed);
       return;
     }
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { ApiError, callApi } from "@/lib/session";
 
-// Borra todas las cartas de quien está navegando. La cuenta y los créditos
+// Borra todas las cartas de quien está navegando. La cuenta y sus derechos
 // quedan. El backend resuelve de quién son a partir del token de la cookie:
 // nunca se acepta un identificador de cuenta que venga del navegador.
 

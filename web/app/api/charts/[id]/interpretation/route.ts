@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { ApiError, callApi, callApiRaw } from "@/lib/session";
 
 // Genera la lectura de una carta. Es la única llamada de la web que gasta un
-// crédito: el descuento lo hace el backend, nunca el navegador.
+// derecho: el descuento lo hace el backend, nunca el navegador.
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +77,7 @@ export async function POST(
         } catch {
           // el cuerpo del backend no era JSON parseable: se sigue sin `code`.
         }
-        return NextResponse.json({ error: "sin créditos", code }, { status: 402 });
+        return NextResponse.json({ error: "sin derecho", code }, { status: 402 });
       }
       if (error.status === 404) return NextResponse.json({ error: "no existe" }, { status: 404 });
       // Otra petición ya está escribiendo esta misma lectura: no es un fallo.

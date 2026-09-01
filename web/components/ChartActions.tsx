@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { SolarSystem } from "@/components/SolarSystem";
+import { cantidad, puede, type Derecho } from "@/lib/derechos";
 import type { Dict, Locale } from "@/lib/i18n";
 import { track } from "@/lib/telemetry";
 
@@ -11,9 +12,10 @@ import { track } from "@/lib/telemetry";
 // elegido.
 //
 // Hay dos productos por carta (RF1, RF2): una lectura breve gratis (tier
-// "corto", la paga un crédito del lote free) y un informe completo de ocho
-// secciones a US$ 29 (tier "largo", lo paga un crédito pago). Conviven: leer
-// la breve no consume ni bloquea el completo, y al revés.
+// "corto", la paga un derecho de `lectura_breve`) y un informe completo de
+// ocho secciones a US$ 29 (tier "largo", lo paga un derecho de
+// `informe_natal`). Conviven: leer la breve no consume ni bloquea el
+// completo, y al revés.
 //
 // El backend las escribe en un hilo aparte (RF10): el POST devuelve 202 al
 // instante y esto sondea `interpretation/estado` hasta que están todas. El
@@ -75,7 +77,7 @@ function recordarTier(chartId: string, locale: string, tier: Tier): void {
 /**
  * Si ya se reintentó el POST de recuperación (HALLAZGO 3) para este tier de
  * esta carta e idioma en esta pestaña. Sin este freno, cada recarga mientras
- * el proceso murió dispararía un POST nuevo: inofensivo para el crédito
+ * el proceso murió dispararía un POST nuevo: inofensivo para el derecho
  * (`iniciar_generacion` no cobra dos veces), pero gasta sin necesidad la
  * cuota diaria de la ruta.
  *
@@ -104,9 +106,7 @@ export function ChartActions({
   locale,
   chartId,
   interpretations,
-  freeCredits,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ver el doc del tipo, más abajo
-  paidCredits,
+  derechos,
   timeKnown,
   dict,
 }: {
@@ -115,18 +115,16 @@ export function ChartActions({
   /** Por idioma, qué tiers están completos. Sólo trae los idiomas con al
    *  menos uno listo — un idioma sin nada no aparece con lista vacía. */
   interpretations: Record<string, Tier[]>;
-  /** Créditos del lote gratis: pagan la lectura breve. */
-  freeCredits: number;
   /**
-   * Créditos pagos: pagan el informe completo.
+   * Derechos de la cuenta (`GET /api/account/`). De acá salen tanto si la
+   * breve está habilitada (`puede(derechos, "leer_breve")`) como cuántas
+   * quedan, para la nota bajo el botón.
    *
-   * El botón del completo no lo usa para habilitarse ni deshabilitarse — a
-   * diferencia de la breve, siempre queda clickeable, y si no hay crédito
-   * pago el 402 (`code: "sin_paid"`) es quien lo dice. Se recibe igual
-   * porque es parte del contrato de créditos de la cuenta (`GET
-   * /api/account/`) y una superficie futura (Task 16) lo va a mostrar acá.
+   * El botón del completo no usa esto para habilitarse ni deshabilitarse —
+   * a diferencia de la breve, siempre queda clickeable, y si no hay derecho
+   * de `leer_informe` el 402 (`code: "sin_leer_informe"`) es quien lo dice.
    */
-  paidCredits: number;
+  derechos: Derecho[];
   /** RF12: si la carta no tiene hora, el informe sale sin la sección de casas. */
   timeKnown: boolean;
   dict: Dict;
@@ -312,8 +310,9 @@ export function ChartActions({
         // un fallo duro — es "esperá unos segundos y reintentá".
         setError(dict.chart.generationInProgress);
       } else if (res.status === 402) {
-        // El 402 trae `code: "sin_free" | "sin_paid"` para distinguir
-        // quedarse sin el lote gratis de no tener el informe comprado.
+        // El 402 trae `code: "sin_leer_breve" | "sin_leer_informe"` para
+        // distinguir quedarse sin el lote gratis de no tener el informe
+        // comprado.
         let code: string | undefined;
         try {
           code = ((await res.json()) as { code?: string }).code;
@@ -321,11 +320,11 @@ export function ChartActions({
           // cuerpo no parseable: se cae al mensaje genérico de abajo.
         }
         setError(
-          code === "sin_free"
-            ? dict.chart.sinFree
-            : code === "sin_paid"
-              ? dict.chart.sinPaid
-              : dict.chart.noCredits,
+          code === "sin_leer_breve"
+            ? dict.chart.sinLeerBreve
+            : code === "sin_leer_informe"
+              ? dict.chart.sinLeerInforme
+              : dict.chart.sinDerecho,
         );
       } else {
         setError(dict.chart.failed);
@@ -371,8 +370,11 @@ export function ChartActions({
   // (aunque no se haya leído nunca) ni el completo. La página siempre
   // prioriza el tier largo al elegir qué lectura mostrar (`page.tsx`), así
   // que una breve generada después de esto es contenido que nadie ve nunca
-  // — gastar uno de los tres créditos de por vida en eso es puro desperdicio.
+  // — gastar una de las tres lecturas breves de por vida en eso es puro
+  // desperdicio.
   if (tieneCompleto) return null;
+
+  const breveDisponibles = cantidad(derechos, "lectura_breve");
 
   return (
     <div className="chartActions">
@@ -382,7 +384,7 @@ export function ChartActions({
             <button
               type="button"
               className="btn btnGhost"
-              disabled={freeCredits === 0 || busy}
+              disabled={!puede(derechos, "leer_breve") || busy}
               onClick={() => interpret("corto")}
             >
               {dict.chart.interpretBreve}
@@ -390,7 +392,7 @@ export function ChartActions({
             <p className="fieldNote">
               {enOtroIdioma("corto")
                 ? dict.chart.interpretFreeLang
-                : dict.chart.interpretBreveNota.replace("{n}", String(freeCredits))}
+                : dict.chart.interpretBreveNota.replace("{n}", String(breveDisponibles))}
             </p>
           </div>
         )}

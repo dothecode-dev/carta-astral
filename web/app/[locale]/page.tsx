@@ -132,18 +132,18 @@ export default async function Home({
 
           <section>
             <div className="sectionHead">
-              <p className="eyebrow">{dict.credits.eyebrow}</p>
-              <h2 className="display sectionTitle creditsTitle">{dict.credits.title}</h2>
+              <p className="eyebrow">{dict.pricing.eyebrow}</p>
+              <h2 className="display sectionTitle pricingTitle">{dict.pricing.title}</h2>
             </div>
 
             <p className="priceTag">
-              <span className="priceAmount">{dict.credits.price}</span>
-              <span className="priceLabel">{dict.credits.priceNote}</span>
+              <span className="priceAmount">{dict.pricing.price}</span>
+              <span className="priceLabel">{dict.pricing.priceNote}</span>
             </p>
 
             <table className="termsTable">
               <tbody>
-                {dict.credits.terms.map((term) => (
+                {dict.pricing.terms.map((term) => (
                   <tr key={term.label}>
                     <th scope="row">{term.label}</th>
                     <td className={term.free ? "free" : undefined}>
@@ -155,7 +155,7 @@ export default async function Home({
             </table>
 
             <p className="caption" style={{ marginTop: "1.25rem" }}>
-              {dict.credits.note}
+              {dict.pricing.note}
             </p>
           </section>
 

@@ -4,12 +4,13 @@ import { notFound, redirect } from "next/navigation";
 
 import { AccountCharts, type ChartSummary } from "@/components/AccountCharts";
 import { DangerZone } from "@/components/DangerZone";
+import { Derechos } from "@/components/Derechos";
 import { Nav } from "@/components/Nav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
 import { Footer } from "@/components/Footer";
-import { cantidad, type Derecho } from "@/lib/derechos";
+import type { Derecho } from "@/lib/derechos";
 
 /** Lo que devuelve /api/account/: no hay email ni nombre. */
 type AccountResponse = {
@@ -66,30 +67,7 @@ export default async function AccountPage({
       <main className="docFrame accountFrame">
         <section className="accountHead">
           <p className="eyebrow">{dict.auth.account}</p>
-          <div className="balanceRow">
-            <div className="balances">
-              <p className="balance">
-                <span className="balanceGlyph" aria-hidden="true">
-                  ☉
-                </span>
-                <span className="balanceNumber">{cantidad(account.derechos, "lectura_breve")}</span>
-                <span className="balanceLabel">{dict.auth.freeCredits}</span>
-              </p>
-              <p className="balance">
-                <span className="balanceGlyph" aria-hidden="true">
-                  ☾
-                </span>
-                <span className="balanceNumber">{cantidad(account.derechos, "informe_natal")}</span>
-                <span className="balanceLabel">{dict.auth.paidCredits}</span>
-              </p>
-            </div>
-            <div className="buyBlock">
-              <button type="button" className="btn btnGhost" disabled>
-                {dict.auth.buyCredits}
-              </button>
-              <p className="buyNote">{dict.auth.buyInApp}</p>
-            </div>
-          </div>
+          <Derechos derechos={account.derechos} dict={dict} />
         </section>
 
         <section className="accountSection">

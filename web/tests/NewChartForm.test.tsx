@@ -148,7 +148,7 @@ describe("NewChartForm", () => {
     expect(body.time_known).toBe(false);
   });
 
-  it("distingue quedarse sin créditos de un fallo", async () => {
+  it("distingue quedarse sin lecturas breves gratis de un fallo", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -157,7 +157,7 @@ describe("NewChartForm", () => {
 
     fetchMock.mockResolvedValueOnce({ ok: false, status: 402 });
     await enviar();
-    expect(screen.getByRole("alert")).toHaveTextContent(t.noCredits);
+    expect(screen.getByRole("alert")).toHaveTextContent(t.sinLeerBreve);
 
     fetchMock.mockResolvedValueOnce({ ok: false, status: 502 });
     await enviar();

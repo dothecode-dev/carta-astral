@@ -11,7 +11,7 @@ import { NatalWheel } from "@/components/NatalWheel";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
 import { type ApiChart, toWheel } from "@/lib/chart";
-import { cantidad, type Derecho } from "@/lib/derechos";
+import type { Derecho } from "@/lib/derechos";
 import { signOf } from "@/lib/ephemeris";
 import { INTL_LOCALE, type Locale, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
 import { buildPdfPayload } from "@/lib/pdfPayload";
@@ -216,8 +216,7 @@ export default async function ChartPage({
           locale={locale}
           chartId={chart.id}
           interpretations={chart.interpretations}
-          freeCredits={cantidad(account.derechos, "lectura_breve")}
-          paidCredits={cantidad(account.derechos, "informe_natal")}
+          derechos={account.derechos}
           timeKnown={chart.birth.time_known}
           dict={dict}
         />

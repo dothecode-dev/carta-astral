@@ -17,6 +17,12 @@ const CHART = "89151d40-e263-4d34-81e0-2fb434f70243";
 
 type Tier = "corto" | "largo";
 
+type DerechoTest = { codigo_producto: string; cantidad_restante: number | null; vigente_hasta: string | null };
+
+function derecho(codigo: string, cantidad: number): DerechoTest {
+  return { codigo_producto: codigo, cantidad_restante: cantidad, vigente_hasta: null };
+}
+
 function renderActions({
   interpretations = {},
   timeKnown = true,
@@ -34,8 +40,7 @@ function renderActions({
       chartId={CHART}
       timeKnown={timeKnown}
       interpretations={interpretations}
-      freeCredits={freeCredits}
-      paidCredits={paidCredits}
+      derechos={[derecho("lectura_breve", freeCredits), derecho("informe_natal", paidCredits)]}
       dict={dict}
     />,
   );
@@ -119,8 +124,9 @@ describe("ChartActions", () => {
   });
 
   // La página siempre prioriza el tier largo al elegir qué lectura mostrar
-  // (page.tsx): una vez comprado el completo, generar la breve gasta uno de
-  // los tres créditos de por vida en una lectura que nadie va a ver nunca.
+  // (page.tsx): una vez comprado el completo, generar la breve gasta una de
+  // las tres lecturas breves de por vida en una lectura que nadie va a ver
+  // nunca.
   it("no ofrece la breve para quien ya tiene el completo, aunque nunca la haya leído", () => {
     const { container } = renderActions({ interpretations: { es: ["largo"] } });
     expect(screen.queryByRole("button", { name: dict.chart.interpretBreve })).toBeNull();
@@ -159,30 +165,30 @@ describe("ChartActions", () => {
   });
 
   it("el 402 distingue quedarse sin gratis de no tener el informe comprado", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_paid" })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_leer_informe" })));
     renderActions();
 
     await clickBoton(dict.chart.interpretCompleto);
 
-    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinPaid);
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinLeerInforme);
   });
 
   it("el 402 avisa cuando se acabó el lote de lecturas gratis", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_free" })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_leer_breve" })));
     renderActions();
 
     await clickBoton(dict.chart.interpretBreve);
 
-    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinFree);
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinLeerBreve);
   });
 
-  it("un 402 sin code reconocido cae al mensaje genérico de créditos", async () => {
+  it("un 402 sin code reconocido cae al mensaje genérico", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, {})));
     renderActions();
 
     await clickBoton(dict.chart.interpretCompleto);
 
-    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.noCredits);
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinDerecho);
   });
 
   it("muestra la lectura cuando el informe completo termina", async () => {
@@ -455,7 +461,7 @@ describe("ChartActions", () => {
 
   it("no repite el reintento si ya lo hizo antes en esta misma pestaña", async () => {
     // Sin este freno, recargar muchas veces mientras el informe se escribe
-    // dispararía un POST por recarga: inofensivo para el crédito, pero gasta
+    // dispararía un POST por recarga: inofensivo para el derecho, pero gasta
     // sin necesidad la cuota diaria de la ruta (`INTERPRETATION_RATE`) y abre
     // hilos de más en el backend.
     sessionStorage.setItem(`interpret:${CHART}:es`, "largo");

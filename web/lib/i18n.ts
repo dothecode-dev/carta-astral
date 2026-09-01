@@ -165,7 +165,7 @@ export type Dict = {
     publishedOn: string;
   };
   privacy: { eyebrow: string; title: string; points: { strong: string; rest: string }[]; link: string };
-  credits: {
+  pricing: {
     eyebrow: string;
     title: string;
     /** El único precio decidido hoy: el informe completo, comprado suelto. */
@@ -194,14 +194,22 @@ export type Dict = {
     blocked: string;
     failed: string;
     legal: string;
-    /** Saldo de lecturas breves gratis (arranca en 3, no se compran). */
-    freeCredits: string;
-    /** Saldo de créditos pagos: cada uno compra un informe completo. */
-    paidCredits: string;
+    /** Derecho de lectura breve con más de una disponible. Lleva "{n}". */
+    derechosBreve: string;
+    /** El mismo derecho con exactamente una disponible: singular, no "{n}" a secas. */
+    derechosBreveUno: string;
+    /** Derecho de informe completo con más de uno disponible (por ejemplo, un pack). Lleva "{n}". */
+    derechosInforme: string;
+    /** El mismo derecho con exactamente uno disponible: singular. */
+    derechosInformeUno: string;
+    /** Cuando la cuenta no tiene ningún derecho activo: en vez de mostrar "0", ofrece comprar. */
+    sinDerechos: string;
+    /** CTA de esa oferta: comprar el informe completo (la única compra que existe hoy). */
+    comprarInforme: string;
+    /** Nota bajo esa CTA: el cobro en la web todavía no está activo. */
+    comprarNota: string;
     account: string;
     signOut: string;
-    buyCredits: string;
-    buyInApp: string;
     chartsTitle: string;
     chartsEmpty: string;
     chartsEmptyCta: string;
@@ -226,7 +234,7 @@ export type Dict = {
     incomplete: string;
     /** Botón de la lectura breve gratis (tier "corto"). */
     interpretBreve: string;
-    /** Nota bajo el botón de la breve. Lleva `{n}`: cuántos créditos gratis quedan. */
+    /** Nota bajo el botón de la breve. Lleva `{n}`: cuántas lecturas breves gratis quedan. */
     interpretBreveNota: string;
     /** Botón del informe completo pago (tier "largo"). */
     interpretCompleto: string;
@@ -248,11 +256,12 @@ export type Dict = {
     interpretFreeLang: string;
     interpreting: string;
     readAgain: string;
-    noCredits: string;
     /** 402 con code "sin_leer_breve": se acabó el lote de lecturas breves gratis. */
-    sinFree: string;
+    sinLeerBreve: string;
     /** 402 con code "sin_leer_informe": el informe completo todavía no está comprado. */
-    sinPaid: string;
+    sinLeerInforme: string;
+    /** 402 con un code no reconocido: mensaje genérico. */
+    sinDerecho: string;
     failed: string;
     /** 409: ya hay una generación en curso para esta carta en otro idioma. */
     generationInProgress: string;
@@ -276,7 +285,7 @@ export type Dict = {
     waitBodyBreve: string;
     /** Con `{hechas}` y `{total}`: cuántas de las secciones de este tier ya están. */
     waitProgress: string;
-    /** RF12: aviso previo, antes de gastar el crédito, si la carta no tiene hora. */
+    /** RF12: aviso previo, antes de gastar el derecho, si la carta no tiene hora. */
     noTimeWarning: string;
     reading: string;
     /** Encabezado del pie que muestra qué trae el informe completo (Task 15). */
@@ -328,7 +337,8 @@ export type Dict = {
     needDate: string;
     badDate: string;
     failed: string;
-    noCredits: string;
+    /** 402 con code "sin_leer_breve": no hay lectura breve gratis disponible para esta carta nueva. */
+    sinLeerBreve: string;
   };
 };
 
@@ -404,8 +414,8 @@ const es: Dict = {
     ],
     link: "Leer la política completa →",
   },
-  credits: {
-    eyebrow: "Créditos",
+  pricing: {
+    eyebrow: "Precios",
     title: "Tus primeras tres lecturas son gratis.\nEl informe completo se compra aparte.",
     price: "US$ 29",
     priceNote: "el informe completo de una carta: ocho secciones, unas 6.000 palabras",
@@ -427,7 +437,7 @@ const es: Dict = {
       },
       {
         q: "¿En qué idiomas está?",
-        a: "Español, inglés y portugués. Leer una carta que ya generaste en otro idioma no consume créditos.",
+        a: "Español, inglés y portugués. Leer una carta que ya generaste en otro idioma no cuesta nada.",
       },
       {
         q: "¿El cálculo es serio o es un horóscopo?",
@@ -443,7 +453,7 @@ const es: Dict = {
       },
       {
         q: "¿Qué pasa si borro mi cuenta?",
-        a: "Se eliminan tus cartas, tus lecturas y tus créditos, sin copia de respaldo. Es definitivo y lo hacés vos desde la app.",
+        a: "Se eliminan tus cartas, tus lecturas y lo que tengas disponible para leer, sin copia de respaldo. Es definitivo y lo hacés vos desde la app.",
       },
     ],
   },
@@ -468,9 +478,9 @@ const es: Dict = {
     interpretFreeLang: "Sin costo: ya lo leíste en otro idioma.",
     interpreting: "Escribiendo tu lectura…",
     readAgain: "Ver la lectura",
-    noCredits: "Te quedaste sin créditos.",
-    sinFree: "Te quedaste sin lecturas breves gratis.",
-    sinPaid: "Todavía no compraste el informe completo.",
+    sinLeerBreve: "Te quedaste sin lecturas breves gratis.",
+    sinLeerInforme: "Todavía no compraste el informe completo.",
+    sinDerecho: "No tenés esta lectura disponible.",
     failed: "No pudimos generar la lectura. Probá de nuevo en un rato.",
     generationInProgress:
       "Ya hay una generación en curso para esta carta en otro idioma. Esperá unos segundos y volvé a intentar.",
@@ -529,7 +539,7 @@ const es: Dict = {
     needDate: "Falta la fecha de nacimiento.",
     badDate: "Revisá la fecha: tiene que ser posterior a 1800 y no puede estar en el futuro.",
     failed: "No pudimos calcular la carta. Revisá los datos y probá de nuevo.",
-    noCredits: "Te quedaste sin créditos.",
+    sinLeerBreve: "Ya usaste tus lecturas breves gratis.",
   },
   foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto" },
   consent: {
@@ -542,17 +552,20 @@ const es: Dict = {
   auth: {
     navEnter: "Entrar",
     title: "Entrá a tu cuenta.",
-    lede: "La misma cuenta que en la app: tus cartas y tus créditos son los mismos.",
+    lede: "La misma cuenta que en la app: tus cartas y tus lecturas son las mismas.",
     loading: "Cargando…",
     blocked: "No pudimos cargar el acceso de Google. Suele pasar con bloqueadores de rastreadores: desactivalo para este sitio y recargá.",
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
     legal: "Al entrar aceptás los términos y la política de privacidad.",
-    freeCredits: "lecturas breves gratis",
-    paidCredits: "créditos para informes",
+    derechosBreve: "{n} lecturas breves",
+    derechosBreveUno: "1 lectura breve",
+    derechosInforme: "{n} informes completos",
+    derechosInformeUno: "1 informe completo",
+    sinDerechos: "Todavía no tenés ninguna lectura ni informe disponible.",
+    comprarInforme: "Comprar el informe completo",
+    comprarNota: "Por ahora no podés comprarlo desde la web: el cobro todavía no está activo.",
     account: "Tu cuenta",
     signOut: "Salir",
-    buyCredits: "Sumar créditos",
-    buyInApp: "Por ahora no podés comprar créditos: el cobro en la web todavía no está activo.",
     chartsTitle: "Tus cartas",
     chartsEmpty: "Todavía no calculaste ninguna.",
     chartsEmptyCta: "Calcular mi carta",
@@ -561,10 +574,10 @@ const es: Dict = {
     settings: "Privacidad y términos",
     dangerTitle: "Borrar mis datos",
     deleteChartsTitle: "Borrar mis cartas",
-    deleteChartsBody: "Se borran todas tus cartas e interpretaciones. Tu cuenta y tus créditos quedan.",
+    deleteChartsBody: "Se borran todas tus cartas e interpretaciones. Lo que tengas disponible para leer no se pierde.",
     deleteChartsConfirm: "Sí, borrar mis cartas",
     deleteAccountTitle: "Borrar mi cuenta",
-    deleteAccountBody: "Se borra todo: cartas, interpretaciones, créditos y la cuenta. No se puede deshacer.",
+    deleteAccountBody: "Se borra todo: cartas, interpretaciones, lecturas e informes disponibles, y la cuenta. No se puede deshacer.",
     deleteAccountConfirm: "Sí, borrar mi cuenta",
     confirmHint: "Esta acción no se puede deshacer.",
     cancel: "Cancelar",
@@ -644,8 +657,8 @@ const en: Dict = {
     ],
     link: "Read the full policy →",
   },
-  credits: {
-    eyebrow: "Credits",
+  pricing: {
+    eyebrow: "Pricing",
     title: "Your first three readings are free.\nThe full report is a separate purchase.",
     price: "US$ 29",
     priceNote: "the full report for one chart: eight sections, about 6,000 words",
@@ -667,7 +680,7 @@ const en: Dict = {
       },
       {
         q: "What languages is it in?",
-        a: "Spanish, English and Portuguese. Reading a chart you already generated in another language costs no credits.",
+        a: "Spanish, English and Portuguese. Reading a chart you already generated in another language costs nothing.",
       },
       {
         q: "Is the calculation serious, or is this a horoscope?",
@@ -683,7 +696,7 @@ const en: Dict = {
       },
       {
         q: "What happens if I delete my account?",
-        a: "Your charts, readings and credits are erased, with no backup copy. It's permanent, and you do it yourself from the app.",
+        a: "Your charts, readings and whatever you have available to read are erased, with no backup copy. It's permanent, and you do it yourself from the app.",
       },
     ],
   },
@@ -708,9 +721,9 @@ const en: Dict = {
     interpretFreeLang: "No cost: you already read it in another language.",
     interpreting: "Writing your reading…",
     readAgain: "See the reading",
-    noCredits: "You've run out of credits.",
-    sinFree: "You're out of free short readings.",
-    sinPaid: "You haven't bought the full report yet.",
+    sinLeerBreve: "You're out of free short readings.",
+    sinLeerInforme: "You haven't bought the full report yet.",
+    sinDerecho: "You don't have this reading available.",
     failed: "We couldn't generate the reading. Try again in a while.",
     generationInProgress:
       "There's already a generation in progress for this chart in another language. Wait a few seconds and try again.",
@@ -769,7 +782,7 @@ const en: Dict = {
     needDate: "The date of birth is missing.",
     badDate: "Check the date: it has to be after 1800 and can't be in the future.",
     failed: "We couldn't compute the chart. Check the details and try again.",
-    noCredits: "You've run out of credits.",
+    sinLeerBreve: "You've used up your free short readings.",
   },
   foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact" },
   consent: {
@@ -782,17 +795,20 @@ const en: Dict = {
   auth: {
     navEnter: "Sign in",
     title: "Sign in to your account.",
-    lede: "The same account as in the app: your charts and your credits are the same.",
+    lede: "The same account as in the app: your charts and your readings are the same.",
     loading: "Loading…",
     blocked: "We couldn't load Google sign-in. This usually comes from a tracker blocker: allow this site and reload.",
     failed: "We couldn't sign you in. Try again.",
     legal: "By signing in you accept the terms and the privacy policy.",
-    freeCredits: "free short readings",
-    paidCredits: "report credits",
+    derechosBreve: "{n} short readings",
+    derechosBreveUno: "1 short reading",
+    derechosInforme: "{n} full reports",
+    derechosInformeUno: "1 full report",
+    sinDerechos: "You don't have any reading or report available yet.",
+    comprarInforme: "Buy the full report",
+    comprarNota: "You can't buy it from the web yet: checkout isn't live.",
     account: "Your account",
     signOut: "Sign out",
-    buyCredits: "Add credits",
-    buyInApp: "You can't buy credits yet: web checkout isn't live.",
     chartsTitle: "Your charts",
     chartsEmpty: "You haven't computed any yet.",
     chartsEmptyCta: "Compute my chart",
@@ -801,10 +817,10 @@ const en: Dict = {
     settings: "Privacy and terms",
     dangerTitle: "Delete my data",
     deleteChartsTitle: "Delete my charts",
-    deleteChartsBody: "All your charts and readings are deleted. Your account and your credits stay.",
+    deleteChartsBody: "All your charts and readings are deleted. What you have available to read isn't lost.",
     deleteChartsConfirm: "Yes, delete my charts",
     deleteAccountTitle: "Delete my account",
-    deleteAccountBody: "Everything goes: charts, readings, credits and the account. It can't be undone.",
+    deleteAccountBody: "Everything goes: charts, readings, whatever you have available to read, and the account. It can't be undone.",
     deleteAccountConfirm: "Yes, delete my account",
     confirmHint: "This action can't be undone.",
     cancel: "Cancel",
@@ -884,8 +900,8 @@ const pt: Dict = {
     ],
     link: "Ler a política completa →",
   },
-  credits: {
-    eyebrow: "Créditos",
+  pricing: {
+    eyebrow: "Preços",
     title: "Suas primeiras três leituras são grátis.\nO relatório completo é comprado à parte.",
     price: "US$ 29",
     priceNote: "o relatório completo de um mapa: oito seções, cerca de 6.000 palavras",
@@ -907,7 +923,7 @@ const pt: Dict = {
       },
       {
         q: "Em quais idiomas está?",
-        a: "Espanhol, inglês e português. Ler um mapa que você já gerou em outro idioma não consome créditos.",
+        a: "Espanhol, inglês e português. Ler um mapa que você já gerou em outro idioma não custa nada.",
       },
       {
         q: "O cálculo é sério ou é horóscopo?",
@@ -923,7 +939,7 @@ const pt: Dict = {
       },
       {
         q: "O que acontece se eu apagar minha conta?",
-        a: "Seus mapas, leituras e créditos são apagados, sem cópia de segurança. É definitivo e você mesmo faz pelo app.",
+        a: "Seus mapas, leituras e o que você tiver disponível para ler são apagados, sem cópia de segurança. É definitivo e você mesmo faz pelo app.",
       },
     ],
   },
@@ -948,9 +964,9 @@ const pt: Dict = {
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     interpreting: "Escrevendo sua leitura…",
     readAgain: "Ver a leitura",
-    noCredits: "Você ficou sem créditos.",
-    sinFree: "Você ficou sem leituras breves grátis.",
-    sinPaid: "Você ainda não comprou o relatório completo.",
+    sinLeerBreve: "Você ficou sem leituras breves grátis.",
+    sinLeerInforme: "Você ainda não comprou o relatório completo.",
+    sinDerecho: "Você não tem essa leitura disponível.",
     failed: "Não conseguimos gerar a leitura. Tente de novo daqui a pouco.",
     generationInProgress:
       "Já há uma geração em andamento para este mapa em outro idioma. Espere alguns segundos e tente de novo.",
@@ -1009,7 +1025,7 @@ const pt: Dict = {
     needDate: "Falta a data de nascimento.",
     badDate: "Revise a data: precisa ser posterior a 1800 e não pode estar no futuro.",
     failed: "Não conseguimos calcular o mapa. Revise os dados e tente de novo.",
-    noCredits: "Você ficou sem créditos.",
+    sinLeerBreve: "Você já usou suas leituras breves grátis.",
   },
   foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato" },
   consent: {
@@ -1022,17 +1038,20 @@ const pt: Dict = {
   auth: {
     navEnter: "Entrar",
     title: "Entre na sua conta.",
-    lede: "A mesma conta do app: seus mapas e seus créditos são os mesmos.",
+    lede: "A mesma conta do app: seus mapas e suas leituras são os mesmos.",
     loading: "Carregando…",
     blocked: "Não conseguimos carregar o acesso do Google. Costuma ser um bloqueador de rastreadores: libere este site e recarregue.",
     failed: "Não conseguimos entrar. Tente de novo.",
     legal: "Ao entrar você aceita os termos e a política de privacidade.",
-    freeCredits: "leituras breves grátis",
-    paidCredits: "créditos para relatórios",
+    derechosBreve: "{n} leituras breves",
+    derechosBreveUno: "1 leitura breve",
+    derechosInforme: "{n} relatórios completos",
+    derechosInformeUno: "1 relatório completo",
+    sinDerechos: "Você ainda não tem nenhuma leitura nem relatório disponível.",
+    comprarInforme: "Comprar o relatório completo",
+    comprarNota: "Por enquanto não é possível comprá-lo pela web: o pagamento ainda não está ativo.",
     account: "Sua conta",
     signOut: "Sair",
-    buyCredits: "Adicionar créditos",
-    buyInApp: "Por enquanto não é possível comprar créditos: o pagamento pela web ainda não está ativo.",
     chartsTitle: "Seus mapas",
     chartsEmpty: "Você ainda não calculou nenhum.",
     chartsEmptyCta: "Calcular meu mapa",
@@ -1041,10 +1060,10 @@ const pt: Dict = {
     settings: "Privacidade e termos",
     dangerTitle: "Apagar meus dados",
     deleteChartsTitle: "Apagar meus mapas",
-    deleteChartsBody: "Todos os seus mapas e leituras são apagados. Sua conta e seus créditos ficam.",
+    deleteChartsBody: "Todos os seus mapas e leituras são apagados. O que você tiver disponível para ler não se perde.",
     deleteChartsConfirm: "Sim, apagar meus mapas",
     deleteAccountTitle: "Apagar minha conta",
-    deleteAccountBody: "Apaga tudo: mapas, leituras, créditos e a conta. Não dá para desfazer.",
+    deleteAccountBody: "Apaga tudo: mapas, leituras, o que você tiver disponível para ler, e a conta. Não dá para desfazer.",
     deleteAccountConfirm: "Sim, apagar minha conta",
     confirmHint: "Esta ação não pode ser desfeita.",
     cancel: "Cancelar",

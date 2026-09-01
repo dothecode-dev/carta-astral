@@ -73,7 +73,7 @@ describe("diccionarios", () => {
   }
 });
 
-describe("credits", () => {
+describe("pricing", () => {
   // Task 16: la home ya no promete "tres cartas gratis y después lo mismo
   // pago" — son dos productos distintos (lectura breve gratis vs. informe
   // completo pago). Estos tests protegen que el copy diga eso, no sólo que
@@ -86,22 +86,22 @@ describe("credits", () => {
     for (const locale of LOCALES) {
       const dict = getDict(locale);
       expect(
-        dict.credits.terms.some((t) => /1 crédito|1 credit/i.test(t.value)),
+        dict.pricing.terms.some((t) => /1 crédito|1 credit/i.test(t.value)),
       ).toBe(false);
     }
   });
 
-  it("la tabla de créditos nombra los dos productos, no una versión recortada del mismo", () => {
+  it("la tabla de precios nombra los dos productos, no una versión recortada del mismo", () => {
     // Tiene que haber una fila gratis (la lectura breve) Y una fila con el
     // precio real del informe completo: si sólo hubiera "Gratis" en todos
     // lados, o sólo un precio sin nada gratis, seguiría siendo un producto.
     for (const locale of LOCALES) {
       const dict = getDict(locale);
-      const hayFilaGratis = dict.credits.terms.some((t) =>
+      const hayFilaGratis = dict.pricing.terms.some((t) =>
         /gratis|free|grátis/i.test(t.value),
       );
-      const hayFilaInformePago = dict.credits.terms.some(
-        (t) => t.value === dict.credits.price,
+      const hayFilaInformePago = dict.pricing.terms.some(
+        (t) => t.value === dict.pricing.price,
       );
       expect(hayFilaGratis, `${locale}: falta una fila gratis`).toBe(true);
       expect(hayFilaInformePago, `${locale}: falta el precio del informe`).toBe(true);
@@ -113,28 +113,39 @@ describe("credits", () => {
     // viejo. Tiene que nombrar el informe completo y su tamaño real.
     for (const locale of LOCALES) {
       const dict = getDict(locale);
-      expect(/ocho secciones|eight sections|oito seções/i.test(dict.credits.priceNote)).toBe(
+      expect(/ocho secciones|eight sections|oito seções/i.test(dict.pricing.priceNote)).toBe(
         true,
       );
     }
   });
 
-  it("los tres idiomas tienen las claves de los dos saldos", () => {
+  it("los tres idiomas tienen las claves de los dos derechos", () => {
     for (const locale of LOCALES) {
       const dict = getDict(locale);
-      expect(dict.auth.freeCredits).toBeTruthy();
-      expect(dict.auth.paidCredits).toBeTruthy();
+      expect(dict.auth.derechosBreve).toBeTruthy();
+      expect(dict.auth.derechosInforme).toBeTruthy();
     }
   });
 
-  it("la cuenta ya no dice que los créditos se compran dentro de la app", () => {
+  it("la cuenta ya no dice que se compra dentro de la app", () => {
     // La app está apagada (APP_AUTH_ENABLED=0) y la venta va por la web: el
     // texto viejo mentía sobre dónde se compra.
     for (const locale of LOCALES) {
       const dict = getDict(locale);
-      expect(/dentro de la app|inside the app|dentro do app/i.test(dict.auth.buyInApp)).toBe(
+      expect(/dentro de la app|inside the app|dentro do app/i.test(dict.auth.comprarNota)).toBe(
         false,
       );
+    }
+  });
+
+  it("ninguna pantalla dice la palabra 'crédito'", () => {
+    // Task 16: el backend ya no tiene créditos, tiene derechos sobre
+    // productos concretos. Este test es el que caza cualquier reaparición
+    // futura de la palabra en el copy (no en identificadores de código).
+    for (const locale of LOCALES) {
+      const dict = getDict(locale);
+      const textos = JSON.stringify(dict);
+      expect(/crédit|credit/i.test(textos), `${locale}: aparece "crédito"/"credit"`).toBe(false);
     }
   });
 });
