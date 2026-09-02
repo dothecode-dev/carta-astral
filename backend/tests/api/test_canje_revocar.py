@@ -72,3 +72,43 @@ def test_revocar_sobre_una_cuenta_borrada_registra_y_no_explota():
     # Chargeback meses después, con la cuenta ya borrada (spec RF22).
     assert revocar(None, "informe_natal", 1, external_id="polar:refund:7") is True
     assert Movimiento.objects.get(external_id="polar:refund:7").account_id is None
+
+
+def test_reembolsar_un_pack_baja_el_derecho_que_ese_pack_otorgo(make_account):
+    """El reembolso se pide con el código de lo que se PAGÓ, no con el del
+    derecho que eso dejó.
+
+    `otorgar` traduce por `Producto.otorga`: comprar `pack_5_natal` deja un
+    `Derecho` de `informe_natal`. Si `revocar` no hace la misma traducción,
+    busca un `Derecho` de `pack_5_natal` que no existe, lo crea en 0, no baja
+    nada, y manda las cinco unidades a deuda — el usuario cobra el reembolso y
+    se queda con los cinco informes. Los tests de arriba no lo veían porque
+    pasan a mano el código ya traducido; el webhook de Polar va a pasar el
+    producto que se compró.
+    """
+    cuenta = make_account()
+    otorgar(cuenta, "pack_5_natal", 1, origen="compra", external_id="p:pack")
+
+    revocar(cuenta, "pack_5_natal", 1, external_id="polar:refund:pack")
+
+    cuenta.refresh_from_db()
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
+    assert cuenta.deuda == 0
+    assert not Derecho.objects.filter(codigo_producto="pack_5_natal").exists()
+
+
+def test_reembolsar_un_pack_ya_usado_deja_la_deuda_de_todas_sus_unidades(
+    make_account, make_chart,
+):
+    """Una unidad reembolsada del pack son cinco informes, no uno: la cantidad
+    que se revoca se traduce por el multiplicador igual que al otorgar."""
+    cuenta = make_account()
+    otorgar(cuenta, "pack_5_natal", 1, origen="compra", external_id="p:pack2")
+    for _ in range(5):
+        canjear(cuenta, "leer_informe", make_chart(account=cuenta))
+
+    revocar(cuenta, "pack_5_natal", 1, external_id="polar:refund:pack2")
+
+    cuenta.refresh_from_db()
+    assert cuenta.deuda == 5
+

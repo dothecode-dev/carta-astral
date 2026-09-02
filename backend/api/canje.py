@@ -278,14 +278,25 @@ def revocar(account, codigo_producto, cantidad, external_id, note="") -> bool:
             logger.info("revocación duplicada ignorada (external_id=%s)", external_id)
             return False
 
+        # La misma traducción que hace `otorgar`, por el mismo motivo: el
+        # `Derecho` vive en el producto OTORGADO, no en el comprado. Sin esto,
+        # reembolsar un `pack_5_natal` buscaba un derecho de `pack_5_natal`
+        # —que no existe—, lo creaba en 0, no bajaba nada y mandaba todo a
+        # deuda: el usuario cobraba los US$ 149,90 y se quedaba con los cinco
+        # informes. El código que llega del webhook es el que se PAGÓ, así que
+        # la traducción tiene que pasar de este lado.
+        prod = producto(codigo_producto)
+        codigo_otorgado, multiplicador = prod.otorga
+        unidades = cantidad * multiplicador
+
         derecho, _ = Derecho.objects.get_or_create(
-            account=acc, codigo_producto=codigo_producto, defaults={"cantidad_restante": 0},
+            account=acc, codigo_producto=codigo_otorgado, defaults={"cantidad_restante": 0},
         )
-        del_saldo = min(derecho.cantidad_restante or 0, cantidad)
+        del_saldo = min(derecho.cantidad_restante or 0, unidades)
         derecho.cantidad_restante -= del_saldo
         derecho.save(update_fields=["cantidad_restante", "updated_at"])
 
-        acc.deuda += cantidad - del_saldo
+        acc.deuda += unidades - del_saldo
         acc.refund_count += 1
         if acc.refund_count >= settings.REFUND_FLAG_THRESHOLD:
             acc.flagged = True
