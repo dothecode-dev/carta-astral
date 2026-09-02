@@ -222,17 +222,6 @@ export default async function ChartPage({
           dict={dict}
         />
 
-        {/* El payload del PDF se arma acá, en el servidor: es la misma tabla que
-            ya se calculó arriba, con los nombres traducidos de este idioma. */}
-        <ChartShare
-          chartId={chart.id}
-          payload={buildPdfPayload(chart, locale, dict)}
-          wheel={wheel}
-          readingLang={readingLang}
-          dict={dict}
-          locale={locale}
-        />
-
         {reading && (
           <section className="reading">
             <p className="eyebrow">{dict.chart.reading}</p>
@@ -242,6 +231,20 @@ export default async function ChartPage({
         )}
 
         <ResumenCompleto secciones={secciones} dict={dict} />
+
+        {/* Al final de todo: llevarse la carta es lo que se hace DESPUÉS de
+            leerla. En el medio partía la página en dos —tablas, botones,
+            lectura— y ofrecía descargar un texto que todavía no se había leído.
+            El payload del PDF se arma acá, en el servidor: es la misma tabla
+            que ya se calculó arriba, con los nombres traducidos de este idioma. */}
+        <ChartShare
+          chartId={chart.id}
+          payload={buildPdfPayload(chart, locale, dict)}
+          wheel={wheel}
+          readingLang={readingLang}
+          dict={dict}
+          locale={locale}
+        />
 
         <Footer locale={locale} dict={dict} />
       </main>

@@ -107,7 +107,7 @@ export function CompraEspera({
 
   return (
     <section className="waiting">
-      <SolarSystem size={200} speed={2.5} />
+      <SolarSystem size={280} speed={2.5} />
       <div className="waitingCopy">
         <h1 className="display waitingTitle">{dict.compra.title}</h1>
         <p className="waitingBody">{dict.compra.body}</p>

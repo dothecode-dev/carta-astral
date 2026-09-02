@@ -142,7 +142,12 @@ export function ChartShare({
   // no es el que ocurre. Mientras se prepara cambia la nota, no el rótulo: si se
   // reemplazaba el rótulo entero el botón saltaba de ancho.
   return (
-    <div className="chartShare">
+    <section className="chartShareBlock">
+      {/* Encabezado, como el resto de las secciones de la carta: los tres
+          botones son archivos para llevarse, y sin rótulo quedaban flotando al
+          final de la página sin decir de qué se trataba el bloque. */}
+      <p className="eyebrow">{dict.share.downloadsTitle}</p>
+      <div className="chartShare">
       <button
         type="button"
         className="btn btnGhost"
@@ -189,6 +194,7 @@ export function ChartShare({
           {dict.share.failed}
         </p>
       )}
-    </div>
+      </div>
+    </section>
   );
 }

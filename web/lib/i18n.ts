@@ -341,6 +341,8 @@ export type Dict = {
     /** Rótulo de la portada del documento y título de la tabla de posiciones. */
     chartEyebrow: string;
     positionsTitle: string;
+    /** Encabezado del bloque: los tres botones son archivos para llevarse. */
+    downloadsTitle: string;
     pdf: string;
     pdfWithReading: string;
     /** Cuando la lectura está escrita en otro idioma; `{lang}` lo nombra. */
@@ -540,7 +542,7 @@ const es: Dict = {
     waitBody: "Estamos escribiendo tu informe, en ocho secciones. Cada una se piensa aparte, con tu carta entera delante: por eso demora unos seis minutos.",
     waitBodyBreve: "Estamos escribiendo tu lectura breve. Demora medio minuto.",
     waitProgress: "Vamos por la sección {hechas} de {total}.",
-    waitColor: "Podés cerrar esta ventana cuando quieras: se sigue escribiendo sin vos y te espera en tu cuenta.",
+    waitColor: "Podés cerrar esta ventana. Acá no hay cartas prearmadas: cada sección se escribe para esta carta y sólo para ésta, y por eso puede demorar hasta seis minutos. Cuando esté, te espera en tu cuenta.",
     noTimeWarning: "Esta carta quedó sin hora de nacimiento: el informe sale con siete secciones, sin la de casas.",
     reading: "Tu lectura",
     resumenTitulo: "Esto trae el informe completo",
@@ -559,12 +561,13 @@ const es: Dict = {
   share: {
     chartEyebrow: "Carta natal",
     positionsTitle: "Posiciones",
-    pdf: "La carta en PDF",
-    pdfWithReading: "La carta y tu lectura",
-    pdfWithReadingIn: "La carta y tu lectura (en {lang})",
-    image: "Imagen para redes",
+    downloadsTitle: "Descargas",
+    pdf: "PDF de la carta",
+    pdfWithReading: "PDF completo",
+    pdfWithReadingIn: "PDF completo (en {lang})",
+    image: "La carta como imagen",
     pdfHint: "Rueda, posiciones y aspectos",
-    pdfWithReadingHint: "Todo en un archivo, listo para imprimir",
+    pdfWithReadingHint: "La carta y tu lectura, listo para imprimir",
     imageHint: "1080×1920, para historias",
     working: "Preparando…",
     failed: "No pudimos preparar el archivo. Probá de nuevo.",
@@ -796,7 +799,7 @@ const en: Dict = {
     waitBody: "We're writing your report, in eight sections. Each one is thought through on its own, with your whole chart in view — that's why it takes about six minutes.",
     waitBodyBreve: "We're writing your short reading. It takes half a minute.",
     waitProgress: "We're on section {hechas} of {total}.",
-    waitColor: "You can close this window whenever you like: it keeps writing without you, and it will be waiting in your account.",
+    waitColor: "You can close this window. There are no pre-written charts here: every section is written for this chart and no other, which is why it can take up to six minutes. When it's ready, it will be waiting in your account.",
     noTimeWarning: "This chart has no birth time: the report comes out with seven sections, without the houses one.",
     reading: "Your reading",
     resumenTitulo: "What the full report includes",
@@ -815,10 +818,11 @@ const en: Dict = {
   share: {
     chartEyebrow: "Natal chart",
     positionsTitle: "Positions",
-    pdf: "The chart as PDF",
-    pdfWithReading: "The chart and your reading",
-    pdfWithReadingIn: "The chart and your reading (in {lang})",
-    image: "Image for social",
+    downloadsTitle: "Downloads",
+    pdf: "Chart PDF",
+    pdfWithReading: "Full PDF",
+    pdfWithReadingIn: "Full PDF (in {lang})",
+    image: "The chart as an image",
     pdfHint: "Wheel, positions and aspects",
     pdfWithReadingHint: "Everything in one file, ready to print",
     imageHint: "1080×1920, for stories",
@@ -1052,7 +1056,7 @@ const pt: Dict = {
     waitBody: "Estamos escrevendo seu relatório, em oito seções. Cada uma é pensada em separado, com o seu mapa inteiro à frente: por isso leva uns seis minutos.",
     waitBodyBreve: "Estamos escrevendo sua leitura breve. Leva meio minuto.",
     waitProgress: "Vamos na seção {hechas} de {total}.",
-    waitColor: "Você pode fechar esta janela quando quiser: continua sendo escrito sem você e fica esperando na sua conta.",
+    waitColor: "Você pode fechar esta janela. Aqui não há mapas prontos: cada seção é escrita para este mapa e só para ele, e por isso pode levar até seis minutos. Quando estiver pronto, espera na sua conta.",
     noTimeWarning: "Este mapa ficou sem hora de nascimento: o relatório sai com sete seções, sem a de casas.",
     reading: "Sua leitura",
     resumenTitulo: "O que o relatório completo traz",
@@ -1071,12 +1075,13 @@ const pt: Dict = {
   share: {
     chartEyebrow: "Mapa natal",
     positionsTitle: "Posições",
-    pdf: "O mapa em PDF",
-    pdfWithReading: "O mapa e sua leitura",
-    pdfWithReadingIn: "O mapa e sua leitura (em {lang})",
-    image: "Imagem para redes",
+    downloadsTitle: "Downloads",
+    pdf: "PDF do mapa",
+    pdfWithReading: "PDF completo",
+    pdfWithReadingIn: "PDF completo (em {lang})",
+    image: "O mapa como imagem",
     pdfHint: "Roda, posições e aspectos",
-    pdfWithReadingHint: "Tudo num arquivo, pronto para imprimir",
+    pdfWithReadingHint: "O mapa e sua leitura, pronto para imprimir",
     imageHint: "1080×1920, para stories",
     working: "Preparando…",
     failed: "Não conseguimos preparar o arquivo. Tente de novo.",

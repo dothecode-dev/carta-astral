@@ -393,7 +393,7 @@ export function ChartActions({
   if (busy || refrescando) {
     return (
       <section className="waiting">
-        <SolarSystem size={200} speed={2.5} />
+        <SolarSystem size={280} speed={2.5} />
         <div className="waitingCopy">
           <h2 className="display waitingTitle">{dict.chart.waitTitle}</h2>
           <p className="waitingBody">

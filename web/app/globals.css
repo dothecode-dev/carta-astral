@@ -630,14 +630,15 @@ body {
 }
 
 .waitingTitle {
-  font-size: var(--step-2);
+  font-size: var(--step-3);
 }
 
 .waitingBody {
   margin: 0;
   color: var(--ink-soft);
-  max-width: 42ch;
+  max-width: 54ch;
   min-height: 2.5rem;
+  font-size: 1.1875rem;
 }
 
 /* La frase que acompaña la espera entera. Más tenue que el párrafo de arriba:
@@ -645,8 +646,10 @@ body {
 .waitingColor {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.9375rem;
-  opacity: 0.75;
+  font-size: 1.0625rem;
+  max-width: 62ch;
+  line-height: 1.6;
+  opacity: 0.8;
 }
 
 .chartActions {
@@ -677,6 +680,16 @@ body {
 /* Llevarse la carta. En fila, porque son hermanos: ninguno es la acción
    principal de la página —esa es leer la carta— y ponerlos en columna debajo del
    botón de lectura los hacía parecer pasos de un mismo trámite. */
+/* El bloque entero: rótulo arriba, botones debajo. Vive al final de la carta,
+   después de la lectura —llevársela es lo que se hace después de leerla—. */
+.chartShareBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  border-top: 1px solid var(--hairline);
+  padding-top: clamp(1.5rem, 4vw, 2rem);
+}
+
 .chartShare {
   display: flex;
   flex-wrap: wrap;
@@ -1711,14 +1724,17 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
-  width: min(100%, 62ch);
-  margin-inline: auto;
+  /* Al ancho del resto de la carta y no en una columna angosta: la página
+     alternaba tablas anchas con texto angosto y se leía como dos documentos
+     pegados. El cuerpo sube en compensación —una línea larga con tipografía
+     chica es lo que cansa— y el interlineado con él. */
+  width: 100%;
 }
 
 .readingParagraph {
   margin: 0;
-  line-height: 1.8;
-  font-size: 1.0625rem;
+  line-height: 1.85;
+  font-size: 1.1875rem;
 }
 
 .readingOpen {
