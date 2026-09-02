@@ -91,22 +91,32 @@ def _chart_repr(chart: Chart) -> dict:
     # diferencia de `langs` arriba, que ya fuerza orden con `sorted(...)`.
     for tiers in tiers_por_lang.values():
         tiers.sort()
-    # Qué se está escribiendo AHORA, por idioma. Sin esto, quien pide su informe,
+    # Qué se va a terminar, por idioma. Sin esto, quien pide su informe,
     # cierra la pestaña y vuelve más tarde encuentra la carta ofreciéndole
-    # generar de nuevo lo que ya pagó y se está escribiendo: `interpretations`
-    # sólo lista lo terminado, así que "no tiene" y "se está generando" eran el
-    # mismo payload.
+    # generar de nuevo lo que ya pagó: `interpretations` sólo lista lo
+    # terminado, así que "no tiene" y "se está generando" eran el mismo payload.
+    #
+    # Lo decidía `esta_generandose` (el lock vivo) porque el único que podía
+    # retomar un intento caído era el usuario apretando el botón de nuevo. Con
+    # `reanudar_informes` corriendo por cron eso dejó de ser cierto: un lock
+    # vencido es una pausa —el cron lo retoma mientras queden intentos—, no un
+    # final. Con el criterio viejo, un informe pago que se cortó volvía a
+    # mostrar el bloque de venta de US$ 29; pasó en producción el 01-09-2026.
+    #
+    # El corte es `INTENTOS_MAXIMOS`, el mismo que usa el cron: agotados los
+    # tres, RF21 devuelve el derecho y borra la fila, y ahí sí corresponde
+    # volver a ofrecer la compra —con el derecho de nuevo en la cuenta—. Sin
+    # ese corte, una fila que nadie va a terminar deja la pantalla esperando
+    # para siempre.
     #
     # Va también en el listado, no sólo en el detalle: el propio contrato de la
     # API advierte que cuando listado y detalle divergen la app rompe al navegar
-    # entre uno y otro (ya pasó con `interpretation_langs`). El costo es
-    # despreciable porque sólo se consulta el cache para las filas incompletas,
-    # que son la excepción: una carta sin nada a medio escribir no consulta nada.
+    # entre uno y otro (ya pasó con `interpretation_langs`).
     en_curso: dict[str, list[str]] = {}
     for i in chart.interpretations.all():
         if i.completa or i.prompt_version != PROMPT_VERSION:
             continue
-        if not interpretation_service.esta_generandose(chart, i.tier):
+        if i.intentos >= interpretation_service.INTENTOS_MAXIMOS:
             continue
         en_curso.setdefault(i.lang, []).append(i.tier)
     for tiers in en_curso.values():

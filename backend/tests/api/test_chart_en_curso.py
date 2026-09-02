@@ -7,18 +7,24 @@ que "no tiene" y "se está generando" eran el mismo payload. La memoria de "yo
 pedí esto" vivía sólo en el `sessionStorage` del navegador, que sobrevive un F5
 pero muere al cerrar la pestaña.
 
-El matiz que evita la espera eterna: una fila incompleta NO alcanza para decir
-"en curso". Si el proceso murió a mitad (un deploy, por ejemplo), esa fila queda
-`completa=False` para siempre y la pantalla esperaría sin fin. Lo que decide es
-el lock de generación: vivo significa que hay alguien escribiendo; vencido, que
-se cayó — y ahí corresponde volver a mostrar los botones, para que el reintento
-consuma un intento y, al tercero, devuelva el crédito.
+Qué decide: que el informe se vaya a terminar, no que haya un proceso
+escribiéndolo en este segundo. Antes lo decidía el lock —vivo, alguien
+escribe; vencido, se cayó y vuelven los botones— porque el único que podía
+reintentar era el usuario apretando de nuevo. Desde `reanudar_informes` eso ya
+no es cierto: un cron retoma lo caído mientras queden intentos, así que un lock
+vencido es una pausa, no un final, y mostrar el bloque de venta ahí es
+ofrecerle comprar de nuevo lo que ya pagó (pasó en producción el 01-09-2026).
+
+La espera eterna la sigue acotando `INTENTOS_MAXIMOS`: agotados los tres sin
+completar, la política de RF21 devuelve el derecho y borra la fila — ahí sí
+corresponde volver a mostrar los botones, y con el derecho de nuevo en la
+cuenta.
 """
 
 import pytest
 from django.core.cache import cache
 
-from api.interpretation_service import PROMPT_VERSION, _lock_key
+from api.interpretation_service import INTENTOS_MAXIMOS, PROMPT_VERSION, _lock_key
 from api.models import Interpretation
 
 pytestmark = pytest.mark.django_db
@@ -47,14 +53,30 @@ def test_una_generacion_viva_aparece_en_curso(client_autenticado, chart):
     assert _pedir(client_autenticado, chart)["en_curso"] == {"es": ["largo"]}
 
 
-def test_una_generacion_cuyo_lock_vencio_no_cuenta_como_en_curso(client_autenticado, chart):
-    """El proceso murió a mitad: la fila queda, pero nadie la está escribiendo.
+def test_una_generacion_caida_sigue_pendiente_porque_el_cron_la_retoma(
+    client_autenticado, chart,
+):
+    """El intento murió a mitad y nadie está escribiendo ahora mismo, pero
+    quedan intentos: `reanudar_informes` la va a retomar.
 
-    Si esto contara como "en curso", la pantalla esperaría para siempre por un
-    informe que nadie va a terminar.
+    Si esto no contara, la carta le ofrecería al usuario comprar por US$ 29 un
+    informe que ya pagó y que se está por terminar solo.
     """
     _en_curso(chart, tier="largo")
     cache.delete(_lock_key(chart, "largo"))
+
+    assert _pedir(client_autenticado, chart)["en_curso"] == {"es": ["largo"]}
+
+
+def test_una_generacion_que_agoto_los_intentos_ya_no_esta_pendiente(
+    client_autenticado, chart,
+):
+    """Agotados los tres intentos ya no hay nada que esperar: RF21 devuelve el
+    derecho y borra la fila. Seguir mostrando la espera sería esperar para
+    siempre por un informe que nadie va a terminar."""
+    interp = _en_curso(chart, tier="largo")
+    cache.delete(_lock_key(chart, "largo"))
+    Interpretation.objects.filter(pk=interp.pk).update(intentos=INTENTOS_MAXIMOS)
 
     assert _pedir(client_autenticado, chart)["en_curso"] == {}
 

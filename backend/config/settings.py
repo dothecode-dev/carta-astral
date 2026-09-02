@@ -17,6 +17,8 @@ from pathlib import Path
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
+from config.observabilidad import init_sentry
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -425,3 +427,48 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+
+# Logging: a stdout, que es donde `docker logs` (y Coolify) lo pueden leer.
+#
+# Sin esto, `api` e `interpret` propagaban a un root sin handlers y sólo salía
+# lo de nivel ERROR, por el handler de último recurso de la stdlib. El código
+# del informe dice en tres lugares que "nunca deja una excepción sin loguear"
+# — y era mentira por omisión. El 01-09-2026 un informe pago se cortó en la
+# sección 3 y no quedó una sola línea sobre por qué.
+#
+# INFO para los dos módulos propios, no WARNING: `interpret.generator` loguea
+# en INFO el `stop_reason` y los `output_tokens` de cada llamada al modelo, que
+# es el dato con el que se decide si el techo de tokens quedó corto (ya pasó
+# con la lectura breve). WARNING para el resto, para no ahogar eso en el ruido
+# de Django.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "consola": {
+            "format": "{asctime} {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "consola",
+        },
+    },
+    "root": {"handlers": ["console"], "level": "WARNING"},
+    "loggers": {
+        "api": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "interpret": {"handlers": ["console"], "level": "INFO", "propagate": False},
+    },
+}
+
+# Sentry: opcional (sin DSN no se inicializa). Ver `config/observabilidad.py`.
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+init_sentry(
+    dsn=SENTRY_DSN,
+    entorno=os.environ.get("SENTRY_ENVIRONMENT") or ("desarrollo" if DEBUG else "produccion"),
+    release=os.environ.get("SENTRY_RELEASE") or None,
+)
