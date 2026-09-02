@@ -75,15 +75,27 @@ importan entre sí. Si necesitás cruzar una de esas fronteras, el problema es e
 servicio (`chart_service.py`, `interpretation_service.py`, `ledger.py` son el patrón),
 no en `views.py`.
 
-## Producción tiene un cron que el repo no arranca
+## Producción corre un cron que el repo no arranca
 
-`backend/scripts/reanudar-informes-cron.sh` corre cada 2 minutos en el VPS y
-termina los informes que quedaron a medias. No es opcional: el hilo que genera
-un informe hace UN intento y muere con él, así que sin ese cron los tres
+`python manage.py reanudar_informes` corre cada 2 minutos en producción y
+termina los informes que quedaron a medias. **No es opcional**: el hilo que
+genera un informe hace UN intento y muere con él, así que sin ese cron los tres
 `INTENTOS_MAXIMOS` se gastan de a uno por vida y un informe pago se queda
 incompleto para siempre —con el derecho ya consumido y la web mostrando la
-espera—. Está instalado a mano (`crontab -l` como root); si se migra el VPS,
-hay que volver a instalarlo: la receta está al pie del script.
+espera—.
+
+Vive como Scheduled Task de Coolify (app Backend → Automation → Scheduled
+Tasks, "Reanudar informes a medias", `*/2 * * * *`, timeout 900). Ahí quedan
+sus corridas con su salida. Al panel se entra por túnel, porque no está
+expuesto a internet:
+
+```bash
+ssh -N -L 8009:localhost:8000 -i ~/.ssh/astraguia_vps root@<ip-del-vps>
+# y después http://localhost:8009
+```
+
+Si el comando se renombra, hay que cambiarlo también ahí: nada en el repo lo
+verifica.
 
 ## Superficies críticas
 
