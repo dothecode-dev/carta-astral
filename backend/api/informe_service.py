@@ -77,6 +77,28 @@ def _tope_por_seccion(cantidad_aplicables: int) -> int:
     return (PRESUPUESTO_GRATIS - 1) // cantidad_aplicables
 
 
+def _primer_parrafo(texto: str) -> str:
+    """El primer bloque de PROSA de una sección, salteando encabezados.
+
+    El modelo arranca algunas secciones repitiendo el título como encabezado
+    markdown, y quedarse con el primer bloque a secas se lo llevaba tal cual:
+    el 01-09-2026 el teaser mostraba "## Tu firma" en crudo debajo de "Tu
+    firma". Un encabezado no es el arranque de la sección —es su título, que
+    el resumen ya muestra aparte en `titulo`— y el componente que lo pinta lo
+    hace como texto plano, así que la almohadilla se ve.
+
+    Se limpia acá, al leer, y no al persistir: así también quedan cubiertas
+    las secciones que ya están escritas en la base. Que el modelo no ponga el
+    encabezado no se puede garantizar desde el prompt (sería una expectativa
+    sobre el modelo, no una garantía — mismo criterio que `_tope_por_seccion`).
+    """
+    for bloque in texto.split("\n\n"):
+        bloque = bloque.strip()
+        if bloque and not bloque.startswith("#"):
+            return bloque
+    return ""
+
+
 def _abrir(parrafo: str, tope: int) -> tuple[str, int]:
     """Corta `parrafo` a lo sumo a `tope` palabras, en el límite de palabra.
 
@@ -130,9 +152,8 @@ def resumen_gratis(interpretacion) -> list[dict]:
         if existente is None:
             parrafo, restante = "", seccion.palabras
         else:
-            primer_parrafo, _, _resto = existente.texto.partition("\n\n")
             total_palabras = len(existente.texto.split())
-            parrafo, mostradas = _abrir(primer_parrafo.strip(), tope)
+            parrafo, mostradas = _abrir(_primer_parrafo(existente.texto), tope)
             restante = total_palabras - mostradas
         salida.append({
             "slug": seccion.slug,

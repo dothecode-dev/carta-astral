@@ -159,3 +159,25 @@ def test_una_seccion_corta_no_se_corta_ni_se_rellena(interpretacion):
     )
     entrada = informe_service.resumen_gratis(interpretacion)[0]
     assert entrada["parrafo"] == "Un párrafo corto de verdad."
+
+
+def test_un_encabezado_no_es_el_arranque_de_la_seccion(interpretacion):
+    """Pasó en producción el 01-09-2026: bajo "Tu firma" el teaser mostraba
+    "## Tu firma" en crudo, y bajo "Cómo pensás y te comunicás", "# Cómo
+    pensás y te comunicás".
+
+    El modelo arranca algunas secciones repitiendo el título como encabezado
+    markdown, y `partition("\\n\\n")` se lo llevaba tal cual. No es el arranque
+    de la sección: es su título, que el teaser ya muestra aparte en
+    `titulo` — y el componente que lo pinta (`ResumenCompleto`) lo hace como
+    texto plano, así que la almohadilla se ve.
+    """
+    for i, s in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=interpretacion, slug=s.slug, orden=i,
+            texto=f"## {s.titulo['es']}\n\nEsto sí es el arranque.\n\n" + ("relleno " * 300),
+        )
+
+    entrada = informe_service.resumen_gratis(interpretacion)[0]
+
+    assert entrada["parrafo"] == "Esto sí es el arranque."
