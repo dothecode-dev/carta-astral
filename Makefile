@@ -185,16 +185,21 @@ sky: ## Muestra el cielo que devuelve el backend local
 VPS_SSH := ssh -i ~/.ssh/astraguia_vps root@65.109.230.14
 # El nombre del contenedor lleva el timestamp del deploy y cambia cada vez: se
 # resuelve en cada llamada, nunca se fija.
-BACK_CONTAINER = $$(docker ps --format '{{.Names}}' | grep jhcsvn | head -1)
+#
+# Va entre comillas SIMPLES en el ssh de abajo a propósito: con dobles, el
+# `$$(...)` lo resolvía el shell de la Mac —donde no hay ningún contenedor— y el
+# comando viajaba como `docker exec  python ...`, que falla con "No such
+# container: python". Entre simples viaja literal y lo resuelve el VPS.
+BACK_CONTAINER = $$(docker ps --format "{{.Names}}" | grep jhcsvn | head -1)
 DRENAJE_MAX := 24   # 24 × 30s = 12 minutos: el doble de lo que tarda un informe
 
 .PHONY: deploy mantenimiento-on mantenimiento-off
 
 mantenimiento-on: ## Prende el cartel de "ya volvemos" en producción
-	@$(VPS_SSH) "docker exec $(BACK_CONTAINER) python manage.py mantenimiento on"
+	@$(VPS_SSH) 'docker exec $(BACK_CONTAINER) python manage.py mantenimiento on'
 
 mantenimiento-off: ## Apaga el cartel
-	@$(VPS_SSH) "docker exec $(BACK_CONTAINER) python manage.py mantenimiento off"
+	@$(VPS_SSH) 'docker exec $(BACK_CONTAINER) python manage.py mantenimiento off'
 
 deploy: ## Despliega a producción sin cortar ningún informe a medias
 	@set -e; \
