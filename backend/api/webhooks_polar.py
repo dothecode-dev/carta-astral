@@ -173,7 +173,14 @@ def _acreditar(orden: dict) -> None:
 
     try:
         aplicado = aplicar_compra(
-            cuenta, codigo, orden.get("net_amount"),
+            # `subtotal_amount` y no `net_amount`: el neto viene descontado del
+            # impuesto que Polar recauda como merchant of record, así que
+            # cambia con el país del comprador y NO es el precio. El pago real
+            # del 02-09-2026 llegó con net 2397 y tax 503 sobre un informe de
+            # US$ 29: comparar ese neto contra el catálogo rechazaba la compra.
+            # El subtotal es el precio de lista, antes de impuestos y de
+            # descuentos, que es lo que el catálogo representa.
+            cuenta, codigo, orden.get("subtotal_amount"),
             external_id=f"polar:order:{order_id}",
             chart=fila.chart if fila is not None else None,
         )

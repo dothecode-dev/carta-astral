@@ -33,7 +33,7 @@ def _configurado(settings):
 def _orden(**cambios) -> dict:
     orden = {
         "id": "ord_1", "checkout_id": "chk_1", "product_id": "prod_uno",
-        "net_amount": 2900, "currency": "usd", "status": "refunded",
+        "subtotal_amount": 2900, "currency": "usd", "status": "refunded",
     }
     orden.update(cambios)
     return orden
@@ -92,7 +92,7 @@ def test_reembolsar_un_pack_descuenta_sus_cinco_unidades(client, make_account):
     otorgar(cuenta, "pack_5_natal", 1, origen="compra", external_id="polar:order:ord_5")
 
     _entregar(client, orden=_orden(id="ord_5", checkout_id="chk_5",
-                                   product_id="prod_cinco", net_amount=12500))
+                                   product_id="prod_cinco", subtotal_amount=12500))
 
     assert _restante(cuenta) == 0
 

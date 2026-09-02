@@ -6,10 +6,10 @@ idempotente por `external_id` y canjea en el acto si el producto da una sola
 unidad. Duplicar acá cualquiera de esas tres cosas sería tener dos fuentes de
 verdad sobre la misma plata.
 
-La forma del payload (`data.checkout_id`, `data.product_id`, `data.net_amount`)
-es la que documenta Polar y **todavía no se vio un evento real**: el log de
-estructura de `webhooks_polar` existe para corregirla cuando llegue (Task 7 del
-plan).
+La forma del payload ya no es una suposición: el 02-09-2026 llegó un pago real
+y la fijó `test_polar_orden_real.py`, con los campos copiados de esa entrega.
+De ahí salió que el monto contra el que se valida es `subtotal_amount` —el
+precio de lista— y no `net_amount`, que viene descontado de impuestos.
 """
 
 import json
@@ -36,7 +36,7 @@ def _orden(**cambios) -> dict:
         "id": "ord_1",
         "checkout_id": "chk_1",
         "product_id": "prod_uno",
-        "net_amount": 2900,
+        "subtotal_amount": 2900,
         "currency": "usd",
         "status": "paid",
     }
@@ -78,7 +78,7 @@ def test_el_pack_otorga_sus_cinco_unidades(client, make_account):
         checkout_id="chk_5", account=cuenta, codigo_producto="pack_5_natal",
     )
 
-    _entregar(client, orden=_orden(checkout_id="chk_5", product_id="prod_cinco", net_amount=12500))
+    _entregar(client, orden=_orden(checkout_id="chk_5", product_id="prod_cinco", subtotal_amount=12500))
 
     assert _restante(cuenta) == 5
 
@@ -105,7 +105,7 @@ def test_un_monto_que_no_es_el_del_catalogo_no_otorga(client, checkout):
     """Hay dos fuentes de precio —nuestro catálogo y el de Polar— y si divergen
     no se acredita. `aplicar_compra` lo rechaza y lo loguea: caja cerrada en
     silencio es peor que caja cerrada con un error a la vista."""
-    resp = _entregar(client, orden=_orden(net_amount=100))
+    resp = _entregar(client, orden=_orden(subtotal_amount=100))
 
     assert 200 <= resp.status_code < 300
     assert _restante(checkout) == 0
