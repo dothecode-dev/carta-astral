@@ -27,7 +27,7 @@ from rest_framework.views import APIView
 from standardwebhooks.webhooks import Webhook, WebhookVerificationError
 
 from api import notificaciones, polar
-from api.canje import MontoInvalido, aplicar_compra
+from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.models import Account, PolarCheckout
 
 logger = logging.getLogger(__name__)
@@ -92,6 +92,8 @@ class PolarWebhookView(APIView):
 
         if tipo == "order.paid":
             _acreditar(orden)
+        elif tipo == "order.refunded":
+            _reembolsar(orden)
         return Response(status=status.HTTP_200_OK)
 
 
@@ -158,3 +160,39 @@ def _acreditar(orden: dict) -> None:
         notificaciones.notificar(
             cuenta, "compra_acreditada", {"producto": codigo}, lang="es",
         )
+
+
+def _reembolsar(orden: dict) -> None:
+    """Revoca lo comprado y anota como deuda lo que ya se usó.
+
+    No se le quita a nadie un informe ya entregado: `canje.revocar` baja el
+    derecho hasta donde alcanza y manda el resto a deuda, que se cancela contra
+    la próxima compra. Es la política que decidimos el 02-09-2026, en contra de
+    lo que decía el plan viejo.
+
+    `external_id` lleva el prefijo `polar:refund:` y no `polar:order:`: comparten
+    el id de la orden, y con la misma clave el reembolso se descartaría como
+    duplicado del pago que lo precedió.
+
+    Como `_acreditar`, nunca levanta: la entrega se responde 2xx igual.
+    """
+    order_id = orden.get("id", "")
+    cuenta, fila = _resolver_cuenta_y_checkout(orden)
+
+    try:
+        codigo = polar.codigo_de_producto(orden.get("product_id", ""))
+    except KeyError:
+        logger.error("reembolso de %s: producto que no mapeamos, no se revoca", order_id)
+        return
+
+    if cuenta is None and fila is None:
+        logger.error("reembolso de %s sin checkout ni cuenta: no se revoca", order_id)
+        return
+
+    try:
+        # `cuenta` puede ser None si la cuenta se borró después de comprar
+        # (RF22): `revocar` lo contempla y registra el movimiento igual, para
+        # que la contabilidad cierre aunque no haya a quién cobrarle.
+        revocar(cuenta, codigo, 1, external_id=f"polar:refund:{order_id}")
+    except Exception:
+        logger.exception("no se pudo revocar el reembolso de la orden %s", order_id)
