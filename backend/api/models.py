@@ -330,3 +330,35 @@ class Movimiento(models.Model):
 
     def __str__(self):
         return f"{self.tipo} {self.cantidad} (acc={self.account_id})"
+
+
+class PolarCheckout(models.Model):
+    """Quién abrió esta sesión de pago, y para qué.
+
+    Existe porque el webhook necesita saber a qué cuenta acreditarle la orden, y
+    la propagación de `metadata` del checkout a la orden **no está en el
+    contrato publicado** de Polar: se confirmó leyendo su fuente, que puede
+    cambiar sin aviso. `order.checkout_id` sí está garantizado, así que la
+    relación se guarda de este lado y la metadata queda como respaldo.
+
+    `chart` es opcional y es lo que hace que comprar desde una carta termine
+    con esa carta escribiéndose, en vez de con un derecho suelto que hay que ir
+    a usar a mano. `SET_NULL`: si se borra la carta antes de que llegue el
+    webhook, el pago se acredita igual.
+    """
+
+    checkout_id = models.CharField(max_length=100, unique=True)
+    account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, related_name="checkouts_polar",
+    )
+    codigo_producto = models.CharField(max_length=50)
+    chart = models.ForeignKey(
+        "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts_polar",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.checkout_id} ({self.codigo_producto})"

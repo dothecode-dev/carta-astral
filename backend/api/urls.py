@@ -1,3 +1,4 @@
+from api.checkout import CheckoutView
 from django.urls import path
 
 from api.sessions import LogoutView
@@ -18,6 +19,7 @@ from api.webhooks import RevenueCatWebhookView
 
 urlpatterns = [
     path("account/", AccountView.as_view()),
+    path("checkout/", CheckoutView.as_view()),
     path("charts/", ChartCollectionView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
