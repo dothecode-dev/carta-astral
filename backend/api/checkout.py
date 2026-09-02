@@ -41,13 +41,17 @@ class CheckoutView(APIView):
         if chart_id:
             carta = get_object_or_404(Chart, uuid=chart_id, account=request.user)
 
+        # El idioma en el que está navegando. Decide dos cosas: a qué página lo
+        # devuelve Polar después de pagar, y en qué idioma se escribe el
+        # informe cuando el webhook lo arranque. Se valida contra la lista
+        # blanca acá —no se concatena ni se guarda tal cual— porque viene del
+        # navegador y termina en una URL y en la base.
+        pedido = request.data.get("locale") or polar.LOCALE_POR_DEFECTO
+        idioma = pedido if pedido in polar.LOCALES else polar.LOCALE_POR_DEFECTO
+
         try:
             checkout_id, url = polar.crear_checkout(
-                request.user, codigo, chart=carta,
-                # El idioma en el que está navegando: define a qué página lo
-                # devuelve Polar después de pagar. `crear_checkout` lo valida
-                # contra su lista blanca — nunca se concatena tal cual.
-                locale=request.data.get("locale") or polar.LOCALE_POR_DEFECTO,
+                request.user, codigo, chart=carta, locale=idioma,
             )
         except (KeyError, ValueError) as exc:
             # Producto que no está en el catálogo, o gratis. Es un pedido mal
@@ -71,6 +75,7 @@ class CheckoutView(APIView):
         # Después del éxito y no antes: una fila huérfana dejaría que el webhook
         # de otra orden resolviera contra ella.
         PolarCheckout.objects.create(
-            checkout_id=checkout_id, account=request.user, codigo_producto=codigo, chart=carta,
+            checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
+            chart=carta, locale=idioma,
         )
         return Response({"url": url})

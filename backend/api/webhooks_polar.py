@@ -27,9 +27,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from standardwebhooks.webhooks import Webhook, WebhookVerificationError
 
-from api import notificaciones, polar
+from api import catalogo, interpretation_service, notificaciones, polar
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.models import Account, PolarCheckout
+from interpret.prompts import TIER_LARGO
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,46 @@ def _acreditar(orden: dict) -> None:
     if aplicado:
         notificaciones.notificar(
             cuenta, "compra_acreditada", {"producto": codigo}, lang="es",
+        )
+        _arrancar_informe(cuenta, fila)
+
+
+def _arrancar_informe(cuenta, fila) -> None:
+    """Deja el informe escribiéndose apenas se acredita el pago.
+
+    Es la diferencia entre "pagué y ya se está escribiendo" y "pagué y ahora
+    andá a buscar dónde usarlo". Sin esto, `aplicar_compra` consumía el derecho
+    contra la carta y nadie creaba la `Interpretation`: la persona volvía y
+    encontraba el botón de comprar otra vez, con el derecho ya gastado (pasó
+    con el primer pago real, el 02-09-2026).
+
+    Sólo para una compra suelta con carta atada. Un pack son cinco informes que
+    se usan cuando la persona quiera: elegirle una carta sería gastarle uno sin
+    que lo pida.
+
+    `iniciar_generacion` corre acá, en el hilo de la entrega, para que la fila
+    quede creada antes de responder: si el hilo que sigue muere, es esa fila la
+    que `reanudar_informes` encuentra y termina. Nada de esto puede tumbar la
+    entrega —el derecho ya está otorgado y un 5xx sumaría a las diez fallidas
+    que deshabilitan el endpoint para todos—, así que cualquier fallo se loguea
+    y se responde 2xx igual.
+    """
+    if fila is None or fila.chart is None:
+        return
+
+    prod = catalogo.producto(fila.codigo_producto)
+    suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
+    if not (suelto and prod.capacidades):
+        return
+
+    try:
+        interpretacion = interpretation_service.iniciar_generacion(
+            fila.chart, fila.locale, cuenta, TIER_LARGO,
+        )
+        interpretation_service.arrancar_en_hilo(interpretacion, fila.chart, cuenta)
+    except Exception:
+        logger.exception(
+            "la compra %s se acreditó pero el informe no arrancó", fila.checkout_id,
         )
 
 

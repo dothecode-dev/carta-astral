@@ -160,6 +160,22 @@ describe("ChartActions", () => {
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretFreeLang);
   });
 
+  it("si el completo ya existe en otro idioma, el botón traduce en vez de cobrar", async () => {
+    // Sin derecho la pantalla ofrece comprar, pero traducir una lectura ya
+    // escrita no cuesta nada del lado del backend: mandar a pagar US$ 29 por
+    // eso es cobrar dos veces la misma carta, y la nota de al lado ya venía
+    // diciendo que era gratis.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(202)));
+    renderActions({ interpretations: { en: ["largo"] }, paidCredits: 0 });
+
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
+
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/charts/${CHART}/interpretation`,
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("sin lectura en otro idioma, la nota del completo sigue mostrando el precio", () => {
     renderActions({ interpretations: {} });
     const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });

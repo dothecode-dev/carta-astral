@@ -8,12 +8,14 @@ se lo inyecta a interpret/ (que no toca settings ni la API key).
 import hashlib
 import json
 import logging
+import threading
 import uuid
 
 import anthropic
 import httpx
 from django.conf import settings
 from django.core.cache import cache
+from django.db import connections
 from django.utils import timezone
 
 from api import notificaciones
@@ -651,6 +653,42 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # está por borrar — la misma clase de carrera que el hallazgo
         # Critical de arriba.
         soltar_lock(chart, interpretacion.tier, token)
+
+
+def arrancar_en_hilo(interpretacion: Interpretation, chart, account) -> None:
+    """Termina en un hilo aparte un informe cuya fila ya existe.
+
+    Vive acá y no en la vista porque tiene dos llamadores: el POST de la web y
+    el webhook de Polar, que arranca el informe apenas se acredita el pago.
+    Duplicar el patrón era duplicar también sus dos cuidados —cerrar la
+    conexión y no morir en silencio—, y el segundo llamador se escribió
+    justamente porque el primero no cubría a quien paga y cierra la pestaña.
+
+    Quien llama tiene que haber creado la `Interpretation` antes, con
+    `iniciar_generacion`, y en su propio hilo: así el cobro y el 402 ocurren
+    donde se los puede responder, y si este hilo muere queda la fila
+    incompleta que `reanudar_informes` retoma.
+    """
+
+    def _en_hilo():
+        # Un hilo nuevo no hereda la conexión a la base del request: cada
+        # consulta abre la suya propia (thread-local), y hay que cerrarla
+        # explícitamente al terminar o la conexión queda pérdida (mismo patrón
+        # que `tests/api/test_ledger_concurrencia.py`). El try/except es la red
+        # de seguridad final: si algo revienta dentro de `completar_generacion`
+        # que ni su propio try/except contempla, esto lo loguea igual — un hilo
+        # de fondo que muere en silencio deja el informe colgado y nadie se
+        # entera.
+        try:
+            completar_generacion(interpretacion, chart, account)
+        except Exception:
+            logger.exception(
+                "el hilo de generación del informe %s murió sin control", interpretacion.pk,
+            )
+        finally:
+            connections.close_all()
+
+    threading.Thread(target=_en_hilo, daemon=True).start()
 
 
 def generar_en_segundo_plano(chart, lang: str, account, tier: str) -> None:

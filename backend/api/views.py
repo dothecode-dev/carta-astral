@@ -1,8 +1,6 @@
 import logging
-import threading
 
 from django.conf import settings
-from django.db import connections
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -303,26 +301,10 @@ class InterpretationView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        def _en_hilo():
-            # Un hilo nuevo no hereda la conexión a la base del request: cada
-            # consulta abre la suya propia (thread-local), y hay que cerrarla
-            # explícitamente al terminar o la conexión queda pérdida (mismo
-            # patrón que `tests/api/test_ledger_concurrencia.py`). El
-            # try/except de acá afuera es la red de seguridad final: si algo
-            # revienta dentro de `completar_generacion` que ni su propio
-            # try/except contempla, esto lo loguea igual — un hilo de fondo
-            # que muere en silencio deja el informe colgado y nadie se entera.
-            try:
-                interpretation_service.completar_generacion(interpretacion, chart, account)
-            except Exception:
-                logger.exception(
-                    "el hilo de generación del informe %s murió sin control",
-                    interpretacion.pk,
-                )
-            finally:
-                connections.close_all()
-
-        threading.Thread(target=_en_hilo, daemon=True).start()
+        # El hilo lo lanza el servicio: el webhook de Polar arranca informes
+        # por el mismo camino, y el patrón —cerrar la conexión, no morir en
+        # silencio— tiene que estar escrito una sola vez.
+        interpretation_service.arrancar_en_hilo(interpretacion, chart, account)
         return Response(status=status.HTTP_202_ACCEPTED)
 
 

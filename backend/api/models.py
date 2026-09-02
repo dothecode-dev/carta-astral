@@ -355,6 +355,11 @@ class PolarCheckout(models.Model):
     chart = models.ForeignKey(
         "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts_polar",
     )
+    # En qué idioma se compró, para escribir el informe en ése. El webhook no
+    # tiene otra forma de saberlo: quien paga puede cerrar la pestaña en Polar
+    # y no volver nunca, y un default silencioso le entregaría el informe pago
+    # en un idioma que no eligió.
+    locale = models.CharField(max_length=5, default="es")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

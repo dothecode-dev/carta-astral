@@ -431,7 +431,16 @@ export function ChartActions({
   if (tieneCompleto) return null;
 
   const breveDisponibles = cantidad(derechos, "lectura_breve");
-  const tieneDerechoAlCompleto = puede(derechos, "leer_informe");
+  /**
+   * Si el informe se puede pedir sin volver a pagar: porque hay derecho, o
+   * porque ya está escrito en otro idioma y traducirlo no cuesta.
+   *
+   * El backend no cobra por traducir una lectura ya escrita
+   * (`_sibling_completo` en `interpretation_service.py`), y la nota de abajo
+   * ya lo decía —`interpretFreeLang`—, pero el botón mandaba a pagar igual:
+   * US$ 29 por algo gratis, con el aviso de que era gratis al lado.
+   */
+  const puedeLeerlo = puede(derechos, "leer_informe") || enOtroIdioma("largo");
 
   return (
     <div className="chartActions">
@@ -463,9 +472,9 @@ export function ChartActions({
               type="button"
               className="btn btnPrimary"
               disabled={busy}
-              onClick={() => (tieneDerechoAlCompleto ? interpret("largo") : comprar())}
+              onClick={() => (puedeLeerlo ? interpret("largo") : comprar())}
             >
-              {tieneDerechoAlCompleto
+              {puedeLeerlo
                 ? dict.chart.interpretCompletoConDerecho
                 : dict.chart.interpretCompleto}
             </button>
