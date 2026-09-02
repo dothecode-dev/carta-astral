@@ -113,10 +113,25 @@ def translate_interpretation(text: str, target_lang: str, client) -> str:
     return _stream_text(client, TRANSLATE_MODEL, system, text, TRANSLATE_MAX_TOKENS)
 
 
+# El tope duro que acompaña al objetivo, como fracción de éste. Un objetivo
+# blando no contiene al modelo: el 02-09-2026 la sección "afectos" (objetivo
+# 900) consumió su techo entero —`output_tokens=3600 max_tokens=3600`, cerca
+# del doble de palabras— y dejó el informe de la carta 8 trabado ahí. Ese
+# fallo es determinista: dos reintentos seguidos murieron en la misma sección
+# con el mismo error, así que ninguna política de reintentos lo pasa.
+#
+# El 20% es holgura de redacción, no permiso para irse al doble: una sección
+# que cierra su última idea en 1080 palabras en vez de 900 sigue siendo la
+# sección que promete el catálogo.
+_MARGEN_TOPE_SECCION = 1.2
+
 _PEDIDO_SECCION = {
-    "es": "Escribí la sección «{titulo}» de un informe de carta natal.\n{foco}\nExtensión: unas {palabras} palabras.",
-    "en": "Write the «{titulo}» section of a natal chart report.\n{foco}\nLength: about {palabras} words.",
-    "pt": "Escreva a seção «{titulo}» de um relatório de mapa natal.\n{foco}\nExtensão: cerca de {palabras} palavras.",
+    "es": "Escribí la sección «{titulo}» de un informe de carta natal.\n{foco}\n"
+    "Extensión: unas {palabras} palabras. No superes las {maximo} palabras.",
+    "en": "Write the «{titulo}» section of a natal chart report.\n{foco}\n"
+    "Length: about {palabras} words. Do not exceed {maximo} words.",
+    "pt": "Escreva a seção «{titulo}» de um relatório de mapa natal.\n{foco}\n"
+    "Extensão: cerca de {palabras} palavras. Não ultrapasse {maximo} palavras.",
 }
 
 _CONTEXTO_PREVIO = {
@@ -137,7 +152,10 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     1000 palabras pide 4000 tokens contra los 1500 de MAX_TOKENS), así que
     el read-timeout por-chunk del streaming es tan o más necesario acá."""
     pedido = _PEDIDO_SECCION[lang].format(
-        titulo=seccion.titulo[lang], foco=seccion.foco[lang], palabras=seccion.palabras
+        titulo=seccion.titulo[lang],
+        foco=seccion.foco[lang],
+        palabras=seccion.palabras,
+        maximo=int(seccion.palabras * _MARGEN_TOPE_SECCION),
     )
     cuerpo = json.dumps(chart_data, ensure_ascii=False)
     content = f"{pedido}\n\n{cuerpo}"

@@ -3,8 +3,8 @@
 Este test existe por un incidente de producción del 31-08-2026. El deploy de los
 dos tiers estrenó `claude-sonnet-5` para la lectura breve manteniendo el
 `MAX_TOKENS = 1500` del producto anterior, mientras el system pide "400 a 700
-palabras". En español hacen falta ~4 tokens por palabra —el mismo factor que el
-informe por secciones ya usa en `SECCION_TOKENS_POR_PALABRA`—, así que ni el
+palabras". En español hacen falta ~4 tokens por palabra (`TOKENS_POR_PALABRA`),
+así que ni el
 MÍNIMO del rango entraba (400 x 4 = 1600 > 1500): el modelo llegaba al límite a
 mitad de frase y `build_interpretation` abortaba con "stop_reason inesperado:
 max_tokens". La lectura breve falló el 100% de las veces durante 25 horas, y dos
@@ -12,6 +12,14 @@ usuarios reales se quedaron sin su lectura y con el crédito descontado.
 
 El bug fue que el prompt decía un número y el techo otro, sin nada que los atara.
 Esto los ata.
+
+Ata contra `TOKENS_POR_PALABRA`, el ratio del tokenizador, y no contra
+`SECCION_TOKENS_POR_PALABRA`, que hasta el 02-09-2026 era el mismo número
+haciendo dos trabajos: el ratio y el margen de holgura del informe. Cuando el
+margen del informe subió a 8 —porque una sección se fue al doble de su
+objetivo—, este test empezó a exigirle a la lectura breve un techo de 5600
+tokens que nada justificaba. Un número con dos significados se rompe apenas uno
+de los dos cambia.
 """
 
 import re
@@ -20,7 +28,7 @@ import pytest
 
 from interpret.prompts import (
     MAX_TOKENS,
-    SECCION_TOKENS_POR_PALABRA,
+    TOKENS_POR_PALABRA,
     SYSTEM_PROMPTS,
 )
 
@@ -43,10 +51,10 @@ def _maximo_de_palabras(prompt: str) -> int:
 def test_el_techo_cubre_el_maximo_de_palabras_que_pide_cada_idioma(lang):
     maximo = _maximo_de_palabras(SYSTEM_PROMPTS[lang])
 
-    assert MAX_TOKENS >= maximo * SECCION_TOKENS_POR_PALABRA, (
+    assert MAX_TOKENS >= maximo * TOKENS_POR_PALABRA, (
         f"el system de {lang} pide hasta {maximo} palabras, que a "
-        f"{SECCION_TOKENS_POR_PALABRA} tokens por palabra son "
-        f"{maximo * SECCION_TOKENS_POR_PALABRA} tokens, pero el techo es {MAX_TOKENS}: "
+        f"{TOKENS_POR_PALABRA} tokens por palabra son "
+        f"{maximo * TOKENS_POR_PALABRA} tokens, pero el techo es {MAX_TOKENS}: "
         "el modelo se va a cortar por max_tokens y la generación va a abortar"
     )
 

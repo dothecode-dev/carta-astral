@@ -144,3 +144,44 @@ def test_el_system_de_seccion_no_fija_un_largo_y_difiere_del_de_interpretacion()
     system_interpretacion = c_interpretacion.llamadas[0]["system"][0]["text"]
 
     assert system_seccion != system_interpretacion
+
+
+def test_el_pedido_le_pone_un_tope_duro_de_palabras_a_la_seccion():
+    """Un objetivo blando ("unas 900 palabras") no alcanza para contener al
+    modelo.
+
+    Evidencia de producción, 02-09-2026: la sección "afectos" (objetivo 900)
+    consumió su techo entero — `output_tokens=3600 max_tokens=3600`, cerca del
+    doble de palabras de lo pedido— y el informe de la carta 8 quedó trabado
+    ahí. Ese fallo es determinista: dos reintentos consecutivos murieron en la
+    misma sección con el mismo error, así que ninguna política de reintentos
+    lo pasa. El tope tiene que estar en el pedido, que es el único que conoce
+    el largo de ESTA sección (el system no puede fijarlo: varía 600-1000, ver
+    `test_el_system_de_seccion_no_fija_un_largo_y_difiere_del_de_interpretacion`).
+    """
+    c = ClienteFalso()
+    build_seccion({"planets": []}, SECCIONES[2], "es", "", c)  # afectos: 900 palabras
+
+    pedido = c.llamadas[0]["messages"][0]["content"]
+    assert "900" in pedido
+    assert "1080" in pedido  # 900 + 20%: el tope duro, no el objetivo
+
+
+def test_el_techo_de_tokens_deja_crecer_la_seccion_mas_alla_del_tope_pedido():
+    """El techo tiene que quedar por encima del tope que pide el prompt, no al
+    borde: si el modelo se pasa igual, mejor una sección larga que un informe
+    trabado para siempre.
+
+    Con el tope en 1,2× el objetivo y el peor ratio real del español (2,2
+    tokens por palabra), contener ese tope pide 2,64 tokens por palabra. El
+    factor 4 anterior parecía alcanzar y no alcanzó, porque el modelo se fue
+    al doble del objetivo: 8 deja lugar para ~3,6× el objetivo nominal antes
+    de tocar el techo.
+    """
+    from interpret.prompts import SECCION_TOKENS_POR_PALABRA
+
+    assert SECCION_TOKENS_POR_PALABRA >= 8
+
+    c = ClienteFalso()
+    build_seccion({"planets": []}, SECCIONES[4], "es", "", c)  # tensiones: 1000
+    assert c.llamadas[0]["max_tokens"] == 1000 * SECCION_TOKENS_POR_PALABRA

@@ -124,7 +124,49 @@ SYSTEM_PROMPTS_SECCION = {"es": _BASE_ES_SECCION, "en": _BASE_EN_SECCION, "pt": 
 # (4 / 2,2 ≈ 1,8×), margen que el factor 2 viejo no daba ni al ratio más
 # favorable (2 / 1,7 ≈ 1,18×). Ver `tests/interpret/test_generar_seccion.py`
 # para el test que fija este número.
-SECCION_TOKENS_POR_PALABRA = 4
+# Actualización del 02-09-2026, con datos de producción: el factor 4 tampoco
+# alcanzó. La sección "afectos" (objetivo 900, techo 3600) consumió su techo
+# exacto —`output_tokens=3600 max_tokens=3600`— y dejó el informe de la carta
+# 8 trabado: el modelo se fue cerca del DOBLE del objetivo, no al 1,8× que el
+# cálculo de abajo daba por peor caso.
+#
+# Dos cambios a la vez, porque uno solo ya falló dos veces:
+#   - El pedido pasa a llevar un tope duro ("no superes las N palabras", ver
+#     `_MARGEN_TOPE_SECCION` en `interpret/generator.py`), que es lo que ataca
+#     la causa: hasta ahora el largo era un objetivo blando y nada más.
+#   - Este factor sube a 8, que es la red por si el modelo se pasa igual. Con
+#     el peor ratio real (2,2 tokens/palabra) una sección puede crecer hasta
+#     ~3,6× su objetivo nominal antes de tocar el techo.
+#
+# El costo del peor caso pasa de ~US$0,45 a ~US$0,90 por informe, contra un
+# precio de US$29: pagar el doble de techo es infinitamente más barato que un
+# informe que no se entrega, porque ese se devuelve entero.
+# Cuántos tokens ocupa una palabra en el idioma más caro de los tres. Es un
+# dato del tokenizador, no una decisión de producto: lo usa el test que ata el
+# largo que pide un prompt con el techo que se le da (`tests/interpret/
+# test_techo_lectura_breve.py`), y por eso vive separado del margen de abajo.
+# Con este ratio, `MAX_TOKENS = 2800` cubre las 700 palabras que pide el system
+# de la lectura breve, que es lo que se arregló el 01-09-2026.
+TOKENS_POR_PALABRA = 4
+
+# Cuánto puede crecer una sección por encima de lo que su pedido permite antes
+# de que el techo la corte. No es holgura de redacción —de eso se ocupa
+# `_MARGEN_TOPE_SECCION` en el pedido, que le pide al modelo no pasar del 20%—
+# sino la red por si el modelo lo ignora: cortar por `max_tokens` es un fallo
+# TERMINAL y determinista (dos reintentos seguidos mueren en la misma sección),
+# así que conviene errarle por exceso.
+#
+# El costo del peor caso pasa de ~US$0,45 a ~US$0,90 por informe, contra un
+# precio de US$29: pagar el doble de techo es infinitamente más barato que un
+# informe que no se entrega, porque ese se devuelve entero.
+SECCION_MARGEN_TECHO = 2
+
+# Hasta el 02-09-2026 esto era un 4 fijo, que hacía las veces de ratio Y de
+# margen a la vez. Con esa mezcla, la sección "afectos" (objetivo 900, techo
+# 3600) consumió su techo exacto —`output_tokens=3600 max_tokens=3600`— y dejó
+# el informe de la carta 8 trabado: el modelo se fue cerca del DOBLE del
+# objetivo, no al 1,8× que el cálculo viejo daba por peor caso.
+SECCION_TOKENS_POR_PALABRA = TOKENS_POR_PALABRA * SECCION_MARGEN_TECHO
 
 
 @dataclass(frozen=True)
