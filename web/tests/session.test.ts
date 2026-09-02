@@ -81,3 +81,36 @@ describe("callApi", () => {
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 });
+
+describe("haySesion", () => {
+  // Lo usan las páginas públicas —home, notas, ejemplo, legales— para pintar el
+  // header. Antes no lo consultaban: eran estáticas y el header siempre decía
+  // "Entrar", así que alguien con la sesión abierta que entraba a los Términos
+  // desde su carta veía un sitio que no lo reconocía.
+  //
+  // No valida contra el backend a propósito (para eso está `sessionIsLive`):
+  // pintar un enlace no justifica una llamada de red en cada página pública, y
+  // el peor caso de una cookie vencida es un clic que termina en el login, que
+  // es exactamente lo que pasaría igual.
+  it("dice que sí cuando hay cookie", async () => {
+    const { haySesion } = await import("@/lib/session");
+    expect(await haySesion()).toBe(true);
+  });
+
+  it("dice que no cuando no hay cookie", async () => {
+    token = null;
+    const { haySesion } = await import("@/lib/session");
+    expect(await haySesion()).toBe(false);
+  });
+
+  it("no le pregunta al backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { haySesion } = await import("@/lib/session");
+
+    await haySesion();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+

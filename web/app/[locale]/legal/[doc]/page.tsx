@@ -7,6 +7,7 @@ import { LEGAL, LEGAL_CONTACT, LEGAL_DOCS, LEGAL_UPDATED, type LegalDocKey } fro
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { Footer } from "@/components/Footer";
+import { haySesion } from "@/lib/session";
 
 function isDoc(value: string): value is LegalDocKey {
   return (LEGAL_DOCS as readonly string[]).includes(value);
@@ -49,9 +50,21 @@ export default async function LegalPage({
   const dict = getDict(locale);
   const content = LEGAL[locale];
 
+  // El header es el mismo en todo el sitio: sin esto la página se sirve
+  // estática y le dice "Entrar" a alguien que ya tiene la sesión abierta.
+  // Leer la cookie la vuelve dinámica, que es el precio de reconocer a quien
+  // entra — y no toca lo que ve Google, que nunca trae cookie.
+  const signedIn = await haySesion();
+
   return (
     <>
-      <Nav locale={locale} dict={dict} path={`/legal/${doc}`} />
+      <Nav
+        locale={locale}
+        dict={dict}
+        path={`/legal/${doc}`}
+        signedIn={signedIn}
+        showExample={!signedIn}
+      />
       <main className="docFrame">
         <LegalDocument
           doc={content[doc]}

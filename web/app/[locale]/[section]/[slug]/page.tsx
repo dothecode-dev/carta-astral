@@ -7,6 +7,7 @@ import { Nav } from "@/components/Nav";
 import { SITE_URL } from "@/lib/config";
 import { DEFAULT_LOCALE, NOTES_SLUG, getDict, isLocale, isNotesSection } from "@/lib/i18n";
 import { fetchNote, fetchTranslationsOrNone, formatNoteDate } from "@/lib/notes";
+import { haySesion } from "@/lib/session";
 
 // Mismo criterio que el listado: sin `generateStaticParams`. Enumerar las notas
 // en el build no sólo ata el build a que el CMS esté arriba —el CI no tiene
@@ -69,6 +70,12 @@ export default async function NotePage({ params }: Params) {
   const dict = getDict(locale);
   const fecha = formatNoteDate(locale, note.fecha);
 
+  // El header es el mismo en todo el sitio: sin esto la página se sirve
+  // estática y le dice "Entrar" a alguien que ya tiene la sesión abierta.
+  // Leer la cookie la vuelve dinámica, que es el precio de reconocer a quien
+  // entra — y no toca lo que ve Google, que nunca trae cookie.
+  const signedIn = await haySesion();
+
   // Lo que Google usa para mostrar la nota como artículo en los resultados.
   const jsonLd = {
     "@context": "https://schema.org",
@@ -88,7 +95,13 @@ export default async function NotePage({ params }: Params) {
       {/* Al listado del otro idioma, no a esta misma nota: cada idioma tiene su
           propia nota con su propio slug, y puede no existir todavía. Mandarte a
           una URL que da 404 sería peor que dejarte en el listado. */}
-      <Nav locale={locale} dict={dict} path={(code) => `/${NOTES_SLUG[code]}`} />
+      <Nav
+        locale={locale}
+        dict={dict}
+        path={(code) => `/${NOTES_SLUG[code]}`}
+        signedIn={signedIn}
+        showExample={!signedIn}
+      />
 
       <div className="docFrame">
         <article className="doc">

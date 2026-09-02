@@ -32,6 +32,23 @@ export async function setSessionToken(token: string): Promise<void> {
 }
 
 /**
+ * ¿Hay una cookie de sesión? Nada más que eso.
+ *
+ * Lo usan las páginas públicas —home, notas, ejemplo, legales— para pintar el
+ * header. Antes no lo consultaban: eran estáticas, así que el header decía
+ * "Entrar" a todo el mundo y alguien con la sesión abierta que iba de su carta
+ * a los Términos se encontraba con un sitio que no lo reconocía.
+ *
+ * No valida contra el backend a propósito —para eso está `sessionIsLive`—: un
+ * enlace en el header no justifica una llamada de red en cada página pública, y
+ * el peor caso de una cookie vencida es un clic que termina en el login, que es
+ * adonde esa persona iba a ir igual.
+ */
+export async function haySesion(): Promise<boolean> {
+  return (await getSessionToken()) !== null;
+}
+
+/**
  * A dónde mandar a alguien cuya cookie el backend ya no reconoce.
  *
  * No alcanza con redirigirlo a /entrar: la cookie muerta seguiría ahí y

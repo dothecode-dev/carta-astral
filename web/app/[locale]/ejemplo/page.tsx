@@ -10,6 +10,7 @@ import { SAMPLE_READING } from "@/content/sample-reading";
 import { LOCALES, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { Footer } from "@/components/Footer";
+import { haySesion } from "@/lib/session";
 
 const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
@@ -63,9 +64,15 @@ export default async function SampleChartPage({
   const reading = SAMPLE_READING[locale];
   const names = PLANET_NAME_BY_KEY[locale];
 
+  // El header es el mismo en todo el sitio: sin esto la página se sirve
+  // estática y le dice "Entrar" a alguien que ya tiene la sesión abierta.
+  // Leer la cookie la vuelve dinámica, que es el precio de reconocer a quien
+  // entra — y no toca lo que ve Google, que nunca trae cookie.
+  const signedIn = await haySesion();
+
   return (
     <>
-      <Nav locale={locale} dict={dict} path="/ejemplo" />
+      <Nav locale={locale} dict={dict} path="/ejemplo" signedIn={signedIn} showExample={!signedIn} />
 
       <main className="docFrame chartFrame">
         <section className="chartHead">

@@ -9,6 +9,7 @@ import { fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
 import { fetchSky } from "@/lib/sky";
 import { StoreBadges } from "@/components/StoreBadges";
 import { Footer } from "@/components/Footer";
+import { haySesion } from "@/lib/session";
 
 export default async function Home({
   params,
@@ -23,9 +24,15 @@ export default async function Home({
   const sky = await fetchSky();
   const notes = await fetchNotesOrNone(locale, 3);
 
+  // El header es el mismo en todo el sitio: sin esto la página se sirve
+  // estática y le dice "Entrar" a alguien que ya tiene la sesión abierta.
+  // Leer la cookie la vuelve dinámica, que es el precio de reconocer a quien
+  // entra — y no toca lo que ve Google, que nunca trae cookie.
+  const signedIn = await haySesion();
+
   return (
     <>
-      <Nav locale={locale} dict={dict} />
+      <Nav locale={locale} dict={dict} signedIn={signedIn} showExample={!signedIn} />
 
       <div className="frame">
         <EphemerisRail

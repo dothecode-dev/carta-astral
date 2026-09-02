@@ -14,6 +14,7 @@ import {
   isNotesSection,
 } from "@/lib/i18n";
 import { fetchNotes, formatNoteDate } from "@/lib/notes";
+import { haySesion } from "@/lib/session";
 
 // El segmento de la sección cambia con el idioma —`/es/notas`, `/en/notes`—
 // porque la palabra en la URL es una señal de idioma para los buscadores.
@@ -59,9 +60,21 @@ export default async function NotesPage({
   const dict = getDict(locale);
   const notes = await fetchNotes(locale);
 
+  // El header es el mismo en todo el sitio: sin esto la página se sirve
+  // estática y le dice "Entrar" a alguien que ya tiene la sesión abierta.
+  // Leer la cookie la vuelve dinámica, que es el precio de reconocer a quien
+  // entra — y no toca lo que ve Google, que nunca trae cookie.
+  const signedIn = await haySesion();
+
   return (
     <>
-      <Nav locale={locale} dict={dict} path={(code) => `/${NOTES_SLUG[code]}`} />
+      <Nav
+        locale={locale}
+        dict={dict}
+        path={(code) => `/${NOTES_SLUG[code]}`}
+        signedIn={signedIn}
+        showExample={!signedIn}
+      />
 
       <div className="docFrame">
         <div className="sectionHead">
