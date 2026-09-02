@@ -173,7 +173,7 @@ def test_dice_cuantos_reanudo(chart, account, fake_client, capsys):
 
     call_command("reanudar_informes")
 
-    assert "1" in capsys.readouterr().out
+    assert "terminados: 1" in capsys.readouterr().out
 
 
 def test_un_informe_que_revienta_no_frena_a_los_demas(
@@ -198,3 +198,22 @@ def test_un_informe_que_revienta_no_frena_a_los_demas(
     call_command("reanudar_informes")
 
     assert atendidas == [segunda.pk]
+
+
+def test_no_cuenta_como_terminado_un_informe_que_sigue_a_medias(
+    chart, account, monkeypatch, capsys,
+):
+    """`completar_generacion` se traga las excepciones de la generación: vuelve
+    sin error aunque el informe haya quedado igual de incompleto. Contar esas
+    llamadas como éxito convierte la salida del cron en una mentira.
+
+    Pasó de verdad el 02-09-2026: el comando informó "reanudados: 1 (fallidos:
+    0)" sobre un informe que se acababa de cortar con `httpx.ReadTimeout`. La
+    única razón por la que se supo fue el traceback, no el contador.
+    """
+    _a_medias(chart, account)
+    monkeypatch.setattr(svc, "completar_generacion", lambda *a, **kw: None)
+
+    call_command("reanudar_informes")
+
+    assert "terminados: 0" in capsys.readouterr().out

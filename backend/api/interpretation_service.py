@@ -11,6 +11,7 @@ import logging
 import uuid
 
 import anthropic
+import httpx
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
@@ -66,7 +67,24 @@ def _build_client():
     if not settings.ANTHROPIC_API_KEY:
         # Sin key el SDK lanza TypeError (500 crudo); mejor un 503 prolijo.
         raise InterpretationError("ANTHROPIC_API_KEY no configurada")
-    return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=25.0)
+    # El read-timeout es POR CHUNK (la generación va por streaming, ver
+    # `interpret.generator._stream_text`): es cuánto se espera entre dos
+    # pedazos de la respuesta, no cuánto puede tardar la sección entera. Con
+    # 25 segundos el informe pago de la carta 8 se cortó dos veces seguidas
+    # con `httpx.ReadTimeout` (01 y 02-09-2026) — las secciones que sí salían
+    # tardaban 25 y 42 segundos, así que estaba en el filo.
+    #
+    # Y un timeout corto acá no "reintenta más rápido": cada corte gasta uno
+    # de los tres `INTENTOS_MAXIMOS` y al tercero se devuelve el derecho y se
+    # borra lo escrito. Le devuelve la plata a alguien que quería su informe.
+    #
+    # El de conexión sigue corto a propósito: esperar por un chunk que está
+    # viniendo es una cosa, esperar por un handshake que no va a pasar es
+    # otra — ahí conviene fallar rápido y que lo tome el intento siguiente.
+    return anthropic.Anthropic(
+        api_key=settings.ANTHROPIC_API_KEY,
+        timeout=httpx.Timeout(120.0, connect=10.0),
+    )
 
 
 def _seconds_until_midnight() -> int:

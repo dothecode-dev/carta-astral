@@ -41,7 +41,8 @@ class Command(BaseCommand):
             account__isnull=False,
         ).select_related("chart", "account")
 
-        reanudados = 0
+        terminados = 0
+        sin_terminar = 0
         fallidos = 0
         for interpretacion in candidatas:
             # El lock vivo significa que hay un hilo escribiendo ESTA misma
@@ -63,6 +64,19 @@ class Command(BaseCommand):
                     "no se pudo reanudar el informe %s", interpretacion.pk
                 )
             else:
-                reanudados += 1
+                # `completar_generacion` se traga las excepciones de la
+                # generación: vuelve sin error aunque el informe haya quedado
+                # igual de incompleto. Contar la llamada como éxito hacía que
+                # el cron informara "reanudados: 1" sobre un informe que se
+                # acababa de cortar (02-09-2026). Lo único que dice la verdad
+                # es releer la fila.
+                interpretacion.refresh_from_db()
+                if interpretacion.completa:
+                    terminados += 1
+                else:
+                    sin_terminar += 1
 
-        self.stdout.write(f"informes reanudados: {reanudados} (fallidos: {fallidos})")
+        self.stdout.write(
+            f"informes terminados: {terminados} "
+            f"(siguen a medias: {sin_terminar}, con error: {fallidos})"
+        )
