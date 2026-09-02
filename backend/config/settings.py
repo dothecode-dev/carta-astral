@@ -294,6 +294,19 @@ APPLE_PRIVATE_KEY = os.environ.get("APPLE_PRIVATE_KEY", "")  # contenido PEM del
 REVENUECAT_WEBHOOK_AUTH = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")
 # Mapa product_id (App Store / Play) → créditos que otorga. JSON en env.
 REVENUECAT_PRODUCT_CREDITS = json.loads(os.environ.get("REVENUECAT_PRODUCT_CREDITS", "{}"))
+
+# --- Polar (cobro en la web) -------------------------------------------------
+# El sandbox es OTRA organización: cuenta, productos y token propios. El default
+# es producción a propósito — un valor mal escrito no puede mandar los pagos
+# reales al sandbox, que no cobra.
+POLAR_ENVIRONMENT = os.environ.get("POLAR_ENVIRONMENT", "")
+POLAR_ACCESS_TOKEN = os.environ.get("POLAR_ACCESS_TOKEN", "")
+POLAR_WEBHOOK_SECRET = os.environ.get("POLAR_WEBHOOK_SECRET", "")
+POLAR_SUCCESS_URL = os.environ.get("POLAR_SUCCESS_URL", "")
+# Mapeo id de Polar → código del catálogo, en JSON. En ese sentido porque así lo
+# consume el webhook, que es quien recibe el id. Mismo patrón que
+# REVENUECAT_PRODUCT_CREDITS, arriba.
+POLAR_PRODUCTOS = json.loads(os.environ.get("POLAR_PRODUCTOS", "{}"))
 # Cantidad de reembolsos que marca una cuenta como abuso.
 REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 
