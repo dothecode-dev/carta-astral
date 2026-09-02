@@ -50,16 +50,23 @@ LOCK_TTL = 600
 # quedó nada"), donde un informe trunco no le costaba nada al usuario.
 INTENTOS_MAXIMOS = 3
 
+# El pie de cada lectura. No nombra a la IA a propósito (decisión de producto
+# del 02-09-2026): esa mención vive en la política de privacidad —que declara a
+# Anthropic como el proveedor que redacta las lecturas, y `check:legal` obliga a
+# que siga ahí— y en la sección "Cómo se escribe tu lectura" de `/cuenta`, a la
+# que enlaza el bloque de compra antes de que nadie ponga plata. Acá competía
+# con el texto que la persona vino a leer.
+#
+# Lo que sí tiene que decir es la advertencia completa: entretenimiento, no es
+# consejo, sin valor predictivo. `tests/api/test_disclaimer.py` fija las dos
+# mitades de esta decisión.
 DISCLAIMERS = {
-    "es": "Esta interpretación fue generada con inteligencia artificial con fines "
-    "de entretenimiento; no es consejo médico, legal ni financiero y no tiene "
-    "valor predictivo demostrado.",
-    "en": "This interpretation was generated with artificial intelligence for "
-    "entertainment purposes; it is not medical, legal or financial advice and "
-    "has no demonstrated predictive value.",
-    "pt": "Esta interpretação foi gerada com inteligência artificial para fins "
-    "de entretenimento; não é conselho médico, legal ou financeiro e não tem "
-    "valor preditivo comprovado.",
+    "es": "Esta interpretación tiene fines de entretenimiento; no es consejo "
+    "médico, legal ni financiero y no tiene valor predictivo demostrado.",
+    "en": "This interpretation is for entertainment purposes; it is not medical, "
+    "legal or financial advice and has no demonstrated predictive value.",
+    "pt": "Esta interpretação tem fins de entretenimento; não é conselho médico, "
+    "legal ou financeiro e não tem valor preditivo comprovado.",
 }
 
 

@@ -238,6 +238,15 @@ export type Dict = {
     interpretBreveNota: string;
     /** Botón del informe completo pago (tier "largo"). */
     interpretCompleto: string;
+    /**
+     * Enlace a los Términos de uso desde el bloque de compra.
+     *
+     * El pie de la lectura dejó de anunciar que la escribe una IA (02-09-2026):
+     * esa explicación vive en los Términos, que la dan entera. Este enlace
+     * existe para que esté a un clic ANTES de pagar, que es el único momento
+     * donde callarlo sale caro.
+     */
+    comoSeEscribe: string;
     /** Nota bajo el botón del completo: precio y qué trae, con hora conocida (ocho secciones). */
     interpretCompletoNota: string;
     /**
@@ -485,6 +494,7 @@ const es: Dict = {
     interpretBreve: "Leer la lectura breve",
     interpretBreveNota: "Gratis. Te quedan {n}.",
     interpretCompleto: "Comprar el informe completo",
+    comoSeEscribe: "Cómo se escribe tu lectura",
     interpretCompletoNota: "US$ 29 · ocho secciones",
     interpretCompletoNotaSinHora: "US$ 29 · siete secciones",
     interpretFreeLang: "Sin costo: ya lo leíste en otro idioma.",
@@ -729,6 +739,7 @@ const en: Dict = {
     interpretBreve: "Read the short reading",
     interpretBreveNota: "Free. You have {n} left.",
     interpretCompleto: "Buy the full report",
+    comoSeEscribe: "How your reading is written",
     interpretCompletoNota: "US$ 29 · eight sections",
     interpretCompletoNotaSinHora: "US$ 29 · seven sections",
     interpretFreeLang: "No cost: you already read it in another language.",
@@ -973,6 +984,7 @@ const pt: Dict = {
     interpretBreve: "Ler a leitura breve",
     interpretBreveNota: "Grátis. Restam {n}.",
     interpretCompleto: "Comprar o relatório completo",
+    comoSeEscribe: "Como sua leitura é escrita",
     interpretCompletoNota: "US$ 29 · oito seções",
     interpretCompletoNotaSinHora: "US$ 29 · sete seções",
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",

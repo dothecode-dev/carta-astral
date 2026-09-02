@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
@@ -441,6 +442,13 @@ export function ChartActions({
                   ? dict.chart.interpretCompletoNota
                   : dict.chart.interpretCompletoNotaSinHora}
             </p>
+            {/* El pie de la lectura ya no anuncia que la escribe una IA: la
+                explicación entera está en los Términos de uso. Acá queda a un
+                clic, que es el único lugar donde callarlo sale caro — antes de
+                que alguien ponga US$ 29. */}
+            <Link className="fieldNote comoSeEscribe" href={`/${locale}/legal/terms`}>
+              {dict.chart.comoSeEscribe}
+            </Link>
           </div>
         )}
       </div>

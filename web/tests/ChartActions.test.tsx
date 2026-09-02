@@ -615,4 +615,17 @@ describe("volver a la carta después de cerrar la pestaña", () => {
     expect(screen.getByText(dict.chart.waitColor)).toBeInTheDocument();
     expect(screen.getByText(/secci[óo]n 4 de 8/i)).toBeInTheDocument();
   });
+
+  it("enlaza a los términos, donde se cuenta cómo se escribe la lectura", () => {
+    // El pie de la lectura ya no anuncia que la escribe una IA: eso quedó en
+    // los Términos de uso, que lo dicen con todas las letras ("genera lecturas
+    // interpretativas mediante inteligencia artificial (…) puede contener
+    // imprecisiones propias del contenido generado automáticamente"). El único
+    // momento donde callarlo sale caro es antes de que alguien ponga US$ 29,
+    // así que el bloque de compra deja el camino a un clic.
+    renderActions({ freeCredits: 0, paidCredits: 1 });
+
+    const enlace = screen.getByRole("link", { name: dict.chart.comoSeEscribe });
+    expect(enlace).toHaveAttribute("href", "/es/legal/terms");
+  });
 });

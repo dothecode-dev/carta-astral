@@ -786,6 +786,22 @@ body {
   line-height: 1.5;
 }
 
+/* Enlace a los Términos bajo el botón del informe. Es una aclaración al pie,
+   no una llamada a la acción: hereda el gris chico de .fieldNote y sólo suma
+   el subrayado que lo delata como enlace. Si compitiera con el botón de US$ 29
+   estaría resolviendo el problema contrario al que existe para resolver. */
+.comoSeEscribe {
+  display: inline-block;
+  margin-top: 0.375rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.comoSeEscribe:hover {
+  color: var(--ink);
+}
+
 .checkboxField {
   display: flex;
   flex-direction: column;
