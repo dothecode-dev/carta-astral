@@ -9,7 +9,7 @@ import { ApiError, callApi } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  let cuerpo: { producto?: string; chart_id?: string } = {};
+  let cuerpo: { producto?: string; chart_id?: string; locale?: string } = {};
   try {
     cuerpo = await request.json();
   } catch {
@@ -23,7 +23,13 @@ export async function POST(request: Request) {
   try {
     const data = await callApi<{ url: string }>("/api/checkout/", {
       method: "POST",
-      body: JSON.stringify({ producto: cuerpo.producto, chart_id: cuerpo.chart_id }),
+      // El locale define a qué página vuelve la persona después de pagar.
+      // El backend lo valida contra su lista blanca antes de armar la URL.
+      body: JSON.stringify({
+        producto: cuerpo.producto,
+        chart_id: cuerpo.chart_id,
+        locale: cuerpo.locale,
+      }),
     });
     return NextResponse.json(data);
   } catch (error) {

@@ -42,7 +42,13 @@ class CheckoutView(APIView):
             carta = get_object_or_404(Chart, uuid=chart_id, account=request.user)
 
         try:
-            checkout_id, url = polar.crear_checkout(request.user, codigo, chart=carta)
+            checkout_id, url = polar.crear_checkout(
+                request.user, codigo, chart=carta,
+                # El idioma en el que está navegando: define a qué página lo
+                # devuelve Polar después de pagar. `crear_checkout` lo valida
+                # contra su lista blanca — nunca se concatena tal cual.
+                locale=request.data.get("locale") or polar.LOCALE_POR_DEFECTO,
+            )
         except (KeyError, ValueError) as exc:
             # Producto que no está en el catálogo, o gratis. Es un pedido mal
             # armado, no una falla nuestra.

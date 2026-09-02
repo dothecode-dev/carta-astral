@@ -132,3 +132,15 @@ def test_sin_token_configurado_es_503(account_client, settings):
     settings.POLAR_ACCESS_TOKEN = ""
 
     assert account_client.post("/api/checkout/", {"producto": "informe_natal"}).status_code == 503
+
+
+def test_el_idioma_de_quien_compra_llega_al_checkout(account_client, polar_responde, settings):
+    """Sin esto, alguien que navega en inglés vuelve de pagar a una página en
+    español. El idioma lo sabe el navegador y viaja en el pedido."""
+    settings.POLAR_SUCCESS_URL = "https://astraguia.com/{locale}/compra"
+    pedidos = polar_responde()
+
+    account_client.post("/api/checkout/", {"producto": "informe_natal", "locale": "pt"})
+
+    enviado = json.loads(pedidos[0].content)
+    assert enviado["success_url"] == "https://astraguia.com/pt/compra"

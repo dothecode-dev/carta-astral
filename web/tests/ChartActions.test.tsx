@@ -645,7 +645,12 @@ describe("volver a la carta después de cerrar la pestaña", () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/checkout");
-    expect(JSON.parse(init.body)).toEqual({ producto: "informe_natal", chart_id: CHART });
+    expect(JSON.parse(init.body)).toEqual({
+      producto: "informe_natal",
+      chart_id: CHART,
+      // Vuelve a la página en el idioma en que estaba navegando.
+      locale: "es",
+    });
     expect(assign).toHaveBeenCalledWith("https://polar.sh/checkout/xyz");
   });
 

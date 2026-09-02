@@ -29,6 +29,13 @@ _BASE_PROD = "https://api.polar.sh/v1"
 TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 
 
+# Los idiomas que el sitio sirve. Lista blanca y no concatenación: el locale
+# llega del navegador y termina en la URL a la que Polar devuelve a la persona
+# después de pagar — sin esta guarda, cualquiera podría fabricar ese destino.
+LOCALES = ("es", "en", "pt")
+LOCALE_POR_DEFECTO = "es"
+
+
 class PolarNoConfigurado(Exception):
     """Falta una credencial o el producto no tiene ficha en Polar."""
 
@@ -81,7 +88,9 @@ def codigo_de_producto(id_polar: str) -> str:
         raise KeyError(f"producto de Polar desconocido: {id_polar}") from None
 
 
-def crear_checkout(account, codigo_producto: str, chart=None) -> tuple[str, str]:
+def crear_checkout(
+    account, codigo_producto: str, chart=None, locale: str = LOCALE_POR_DEFECTO,
+) -> tuple[str, str]:
     """Abre una sesión de pago para ese producto y devuelve `(checkout_id, url)`.
 
     `KeyError` si el producto no está en el catálogo, `ValueError` si es gratis
@@ -104,7 +113,11 @@ def crear_checkout(account, codigo_producto: str, chart=None) -> tuple[str, str]
         "metadata": {"account_id": str(account.pk)},
     }
     if settings.POLAR_SUCCESS_URL:
-        cuerpo["success_url"] = settings.POLAR_SUCCESS_URL
+        # Quien compra navegando en inglés vuelve a una página en inglés. La
+        # variable es una plantilla con `{locale}` porque el idioma lo sabe el
+        # navegador, no la configuración; si no lo trae, se usa el default.
+        idioma = locale if locale in LOCALES else LOCALE_POR_DEFECTO
+        cuerpo["success_url"] = settings.POLAR_SUCCESS_URL.replace("{locale}", idioma)
     if chart is not None:
         cuerpo["metadata"]["chart_id"] = str(chart.pk)
 

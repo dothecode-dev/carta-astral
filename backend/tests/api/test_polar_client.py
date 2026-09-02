@@ -159,3 +159,28 @@ def test_el_pedido_lleva_timeout():
     """Un checkout colgado bloquea un worker de gunicorn; con --timeout 60, el
     arbiter termina matándolo."""
     assert polar.TIMEOUT is not None
+
+
+def test_la_url_de_retorno_lleva_el_idioma_de_quien_compra(polar_responde, make_account, settings):
+    """Quien compra navegando en inglés tiene que volver a una página en
+    inglés. `POLAR_SUCCESS_URL` es una plantilla con `{locale}` justamente
+    porque el idioma lo sabe el navegador, no la configuración."""
+    settings.POLAR_SUCCESS_URL = "https://astraguia.com/{locale}/compra"
+    pedidos = polar_responde()
+
+    polar.crear_checkout(make_account(), "informe_natal", locale="en")
+
+    assert json.loads(pedidos[0].content)["success_url"] == "https://astraguia.com/en/compra"
+
+
+def test_un_idioma_que_no_existe_no_arma_la_url_de_retorno(polar_responde, make_account, settings):
+    """Lista blanca, no concatenación: el locale llega del navegador y va a
+    parar a una URL de retorno. Sin esta guarda, cualquiera podría fabricar el
+    destino al que Polar devuelve a la persona después de pagar."""
+    settings.POLAR_SUCCESS_URL = "https://astraguia.com/{locale}/compra"
+    pedidos = polar_responde()
+
+    polar.crear_checkout(make_account(), "informe_natal", locale="../evil.com")
+
+    enviado = json.loads(pedidos[0].content)
+    assert enviado["success_url"] == "https://astraguia.com/es/compra"

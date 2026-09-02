@@ -310,7 +310,7 @@ export function ChartActions({
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ producto: "informe_natal", chart_id: chartId }),
+        body: JSON.stringify({ producto: "informe_natal", chart_id: chartId, locale }),
       });
       if (!res.ok) {
         setBusy(false);
