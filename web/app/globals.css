@@ -266,6 +266,25 @@ body {
   min-height: 44px;
 }
 
+/* El botón lo dibuja Google dentro de un iframe cross-origin: su forma no se
+   puede tocar con CSS, y `shape: "pill"` de renderButton no llega al botón
+   personalizado —el que muestra nombre y mail cuando ya hay sesión de Google—,
+   que sale como un rectángulo blanco de esquinas rectas sobre el violeta.
+   Recortarlo desde afuera es lo único que se puede hacer sin tocar el iframe.
+
+   `min-height` iguala la altura real del iframe (44px con `size: "large"`):
+   el div que Google mete adentro mide 40 y, sin esto, `overflow: hidden` le
+   comía 4px al botón. El ancho fija los 280 que se le piden a renderButton —
+   el iframe se dibuja 20px más ancho y ese sobrante es justamente lo que el
+   recorte saca. */
+.signinButton {
+  width: 280px;
+  max-width: 100%;
+  min-height: 44px;
+  border-radius: 22px;
+  overflow: hidden;
+}
+
 .signinNote {
   margin: 0;
   font-size: 0.8125rem;

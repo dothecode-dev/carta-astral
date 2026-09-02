@@ -133,7 +133,9 @@ export function GoogleSignIn({
 
   return (
     <div className="signin">
-      <div ref={holder} />
+      {/* Clase propia, y no `.signin`: el recorte de `.signinButton` (ver
+          globals.css) no puede alcanzar a las notas de error de abajo. */}
+      <div className="signinButton" ref={holder} />
       {status === "loading" && <p className="signinNote">{labels.loading}</p>}
       {status === "blocked" && <p className="signinNote signinError">{labels.blocked}</p>}
       {status === "failed" && <p className="signinNote signinError">{labels.failed}</p>}

@@ -110,4 +110,19 @@ describe("GoogleSignIn", () => {
 
     expect(screen.getByText(labels.blocked)).toBeInTheDocument();
   });
+
+  it("le da al botón de Google un contenedor propio para recortarlo", () => {
+    // El botón lo dibuja Google dentro de un iframe cross-origin, así que su
+    // forma no se puede tocar con CSS: `shape: "pill"` de renderButton lo
+    // ignora cuando muestra el botón personalizado (el que trae nombre y mail
+    // de la sesión de Google), y sale un rectángulo blanco de esquinas rectas
+    // sobre el violeta. Lo único que se puede hacer desde afuera es recortarlo,
+    // y para eso el contenedor necesita una clase propia — `.signin` no sirve:
+    // envuelve también las notas de error, que no hay que recortar.
+    vi.stubGlobal("google", fakeGoogle());
+
+    const { container } = render(<GoogleSignIn locale="es" labels={labels} />);
+
+    expect(container.querySelector(".signinButton")).not.toBeNull();
+  });
 });
