@@ -24,7 +24,13 @@ MODEL = "claude-sonnet-5"
 # `tests/interpret/test_techo_lectura_breve.py` ata este número al rango que
 # declara el prompt: si uno de los dos cambia sin el otro, ese test se pone en
 # rojo. Era justamente lo que faltaba.
-MAX_TOKENS = 2800
+#
+# Subido de 2800 a 4200 el 02-09-2026: aquel arreglo dejó el techo justo para
+# un ratio de 4 tokens por palabra, y el ratio medido llega a 5,6 (ver
+# `TOKENS_POR_PALABRA`). Con 2800, una lectura que se acercara al máximo de su
+# propio rango (700 palabras) volvía a cortarse — el mismo incidente, esperando
+# a repetirse. No cuesta plata: se paga por token generado, no por el techo.
+MAX_TOKENS = 4200
 
 # Traducción de lecturas ya generadas: tarea fácil, modelo barato.
 TRANSLATE_MODEL = "claude-haiku-4-5"
@@ -145,9 +151,17 @@ SYSTEM_PROMPTS_SECCION = {"es": _BASE_ES_SECCION, "en": _BASE_EN_SECCION, "pt": 
 # dato del tokenizador, no una decisión de producto: lo usa el test que ata el
 # largo que pide un prompt con el techo que se le da (`tests/interpret/
 # test_techo_lectura_breve.py`), y por eso vive separado del margen de abajo.
-# Con este ratio, `MAX_TOKENS = 2800` cubre las 700 palabras que pide el system
-# de la lectura breve, que es lo que se arregló el 01-09-2026.
-TOKENS_POR_PALABRA = 4
+#
+# MEDIDO, no estimado. Seis secciones reales del 02-09-2026, con output_tokens
+# logueado y las palabras contadas sobre el texto guardado, dan entre 4,1 y 5,6
+# tokens por palabra en español. El valor anterior (4) venía de un comentario
+# que hablaba de "1,7 a 2,2", un ratio que no existe — y de ahí salieron los
+# dos incidentes: el techo se calculaba con un número inventado y el modelo se
+# quedaba sin tokens cumpliendo exactamente lo que se le pedía.
+#
+# Subirlo no cuesta plata: se paga por token generado, no por el techo. Lo
+# único que cambia es que deja de cortar.
+TOKENS_POR_PALABRA = 6
 
 # Cuánto puede crecer una sección por encima de lo que su pedido permite antes
 # de que el techo la corte. No es holgura de redacción —de eso se ocupa

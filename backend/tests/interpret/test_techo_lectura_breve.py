@@ -64,3 +64,29 @@ def test_los_tres_idiomas_piden_el_mismo_largo():
     maximos = {lang: _maximo_de_palabras(p) for lang, p in SYSTEM_PROMPTS.items()}
 
     assert len(set(maximos.values())) == 1, maximos
+
+
+def test_el_ratio_no_baja_de_lo_que_se_midio_en_produccion():
+    """`TOKENS_POR_PALABRA` no es una estimación: es un dato medido.
+
+    Seis secciones reales del informe de la carta 8, el 02-09-2026, con
+    `output_tokens` logueado y las palabras contadas sobre el texto
+    persistido:
+
+        afectos    865 palabras   3909 tokens   4,5
+        trabajo    795 palabras   4431 tokens   5,6
+        tensiones  925 palabras   3765 tokens   4,1
+        lentos     822 palabras   3450 tokens   4,2
+        casas      600 palabras   2647 tokens   4,4
+
+    El comentario que justificaba el valor viejo hablaba de "1,7 a 2,2 tokens
+    por palabra"; el peor caso real es 5,6. De ahí venían los dos incidentes:
+    el techo se calculaba con un ratio que no existe, así que el modelo se
+    quedaba sin tokens cumpliendo exactamente lo que se le pedía.
+
+    Si alguien vuelve a bajar este número, que sea con mediciones nuevas.
+    """
+    assert TOKENS_POR_PALABRA >= 6, (
+        "el peor ratio medido en producción es 5,6 tokens por palabra: por "
+        "debajo de 6 no queda margen y el corte por max_tokens es terminal"
+    )
