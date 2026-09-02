@@ -92,7 +92,7 @@ async function clickBoton(name: string) {
 }
 
 describe("ChartActions", () => {
-  it("ofrece la lectura breve gratis y el informe completo pago", () => {
+  it("ofrece la lectura breve gratis y, sin derecho, la compra del completo", () => {
     renderActions({ freeCredits: 2, paidCredits: 0 });
     expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeEnabled();
     expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeEnabled();
@@ -103,7 +103,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions({ freeCredits: 2, paidCredits: 1 });
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.tier).toBe("largo");
@@ -112,13 +112,13 @@ describe("ChartActions", () => {
   it("sin lecturas gratis deshabilita la breve pero no el completo", () => {
     renderActions({ freeCredits: 0, paidCredits: 1 });
     expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeDisabled();
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeEnabled();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeEnabled();
   });
 
   it("con la breve ya leída sigue ofreciendo el informe completo", () => {
     renderActions({ interpretations: { es: ["corto"] } });
     expect(screen.queryByRole("button", { name: dict.chart.interpretBreve })).toBeNull();
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeEnabled();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeEnabled();
   });
 
   it("no ofrece nada si los dos productos ya están leídos en este idioma", () => {
@@ -133,7 +133,7 @@ describe("ChartActions", () => {
   it("no ofrece la breve para quien ya tiene el completo, aunque nunca la haya leído", () => {
     const { container } = renderActions({ interpretations: { es: ["largo"] } });
     expect(screen.queryByRole("button", { name: dict.chart.interpretBreve })).toBeNull();
-    expect(screen.queryByRole("button", { name: dict.chart.interpretCompleto })).toBeNull();
+    expect(screen.queryByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeNull();
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -142,7 +142,7 @@ describe("ChartActions", () => {
     // es por idioma: que "en" tenga los dos tiers no dice nada de "es".
     renderActions({ interpretations: { en: ["corto", "largo"] } });
     expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeInTheDocument();
   });
 
   // El backend traduce una lectura ya escrita sin cobrar de nuevo (sin
@@ -156,13 +156,13 @@ describe("ChartActions", () => {
 
   it("si el completo ya existe en otro idioma, la nota avisa que no cuesta", () => {
     renderActions({ interpretations: { en: ["largo"] } });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretFreeLang);
   });
 
   it("sin lectura en otro idioma, la nota del completo sigue mostrando el precio", () => {
     renderActions({ interpretations: {} });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNota);
     expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretFreeLang);
   });
@@ -171,7 +171,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_leer_informe" })));
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinLeerInforme);
   });
@@ -189,7 +189,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, {})));
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinDerecho);
   });
@@ -202,7 +202,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
     await correr(POLL_MS);
 
     expect(refresh).toHaveBeenCalledOnce();
@@ -220,7 +220,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
     await correr(POLL_MS);
 
     expect(screen.queryByText(dict.chart.waitTitle)).not.toBeInTheDocument();
@@ -235,7 +235,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
 
     expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
   });
@@ -267,7 +267,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
 
     expect(screen.getByText(dict.chart.waitBody)).toBeInTheDocument();
     expect(screen.queryByText(dict.chart.waitBodyBreve)).not.toBeInTheDocument();
@@ -283,7 +283,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
     await correr(POLL_MS);
 
     expect(screen.getByText(/4 de 8/)).toBeInTheDocument();
@@ -300,7 +300,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
     await correr(POLL_MS);
 
     expect(screen.getByText(/1 de 8/)).toBeInTheDocument();
@@ -316,7 +316,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(503)));
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
   });
@@ -329,11 +329,11 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(409)));
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.generationInProgress);
     // No es un callejón sin salida: el botón sigue ahí para reintentar.
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
 
@@ -345,13 +345,13 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
     await correr(POLL_MS * POLL_TRIES);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
     expect(refresh).not.toHaveBeenCalled();
     // El botón vuelve: no es un callejón sin salida.
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeInTheDocument();
   }, 20000);
 
   it("avisa que faltará una sección si la carta no tiene hora, antes de cobrar", () => {
@@ -369,14 +369,14 @@ describe("ChartActions", () => {
   // informe sale con siete (`noTimeWarning`, debajo).
   it("sin hora de nacimiento, la nota del completo dice siete secciones, no ocho", () => {
     renderActions({ timeKnown: false });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNotaSinHora);
     expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretCompletoNota);
   });
 
   it("con hora de nacimiento, la nota del completo sigue diciendo ocho secciones", () => {
     renderActions({ timeKnown: true });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNota);
   });
 
@@ -394,7 +394,7 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
     await correr(POLL_MS * 2);
 
     expect(refresh).toHaveBeenCalledOnce();
@@ -405,11 +405,11 @@ describe("ChartActions", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     renderActions();
 
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
     expect(refresh).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeInTheDocument();
   });
 
   it("si no hay nada que recuperar en esta pestaña, muestra los botones sin llamar al backend", () => {
@@ -421,7 +421,7 @@ describe("ChartActions", () => {
 
     renderActions();
 
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -572,7 +572,7 @@ describe("volver a la carta después de cerrar la pestaña", () => {
     await correr();
 
     expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: dict.chart.interpretCompleto })).toBeNull();
+    expect(screen.queryByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeNull();
   });
 
   it("sondea sin volver a pedir la generación: el servidor ya dijo que está viva", async () => {
@@ -627,5 +627,51 @@ describe("volver a la carta después de cerrar la pestaña", () => {
 
     const enlace = screen.getByRole("link", { name: dict.chart.comoSeEscribe });
     expect(enlace).toHaveAttribute("href", "/es/legal/terms");
+  });
+
+  it("sin derecho, el botón del informe abre el pago en vez de generar", async () => {
+    // El backend responde 402 sin derecho, así que pedir la generación sería
+    // pedirle a alguien que choque contra una puerta cerrada. El botón lleva a
+    // pagar, con la carta atada para que el informe arranque solo al acreditar.
+    const assign = vi.fn();
+    vi.stubGlobal("location", { assign, href: "" });
+    const fetchMock = vi.fn().mockResolvedValue(
+      reply(200, { url: "https://polar.sh/checkout/xyz" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ paidCredits: 0 });
+    await clickBoton(dict.chart.interpretCompleto);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/checkout");
+    expect(JSON.parse(init.body)).toEqual({ producto: "informe_natal", chart_id: CHART });
+    expect(assign).toHaveBeenCalledWith("https://polar.sh/checkout/xyz");
+  });
+
+  it("con derecho, el mismo botón lee en vez de cobrar de nuevo", async () => {
+    // Quien compró un pack tiene cinco informes pagos: mandarlo a pagar otra
+    // vez sería cobrarle dos veces lo mismo.
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(true, 8, 8));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ paidCredits: 2 });
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
+
+    expect(fetchMock.mock.calls[0][0]).toContain("/interpretation");
+  });
+
+  it("si el pago no se puede abrir, lo dice y no navega a ningún lado", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { assign, href: "" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(502, { error: "x" })));
+
+    renderActions({ paidCredits: 0 });
+    await clickBoton(dict.chart.interpretCompleto);
+
+    expect(screen.getByText(dict.chart.compraFallo)).toBeInTheDocument();
+    expect(assign).not.toHaveBeenCalled();
   });
 });

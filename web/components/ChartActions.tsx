@@ -295,6 +295,38 @@ export function ChartActions({
     };
   }, [chartId, locale, enCurso, tieneBreve, tieneCompleto, seguirGenerando]);
 
+  /**
+   * Manda a pagar el informe, con esta carta atada.
+   *
+   * El backend guarda esa relación (`PolarCheckout.chart`) y el webhook la usa
+   * para que el informe arranque solo al acreditar el pago: la diferencia
+   * entre "pagué y ya se está escribiendo" y "pagué y ahora buscá dónde
+   * usarlo".
+   */
+  async function comprar() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ producto: "informe_natal", chart_id: chartId }),
+      });
+      if (!res.ok) {
+        setBusy(false);
+        setError(dict.chart.compraFallo);
+        return;
+      }
+      const { url } = (await res.json()) as { url: string };
+      // Polar es otro sitio: no es una navegación de Next.
+      window.location.assign(url);
+    } catch (err) {
+      console.error("no se pudo abrir el checkout", err);
+      setBusy(false);
+      setError(dict.chart.compraFallo);
+    }
+  }
+
   async function interpret(tier: Tier) {
     setProgreso(null);
     setBusy(true);
@@ -399,6 +431,7 @@ export function ChartActions({
   if (tieneCompleto) return null;
 
   const breveDisponibles = cantidad(derechos, "lectura_breve");
+  const tieneDerechoAlCompleto = puede(derechos, "leer_informe");
 
   return (
     <div className="chartActions">
@@ -422,13 +455,19 @@ export function ChartActions({
         )}
         {!tieneCompleto && (
           <div className="chartActionCol">
+            {/* Con derecho se lee; sin derecho se paga. El mismo lugar de la
+                pantalla hace las dos cosas porque para quien mira es el mismo
+                gesto —"quiero mi informe"—, y cobrarle a quien ya pagó (un
+                pack deja cinco) sería cobrarle dos veces lo mismo. */}
             <button
               type="button"
               className="btn btnPrimary"
               disabled={busy}
-              onClick={() => interpret("largo")}
+              onClick={() => (tieneDerechoAlCompleto ? interpret("largo") : comprar())}
             >
-              {dict.chart.interpretCompleto}
+              {tieneDerechoAlCompleto
+                ? dict.chart.interpretCompletoConDerecho
+                : dict.chart.interpretCompleto}
             </button>
             <p className="fieldNote">
               {enOtroIdioma("largo")

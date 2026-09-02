@@ -247,6 +247,13 @@ export type Dict = {
      * donde callarlo sale caro.
      */
     comoSeEscribe: string;
+    /**
+     * Botón del informe cuando la cuenta YA tiene el derecho (compró un pack,
+     * o pagó y volvió). Mandarla a pagar otra vez sería cobrarle dos veces.
+     */
+    interpretCompletoConDerecho: string;
+    /** Cuando el pago no se pudo abrir: el problema es nuestro, no de quien compra. */
+    compraFallo: string;
     /** Nota bajo el botón del completo: precio y qué trae, con hora conocida (ocho secciones). */
     interpretCompletoNota: string;
     /**
@@ -495,6 +502,8 @@ const es: Dict = {
     interpretBreveNota: "Gratis. Te quedan {n}.",
     interpretCompleto: "Comprar el informe completo",
     comoSeEscribe: "Cómo se escribe tu lectura",
+    interpretCompletoConDerecho: "Leer el informe completo",
+    compraFallo: "No pudimos abrir el pago. Probá de nuevo en un momento.",
     interpretCompletoNota: "US$ 29 · ocho secciones",
     interpretCompletoNotaSinHora: "US$ 29 · siete secciones",
     interpretFreeLang: "Sin costo: ya lo leíste en otro idioma.",
@@ -740,6 +749,8 @@ const en: Dict = {
     interpretBreveNota: "Free. You have {n} left.",
     interpretCompleto: "Buy the full report",
     comoSeEscribe: "How your reading is written",
+    interpretCompletoConDerecho: "Read the full report",
+    compraFallo: "We couldn't open the payment. Try again in a moment.",
     interpretCompletoNota: "US$ 29 · eight sections",
     interpretCompletoNotaSinHora: "US$ 29 · seven sections",
     interpretFreeLang: "No cost: you already read it in another language.",
@@ -985,6 +996,8 @@ const pt: Dict = {
     interpretBreveNota: "Grátis. Restam {n}.",
     interpretCompleto: "Comprar o relatório completo",
     comoSeEscribe: "Como sua leitura é escrita",
+    interpretCompletoConDerecho: "Ler o relatório completo",
+    compraFallo: "Não conseguimos abrir o pagamento. Tente de novo em instantes.",
     interpretCompletoNota: "US$ 29 · oito seções",
     interpretCompletoNotaSinHora: "US$ 29 · sete seções",
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
