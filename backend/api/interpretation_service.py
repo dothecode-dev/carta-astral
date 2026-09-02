@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from api import notificaciones
 from api.canje import SinDerecho, canjear, devolver
-from api.catalogo import productos_con_capacidad
+from api.catalogo import codigos_otorgados_por
 from api.exceptions import CapReached, GenerationInProgress
 from api.models import Interpretation, Movimiento
 from interpret.exceptions import InterpretationError
@@ -570,9 +570,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # Mismo principio que tenía el ledger viejo al leer `consumo.
         # lot` en vez de asumirlo — el refactor había cambiado ese
         # read-back por una constante, y esto lo repone.
-        codigos = {
-            p.otorga[0] for p in productos_con_capacidad(CAPACIDAD_POR_TIER[interpretacion.tier])
-        }
+        codigos = codigos_otorgados_por(CAPACIDAD_POR_TIER[interpretacion.tier])
         consumo = Movimiento.objects.filter(
             account=account, chart=chart, tipo="consumo", codigo_producto__in=codigos,
         ).first()

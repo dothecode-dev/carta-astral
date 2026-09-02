@@ -12,7 +12,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from api.catalogo import ACCESO, producto, productos_con_capacidad
+from api.catalogo import ACCESO, codigos_otorgados_por, producto
 from api.models import Account, Chart, Derecho, Movimiento
 
 logger = logging.getLogger(__name__)
@@ -57,11 +57,14 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
     """
     prod = producto(codigo_producto)
     # El derecho se otorga en el producto de destino, no en el que se compró:
-    # el pack de 5 informes natales (otorga=("informe_natal", 5)) tiene que
+    # el pack de 5 informes natales (otorga=(("informe_natal", 5),)) tiene que
     # dejar un derecho de informe_natal, no uno de pack_5_natal que nadie
     # consulta. El Movimiento sí guarda el producto comprado: es el rastro
     # de auditoría de lo que entró por Polar.
-    codigo_otorgado, multiplicador = prod.otorga
+    #
+    # Se recorre porque un producto puede otorgar MÁS DE UNA cosa: un combo
+    # "carta + horóscopo" deja un derecho de cada uno. Un pack sigue siendo el
+    # caso de un solo par con cantidad > 1.
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
         if not _movimiento_idempotente(
@@ -71,36 +74,46 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
             logger.info("otorgamiento duplicado ignorado (external_id=%s)", external_id)
             return False
 
-        if prod.naturaleza == ACCESO:
-            # El default de creación ya tiene que traer vigente_hasta puesta:
-            # el CheckConstraint exige exactamente una de las dos columnas no
-            # nula, y un derecho recién creado con cantidad_restante=None y
-            # vigente_hasta=None (sin default) lo viola.
-            vigencia_nueva = timezone.now() + timezone.timedelta(days=prod.duracion_dias)
-            derecho, created = Derecho.objects.get_or_create(
-                account=acc, codigo_producto=codigo_otorgado,
-                defaults={"cantidad_restante": None, "vigente_hasta": vigencia_nueva},
-            )
-            if not created:
-                desde = max(derecho.vigente_hasta or timezone.now(), timezone.now())
-                derecho.vigente_hasta = desde + timezone.timedelta(days=prod.duracion_dias)
-                derecho.save(update_fields=["vigente_hasta", "updated_at"])
-        else:
-            derecho, _ = Derecho.objects.get_or_create(
-                account=acc, codigo_producto=codigo_otorgado,
-                defaults={"cantidad_restante": 0},
-            )
-            otorgado = cantidad * multiplicador
-            # La deuda se cancela antes de dar saldo: quien reembolsó algo que
-            # ya usó y vuelve a comprar, primero salda lo que debe.
-            aplicado_a_deuda = min(acc.deuda, otorgado)
-            if aplicado_a_deuda:
-                acc.deuda -= aplicado_a_deuda
-                acc.save(update_fields=["deuda"])
-                account.deuda = acc.deuda
-            derecho.cantidad_restante += otorgado - aplicado_a_deuda
-            derecho.save(update_fields=["cantidad_restante", "updated_at"])
+        for codigo_otorgado, multiplicador in prod.otorga:
+            _aplicar_otorgamiento(acc, account, prod, codigo_otorgado, cantidad * multiplicador)
     return True
+
+
+def _aplicar_otorgamiento(acc, account, prod, codigo_otorgado: str, otorgado: int) -> None:
+    """Deja UN derecho concreto, ya traducido y multiplicado.
+
+    Lo llama `otorgar` una vez por cada cosa que el producto otorgue: una sola
+    para un producto suelto o un pack, varias para un combo. Corre siempre
+    dentro de la transacción y del `select_for_update` de `otorgar`.
+    """
+    if prod.naturaleza == ACCESO:
+        # El default de creación ya tiene que traer vigente_hasta puesta:
+        # el CheckConstraint exige exactamente una de las dos columnas no
+        # nula, y un derecho recién creado con cantidad_restante=None y
+        # vigente_hasta=None (sin default) lo viola.
+        vigencia_nueva = timezone.now() + timezone.timedelta(days=prod.duracion_dias)
+        derecho, created = Derecho.objects.get_or_create(
+            account=acc, codigo_producto=codigo_otorgado,
+            defaults={"cantidad_restante": None, "vigente_hasta": vigencia_nueva},
+        )
+        if not created:
+            desde = max(derecho.vigente_hasta or timezone.now(), timezone.now())
+            derecho.vigente_hasta = desde + timezone.timedelta(days=prod.duracion_dias)
+            derecho.save(update_fields=["vigente_hasta", "updated_at"])
+        return
+
+    derecho, _ = Derecho.objects.get_or_create(
+        account=acc, codigo_producto=codigo_otorgado, defaults={"cantidad_restante": 0},
+    )
+    # La deuda se cancela antes de dar saldo: quien reembolsó algo que ya usó
+    # y vuelve a comprar, primero salda lo que debe.
+    aplicado_a_deuda = min(acc.deuda, otorgado)
+    if aplicado_a_deuda:
+        acc.deuda -= aplicado_a_deuda
+        acc.save(update_fields=["deuda"])
+        account.deuda = acc.deuda
+    derecho.cantidad_restante += otorgado - aplicado_a_deuda
+    derecho.save(update_fields=["cantidad_restante", "updated_at"])
 
 
 def aplicar_compra(
@@ -146,11 +159,13 @@ def aplicar_compra(
     carta = chart
     if carta is None and chart_id is not None:
         carta = Chart.objects.filter(pk=chart_id).first()
-    # Sólo canjea una compra suelta (otorga exactamente 1 unidad): un
-    # producto que otorga más de una es un pack por definición y nunca
-    # canjea al comprar, aunque el llamador le pase una carta. Si la carta ya
-    # no existe, el otorgamiento ya ocurrió y el canje se omite igual.
-    if carta is not None and prod.otorga[1] == 1 and prod.capacidades:
+    # Sólo canjea una compra suelta: un producto que otorga más de una
+    # unidad es un pack, y uno que otorga más de un producto es un combo —
+    # ninguno de los dos canjea al comprar, porque no hay una sola cosa que
+    # canjear, aunque el llamador le pase una carta. Si la carta ya no existe,
+    # el otorgamiento ya ocurrió y el canje se omite igual.
+    suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
+    if carta is not None and suelto and prod.capacidades:
         canjear(account, prod.capacidades[0], carta)
     return True
 
@@ -168,7 +183,7 @@ def canjear(account, capacidad: str, chart, build=None):
     descuento: lo que construya queda atado al mismo commit que el
     `Movimiento`, así nunca se cobra sin dejar el objeto construido.
     """
-    codigos = {p.otorga[0] for p in productos_con_capacidad(capacidad)}
+    codigos = codigos_otorgados_por(capacidad)
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
 
@@ -286,17 +301,21 @@ def revocar(account, codigo_producto, cantidad, external_id, note="") -> bool:
         # informes. El código que llega del webhook es el que se PAGÓ, así que
         # la traducción tiene que pasar de este lado.
         prod = producto(codigo_producto)
-        codigo_otorgado, multiplicador = prod.otorga
-        unidades = cantidad * multiplicador
+        # Una vuelta por cada cosa que el producto otorgó: un combo dejó dos
+        # derechos y el reembolso tiene que bajar los dos, o media compra
+        # queda regalada.
+        sin_cubrir = 0
+        for codigo_otorgado, multiplicador in prod.otorga:
+            unidades = cantidad * multiplicador
+            derecho, _ = Derecho.objects.get_or_create(
+                account=acc, codigo_producto=codigo_otorgado, defaults={"cantidad_restante": 0},
+            )
+            del_saldo = min(derecho.cantidad_restante or 0, unidades)
+            derecho.cantidad_restante -= del_saldo
+            derecho.save(update_fields=["cantidad_restante", "updated_at"])
+            sin_cubrir += unidades - del_saldo
 
-        derecho, _ = Derecho.objects.get_or_create(
-            account=acc, codigo_producto=codigo_otorgado, defaults={"cantidad_restante": 0},
-        )
-        del_saldo = min(derecho.cantidad_restante or 0, unidades)
-        derecho.cantidad_restante -= del_saldo
-        derecho.save(update_fields=["cantidad_restante", "updated_at"])
-
-        acc.deuda += unidades - del_saldo
+        acc.deuda += sin_cubrir
         acc.refund_count += 1
         if acc.refund_count >= settings.REFUND_FLAG_THRESHOLD:
             acc.flagged = True
@@ -311,7 +330,7 @@ def puede(account, capacidad: str) -> bool:
     Es la única pregunta que hacen las vistas y las pantallas. Preguntar por
     producto obligaría a recorrerlas todas cada vez que se agrega un plan.
     """
-    codigos = {p.otorga[0] for p in productos_con_capacidad(capacidad)}
+    codigos = codigos_otorgados_por(capacidad)
     if not codigos:
         return False
     ahora = timezone.now()

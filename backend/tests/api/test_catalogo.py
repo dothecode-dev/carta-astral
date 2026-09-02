@@ -12,9 +12,9 @@ def test_catalogo_tiene_exactamente_los_tres_productos_de_esta_iteracion():
 @pytest.mark.parametrize(
     "codigo,precio,otorga,capacidades",
     [
-        ("lectura_breve", 0, ("lectura_breve", 1), ("leer_breve",)),
-        ("informe_natal", 2900, ("informe_natal", 1), ("leer_informe",)),
-        ("pack_5_natal", 14990, ("informe_natal", 5), ("leer_informe",)),
+        ("lectura_breve", 0, (("lectura_breve", 1),), ("leer_breve",)),
+        ("informe_natal", 2900, (("informe_natal", 1),), ("leer_informe",)),
+        ("pack_5_natal", 14990, (("informe_natal", 5),), ("leer_informe",)),
     ],
 )
 def test_precios_y_otorgamientos_exactos(codigo, precio, otorga, capacidades):
@@ -34,7 +34,7 @@ def test_un_producto_de_acceso_declara_duracion():
     # obligaría a migrar compras con plata real adentro (spec RF3).
     plan = Producto(
         codigo="plan_demo", precio_centavos=999, naturaleza=ACCESO,
-        capacidades=("leer_informe",), otorga=("plan_demo", 1), duracion_dias=30,
+        capacidades=("leer_informe",), otorga=(("plan_demo", 1),), duracion_dias=30,
     )
     assert plan.duracion_dias == 30
 
@@ -43,7 +43,7 @@ def test_producto_de_acceso_sin_duracion_es_invalido():
     with pytest.raises(ValueError, match="duracion_dias"):
         Producto(
             codigo="malo", precio_centavos=1, naturaleza=ACCESO,
-            capacidades=("x",), otorga=("malo", 1), duracion_dias=None,
+            capacidades=("x",), otorga=(("malo", 1),), duracion_dias=None,
         )
 
 

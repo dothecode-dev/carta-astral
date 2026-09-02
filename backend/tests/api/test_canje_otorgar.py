@@ -61,7 +61,7 @@ def test_otorgar_un_producto_de_acceso_pone_vigencia_y_no_cantidad(make_account,
     from api import catalogo
     plan = catalogo.Producto(
         codigo="plan_demo", precio_centavos=999, naturaleza=catalogo.ACCESO,
-        capacidades=("leer_informe",), otorga=("plan_demo", 1), duracion_dias=30,
+        capacidades=("leer_informe",), otorga=(("plan_demo", 1),), duracion_dias=30,
     )
     monkeypatch.setitem(catalogo.CATALOGO, "plan_demo", plan)
     cuenta = make_account()

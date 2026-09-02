@@ -420,7 +420,7 @@ def test_la_devolucion_acredita_el_producto_real_no_una_constante_por_tier(
 
     monkeypatch.setitem(catalogo.CATALOGO, "informe_vinculo", catalogo.Producto(
         codigo="informe_vinculo", precio_centavos=3900, naturaleza=catalogo.CONSUMIBLE,
-        capacidades=("leer_informe",), otorga=("informe_vinculo", 1),
+        capacidades=("leer_informe",), otorga=(("informe_vinculo", 1),),
     ))
 
     acc = make_account(lecturas_breves=0, informes=0)
