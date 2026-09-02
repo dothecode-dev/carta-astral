@@ -1,4 +1,4 @@
-from api.checkout import CheckoutView
+from api.checkout import CheckoutEstadoView, CheckoutView
 from api.webhooks_polar import PolarWebhookView
 from django.urls import path
 
@@ -21,6 +21,8 @@ from api.webhooks import RevenueCatWebhookView
 urlpatterns = [
     path("account/", AccountView.as_view()),
     path("checkout/", CheckoutView.as_view()),
+    # Estado de una compra: lo consulta la página de retorno de Polar.
+    path("checkout/<str:checkout_id>/", CheckoutEstadoView.as_view()),
     # Con barra final: Polar no sigue redirects y APPEND_SLASH daría 301,
     # que cuenta como entrega fallida (ver 839ba19).
     path("webhooks/polar/", PolarWebhookView.as_view()),

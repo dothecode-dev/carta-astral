@@ -173,6 +173,24 @@ def test_la_url_de_retorno_lleva_el_idioma_de_quien_compra(polar_responde, make_
     assert json.loads(pedidos[0].content)["success_url"] == "https://astraguia.com/en/compra"
 
 
+def test_el_placeholder_de_polar_llega_intacto(polar_responde, make_account, settings):
+    """`{CHECKOUT_ID}` lo reemplaza Polar, no nosotros.
+
+    La página de retorno lo necesita para saber qué compra seguir: sin él no
+    puede distinguir a quién acaba de pagar de alguien que entró de casualidad.
+    Sólo `{locale}` se reemplaza de este lado, así que un reemplazo más goloso
+    —un `format()`, por ejemplo— rompería la URL entera.
+    """
+    settings.POLAR_SUCCESS_URL = "https://astraguia.com/{locale}/compra?checkout_id={CHECKOUT_ID}"
+    pedidos = polar_responde()
+
+    polar.crear_checkout(make_account(), "informe_natal", locale="pt")
+
+    assert json.loads(pedidos[0].content)["success_url"] == (
+        "https://astraguia.com/pt/compra?checkout_id={CHECKOUT_ID}"
+    )
+
+
 def test_un_idioma_que_no_existe_no_arma_la_url_de_retorno(polar_responde, make_account, settings):
     """Lista blanca, no concatenación: el locale llega del navegador y va a
     parar a una URL de retorno. Sin esta guarda, cualquiera podría fabricar el

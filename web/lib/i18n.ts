@@ -323,6 +323,20 @@ export type Dict = {
     /** Cierre del pie, invitando a comprar el informe completo. */
     resumenCta: string;
   };
+  /** La pantalla de vuelta del pago (`POLAR_SUCCESS_URL`). */
+  compra: {
+    /** Mientras se espera la confirmación del pago, que tarda segundos. */
+    title: string;
+    body: string;
+    /** Si esa confirmación no llegó en 45 segundos. No es un error: es la
+     *  verdad —el pago se hizo— y dónde seguir. */
+    demoraTitle: string;
+    demoraBody: string;
+    /** Cuando se llega sin `checkout_id`: a mano, o con un link guardado. */
+    sinDatoTitle: string;
+    sinDatoBody: string;
+    irACuenta: string;
+  };
   share: {
     /** Rótulo de la portada del documento y título de la tabla de posiciones. */
     chartEyebrow: string;
@@ -532,6 +546,15 @@ const es: Dict = {
     resumenTitulo: "Esto trae el informe completo",
     resumenRestante: "+{n} palabras",
     resumenCta: "Comprá el informe completo para leerlas todas.",
+  },
+  compra: {
+    title: "Listo, gracias",
+    body: "Estamos confirmando tu pago. Tarda unos segundos y te llevamos solos a lo que compraste.",
+    demoraTitle: "Tu pago se hizo",
+    demoraBody: "La confirmación está tardando más de lo normal. No hace falta que pagues de nuevo: en cuanto llegue, lo vas a encontrar en tu cuenta. Si en unos minutos no aparece, escribinos a info@astraguia.com.",
+    sinDatoTitle: "Gracias por tu compra",
+    sinDatoBody: "Lo que compraste te espera en tu cuenta.",
+    irACuenta: "Ir a mi cuenta",
   },
   share: {
     chartEyebrow: "Carta natal",
@@ -780,6 +803,15 @@ const en: Dict = {
     resumenRestante: "+{n} words",
     resumenCta: "Buy the full report to read them all.",
   },
+  compra: {
+    title: "All set, thank you",
+    body: "We're confirming your payment. It takes a few seconds, and then we'll take you straight to what you bought.",
+    demoraTitle: "Your payment went through",
+    demoraBody: "The confirmation is taking longer than usual. There's no need to pay again: as soon as it arrives, you'll find it in your account. If it doesn't show up in a few minutes, write to us at info@astraguia.com.",
+    sinDatoTitle: "Thank you for your purchase",
+    sinDatoBody: "What you bought is waiting in your account.",
+    irACuenta: "Go to my account",
+  },
   share: {
     chartEyebrow: "Natal chart",
     positionsTitle: "Positions",
@@ -1026,6 +1058,15 @@ const pt: Dict = {
     resumenTitulo: "O que o relatório completo traz",
     resumenRestante: "+{n} palavras",
     resumenCta: "Compre o relatório completo para ler tudo.",
+  },
+  compra: {
+    title: "Pronto, obrigado",
+    body: "Estamos confirmando seu pagamento. Leva alguns segundos e levamos você direto ao que comprou.",
+    demoraTitle: "Seu pagamento foi feito",
+    demoraBody: "A confirmação está demorando mais que o normal. Não precisa pagar de novo: assim que chegar, você vai encontrar na sua conta. Se em alguns minutos não aparecer, escreva para info@astraguia.com.",
+    sinDatoTitle: "Obrigado pela sua compra",
+    sinDatoBody: "O que você comprou espera na sua conta.",
+    irACuenta: "Ir para minha conta",
   },
   share: {
     chartEyebrow: "Mapa natal",

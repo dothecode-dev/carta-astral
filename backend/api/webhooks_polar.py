@@ -21,6 +21,7 @@ import json
 import logging
 
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -193,6 +194,12 @@ def _acreditar(orden: dict) -> None:
         return
 
     if aplicado:
+        if fila is not None:
+            # La marca que lee la página de retorno. Va después de otorgar y
+            # sólo si se otorgó: decir "listo" sobre una compra que no acreditó
+            # mandaría a la persona a una carta sin informe.
+            fila.acreditado_at = timezone.now()
+            fila.save(update_fields=["acreditado_at"])
         notificaciones.notificar(
             cuenta, "compra_acreditada", {"producto": codigo}, lang="es",
         )

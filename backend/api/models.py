@@ -360,6 +360,13 @@ class PolarCheckout(models.Model):
     # y no volver nunca, y un default silencioso le entregaría el informe pago
     # en un idioma que no eligió.
     locale = models.CharField(max_length=5, default="es")
+    # Cuándo el webhook otorgó lo comprado. Lo consulta la página de retorno,
+    # que existe por una carrera inevitable: el redirect del navegador es
+    # instantáneo y la entrega del webhook puede llegar después.
+    #
+    # Se guarda acá y no se deduce mirando movimientos por fecha: dos compras
+    # del mismo producto en el mismo minuto no se distinguirían así.
+    acreditado_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
