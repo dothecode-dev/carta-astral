@@ -28,6 +28,7 @@ dependencies = [
 dev = [
     "import-linter>=2.12",
     "mypy>=2.1.0",
+    "polar-sdk>=0.32.0",
     "pytest>=9.1.1",
     "pytest-django>=4.12.0",
     "ruff>=0.15.20",

@@ -10,8 +10,6 @@ Standard Webhooks: headers `webhook-id`, `webhook-timestamp` y
 """
 
 import base64
-import hashlib
-import hmac
 import json
 import time
 
@@ -20,31 +18,16 @@ from django.urls import resolve
 
 from api.models import Derecho, Movimiento
 from api.webhooks_polar import PolarWebhookView
+from tests.api.polar_firma import SECRETO
+from tests.api.polar_firma import firmar as _firmar
 
 pytestmark = pytest.mark.django_db
-
-SECRETO = "whsec_" + base64.b64encode(b"un-secreto-de-prueba-de-32-bytes").decode()
 
 
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.POLAR_WEBHOOK_SECRET = SECRETO
     settings.POLAR_PRODUCTOS = {"prod_uno": "informe_natal"}
-
-
-def _firmar(body: bytes, secreto: str, webhook_id="msg_1", ts=None) -> dict:
-    """Firma como firma Polar. El secreto viaja con el prefijo `whsec_` y lo
-    que se usa para el HMAC es su parte base64 DECODIFICADA."""
-    ts = ts or str(int(time.time()))
-    crudo = secreto.removeprefix("whsec_")
-    llave = base64.b64decode(crudo)
-    firmado = f"{webhook_id}.{ts}.".encode() + body
-    firma = base64.b64encode(hmac.new(llave, firmado, hashlib.sha256).digest()).decode()
-    return {
-        "HTTP_WEBHOOK_ID": webhook_id,
-        "HTTP_WEBHOOK_TIMESTAMP": ts,
-        "HTTP_WEBHOOK_SIGNATURE": f"v1,{firma}",
-    }
 
 
 def _cuerpo(tipo="order.paid") -> bytes:

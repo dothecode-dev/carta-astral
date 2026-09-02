@@ -12,19 +12,14 @@ estructura de `webhooks_polar` existe para corregirla cuando llegue (Task 7 del
 plan).
 """
 
-import base64
-import hashlib
-import hmac
 import json
-import time
 
 import pytest
 
 from api.models import Derecho, Movimiento, PolarCheckout
+from tests.api.polar_firma import SECRETO, firmar as _firmar
 
 pytestmark = pytest.mark.django_db
-
-SECRETO = "whsec_" + base64.b64encode(b"un-secreto-de-prueba-de-32-bytes").decode()
 
 
 @pytest.fixture(autouse=True)
@@ -33,19 +28,6 @@ def _configurado(settings):
     settings.POLAR_PRODUCTOS = {
         "prod_uno": "informe_natal",
         "prod_cinco": "pack_5_natal",
-    }
-
-
-def _firmar(body: bytes, webhook_id="msg_1") -> dict:
-    ts = str(int(time.time()))
-    llave = base64.b64decode(SECRETO.removeprefix("whsec_"))
-    firma = base64.b64encode(
-        hmac.new(llave, f"{webhook_id}.{ts}.".encode() + body, hashlib.sha256).digest()
-    ).decode()
-    return {
-        "HTTP_WEBHOOK_ID": webhook_id,
-        "HTTP_WEBHOOK_TIMESTAMP": ts,
-        "HTTP_WEBHOOK_SIGNATURE": f"v1,{firma}",
     }
 
 
@@ -66,7 +48,7 @@ def _entregar(client, tipo="order.paid", orden=None, webhook_id="msg_1"):
     body = json.dumps({"type": tipo, "data": orden or _orden()}).encode()
     return client.post(
         "/api/webhooks/polar/", body, content_type="application/json",
-        **_firmar(body, webhook_id),
+        **_firmar(body, webhook_id=webhook_id),
     )
 
 

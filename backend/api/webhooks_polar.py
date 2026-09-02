@@ -16,6 +16,7 @@ Sólo se escuchan `order.paid` y `order.refunded`:
   los dos acredita dos veces la misma compra.
 """
 
+import base64
 import json
 import logging
 
@@ -35,6 +36,27 @@ logger = logging.getLogger(__name__)
 # Los únicos dos que mueven derechos. Cualquier otro se responde 2xx y se
 # descarta sin tocar nada.
 EVENTOS = ("order.paid", "order.refunded")
+
+
+def _clave(secreto: str) -> str:
+    """El secreto, en la forma en que la librería espera recibirlo.
+
+    Polar trata el secreto configurado como TEXTO PLANO OPACO: lo
+    base64-encodea entero y firma con esos bytes. `standardwebhooks` hace el
+    b64decode del otro lado, así que hay que dárselo encodeado. Es lo que hace
+    el SDK oficial de Polar en `validate_event`:
+
+        base64_secret = base64.b64encode(secret.encode()).decode()
+        webhook = Webhook(base64_secret)
+
+    Pasarle el secreto crudo —lo que hacíamos hasta el 02-09-2026— hace que la
+    librería le saque el prefijo `whsec_` y lo decodifique, derivando una clave
+    que no tiene nada que ver: NINGUNA entrega real de Polar puede verificar, y
+    el primer pago de verdad se rechazó con 403. La suite no lo vio porque
+    firmaba con esa misma derivación. `tests/api/test_polar_firma_contrato.py`
+    ancla esto contra el verificador oficial para que no vuelva a pasar.
+    """
+    return base64.b64encode(secreto.encode()).decode()
 
 
 def _estructura(dato, profundidad=0):
@@ -72,9 +94,15 @@ class PolarWebhookView(APIView):
             # Sobre `request.body` (bytes) y no `request.data`: la firma cubre
             # el cuerpo EXACTO que mandó Polar, y volver a serializar el dict
             # parseado da otros bytes.
-            evento = Webhook(secreto).verify(request.body, dict(request.headers))
-        except (WebhookVerificationError, ValueError):
-            logger.warning("entrega de polar con firma inválida")
+            evento = Webhook(_clave(secreto)).verify(request.body, dict(request.headers))
+        except (WebhookVerificationError, ValueError) as e:
+            # El motivo, no sólo el rechazo: la librería distingue headers que
+            # faltan, timestamp fuera de tolerancia y firma que no coincide, y
+            # son problemas distintos con arreglos distintos. Sin esto, el
+            # primer pago real de prueba (02-09-2026) dejó como única pista
+            # "firma inválida" repetido dos veces. Son mensajes fijos de la
+            # librería: no arrastran nada del payload.
+            logger.warning("entrega de polar rechazada: %s", e)
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         if isinstance(evento, (str, bytes)):
