@@ -5,8 +5,8 @@ from api.catalogo import (
 )
 
 
-def test_catalogo_tiene_exactamente_los_tres_productos_de_esta_iteracion():
-    assert set(CATALOGO) == {"lectura_breve", "informe_natal", "pack_5_natal"}
+def test_catalogo_tiene_exactamente_los_productos_de_esta_iteracion():
+    assert set(CATALOGO) == {"lectura_breve", "informe_natal", "pack_3_natal", "pack_5_natal"}
 
 
 @pytest.mark.parametrize(
@@ -14,7 +14,8 @@ def test_catalogo_tiene_exactamente_los_tres_productos_de_esta_iteracion():
     [
         ("lectura_breve", 0, (("lectura_breve", 1),), ("leer_breve",)),
         ("informe_natal", 2900, (("informe_natal", 1),), ("leer_informe",)),
-        ("pack_5_natal", 14990, (("informe_natal", 5),), ("leer_informe",)),
+        ("pack_3_natal", 7900, (("informe_natal", 3),), ("leer_informe",)),
+        ("pack_5_natal", 12500, (("informe_natal", 5),), ("leer_informe",)),
     ],
 )
 def test_precios_y_otorgamientos_exactos(codigo, precio, otorga, capacidades):
@@ -47,9 +48,9 @@ def test_producto_de_acceso_sin_duracion_es_invalido():
         )
 
 
-def test_productos_con_capacidad_encuentra_los_dos_que_dan_leer_informe():
+def test_productos_con_capacidad_encuentra_todos_los_que_dan_leer_informe():
     codigos = {p.codigo for p in productos_con_capacidad("leer_informe")}
-    assert codigos == {"informe_natal", "pack_5_natal"}
+    assert codigos == {"informe_natal", "pack_3_natal", "pack_5_natal"}
 
 
 def test_producto_desconocido_falla_con_su_codigo_en_el_mensaje():
@@ -73,3 +74,28 @@ def test_ningun_producto_pago_otorga_lectura_breve():
     pagos = [p.codigo for p in CATALOGO.values()
              if p.precio_centavos > 0 and p.otorga[0] == "lectura_breve"]
     assert pagos == []
+
+
+def test_ningun_pack_sale_mas_caro_que_comprar_de_a_uno():
+    """Un pack que no descuenta no es un pack: es un recargo por comprar de a
+    muchos.
+
+    Pasó de verdad y estuvo en el catálogo hasta el 02-09-2026: el pack de 5
+    valía US$ 149,90 cuando cinco informes sueltos costaban US$ 145,00 — casi
+    US$ 5 de castigo por llevar más. Nadie lo elige salvo por error, y quien lo
+    nota siente que se lo quisieron pasar.
+    """
+    for prod in CATALOGO.values():
+        for codigo, cantidad in prod.otorga:
+            if cantidad <= 1 or codigo not in CATALOGO:
+                continue
+            suelto = CATALOGO[codigo].precio_centavos
+            if suelto == 0:
+                continue
+            sumados = suelto * cantidad
+            assert prod.precio_centavos < sumados, (
+                f"{prod.codigo} cuesta {prod.precio_centavos} y las {cantidad} "
+                f"unidades sueltas de {codigo} cuestan {sumados}: "
+                "el pack sale más caro que comprar de a uno"
+            )
+

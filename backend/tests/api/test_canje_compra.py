@@ -1,7 +1,13 @@
 import pytest
 
 from api.canje import MontoInvalido, aplicar_compra
+from api.catalogo import producto
 from api.models import Derecho, Movimiento
+
+# Del catálogo y no un literal: el precio cambia (el pack de 5 pasó de
+# US$ 149,90 a US$ 125,00 el 02-09-2026) y estos tests son sobre qué otorga
+# la compra, no sobre cuánto sale. El valor exacto lo fija test_catalogo.py.
+PRECIO_PACK = producto("pack_5_natal").precio_centavos
 
 pytestmark = pytest.mark.django_db
 
@@ -19,7 +25,7 @@ def test_una_compra_suelta_otorga_uno_y_lo_canjea_contra_la_carta(make_account, 
 def test_el_pack_otorga_cinco_y_no_canjea_nada(make_account):
     cuenta = make_account()
 
-    aplicar_compra(cuenta, "pack_5_natal", 14990, external_id="polar:2")
+    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="polar:2")
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
     assert Movimiento.objects.filter(tipo="consumo").count() == 0
@@ -64,9 +70,9 @@ def test_el_rechazo_avisa_con_los_tres_datos(make_account, caplog):
 
 def test_el_mismo_evento_no_se_aplica_dos_veces(make_account):
     cuenta = make_account()
-    aplicar_compra(cuenta, "pack_5_natal", 14990, external_id="polar:8")
+    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="polar:8")
 
-    assert aplicar_compra(cuenta, "pack_5_natal", 14990, external_id="polar:8") is False
+    assert aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="polar:8") is False
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
 
@@ -91,7 +97,7 @@ def test_el_pack_no_canjea_aunque_llegue_con_carta(make_account, make_chart):
     cuenta = make_account()
     carta = make_chart(account=cuenta)
 
-    aplicar_compra(cuenta, "pack_5_natal", 14990, external_id="polar:11", chart=carta)
+    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="polar:11", chart=carta)
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
     assert Movimiento.objects.filter(tipo="consumo").count() == 0

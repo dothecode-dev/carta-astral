@@ -41,7 +41,12 @@ class Producto:
 _PRODUCTOS = (
     Producto("lectura_breve", 0, CONSUMIBLE, ("leer_breve",), (("lectura_breve", 1),)),
     Producto("informe_natal", 2900, CONSUMIBLE, ("leer_informe",), (("informe_natal", 1),)),
-    Producto("pack_5_natal", 14990, CONSUMIBLE, ("leer_informe",), (("informe_natal", 5),)),
+    # Los packs descuentan de verdad sobre el suelto (US$ 29): US$ 26,33 la
+    # unidad en el de 3 y US$ 25 en el de 5. Hasta el 02-09-2026 el de 5 valía
+    # US$ 149,90 —más caro que cinco sueltas— y era un recargo por comprar de a
+    # muchos; `test_ningun_pack_sale_mas_caro_que_comprar_de_a_uno` lo impide.
+    Producto("pack_3_natal", 7900, CONSUMIBLE, ("leer_informe",), (("informe_natal", 3),)),
+    Producto("pack_5_natal", 12500, CONSUMIBLE, ("leer_informe",), (("informe_natal", 5),)),
 )
 
 CATALOGO: dict[str, Producto] = {p.codigo: p for p in _PRODUCTOS}
