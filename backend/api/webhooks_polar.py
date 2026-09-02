@@ -28,7 +28,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from standardwebhooks.webhooks import Webhook, WebhookVerificationError
 
-from api import catalogo, interpretation_service, notificaciones, polar
+from api import catalogo, interpretation_service, mantenimiento, notificaciones, polar
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.models import Account, PolarCheckout
 from interpret.prompts import TIER_LARGO
@@ -238,6 +238,18 @@ def _arrancar_informe(cuenta, fila) -> None:
         interpretacion = interpretation_service.iniciar_generacion(
             fila.chart, fila.locale, cuenta, TIER_LARGO,
         )
+        if mantenimiento.activo():
+            # Hay un deploy en curso: la fila queda creada —incompleta— y no se
+            # lanza el hilo, que moriría con el contenedor viejo a mitad de
+            # camino. `reanudar_informes` la termina cuando el mantenimiento
+            # pase: es exactamente la red que ese cron ya es. La plata, en
+            # cambio, se acredita igual: rechazar la entrega sumaría a las diez
+            # fallidas que apagan el endpoint para todos.
+            logger.info(
+                "compra %s acreditada en mantenimiento: el informe queda para el cron",
+                fila.checkout_id,
+            )
+            return
         interpretation_service.arrancar_en_hilo(interpretacion, fila.chart, cuenta)
     except Exception:
         logger.exception(

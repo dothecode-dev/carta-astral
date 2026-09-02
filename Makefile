@@ -171,3 +171,59 @@ test-back-pg: .env.staging ## pytest contra el Postgres de staging (corre los te
 
 sky: ## Muestra el cielo que devuelve el backend local
 	@curl -s http://localhost:$(BACK_PORT)/api/sky/ | python3 -m json.tool
+
+# --- Deploy ordenado -----------------------------------------------------
+#
+# Un deploy mata el contenedor viejo con su hilo adentro, y con él el informe
+# que estuviera escribiendo. `reanudar_informes` lo rescata en la corrida
+# siguiente, pero quien pagó espera de más. Esto lo evita: prende el cartel,
+# espera a que no quede nada escribiéndose, recién ahí pushea, y apaga.
+#
+# El cartel se apaga con `trap`: si el push falla, si el deploy no levanta o si
+# cortás con Ctrl-C, producción no queda cerrada. Olvidárselo prendido es el
+# riesgo real de cualquier modo mantenimiento, y no puede depender de acordarse.
+VPS_SSH := ssh -i ~/.ssh/astraguia_vps root@65.109.230.14
+# El nombre del contenedor lleva el timestamp del deploy y cambia cada vez: se
+# resuelve en cada llamada, nunca se fija.
+BACK_CONTAINER = $$(docker ps --format '{{.Names}}' | grep jhcsvn | head -1)
+DRENAJE_MAX := 24   # 24 × 30s = 12 minutos: el doble de lo que tarda un informe
+
+.PHONY: deploy mantenimiento-on mantenimiento-off
+
+mantenimiento-on: ## Prende el cartel de "ya volvemos" en producción
+	@$(VPS_SSH) "docker exec $(BACK_CONTAINER) python manage.py mantenimiento on"
+
+mantenimiento-off: ## Apaga el cartel
+	@$(VPS_SSH) "docker exec $(BACK_CONTAINER) python manage.py mantenimiento off"
+
+deploy: ## Despliega a producción sin cortar ningún informe a medias
+	@set -e; \
+	trap '$(MAKE) --no-print-directory mantenimiento-off >/dev/null 2>&1 || true' EXIT INT TERM; \
+	echo "→ cartel de mantenimiento"; \
+	$(MAKE) --no-print-directory mantenimiento-on >/dev/null; \
+	echo "→ esperando a que no quede ningún informe escribiéndose"; \
+	i=0; \
+	while :; do \
+		n=$$(curl -s --max-time 10 https://api.astraguia.com/api/estado/ \
+			| sed -n 's/.*"generando":[[:space:]]*\([0-9]*\).*/\1/p'); \
+		[ -z "$$n" ] && n="?"; \
+		if [ "$$n" = "0" ]; then echo "   no queda ninguno"; break; fi; \
+		i=$$((i+1)); \
+		if [ $$i -ge $(DRENAJE_MAX) ]; then \
+			echo "   siguen $$n después de 12 minutos: no despliego."; \
+			echo "   Si querés forzarlo igual, corré el push a mano con el cartel puesto."; \
+			exit 1; \
+		fi; \
+		echo "   quedan $$n, reviso en 30s ($$i/$(DRENAJE_MAX))"; sleep 30; \
+	done; \
+	echo "→ push"; \
+	git push origin main; \
+	sha=$$(git rev-parse HEAD); \
+	echo "→ esperando que producción levante $${sha}"; \
+	for i in $$(seq 1 60); do \
+		if $(VPS_SSH) "docker ps --format '{{.Image}}' | grep -q $$sha"; then \
+			echo "   arriba"; break; \
+		fi; \
+		sleep 15; \
+	done; \
+	echo "→ apago el cartel"

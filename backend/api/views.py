@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 
 from core.exceptions import CoreError
 
-from api import geocode, informe_service, interpretation_service
+from api import geocode, informe_service, interpretation_service, mantenimiento
 from api.accounts import resolve_account
 from api.auth import (
     AccountTokenAuthentication,
@@ -256,6 +256,16 @@ class InterpretationView(APIView):
         un 402/503 por falta de crédito o cap alcanzado se responde antes de
         aceptar el 202— pero generar las secciones corre en un hilo aparte; la
         web sigue el avance con `GET .../interpretation/estado`."""
+        if mantenimiento.activo():
+            # Antes de cobrar nada: un deploy en curso mataría el hilo a mitad
+            # de camino y dejaría el informe a medias con el derecho gastado.
+            # 503 y no 409 porque es exactamente eso —el servicio no está
+            # disponible ahora— y la web ya lo traduce a "probá en un rato".
+            return Response(
+                {"error": "estamos actualizando el sitio, probá en unos minutos"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         lang = request.data.get("lang", "es")
         if lang not in _INTERPRETATION_LANGS:
             return Response(

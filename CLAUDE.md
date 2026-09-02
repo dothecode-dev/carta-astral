@@ -121,6 +121,25 @@ Si vas a tocar una y no hay test que cubra el caso, escribilo primero.
 Los mensajes de commit no llevan trailer `Co-Authored-By` ni menciones a Claude,
 Anthropic o IA — tampoco en descripciones de PR. Autoría humana solamente.
 
+**El deploy a producción va por `make deploy`, no por `git push` a secas.** Un
+deploy mata el contenedor viejo con su hilo adentro, y con él el informe que
+estuviera escribiendo: `reanudar_informes` lo rescata dos minutos después, pero
+quien pagó espera de más. `make deploy` prende el cartel de mantenimiento
+(«Estamos aceitando el universo»), espera a que no quede ningún informe
+escribiéndose, pushea, espera a que producción levante el commit nuevo y apaga
+el cartel — con `trap`, así que un fallo o un Ctrl-C no dejan producción
+cerrada. Si el drenaje no termina en doce minutos, no despliega.
+
+Mientras el cartel está puesto, el sitio responde 503 (`web/proxy.ts` — en Next
+16 el middleware se llama así) y el backend rechaza arrancar informes y abrir
+checkouts. El webhook de Polar es la excepción: sigue acreditando —rechazar
+suma a las diez entregas fallidas que apagan el endpoint— pero deja el informe
+sin arrancar, para que lo termine el cron.
+
+`git push` directo sigue funcionando y está bien para la web o para cualquier
+cambio que no toque la generación. El flag vive en la caché de la base, así que
+`make mantenimiento-off` lo apaga desde cualquier lado.
+
 **Se pushea directo a `main`. No hay PR ni aprobación.** Somos dos personas: pedir la
 aprobación de alguien era un trámite que terminaba salteándose con `--admin`, y una regla
 que se saltea siempre no es una regla. La protección de rama se quitó el 13-08-2026.

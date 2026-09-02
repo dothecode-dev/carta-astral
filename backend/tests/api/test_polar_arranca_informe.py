@@ -157,3 +157,33 @@ def test_si_la_generacion_no_arranca_el_pago_queda_acreditado_igual(
     resp = _entregar(client)
 
     assert 200 <= resp.status_code < 300
+
+
+def test_en_mantenimiento_la_compra_se_acredita_pero_el_hilo_no_arranca(
+    client, make_account, make_chart, sin_hilo,
+):
+    """Durante un deploy la plata se acredita igual y el informe espera.
+
+    Rechazar la entrega sumaría a las diez fallidas que apagan el endpoint para
+    todos los pagos que vengan después. Y arrancar el hilo sería peor: el
+    contenedor está por morir y el informe quedaría a medias. La fila queda
+    creada a propósito —incompleta— y `reanudar_informes` la termina cuando el
+    mantenimiento pase: es exactamente la red que ese cron ya es.
+    """
+    from api import mantenimiento
+
+    cuenta = make_account()
+    carta = make_chart(account=cuenta)
+    PolarCheckout.objects.create(
+        checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
+        chart=carta, locale="es",
+    )
+    mantenimiento.activar()
+
+    resp = _entregar(client)
+
+    assert 200 <= resp.status_code < 300
+    # El derecho se otorgó y la fila del informe existe, lista para el cron.
+    assert Interpretation.objects.filter(chart=carta, lang="es", tier="largo").exists()
+    # Pero nadie lanzó el hilo.
+    assert sin_hilo == []

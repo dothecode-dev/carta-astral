@@ -1,4 +1,5 @@
 from api.checkout import CheckoutEstadoView, CheckoutView
+from api.mantenimiento import EstadoView
 from api.webhooks_polar import PolarWebhookView
 from django.urls import path
 
@@ -34,6 +35,8 @@ urlpatterns = [
     path("charts/<uuid:uuid>/pdf/", ChartPdfView.as_view()),
     path("geocode/", GeocodeView.as_view()),
     path("sky/", SkyView.as_view()),
+    # Si el sitio acepta trabajo nuevo: lo mira `make deploy` y la web.
+    path("estado/", EstadoView.as_view()),
     path("auth/apple", AppleAuthView.as_view()),
     path("auth/google", GoogleAuthView.as_view()),
     path("auth/logout", LogoutView.as_view()),

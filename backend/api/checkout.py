@@ -15,7 +15,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api import catalogo, polar
+from api import catalogo, mantenimiento, polar
 from api.auth import AccountTokenAuthentication
 from api.permissions import HasAccount
 from api.models import Chart, PolarCheckout
@@ -28,6 +28,15 @@ class CheckoutView(APIView):
     permission_classes = [HasAccount]
 
     def post(self, request):
+        if mantenimiento.activo():
+            # Cobrar y no poder entregar es la peor combinación posible: el
+            # webhook acreditaría durante el deploy y el informe arrancaría
+            # contra un contenedor que está por morir.
+            return Response(
+                {"error": "estamos actualizando el sitio, probá en unos minutos"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         codigo = request.data.get("producto")
         if not codigo:
             return Response(
