@@ -1,6 +1,7 @@
 from api.checkout import CheckoutEstadoView, CheckoutView
 from api.mantenimiento import EstadoView
 from api.webhooks_polar import PolarWebhookView
+from api.webhooks_stripe import StripeWebhookView
 from django.urls import path
 
 from api.sessions import LogoutView
@@ -27,6 +28,7 @@ urlpatterns = [
     # Con barra final: Polar no sigue redirects y APPEND_SLASH daría 301,
     # que cuenta como entrega fallida (ver 839ba19).
     path("webhooks/polar/", PolarWebhookView.as_view()),
+    path("webhooks/stripe/", StripeWebhookView.as_view()),
     path("charts/", ChartCollectionView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),

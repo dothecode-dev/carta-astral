@@ -299,6 +299,12 @@ REVENUECAT_PRODUCT_CREDITS = json.loads(os.environ.get("REVENUECAT_PRODUCT_CREDI
 # El sandbox es OTRA organización: cuenta, productos y token propios. El default
 # es producción a propósito — un valor mal escrito no puede mandar los pagos
 # reales al sandbox, que no cobra.
+# Stripe reemplaza a Polar como pasarela (Polar rechazó el rubro el 03-09-2026).
+# Las variables de Polar siguen abajo: hacen falta para los reembolsos de las
+# compras que entraron por ahí.
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
 POLAR_ENVIRONMENT = os.environ.get("POLAR_ENVIRONMENT", "")
 POLAR_ACCESS_TOKEN = os.environ.get("POLAR_ACCESS_TOKEN", "")
 POLAR_WEBHOOK_SECRET = os.environ.get("POLAR_WEBHOOK_SECRET", "")
