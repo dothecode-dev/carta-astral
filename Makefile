@@ -109,7 +109,7 @@ staging-up: .env.staging ## Levanta el staging local (web :3002, backend :8001)
 	@echo ""
 	@echo "  web     → http://localhost:$${WEB_PORT:-3002}"
 	@echo "  backend → http://localhost:$${BACK_PORT:-8001}/healthz/"
-	@echo "  base    → localhost:$${DB_PORT:-5433}"
+	@echo "  base    → localhost:$$(sed -n 's/^DB_PORT=//p' .env.staging)"
 	@echo ""
 	@echo "  Tu Mac es arm64 y el VPS amd64. Esto builda nativo, que alcanza"
 	@echo "  para probar comportamiento. Para verificar el build REAL de"
@@ -132,6 +132,16 @@ staging-reset: ## Borra la base de staging y levanta de cero
 	@echo "    cp .env.staging.example .env.staging"
 	@echo "y completá al menos POSTGRES_PASSWORD y SECRET_KEY."
 	@exit 1
+
+# La ayuda de arriba, cuando el que rebota es docker y no nosotros: su
+# "port is already allocated" no dice qué lo tiene tomado ni dónde se cambia.
+_puerto-tomado:
+	@echo ""
+	@echo "  El $(DB_PORT) ya está ocupado en esta máquina, casi seguro por otro"
+	@echo "  proyecto. Cambiá DB_PORT en .env.staging por uno libre y volvé a"
+	@echo "  correr. Lo que hay escuchando ahora:"
+	@docker ps --format '    {{.Names}}\t{{.Ports}}' | grep 5432 || true
+	@echo ""
 
 test-back-pg: .env.staging ## pytest contra el Postgres de staging (corre los tests que SQLite saltea)
 	# Por qué existe: `make test-back` usa el default de dj_database_url, que es
@@ -160,14 +170,42 @@ test-back-pg: .env.staging ## pytest contra el Postgres de staging (corre los te
 	# disponible acá: `/bin/sh` corre en modo POSIX y lo rechaza) — lee
 	# `.env.staging` directo con redirección de archivo, que no abre subshell,
 	# y filtra las cuatro variables que importan con `case`.
+	# El 03-09-2026 este gate corrió sus 601 tests contra la base de OTRO
+	# proyecto: el contenedor de astra había quedado corriendo sin publicar
+	# puerto y el 5433 lo tenía tomado otro compose de la misma máquina. Todo
+	# falló con "password authentication failed" y el error parecía del código.
+	# Un gate de plata que apunta a la base equivocada es peor que no tenerlo,
+	# así que ahora el target levanta el `db` él mismo, verifica que el puerto
+	# publicado por NUESTRO contenedor sea el que va a usar pytest —si no,
+	# recrea— y abre una conexión de prueba antes de lanzar la suite.
 	@while IFS='=' read -r key value; do \
 		case "$$key" in \
 			POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_DB|DB_PORT) export "$$key=$$value" ;; \
 		esac; \
 	done < .env.staging; \
-		cd backend && DEBUG=1 \
-		DATABASE_URL="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@localhost:$$DB_PORT/$$POSTGRES_DB" \
-		.venv/bin/python -m pytest -q
+	DB_PORT="$${DB_PORT:-5433}"; \
+	$(STAGING) up -d db >/dev/null || { $(MAKE) --no-print-directory _puerto-tomado DB_PORT=$$DB_PORT; exit 1; }; \
+	publicado=$$($(STAGING) port db 5432 2>/dev/null | head -1 | sed 's/.*://'); \
+	if [ "$$publicado" != "$$DB_PORT" ]; then \
+		echo "El contenedor de staging publica $${publicado:-nada} y pytest va a ir al $$DB_PORT: lo recreo."; \
+		$(STAGING) up -d --force-recreate db >/dev/null || { $(MAKE) --no-print-directory _puerto-tomado DB_PORT=$$DB_PORT; exit 1; }; \
+		publicado=$$($(STAGING) port db 5432 2>/dev/null | head -1 | sed 's/.*://'); \
+	fi; \
+	if [ "$$publicado" != "$$DB_PORT" ]; then \
+		echo "ABORTO: el Postgres de ASTRA no quedó publicado en localhost:$$DB_PORT."; \
+		echo "Si otro proyecto tiene tomado ese puerto, cambiá DB_PORT en .env.staging:"; \
+		docker ps --format '  {{.Names}}\t{{.Ports}}' | grep 5432 || true; \
+		exit 1; \
+	fi; \
+	url="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@localhost:$$DB_PORT/$$POSTGRES_DB"; \
+	cd backend && \
+	DATABASE_URL="$$url" .venv/bin/python -c \
+		'import os, psycopg; psycopg.connect(os.environ["DATABASE_URL"]).close()' || { \
+		echo "ABORTO: no se pudo abrir una conexión al Postgres de staging en localhost:$$DB_PORT."; \
+		echo "El contenedor está arriba, así que del otro lado hay otra base o las credenciales de .env.staging no son las del volumen."; \
+		exit 1; \
+	}; \
+	DEBUG=1 DATABASE_URL="$$url" .venv/bin/python -m pytest -q
 
 sky: ## Muestra el cielo que devuelve el backend local
 	@curl -s http://localhost:$(BACK_PORT)/api/sky/ | python3 -m json.tool
