@@ -11,7 +11,7 @@ describe("Derechos", () => {
     render(<Derechos derechos={[
       { codigo_producto: "lectura_breve", cantidad_restante: 2, vigente_hasta: null },
       { codigo_producto: "informe_natal", cantidad_restante: 1, vigente_hasta: null },
-    ]} dict={dict} locale="es" />);
+    ]} dict={dict} locale="es" hayCartas />);
 
     expect(screen.getByText(/2 lecturas breves/i)).toBeInTheDocument();
     expect(screen.getByText(/1 informe completo/i)).toBeInTheDocument();
@@ -19,7 +19,7 @@ describe("Derechos", () => {
   });
 
   it("sin derechos ofrece el informe en vez de mostrar un cero", () => {
-    render(<Derechos derechos={[]} dict={dict} locale="es" />);
+    render(<Derechos derechos={[]} dict={dict} locale="es" hayCartas />);
     expect(screen.queryByText("0")).toBeNull();
     // No sólo evita el "0": ofrece algo en su lugar.
     expect(screen.getByText(dict.auth.sinDerechos)).toBeInTheDocument();
@@ -28,7 +28,7 @@ describe("Derechos", () => {
   it("con un solo derecho usa singular, no '1 lecturas breves'", () => {
     render(<Derechos derechos={[
       { codigo_producto: "lectura_breve", cantidad_restante: 1, vigente_hasta: null },
-    ]} dict={dict} locale="es" />);
+    ]} dict={dict} locale="es" hayCartas />);
     expect(screen.getByText(/1 lectura breve\b/i)).toBeInTheDocument();
     expect(screen.queryByText(/1 lecturas breves/i)).toBeNull();
   });
@@ -37,7 +37,31 @@ describe("Derechos", () => {
     render(<Derechos derechos={[
       { codigo_producto: "lectura_breve", cantidad_restante: 0, vigente_hasta: null },
       { codigo_producto: "informe_natal", cantidad_restante: 0, vigente_hasta: null },
-    ]} dict={dict} locale="es" />);
+    ]} dict={dict} locale="es" hayCartas />);
     expect(screen.getByText(dict.auth.sinDerechos)).toBeInTheDocument();
+  });
+});
+
+// El bloque enumeraba lo que la cuenta tiene y su único enlace era "Ver
+// precios": la única salida de lo que ya estaba pago era volver a la caja.
+describe("dónde se usa lo que ya está pago", () => {
+  const conInforme = [
+    { codigo_producto: "informe_natal", cantidad_restante: 1, vigente_hasta: null },
+  ];
+
+  it("con cartas, lleva a elegir una", () => {
+    render(<Derechos derechos={conInforme} dict={dict} locale="es" hayCartas />);
+
+    expect(screen.getByRole("link", { name: dict.auth.listoUsar })).toHaveAttribute(
+      "href", "#tus-cartas",
+    );
+  });
+
+  it("sin ninguna carta todavía, lleva a calcular la primera", () => {
+    render(<Derechos derechos={conInforme} dict={dict} locale="es" hayCartas={false} />);
+
+    expect(screen.getByRole("link", { name: dict.auth.listoUsarSinCartas })).toHaveAttribute(
+      "href", "/es/nueva",
+    );
   });
 });

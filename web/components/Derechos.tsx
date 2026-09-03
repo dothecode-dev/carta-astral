@@ -34,10 +34,15 @@ export function Derechos({
   derechos,
   dict,
   locale,
+  hayCartas,
 }: {
   derechos: Derecho[];
   dict: Dict;
   locale: Locale;
+  /** Decide cuál es el paso siguiente: una carta donde gastar el derecho ya
+   *  existe, o hay que calcularla primero. Sin esto el bloque enumeraba lo que
+   *  la cuenta tiene y no decía en ningún lado dónde se usa. */
+  hayCartas: boolean;
 }) {
   // `cantidad` ya trae 0 para lo que no está en la lista o ya se agotó
   // (`cantidad_restante: 0`): filtrar por > 0 es lo que evita mostrar "0
@@ -71,6 +76,15 @@ export function Derechos({
           <span className="derechoTexto">{linea.texto(dict, linea.n)}</span>
         </p>
       ))}
+      {/* Primero dónde se usa lo que ya está pago; comprar más va después y en
+          gris. Al revés —que era como estaba— la única salida de este bloque
+          era volver a la caja. */}
+      <Link
+        className="btn btnGhost derechosUsar"
+        href={hayCartas ? "#tus-cartas" : `/${locale}/nueva`}
+      >
+        {hayCartas ? dict.auth.listoUsar : dict.auth.listoUsarSinCartas}
+      </Link>
       <Link className="derechosMas" href={`/${locale}/precios`}>
         {dict.auth.verPrecios}
       </Link>

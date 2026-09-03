@@ -7,7 +7,7 @@ import { fetchNotesOrNone } from "@/lib/notes";
 
 // Sólo lo que es público e indexable. Las páginas con sesión (`cuenta`,
 // `carta/[id]`, `nueva`) y la de acceso son `noindex` y no entran acá.
-const PATHS = ["", "/ejemplo", "/legal/privacy", "/legal/terms"] as const;
+const PATHS = ["", "/precios", "/ejemplo", "/legal/privacy", "/legal/terms"] as const;
 
 function url(locale: string, path: string) {
   return `${SITE_URL}/${locale}${path}`;
@@ -63,7 +63,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // un `lastmod` que miente.
       ...(path.startsWith("/legal/") ? { lastModified: LEGAL_UPDATED } : {}),
       changeFrequency: path === "" ? ("weekly" as const) : ("monthly" as const),
-      priority: path === "" ? 1 : path === "/ejemplo" ? 0.8 : 0.3,
+      priority:
+        path === "" ? 1 : path === "/precios" ? 0.9 : path === "/ejemplo" ? 0.8 : 0.3,
       alternates: { languages: languagesFor(path) },
     })),
   );

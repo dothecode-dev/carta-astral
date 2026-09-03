@@ -177,8 +177,8 @@ describe("ChartActions", () => {
   });
 
   it("sin lectura en otro idioma, la nota del completo sigue mostrando el precio", () => {
-    renderActions({ interpretations: {} });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
+    renderActions({ interpretations: {}, paidCredits: 0 });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNota);
     expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretFreeLang);
   });
@@ -384,16 +384,50 @@ describe("ChartActions", () => {
   // secciones" en la nota del botón y admitía, en la misma pantalla, que el
   // informe sale con siete (`noTimeWarning`, debajo).
   it("sin hora de nacimiento, la nota del completo dice siete secciones, no ocho", () => {
-    renderActions({ timeKnown: false });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
+    renderActions({ timeKnown: false, paidCredits: 0 });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNotaSinHora);
     expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretCompletoNota);
   });
 
   it("con hora de nacimiento, la nota del completo sigue diciendo ocho secciones", () => {
-    renderActions({ timeKnown: true });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
+    renderActions({ timeKnown: true, paidCredits: 0 });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNota);
+  });
+
+  // El botón ya decía "Leer el informe completo" con un derecho en la cuenta,
+  // pero la nota de abajo seguía anunciando "US$ 29 · ocho secciones": a quien
+  // había comprado un pack de cinco, la pantalla le mostraba el precio de algo
+  // que ya estaba pago, a dos centímetros del botón. Nadie aprieta eso.
+  it("con el informe ya comprado, la nota no nombra el precio", () => {
+    renderActions({ paidCredits: 1 });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
+    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNotaConDerecho);
+    expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretCompletoNota);
+  });
+
+  it("sin hora y ya comprado, la nota con derecho también dice siete secciones", () => {
+    renderActions({ paidCredits: 1, timeKnown: false });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
+    expect(boton.parentElement).toHaveTextContent(
+      dict.chart.interpretCompletoNotaConDerechoSinHora,
+    );
+    expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretCompletoNotaSinHora);
+  });
+
+  it("con un pack, dice cuántos quedan después de este", () => {
+    renderActions({ paidCredits: 5 });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
+    expect(boton.parentElement).toHaveTextContent(
+      dict.chart.interpretCompletoSaldo.replace("{n}", "4"),
+    );
+  });
+
+  it("con el último informe no habla de saldo: lo que importa es que está pago", () => {
+    renderActions({ paidCredits: 1 });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
+    expect(boton.parentElement).not.toHaveTextContent("0");
   });
 
   // `fetch` rechaza ante un corte de red; no resuelve con `ok: false`. En una

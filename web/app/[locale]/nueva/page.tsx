@@ -28,8 +28,12 @@ export default async function NewChartPage({
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  // Calcular una carta la guarda en una cuenta: sin sesión no hay dónde.
-  if (!(await getSessionToken())) redirect(`/${locale}/entrar`);
+  // Calcular una carta la guarda en una cuenta: sin sesión no hay dónde. Se
+  // vuelve acá al entrar: el CTA principal de la home termina en esta página,
+  // y mandar a la cuenta a quien venía a calcular su carta lo obligaba a
+  // empezar de nuevo sin haberle avisado nunca que hacía falta una cuenta.
+  if (!(await getSessionToken()))
+    redirect(`/${locale}/entrar?next=${encodeURIComponent(`/${locale}/nueva`)}`);
 
   const dict = getDict(locale);
 

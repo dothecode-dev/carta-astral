@@ -2181,6 +2181,10 @@ body {
    tres tarjetas entran de a dos y la tercera queda huérfana abajo. Acá el
    contenido no es un texto para leer en columna, son tres opciones para
    comparar de un vistazo. */
+.pricingCta {
+  margin: 1.5rem 0 0;
+}
+
 .preciosFrame {
   max-width: 960px;
 }
@@ -2245,6 +2249,70 @@ body {
   flex: 1;
 }
 
+/* Lo gratis va como banda, no como cuarta tarjeta: metido en la grilla dejaba
+   una fila de tres y una huérfana abajo, y además ponía a competir con el
+   precio algo que no se compra. */
+.preciosGratis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 1.375rem) clamp(1.25rem, 3vw, 1.75rem);
+  background: var(--surface);
+  border: 1px dashed var(--hairline-strong);
+  border-radius: 0.75rem;
+}
+
+.preciosGratisTexto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.preciosGratisNombre {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 400;
+}
+
+.preciosGratisNombre strong {
+  font-weight: 600;
+}
+
+.preciosGratisDetalle {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+}
+
+/* La única con acento. Tres tarjetas idénticas dejaban la decisión entera en
+   manos de quien mira, y quien no sabe cuál elegir no elige ninguna. */
+.precioCardDestacado {
+  position: relative;
+  border-color: var(--accent);
+  /* Un segundo hilo en vez de subir el grosor del borde: engrosarlo corría la
+     tarjeta un pixel respecto de las otras dos y se notaba en la grilla. */
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Montado sobre el borde y fuera del flujo: dentro de la tarjeta empujaba el
+   nombre hacia abajo y los tres títulos dejaban de estar a la misma altura. */
+.precioDistintivo {
+  position: absolute;
+  top: 0;
+  left: clamp(1.25rem, 3vw, 1.75rem);
+  transform: translateY(-50%);
+  margin: 0;
+  padding: 0 0.5rem;
+  background: var(--ground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
 .preciosNota,
 .preciosVacio {
   margin: 0;
@@ -2258,6 +2326,13 @@ body {
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.9375rem;
+}
+
+/* La salida del bloque: dónde se usa lo que ya está pago. Ancho propio para
+   que no se estire a la fila entera de la tarjeta. */
+.derechosUsar {
+  align-self: flex-start;
+  margin-top: 0.25rem;
 }
 
 .derechosMas {

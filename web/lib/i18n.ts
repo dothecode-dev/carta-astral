@@ -210,6 +210,9 @@ export type Dict = {
     priceNote: string;
     terms: { label: string; value: string; free?: boolean }[];
     note: string;
+    /** A la página de precios. La sección no tenía ni un enlace: la tabla
+     *  terminaba en una nota y ahí se cortaba el camino a comprar. */
+    cta: string;
   };
   faq: { eyebrow: string; title: string; items: { q: string; a: string }[] };
   /** El cierre de la home. Antes anunciaba las apps de las tiendas con un
@@ -238,6 +241,20 @@ export type Dict = {
     /** Si el catálogo no se pudo cargar. */
     sinCatalogo: string;
     nota: string;
+    /**
+     * La lectura breve, arriba de todo lo que se cobra.
+     *
+     * No sale del catálogo público —vale 0 y el backend no la lista—, así que
+     * si no se escribe acá no aparece en ningún lado: quien llegaba a esta
+     * página desde afuera creía que el piso para probar ASTRA eran US$ 29.
+     */
+    gratisNombre: string;
+    gratisPrecio: string;
+    gratisDetalle: string;
+    /** Distintivo del pack que conviene mirar primero. */
+    recomendado: string;
+    /** A la muestra de lectura: nadie compra 6.000 palabras a ciegas. */
+    verEjemplo: string;
   };
   auth: {
     navEnter: string;
@@ -247,6 +264,19 @@ export type Dict = {
     blocked: string;
     failed: string;
     legal: string;
+    /**
+     * Título de lo que la cuenta puede usar ahora mismo.
+     *
+     * El bloque de derechos no tenía ninguno: aparecía suelto bajo el mail, en
+     * gris, y su único enlace era "Ver precios" —o sea, comprar más—. Lo que
+     * alguien busca al entrar es qué tiene y dónde usarlo, y ninguna de las dos
+     * cosas estaba escrita.
+     */
+    listoTitle: string;
+    /** El paso siguiente cuando ya hay cartas donde gastar el derecho. */
+    listoUsar: string;
+    /** El paso siguiente cuando todavía no hay ninguna carta. */
+    listoUsarSinCartas: string;
     /** Derecho de lectura breve con más de una disponible. Lleva "{n}". */
     derechosBreve: string;
     /** El mismo derecho con exactamente una disponible: singular, no "{n}" a secas. */
@@ -328,6 +358,24 @@ export type Dict = {
      * que salían siete — las dos a la vista al mismo tiempo.
      */
     interpretCompletoNotaSinHora: string;
+    /**
+     * Nota bajo el botón del completo cuando la cuenta YA tiene el derecho.
+     *
+     * Sin esta rama la nota sólo miraba el idioma y la hora, así que a quien
+     * había comprado un pack de cinco el botón le decía "Leer el informe
+     * completo" y la línea de abajo "US$ 29 · ocho secciones": el precio de
+     * algo que ya estaba pago, en la misma pantalla y a dos centímetros. Nadie
+     * aprieta un botón que parece que va a cobrarle de nuevo.
+     */
+    interpretCompletoNotaConDerecho: string;
+    /** La misma, para una carta sin hora: siete secciones (ver `...SinHora`). */
+    interpretCompletoNotaConDerechoSinHora: string;
+    /**
+     * Cuánto queda del pack, debajo de la nota anterior. Sólo se muestra con
+     * más de uno, así que el plural nunca queda mal: con el último informe la
+     * frase sobra —lo que importa es que ya está pago—.
+     */
+    interpretCompletoSaldo: string;
     /**
      * Nota de cualquiera de los dos botones cuando ESE tier ya está completo
      * en otro idioma: traducirlo no cuesta (el backend lo resuelve sin tocar
@@ -532,9 +580,11 @@ const es: Dict = {
       { label: "Tus primeras 3 lecturas breves", value: "Gratis", free: true },
       { label: "Informe completo de una carta", value: "US$ 29" },
       { label: "El mismo informe en otro idioma", value: "Sin costo", free: true },
+      { label: "Packs de 3 o 5 informes", value: "Desde US$ 25 cada uno" },
       { label: "Vencimiento", value: "No vencen" },
     ],
     note: "Precios en dólares. Se paga directo en la web; el importe final puede incluir impuestos según tu país.",
+    cta: "Ver todos los precios",
   },
   faq: {
     eyebrow: "Preguntas",
@@ -585,6 +635,9 @@ const es: Dict = {
     compraFallo: "No pudimos abrir el pago. Probá de nuevo en un momento.",
     interpretCompletoNota: "US$ 29 · ocho secciones",
     interpretCompletoNotaSinHora: "US$ 29 · siete secciones",
+    interpretCompletoNotaConDerecho: "Ya lo tenés pago · ocho secciones",
+    interpretCompletoNotaConDerechoSinHora: "Ya lo tenés pago · siete secciones",
+    interpretCompletoSaldo: "Después de este te quedan {n}.",
     interpretFreeLang: "Sin costo: ya lo leíste en otro idioma.",
     interpreting: "Escribiendo tu lectura…",
     readAgain: "Ver la lectura",
@@ -688,6 +741,11 @@ const es: Dict = {
     abriendo: "Abriendo el pago…",
     fallo: "No pudimos abrir el pago. Probá de nuevo.",
     sinCatalogo: "No pudimos cargar los precios. Volvé a intentar en un momento.",
+    gratisNombre: "Lectura breve",
+    gratisPrecio: "Gratis",
+    gratisDetalle: "Tres por cuenta, sin tarjeta. Tu carta en unos párrafos.",
+    recomendado: "El más elegido",
+    verEjemplo: "Ver un ejemplo",
     nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
   },
   auth: {
@@ -698,6 +756,9 @@ const es: Dict = {
     blocked: "No pudimos cargar el acceso de Google. Suele pasar con bloqueadores de rastreadores: desactivalo para este sitio y recargá.",
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
     legal: "Al entrar aceptás los términos y la política de privacidad.",
+    listoTitle: "Listo para usar",
+    listoUsar: "Elegí una carta para usarlo",
+    listoUsarSinCartas: "Calculá una carta para usarlo",
     derechosBreve: "{n} lecturas breves",
     derechosBreveUno: "1 lectura breve",
     derechosInforme: "{n} informes completos",
@@ -813,9 +874,11 @@ const en: Dict = {
       { label: "Your first 3 short readings", value: "Free", free: true },
       { label: "Full report for one chart", value: "US$ 29" },
       { label: "The same report in another language", value: "No charge", free: true },
+      { label: "Packs of 3 or 5 reports", value: "From US$ 25 each" },
       { label: "Expiry", value: "They don't expire" },
     ],
     note: "Prices in US dollars. You pay directly on the web; the final amount may include tax depending on your country.",
+    cta: "See all pricing",
   },
   faq: {
     eyebrow: "Questions",
@@ -866,6 +929,9 @@ const en: Dict = {
     compraFallo: "We couldn't open the payment. Try again in a moment.",
     interpretCompletoNota: "US$ 29 · eight sections",
     interpretCompletoNotaSinHora: "US$ 29 · seven sections",
+    interpretCompletoNotaConDerecho: "Already paid for · eight sections",
+    interpretCompletoNotaConDerechoSinHora: "Already paid for · seven sections",
+    interpretCompletoSaldo: "You'll have {n} left after this one.",
     interpretFreeLang: "No cost: you already read it in another language.",
     interpreting: "Writing your reading…",
     readAgain: "See the reading",
@@ -969,6 +1035,11 @@ const en: Dict = {
     abriendo: "Opening checkout…",
     fallo: "We couldn't open the checkout. Please try again.",
     sinCatalogo: "We couldn't load pricing. Please try again in a moment.",
+    gratisNombre: "Short reading",
+    gratisPrecio: "Free",
+    gratisDetalle: "Three per account, no card. Your chart in a few paragraphs.",
+    recomendado: "Most chosen",
+    verEjemplo: "See an example",
     nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
   },
   auth: {
@@ -979,6 +1050,9 @@ const en: Dict = {
     blocked: "We couldn't load Google sign-in. This usually comes from a tracker blocker: allow this site and reload.",
     failed: "We couldn't sign you in. Try again.",
     legal: "By signing in you accept the terms and the privacy policy.",
+    listoTitle: "Ready to use",
+    listoUsar: "Pick a chart to use it on",
+    listoUsarSinCartas: "Calculate a chart to use it on",
     derechosBreve: "{n} short readings",
     derechosBreveUno: "1 short reading",
     derechosInforme: "{n} full reports",
@@ -1094,9 +1168,11 @@ const pt: Dict = {
       { label: "Suas primeiras 3 leituras breves", value: "Grátis", free: true },
       { label: "Relatório completo de um mapa", value: "US$ 29" },
       { label: "O mesmo relatório em outro idioma", value: "Sem custo", free: true },
+      { label: "Pacotes de 3 ou 5 relatórios", value: "A partir de US$ 25 cada" },
       { label: "Validade", value: "Não expiram" },
     ],
     note: "Preços em dólares. O pagamento é feito direto pela web; o valor final pode incluir impostos conforme o seu país.",
+    cta: "Ver todos os preços",
   },
   faq: {
     eyebrow: "Perguntas",
@@ -1147,6 +1223,9 @@ const pt: Dict = {
     compraFallo: "Não conseguimos abrir o pagamento. Tente de novo em instantes.",
     interpretCompletoNota: "US$ 29 · oito seções",
     interpretCompletoNotaSinHora: "US$ 29 · sete seções",
+    interpretCompletoNotaConDerecho: "Já está pago · oito seções",
+    interpretCompletoNotaConDerechoSinHora: "Já está pago · sete seções",
+    interpretCompletoSaldo: "Depois deste ainda ficam {n}.",
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     interpreting: "Escrevendo sua leitura…",
     readAgain: "Ver a leitura",
@@ -1250,6 +1329,11 @@ const pt: Dict = {
     abriendo: "Abrindo o pagamento…",
     fallo: "Não conseguimos abrir o pagamento. Tente de novo.",
     sinCatalogo: "Não conseguimos carregar os preços. Tente de novo em instantes.",
+    gratisNombre: "Leitura breve",
+    gratisPrecio: "Grátis",
+    gratisDetalle: "Três por conta, sem cartão. Seu mapa em alguns parágrafos.",
+    recomendado: "O mais escolhido",
+    verEjemplo: "Ver um exemplo",
     nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
   },
   auth: {
@@ -1260,6 +1344,9 @@ const pt: Dict = {
     blocked: "Não conseguimos carregar o acesso do Google. Costuma ser um bloqueador de rastreadores: libere este site e recarregue.",
     failed: "Não conseguimos entrar. Tente de novo.",
     legal: "Ao entrar você aceita os termos e a política de privacidade.",
+    listoTitle: "Pronto para usar",
+    listoUsar: "Escolha um mapa para usar",
+    listoUsarSinCartas: "Calcule um mapa para usar",
     derechosBreve: "{n} leituras breves",
     derechosBreveUno: "1 leitura breve",
     derechosInforme: "{n} relatórios completos",

@@ -7,7 +7,7 @@ import { AspectMatrix } from "@/components/AspectMatrix";
 import { NatalWheel } from "@/components/NatalWheel";
 import { SAMPLE_BIRTH, SAMPLE_CHART } from "@/content/sample-chart";
 import { SAMPLE_READING } from "@/content/sample-reading";
-import { LOCALES, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
+import { DEFAULT_LOCALE, LOCALES, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { Footer } from "@/components/Footer";
 import { haySesion } from "@/lib/session";
@@ -47,7 +47,12 @@ export async function generateMetadata({
     title: `${reading.pageTitle} — ASTRA`,
     alternates: {
       canonical: `/${locale}/ejemplo`,
-      languages: Object.fromEntries(LOCALES.map((code) => [code, `/${code}/ejemplo`])),
+      languages: {
+        ...Object.fromEntries(LOCALES.map((code) => [code, `/${code}/ejemplo`])),
+        // Declarar `languages` acá pisa el del layout: sin esta línea la página
+        // se quedaba sin `x-default`.
+        "x-default": `/${DEFAULT_LOCALE}/ejemplo`,
+      },
     },
   };
 }

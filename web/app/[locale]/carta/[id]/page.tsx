@@ -41,7 +41,8 @@ export default async function ChartPage({
 }) {
   const { locale, id } = await params;
   if (!isLocale(locale)) notFound();
-  if (!(await getSessionToken())) redirect(`/${locale}/entrar`);
+  if (!(await getSessionToken()))
+    redirect(`/${locale}/entrar?next=${encodeURIComponent(`/${locale}/carta/${id}`)}`);
 
   const dict = getDict(locale);
   const names = PLANET_NAME_BY_KEY[locale];
@@ -103,6 +104,20 @@ export default async function ChartPage({
   const readingLang: Locale | null = chart.interpretation_langs.includes(locale)
     ? locale
     : ((chart.interpretation_langs.filter(isLocale)[0] as Locale | undefined) ?? null);
+
+  // Se arma una vez y se ubica según haya lectura o no (ver abajo). El mismo
+  // elemento en los dos lugares: duplicarlo sería duplicarle el estado.
+  const acciones = (
+    <ChartActions
+      locale={locale}
+      chartId={chart.id}
+      interpretations={chart.interpretations}
+      enCurso={chart.en_curso}
+      derechos={account.derechos}
+      timeKnown={chart.birth.time_known}
+      dict={dict}
+    />
+  );
 
   const wheel = toWheel(chart);
   const fecha = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
@@ -212,15 +227,14 @@ export default async function ChartPage({
           />
         )}
 
-        <ChartActions
-          locale={locale}
-          chartId={chart.id}
-          interpretations={chart.interpretations}
-          enCurso={chart.en_curso}
-          derechos={account.derechos}
-          timeKnown={chart.birth.time_known}
-          dict={dict}
-        />
+        {/* Antes de la lectura, arriba: es lo único que hay para hacer en esta
+            página y quedaba enterrado bajo la rueda, las tablas y la matriz de
+            aspectos. Después de la lectura, abajo: el momento en que alguien
+            decide comprar el informe es cuando terminó de leer la breve y está
+            mirando el índice de lo que se pierde, y ahí no había dónde hacer
+            clic —el cierre de `ResumenCompleto` es un párrafo, y el botón había
+            quedado media pantalla más arriba—. */}
+        {!reading && acciones}
 
         {reading && (
           <section className="reading">
@@ -231,6 +245,8 @@ export default async function ChartPage({
         )}
 
         <ResumenCompleto secciones={secciones} dict={dict} />
+
+        {reading && acciones}
 
         {/* Al final de todo: llevarse la carta es lo que se hace DESPUÉS de
             leerla. En el medio partía la página en dos —tablas, botones,

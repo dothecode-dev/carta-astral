@@ -7,6 +7,7 @@ import { SkyWheel } from "@/components/SkyWheel";
 import { NOTES_SLUG, getDict, isLocale } from "@/lib/i18n";
 import { fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
 import { fetchSky } from "@/lib/sky";
+import { SITE_URL } from "@/lib/config";
 import { Footer } from "@/components/Footer";
 import { haySesion } from "@/lib/session";
 
@@ -28,6 +29,31 @@ export default async function Home({
   // Leer la cookie la vuelve dinámica, que es el precio de reconocer a quien
   // entra — y no toca lo que ve Google, que nunca trae cookie.
   const signedIn = await haySesion();
+
+  // Lo que le dice a Google qué es este sitio y quién lo hace. Sin esto,
+  // `Article` en las notas era el único dato estructurado del dominio: la
+  // portada, que es la que se busca por marca, no declaraba nada.
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${SITE_URL}/#organizacion`,
+        name: "ASTRA",
+        url: SITE_URL,
+        founder: { "@type": "Organization", name: "dothecode" },
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#sitio`,
+        name: "ASTRA",
+        url: `${SITE_URL}/${locale}`,
+        inLanguage: locale,
+        description: dict.meta.description,
+        publisher: { "@id": `${SITE_URL}/#organizacion` },
+      },
+    ],
+  };
 
   return (
     <>
@@ -163,6 +189,16 @@ export default async function Home({
             <p className="caption" style={{ marginTop: "1.25rem" }}>
               {dict.pricing.note}
             </p>
+
+            {/* La sección terminaba en la nota, sin un solo enlace: la tabla
+                decía cuánto sale y no había por dónde seguir. Los packs, que
+                son lo de mejor margen, no se nombraban en ningún lado de la
+                home. */}
+            <p className="pricingCta">
+              <Link className="btn btnGhost" href={`/${locale}/precios`}>
+                {dict.pricing.cta}
+              </Link>
+            </p>
           </section>
 
           <section>
@@ -195,6 +231,11 @@ export default async function Home({
             </div>
           </section>
           <Footer locale={locale} dict={dict} />
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
         </main>
       </div>
     </>

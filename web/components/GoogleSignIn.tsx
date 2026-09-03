@@ -45,9 +45,13 @@ function usableClientId(raw: string | undefined): string | undefined {
 export function GoogleSignIn({
   locale,
   labels,
+  next,
 }: {
   locale: string;
   labels: { loading: string; blocked: string; failed: string };
+  /** A dónde volver al entrar. Ya validado contra la lista de `destinoSeguro`
+   *  por quien renderiza: acá llega una ruta interna o nada. */
+  next?: string | null;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -97,7 +101,10 @@ export function GoogleSignIn({
         // Ver arriba: sin id no hay a quién atribuir, y se sigue de largo.
       }
       track("login", { provider: "google" });
-      router.replace(`/${locale}/cuenta`);
+      // Sin `next` el destino es la cuenta, que es donde está todo. Con `next`,
+      // el lugar del que vino: si hizo clic en "Comprar" y el login se
+      // interpuso, vuelve a la compra en vez de a una cuenta vacía.
+      router.replace(next ?? `/${locale}/cuenta`);
       router.refresh();
     }
 
@@ -129,7 +136,7 @@ export function GoogleSignIn({
     // dejar un botón que no aparece nunca.
     script.onerror = () => setStatus("blocked");
     document.head.appendChild(script);
-  }, [clientId, raw, locale, router]);
+  }, [clientId, raw, locale, router, next]);
 
   return (
     <div className="signin">

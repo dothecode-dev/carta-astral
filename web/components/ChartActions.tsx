@@ -441,6 +441,9 @@ export function ChartActions({
    * US$ 29 por algo gratis, con el aviso de que era gratis al lado.
    */
   const puedeLeerlo = puede(derechos, "leer_informe") || enOtroIdioma("largo");
+  /** Informes comprados sin usar. Distinto de `puedeLeerlo`, que también es
+   *  cierto por una traducción gratis: ahí no hay nada pago que descontar. */
+  const informesPagos = cantidad(derechos, "informe_natal");
 
   return (
     <div className="chartActions">
@@ -481,15 +484,29 @@ export function ChartActions({
             <p className="fieldNote">
               {enOtroIdioma("largo")
                 ? dict.chart.interpretFreeLang
-                : // RF12: sin hora de nacimiento el informe sale con siete
-                  // secciones, sin la de casas (`noTimeWarning`, debajo). Sin
-                  // esta rama, el botón prometía "ocho secciones" para
-                  // cualquier carta, contradiciendo ese aviso en la misma
-                  // pantalla.
-                  timeKnown
-                  ? dict.chart.interpretCompletoNota
-                  : dict.chart.interpretCompletoNotaSinHora}
+                : // Con derecho no se nombra el precio: el botón dice "Leer" y
+                  // decir "US$ 29" abajo hacía parecer que iba a cobrar otra
+                  // vez a quien ya había pagado —un pack deja cinco—.
+                  informesPagos > 0
+                    ? timeKnown
+                      ? dict.chart.interpretCompletoNotaConDerecho
+                      : dict.chart.interpretCompletoNotaConDerechoSinHora
+                    : // RF12: sin hora de nacimiento el informe sale con siete
+                      // secciones, sin la de casas (`noTimeWarning`, debajo). Sin
+                      // esta rama, el botón prometía "ocho secciones" para
+                      // cualquier carta, contradiciendo ese aviso en la misma
+                      // pantalla.
+                      timeKnown
+                      ? dict.chart.interpretCompletoNota
+                      : dict.chart.interpretCompletoNotaSinHora}
             </p>
+            {/* Sólo con más de uno: con el último, lo que importa es que ya
+                está pago, y "te queda 1" no agrega nada. */}
+            {informesPagos > 1 && (
+              <p className="fieldNote">
+                {dict.chart.interpretCompletoSaldo.replace("{n}", String(informesPagos - 1))}
+              </p>
+            )}
             {/* El pie de la lectura ya no anuncia que la escribe una IA: la
                 explicación entera está en los Términos de uso. Acá queda a un
                 clic, que es el único lugar donde callarlo sale caro — antes de

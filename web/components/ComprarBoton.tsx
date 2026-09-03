@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Dict, Locale } from "@/lib/i18n";
 
@@ -23,24 +23,22 @@ export function ComprarBoton({
   locale,
   dict,
   signedIn,
+  reanudar = false,
 }: {
   codigo: string;
   locale: Locale;
   dict: Dict;
   signedIn: boolean;
+  /** Este es el producto que la persona había pedido antes de que el login se
+   *  interpusiera: se abre el checkout sola, sin pedirle el mismo clic dos
+   *  veces. Lo decide la página, comparando el `?comprar=` contra el catálogo
+   *  real — acá ya llega resuelto. */
+  reanudar?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!signedIn) {
-    return (
-      <Link className="btn btnPrimary" href={`/${locale}/entrar`}>
-        {dict.precios.comprar}
-      </Link>
-    );
-  }
-
-  async function comprar() {
+  const comprar = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
@@ -61,6 +59,34 @@ export function ComprarBoton({
       setBusy(false);
       setError(dict.precios.fallo);
     }
+  }, [codigo, locale, dict.precios.fallo]);
+
+  // Una sola vez por montaje: sin el guard, volver de Stripe con el botón
+  // "atrás" —que restaura la URL con `?comprar=` incluido— relanzaría el
+  // checkout de quien justo acababa de decidir que no.
+  const reanudado = useRef(false);
+  useEffect(() => {
+    if (!reanudar || !signedIn || reanudado.current) return;
+    reanudado.current = true;
+    // Se borra el rastro antes de salir del sitio, por la misma razón: la URL
+    // a la que se vuelve ya no pide comprar nada.
+    window.history.replaceState(null, "", `/${locale}/precios`);
+    void comprar();
+  }, [reanudar, signedIn, locale, comprar]);
+
+  if (!signedIn) {
+    return (
+      <Link
+        className="btn btnPrimary"
+        // Con qué venía y a dónde volver. Sin esto el login lo dejaba en su
+        // cuenta vacía y la compra se perdía en el camino.
+        href={`/${locale}/entrar?next=${encodeURIComponent(
+          `/${locale}/precios`,
+        )}&comprar=${encodeURIComponent(codigo)}`}
+      >
+        {dict.precios.comprar}
+      </Link>
+    );
   }
 
   return (

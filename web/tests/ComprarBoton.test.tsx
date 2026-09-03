@@ -15,9 +15,48 @@ describe("ComprarBoton", () => {
   it("sin sesión manda a entrar en vez de fallar con un 401", () => {
     render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn={false} />);
 
+    // Con a dónde volver y qué venía a comprar: sin eso, el login lo depositaba
+    // en su cuenta vacía y la compra se perdía en el camino.
     expect(screen.getByRole("link", { name: dict.precios.comprar })).toHaveAttribute(
-      "href", "/es/entrar",
+      "href", "/es/entrar?next=%2Fes%2Fprecios&comprar=pack_5_natal",
     );
+  });
+
+  it("al volver del login abre el checkout de lo que se había pedido, una sola vez", async () => {
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { assign }, writable: true, configurable: true,
+    });
+    const replaceState = vi.spyOn(window.history, "replaceState");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "https://checkout.stripe.com/c/pay/cs_test_1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { rerender } = render(
+      <ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn reanudar />,
+    );
+    await screen.findByRole("button");
+    rerender(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn reanudar />);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      producto: "pack_5_natal", locale: "es",
+    });
+    // La URL queda sin el pedido: volver de Stripe con el botón "atrás" no
+    // puede relanzarle el pago a quien acaba de decidir que no.
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/es/precios");
+  });
+
+  it("no reanuda nada si no se pidió", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn />);
+    await screen.findByRole("button");
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("con sesión abre el checkout del producto que se eligió", async () => {

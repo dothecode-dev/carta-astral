@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { Nav } from "@/components/Nav";
+import { destinoSeguro } from "@/lib/destino";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { sessionIsLive } from "@/lib/session";
 import { Footer } from "@/components/Footer";
@@ -26,18 +27,38 @@ export async function generateMetadata({
   };
 }
 
+/** El producto que se venía a comprar, si es que se venía a eso.
+ *
+ *  No se valida contra el catálogo acá —esta pantalla no lo tiene y pedirlo
+ *  sólo para esto sería una llamada de red por login—: la forma alcanza para
+ *  que no se pueda colar nada en la URL de destino, y /precios ignora un código
+ *  que no exista. */
+function productoPedido(comprar: unknown): string | null {
+  return typeof comprar === "string" && /^[a-z0-9_]{1,40}$/.test(comprar) ? comprar : null;
+}
+
 export default async function SignInPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
+  const query = await searchParams;
+  const destino = destinoSeguro(query.next, locale);
+  const producto = productoPedido(query.comprar);
+  // La compra viaja aparte de la ruta: `destinoSeguro` rechaza cualquier `next`
+  // con query justamente para no tener que razonar sobre lo que venga pegado.
+  const volverA =
+    destino && producto ? `${destino}?comprar=${encodeURIComponent(producto)}` : destino;
+
   // Quien ya entró no tiene nada que hacer acá. Se le pregunta al backend en
   // vez de confiar en que exista la cookie: una cookie que él ya no reconoce
   // mandaba a /cuenta, que rebotaba para acá, y así hasta la pantalla en blanco.
-  if (await sessionIsLive()) redirect(`/${locale}/cuenta`);
+  if (await sessionIsLive()) redirect(volverA ?? `/${locale}/cuenta`);
 
   const dict = getDict(locale);
 
@@ -52,6 +73,7 @@ export default async function SignInPage({
 
           <GoogleSignIn
             locale={locale}
+            next={volverA}
             labels={{
               loading: dict.auth.loading,
               blocked: dict.auth.blocked,

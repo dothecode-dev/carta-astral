@@ -55,6 +55,8 @@ const json = (body: unknown, status = 200) =>
   });
 
 const params = { params: Promise.resolve({ locale: "es" }) };
+// Next siempre le pasa los dos a una página; el de la cuenta no los usa.
+const sinQuery = { ...params, searchParams: Promise.resolve({}) };
 
 /** Corre la página y devuelve a dónde redirigió, o null si renderizó. */
 async function destinoDe(page: () => Promise<unknown>): Promise<string | null> {
@@ -81,19 +83,19 @@ describe("/entrar con una cookie que ya no vale", () => {
   it("muestra el login en vez de rebotar a /cuenta", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ detail: "sin sesión" }, 401)));
 
-    expect(await destinoDe(() => SignInPage(params))).toBeNull();
+    expect(await destinoDe(() => SignInPage(sinQuery))).toBeNull();
   });
 
   it("tampoco rebota si el backend está caído: un 500 no prueba que haya sesión", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ detail: "boom" }, 500)));
 
-    expect(await destinoDe(() => SignInPage(params))).toBeNull();
+    expect(await destinoDe(() => SignInPage(sinQuery))).toBeNull();
   });
 
   it("tampoco rebota si el backend no responde", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
 
-    expect(await destinoDe(() => SignInPage(params))).toBeNull();
+    expect(await destinoDe(() => SignInPage(sinQuery))).toBeNull();
   });
 });
 
@@ -104,7 +106,43 @@ describe("/entrar con una sesión viva", () => {
       vi.fn().mockResolvedValue(json({ free_credits: 3, paid_credits: 0, account_id: 1 })),
     );
 
-    expect(await destinoDe(() => SignInPage(params))).toBe("/es/cuenta");
+    expect(await destinoDe(() => SignInPage(sinQuery))).toBe("/es/cuenta");
+  });
+
+  it("vuelve al lugar del que vino, con la compra que traía", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(json({ free_credits: 3, paid_credits: 0, account_id: 1 })),
+    );
+
+    const destino = await destinoDe(() =>
+      SignInPage({
+        ...params,
+        searchParams: Promise.resolve({ next: "/es/precios", comprar: "pack_5_natal" }),
+      }),
+    );
+
+    expect(destino).toBe("/es/precios?comprar=pack_5_natal");
+  });
+
+  // El `next` lo escribe cualquiera que arme un enlace: si se usara tal cual,
+  // el sitio serviría para depositar a alguien recién autenticado en un
+  // dominio ajeno.
+  it("ignora un next que apunte afuera del sitio", async () => {
+    // Una Response por llamada: el cuerpo de una sola se consume en la primera
+    // y las demás verían una sesión caída en vez de lo que el test prueba.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ free_credits: 3, paid_credits: 0, account_id: 1 })),
+    );
+
+    for (const next of ["https://evil.com", "//evil.com", "/es/precios?x=1", "/en/cuenta"]) {
+      expect(
+        await destinoDe(() =>
+          SignInPage({ ...params, searchParams: Promise.resolve({ next }) }),
+        ),
+      ).toBe("/es/cuenta");
+    }
   });
 
   it("sin cookie no le pregunta nada al backend", async () => {
@@ -112,7 +150,7 @@ describe("/entrar con una sesión viva", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(await destinoDe(() => SignInPage(params))).toBeNull();
+    expect(await destinoDe(() => SignInPage(sinQuery))).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

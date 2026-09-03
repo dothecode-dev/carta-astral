@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { LegalDocument } from "@/components/LegalDocument";
 import { Nav } from "@/components/Nav";
 import { LEGAL, LEGAL_CONTACT, LEGAL_DOCS, LEGAL_UPDATED, type LegalDocKey } from "@/content/legal";
-import { LOCALES, getDict, isLocale } from "@/lib/i18n";
+import { DEFAULT_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { Footer } from "@/components/Footer";
 import { haySesion } from "@/lib/session";
@@ -32,7 +32,10 @@ export async function generateMetadata({
     title: `${content.title} — ASTRA`,
     alternates: {
       canonical: `/${locale}/legal/${doc}`,
-      languages: Object.fromEntries(LOCALES.map((code) => [code, `/${code}/legal/${doc}`])),
+      languages: {
+        ...Object.fromEntries(LOCALES.map((code) => [code, `/${code}/legal/${doc}`])),
+        "x-default": `/${DEFAULT_LOCALE}/legal/${doc}`,
+      },
     },
     // Son documentos de referencia, no contenido por el que queramos posicionar.
     robots: { index: true, follow: true },
