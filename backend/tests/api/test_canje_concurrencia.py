@@ -20,48 +20,13 @@ con dos consumos en vez de uno.
 import threading
 
 import pytest
-from django.db import connection, connections
+from django.db import connection
 from django.db.models import Sum
 
 from api.canje import SinDerecho, aplicar_compra, canjear, otorgar, revocar
 from api.catalogo import producto
 from api.models import Derecho, Movimiento
-
-# SQLite serializa la base entera e ignora `SELECT ... FOR UPDATE`, así que el
-# lock de fila que estos tests verifican ni siquiera existe ahí: un "pasa" en
-# SQLite sería un falso verde. Corre en CI contra Postgres 16; a mano:
-# `make staging-up && make test-back-pg`.
-requiere_postgres = pytest.mark.skipif(
-    connection.vendor != "postgresql",
-    reason="necesita locking de fila real (Postgres); SQLite ignora FOR UPDATE",
-)
-
-
-def _en_hilos(fn, veces: int):
-    """Corre `fn(i)` en `veces` hilos a la vez y devuelve (resultados, errores).
-
-    Cada hilo cierra su conexión al terminar: sin eso quedan abiertas y el
-    teardown de la base se cuelga.
-    """
-    resultados, errores = [], []
-    barrera = threading.Barrier(veces)
-
-    def worker(i):
-        try:
-            barrera.wait()  # todos arrancan lo más juntos posible
-            resultados.append(fn(i))
-        except Exception as exc:  # noqa: BLE001 - se inspeccionan en el test
-            errores.append(exc)
-        finally:
-            connections.close_all()
-
-    hilos = [threading.Thread(target=worker, args=(i,)) for i in range(veces)]
-    for h in hilos:
-        h.start()
-    for h in hilos:
-        h.join(timeout=20)
-    return resultados, errores
-
+from tests.api.concurrencia import en_hilos, requiere_postgres
 
 def _restante(codigo="informe_natal") -> int:
     return Derecho.objects.get(codigo_producto=codigo).cantidad_restante
@@ -108,7 +73,7 @@ def test_cinco_canjes_simultaneos_con_tres_derechos_gastan_exactamente_tres(
     otorgar(cuenta, "informe_natal", 3, origen="compra", external_id="p:3")
     cartas = [make_chart(account=cuenta) for _ in range(5)]
 
-    resultados, errores = _en_hilos(lambda i: canjear(cuenta, "leer_informe", cartas[i]), 5)
+    resultados, errores = en_hilos(lambda i: canjear(cuenta, "leer_informe", cartas[i]), 5)
 
     assert len(resultados) == 3
     assert all(isinstance(e, SinDerecho) for e in errores)
@@ -127,7 +92,7 @@ def test_el_mismo_evento_de_pago_en_paralelo_otorga_una_sola_vez(make_account):
     """
     cuenta = make_account()
 
-    resultados, errores = _en_hilos(
+    resultados, errores = en_hilos(
         lambda _i: otorgar(
             cuenta, "informe_natal", 10, origen="compra", external_id="evt_paralelo",
         ),
@@ -147,7 +112,7 @@ def test_otorgamientos_distintos_en_paralelo_suman_todos(make_account):
     """El contrapunto: eventos DISTINTOS no deben perderse por el lock."""
     cuenta = make_account()
 
-    resultados, errores = _en_hilos(
+    resultados, errores = en_hilos(
         lambda i: otorgar(
             cuenta, "informe_natal", 5, origen="compra", external_id=f"evt_{i}",
         ),
@@ -168,7 +133,7 @@ def test_revocaciones_duplicadas_en_paralelo_descuentan_una_sola_vez(make_accoun
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 10, origen="compra", external_id="p:rev")
 
-    resultados, errores = _en_hilos(
+    resultados, errores = en_hilos(
         lambda _i: revocar(cuenta, "informe_natal", 10, external_id="rf_paralelo"), 3,
     )
 
@@ -199,7 +164,7 @@ def test_canjear_y_otorgar_a_la_vez_no_pierde_ninguna_operacion(make_account, ma
             )
         return canjear(cuenta, "leer_informe", cartas[i])
 
-    _resultados, errores = _en_hilos(operar, 4)
+    _resultados, errores = en_hilos(operar, 4)
 
     assert not [e for e in errores if not isinstance(e, SinDerecho)]
     # El invariante de abajo se cumple solo si NADA corrió (1 == 1), así que
@@ -224,7 +189,7 @@ def test_dos_aplicar_compra_del_mismo_evento_otorgan_una_sola_vez(make_account):
     """
     cuenta = make_account()
 
-    resultados, errores = _en_hilos(
+    resultados, errores = en_hilos(
         lambda _i: aplicar_compra(
             cuenta, "pack_5_natal", producto("pack_5_natal").precio_centavos,
             external_id="stripe:session:cs_par",
@@ -253,7 +218,7 @@ def test_dos_entregas_de_la_misma_compra_suelta_dejan_un_otorgamiento_y_un_consu
     cuenta = make_account()
     carta = make_chart(account=cuenta)
 
-    resultados, errores = _en_hilos(
+    resultados, errores = en_hilos(
         lambda _i: aplicar_compra(
             cuenta, "informe_natal", 2900, external_id="stripe:session:cs_suelto",
             chart=carta,
