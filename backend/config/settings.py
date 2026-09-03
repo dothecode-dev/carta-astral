@@ -304,6 +304,10 @@ REVENUECAT_PRODUCT_CREDITS = json.loads(os.environ.get("REVENUECAT_PRODUCT_CREDI
 # compras que entraron por ahí.
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+# `price_id → código del catálogo`, en la dirección en que lo consulta el
+# webhook. Los ids de Stripe no se comparten entre modo test y live, así que
+# este mapeo es distinto en cada entorno y el código, el mismo.
+STRIPE_PRECIOS = json.loads(os.environ.get("STRIPE_PRECIOS", "{}"))
 
 POLAR_ENVIRONMENT = os.environ.get("POLAR_ENVIRONMENT", "")
 POLAR_ACCESS_TOKEN = os.environ.get("POLAR_ACCESS_TOKEN", "")
