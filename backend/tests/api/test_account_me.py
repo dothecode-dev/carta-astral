@@ -28,4 +28,6 @@ def test_la_cuenta_expone_sus_derechos_y_no_saldos(make_account):
     assert {
         "codigo_producto": "informe_natal", "cantidad_restante": 1, "vigente_hasta": None,
     } in data["derechos"]
-    assert set(data) == {"account_id", "deuda", "derechos"}
+    # `email` se sumó el 03-09-2026: la pantalla de cuenta no podía decir
+    # con qué mail estabas adentro.
+    assert set(data) == {"account_id", "deuda", "derechos", "email"}

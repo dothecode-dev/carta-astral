@@ -43,6 +43,11 @@ class AccountView(APIView):
 
     def get(self, request):
         return Response({
+            # Con qué mail entraste. Puede venir vacío —Apple deja ocultarlo—,
+            # pero el campo está siempre: la pantalla muestra lo que haya, y
+            # sin esto no había forma de darse cuenta de que uno quedó
+            # logueado con la cuenta equivocada.
+            "email": request.user.email,
             "derechos": derechos_de(request.user),
             "deuda": request.user.deuda,
             "account_id": request.user.id,

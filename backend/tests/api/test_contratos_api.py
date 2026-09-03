@@ -288,7 +288,7 @@ def test_la_cuenta_tiene_exactamente_estas_claves(make_account):
 
     r = c.get("/api/account/")
 
-    assert set(r.data) == {"derechos", "deuda", "account_id"}
+    assert set(r.data) == {"derechos", "deuda", "account_id", "email"}
 
 
 @pytest.mark.django_db

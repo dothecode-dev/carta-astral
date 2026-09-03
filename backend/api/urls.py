@@ -1,5 +1,7 @@
 from api.checkout import CheckoutEstadoView, CheckoutView
 from api.mantenimiento import EstadoView
+from api.catalogo_api import CatalogoView
+from api.compras_api import ComprasView
 from api.webhooks_stripe import StripeWebhookView
 from django.urls import path
 
@@ -26,6 +28,9 @@ urlpatterns = [
     path("checkout/<str:checkout_id>/", CheckoutEstadoView.as_view()),
     # Con barra final: la pasarela no sigue redirects y APPEND_SLASH daría 301,
     # que cuenta como entrega fallida (ver 839ba19).
+    path("compras/", ComprasView.as_view()),
+    # Público: los precios se ven sin cuenta.
+    path("catalogo/", CatalogoView.as_view()),
     path("webhooks/stripe/", StripeWebhookView.as_view()),
     path("charts/", ChartCollectionView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
