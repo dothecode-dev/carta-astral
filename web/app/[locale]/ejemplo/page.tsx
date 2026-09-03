@@ -170,7 +170,7 @@ export default async function SampleChartPage({
             <h2 className="closeTitle">{reading.closing.title}</h2>
             <p className="closeNote">{reading.closing.note}</p>
           </div>
-          <Link className="btn btnPrimary" href={`/${locale}#descargar`}>
+          <Link className="btn btnPrimary" href={`/${locale}/nueva`}>
             {reading.closing.cta}
           </Link>
         </div>

@@ -16,11 +16,9 @@ const nextConfig: NextConfig = {
   // su `canonical` en `generateMetadata`, así que los buscadores las colapsan.
   skipTrailingSlashRedirect: true,
 
-  async redirects() {
-    // La raíz manda al idioma por defecto. Va acá y no en proxy.ts porque es un
-    // redirect fijo que no necesita mirar la request: lo recomienda la doc de Next 16.
-    return [{ source: "/", destination: "/es", permanent: false }];
-  },
+  // El redirect de la raíz vive en `proxy.ts`, no acá. Estaba en `redirects()`
+  // con destino fijo a `/es`, pero elegir idioma exige leer `Accept-Language` y
+  // un redirect estático no ve las cabeceras de la request.
 };
 
 export default nextConfig;

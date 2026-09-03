@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { API_URL } from "@/lib/config";
-import { DEFAULT_LOCALE, LOCALES, type Locale } from "@/lib/i18n";
+import { DEFAULT_LOCALE, LOCALES, negociarIdioma, type Locale } from "@/lib/i18n";
 
 // El cartel de mantenimiento, para desplegar sin cortar un informe por la mitad.
 //
@@ -87,7 +87,27 @@ function pagina(locale: Locale): string {
 }
 
 export async function proxy(request: NextRequest) {
-  if (!(await enMantenimiento())) return NextResponse.next();
+  if (!(await enMantenimiento())) {
+    // La raíz no tiene página propia: manda al idioma que pide el navegador.
+    // Estaba en `redirects()` de `next.config.ts` con destino fijo a `/es`, y
+    // ahí no servía —un redirect estático no puede mirar una cabecera—, así que
+    // un brasileño que entraba por astraguia.com veía todo en español.
+    //
+    // La URL sale de `nextUrl.clone()` y NO de `new URL(path, request.url)`:
+    // detrás de Traefik, `request.url` es la del contenedor y el Location
+    // saldría apuntando a `https://0.0.0.0:3000/...`. Ya pasó en `/entrar`.
+    // Un Location relativo tampoco sirve acá —el proxy lo parsea como URL y
+    // tira `ERR_INVALID_URL`—, aunque sí funcione en un Route Handler.
+    if (request.nextUrl.pathname === "/") {
+      const destino = new URL(request.nextUrl);
+      destino.pathname = `/${negociarIdioma(request.headers.get("accept-language"))}`;
+      const res = NextResponse.redirect(destino, 307);
+      // Que el CDN no le sirva a todo el mundo el idioma del primero que pasó.
+      res.headers.set("Vary", "Accept-Language");
+      return res;
+    }
+    return NextResponse.next();
+  }
 
   return new NextResponse(pagina(idiomaDe(request.nextUrl.pathname)), {
     status: 503,

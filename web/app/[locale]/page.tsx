@@ -7,7 +7,6 @@ import { SkyWheel } from "@/components/SkyWheel";
 import { NOTES_SLUG, getDict, isLocale } from "@/lib/i18n";
 import { fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
 import { fetchSky } from "@/lib/sky";
-import { StoreBadges } from "@/components/StoreBadges";
 import { Footer } from "@/components/Footer";
 import { haySesion } from "@/lib/session";
 
@@ -55,7 +54,7 @@ export default async function Home({
                 {dict.hero.lede} <strong>{dict.hero.ledeStrong}</strong>
               </p>
               <div className="actions">
-                <a className="btn btnPrimary" href="#descargar">
+                <a className="btn btnPrimary" href={`/${locale}/nueva`}>
                   {dict.hero.cta}
                 </a>
                 <a className="btn btnGhost" href={`/${locale}/ejemplo`}>
@@ -182,14 +181,18 @@ export default async function Home({
             </div>
           </section>
 
-          <section className="download" id="descargar">
+          <section className="cierre">
             <div className="sectionHead">
-              <p className="eyebrow">{dict.download.eyebrow}</p>
-              <h2 className="display sectionTitle">{dict.download.title}</h2>
-              <p className="caption">{dict.download.note}</p>
+              <p className="eyebrow">{dict.cierre.eyebrow}</p>
+              <h2 className="display sectionTitle">{dict.cierre.title}</h2>
+              <p className="caption">{dict.cierre.note}</p>
             </div>
 
-            <StoreBadges dict={dict} />
+            <div className="actions">
+              <a className="btn btnPrimary" href={`/${locale}/nueva`}>
+                {dict.cierre.cta}
+              </a>
+            </div>
           </section>
           <Footer locale={locale} dict={dict} />
         </main>

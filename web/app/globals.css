@@ -1422,8 +1422,8 @@ body {
   line-height: 1.6;
 }
 
-/* --- Descarga ----------------------------------------------------------- */
-.download {
+/* --- Cierre de la home -------------------------------------------------- */
+.cierre {
   /* Sólo arriba: la línea de abajo duplicaba la que ya trae el pie. */
   border-top: 1px solid var(--hairline);
   padding: clamp(2.5rem, 6vw, 3.5rem) 0 0;
@@ -1431,59 +1431,6 @@ body {
   flex-direction: column;
   gap: 1.75rem;
   align-items: flex-start;
-}
-
-.stores {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.storesSoon {
-  margin-top: 0.75rem;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-.store {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.7rem;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 10px;
-  padding: 0.6rem 1.1rem;
-  text-decoration: none;
-  color: var(--ink);
-  /* Sin apps publicadas los badges no son interactivos: no hay hover ni cursor
-     de mano, porque prometer una reacción que no llega a ningún lado es peor
-     que mostrarlos quietos. Vuelven a ser enlaces cuando las apps existan. */
-  cursor: default;
-}
-
-.store svg {
-  display: block;
-  flex-shrink: 0;
-}
-
-.storeText {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-
-.storeSmall {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.5625rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-.storeName {
-  font-size: 1rem;
 }
 
 /* --- Documentos legales -------------------------------------------------

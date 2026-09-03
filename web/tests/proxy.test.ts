@@ -9,8 +9,18 @@ import type { NextRequest } from "next/server";
 // variable de módulo (el caché de cinco segundos), y compartirla entre tests
 // haría que el primero decidiera por los demás.
 
-const pedir = (pathname = "/es/carta/abc") =>
-  ({ nextUrl: { pathname } }) as unknown as NextRequest;
+// `nextUrl` es una URL de verdad y no un objeto plano: el redirect de la raíz
+// la clona y le cambia el pathname, y con un mock plano el test pasaría
+// mientras producción devuelve 500 por URL inválida. Pasó exactamente eso.
+const pedir = (
+  pathname = "/es/carta/abc",
+  acceptLanguage: string | null = null,
+  origen = "https://astraguia.com",
+) =>
+  ({
+    nextUrl: new URL(pathname, origen),
+    headers: { get: (nombre: string) => (nombre === "accept-language" ? acceptLanguage : null) },
+  }) as unknown as NextRequest;
 
 async function cargarProxy() {
   vi.resetModules();
@@ -93,5 +103,68 @@ describe("proxy de mantenimiento", () => {
     await proxy(pedir("/en"));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("la raíz elige idioma", () => {
+  const abierto = () =>
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: false })));
+
+  it("manda al idioma que pide el navegador", async () => {
+    abierto();
+    const proxy = await cargarProxy();
+
+    const res = await proxy(pedir("/", "pt-BR,pt;q=0.9,en;q=0.8"));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("https://astraguia.com/pt");
+  });
+
+  it("sin cabecera, o con un idioma que no tenemos, cae en español", async () => {
+    abierto();
+    const proxy = await cargarProxy();
+
+    expect((await proxy(pedir("/", null))).headers.get("location")).toBe("https://astraguia.com/es");
+    expect((await proxy(pedir("/", "de-DE,de;q=0.9"))).headers.get("location")).toBe(
+      "https://astraguia.com/es",
+    );
+  });
+
+  it("el redirect conserva el host por el que entró el visitante", async () => {
+    // La trampa de `/entrar`: armar la URL sobre `request.url` hace que detrás
+    // de Traefik el Location salga apuntando al contenedor
+    // (`https://0.0.0.0:3000/...`) y el navegador no llegue a ningún lado.
+    abierto();
+    const proxy = await cargarProxy();
+
+    const location = (await proxy(pedir("/", "en", "https://www.astraguia.com"))).headers.get(
+      "location",
+    );
+
+    expect(location).toBe("https://www.astraguia.com/en");
+  });
+
+  it("avisa que la respuesta depende del idioma", async () => {
+    // Sin `Vary`, un CDN le sirve a todo el mundo el idioma del primero que pasó.
+    abierto();
+    const proxy = await cargarProxy();
+
+    expect((await proxy(pedir("/", "pt"))).headers.get("vary")).toBe("Accept-Language");
+  });
+
+  it("en mantenimiento la raíz muestra el cartel, no el redirect", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: true })));
+    const proxy = await cargarProxy();
+
+    const res = await proxy(pedir("/", "pt-BR"));
+
+    expect(res.status).toBe(503);
+  });
+
+  it("las demás rutas siguen pasando de largo", async () => {
+    abierto();
+    const proxy = await cargarProxy();
+
+    expect((await proxy(pedir("/es/cuenta", "pt-BR"))).status).toBe(200);
   });
 });

@@ -9,6 +9,43 @@ export function isLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);
 }
 
+/** El idioma que pide el navegador, si es uno de los tres; si no, el de por defecto.
+ *
+ * Sin `@formatjs/intl-localematcher` ni `negotiator`, que es lo que sugiere la
+ * doc de Next: para tres idiomas sin variantes regionales el matcheo es por
+ * prefijo, y dos dependencias para eso salen más caras que estas líneas.
+ *
+ * `Accept-Language` viene como `pt-BR,pt;q=0.9,en;q=0.8`: cada entrada con su
+ * peso, sin garantía de venir ordenada. Se ordena por `q` y gana el primero que
+ * sea uno de los nuestros — `pt-BR` cuenta como `pt`. Un `q=0` significa
+ * "explícitamente no", así que esa entrada se descarta. */
+export function negociarIdioma(acceptLanguage: string | null | undefined): Locale {
+  if (!acceptLanguage) return DEFAULT_LOCALE;
+
+  const preferencias = acceptLanguage
+    .split(",")
+    .map((entrada) => {
+      const [etiqueta, ...parametros] = entrada.trim().split(";");
+      const q = parametros
+        .map((p) => /^\s*q=([\d.]+)\s*$/.exec(p))
+        .find((m) => m !== null)?.[1];
+      const peso = q === undefined ? 1 : Number.parseFloat(q);
+      return { idioma: etiqueta.trim().toLowerCase().split("-")[0], peso };
+    })
+    .filter((p) => p.idioma !== "" && Number.isFinite(p.peso) && p.peso > 0)
+    // `sort` de JS no es estable entre pesos iguales en todos los motores, pero
+    // sí lo es en V8, que es el único que corre esto. El orden de aparición
+    // desempata, que es lo que dice el RFC 9110.
+    .sort((a, b) => b.peso - a.peso);
+
+  // Un `for` y no un `find`: el estrechamiento de `isLocale` no sobrevive al
+  // `?.idioma` de un `find`, y castear para taparlo sería peor.
+  for (const { idioma } of preferencias) {
+    if (isLocale(idioma)) return idioma;
+  }
+  return DEFAULT_LOCALE;
+}
+
 /** El segmento de la sección de notas, traducido.
  *
  * La palabra en la URL es una señal de idioma para los buscadores, y evita que
@@ -145,7 +182,7 @@ export const PLANET_NAME_BY_KEY: Record<Locale, Record<string, string>> = {
 
 export type Dict = {
   meta: { title: string; description: string };
-  nav: { example: string; notes: string; download: string };
+  nav: { example: string; notes: string };
   theme: { night: string; day: string; label: string };
   rail: { eyebrow: string; note: string };
   hero: { title: string; lede: string; ledeStrong: string; cta: string; ctaSecondary: string; wheelAlt: string };
@@ -175,14 +212,14 @@ export type Dict = {
     note: string;
   };
   faq: { eyebrow: string; title: string; items: { q: string; a: string }[] };
-  download: {
+  /** El cierre de la home. Antes anunciaba las apps de las tiendas con un
+   *  «Próximamente»; la app no se está construyendo, así que el último empujón
+   *  de la página lleva al formulario de carta nueva, que es el producto real. */
+  cierre: {
     eyebrow: string;
     title: string;
     note: string;
-    appleSmall: string;
-    playSmall: string;
-    /** Las apps se anuncian pero todavía no están publicadas. */
-    soon: string;
+    cta: string;
   };
   foot: { brand: string; privacy: string; terms: string; contact: string };
   consent: { text: string; accept: string; reject: string; more: string; footLink: string };
@@ -392,7 +429,7 @@ const es: Dict = {
     description:
       "Tu carta natal calculada con efemérides reales y leída en tu idioma. Directo en el navegador, sin instalar nada.",
   },
-  nav: { example: "Carta de ejemplo", notes: "Notas", download: "Descargar" },
+  nav: { example: "Carta de ejemplo", notes: "Notas" },
   theme: { night: "Noche", day: "Día", label: "Luz de la página" },
   rail: {
     eyebrow: "Efeméride — ahora",
@@ -403,7 +440,7 @@ const es: Dict = {
     lede:
       "La rueda no es una ilustración: son las posiciones reales de este instante, calculadas con las mismas efemérides que ASTRA usa para tu carta natal.",
     ledeStrong: "Poné tu fecha, hora y lugar de nacimiento y vas a ver la tuya.",
-    cta: "Descargar ASTRA",
+    cta: "Ver mi carta natal",
     ctaSecondary: "Ver una carta de ejemplo",
     wheelAlt: "Rueda con las posiciones planetarias del momento actual",
   },
@@ -453,7 +490,7 @@ const es: Dict = {
       },
       {
         strong: "Borrar es borrar.",
-        rest: "Podés eliminar una carta o toda tu cuenta desde la app, y no queda copia.",
+        rest: "Podés eliminar una carta o toda tu cuenta desde acá, y no queda copia.",
       },
     ],
     link: "Leer la política completa →",
@@ -489,7 +526,7 @@ const es: Dict = {
       },
       {
         q: "¿Necesito crear una cuenta?",
-        a: "Entrás con Apple o Google. No hay contraseñas que recordar ni formulario que completar.",
+        a: "Entrás con tu cuenta de Google. No hay contraseñas que recordar ni formulario que completar.",
       },
       {
         q: "¿Puedo hacer cartas de otras personas?",
@@ -497,17 +534,15 @@ const es: Dict = {
       },
       {
         q: "¿Qué pasa si borro mi cuenta?",
-        a: "Se eliminan tus cartas, tus lecturas y lo que tengas disponible para leer, sin copia de respaldo. Es definitivo y lo hacés vos desde la app.",
+        a: "Se eliminan tus cartas, tus lecturas y lo que tengas disponible para leer, sin copia de respaldo. Es definitivo y lo hacés vos desde tu cuenta.",
       },
     ],
   },
-  download: {
-    eyebrow: "Descargar",
+  cierre: {
+    eyebrow: "Empezar",
     title: "Empezá por la tuya.",
-    note: "Android e iOS. La primera carta no cuesta nada.",
-    appleSmall: "Descargar en el",
-    playSmall: "Disponible en",
-    soon: "Próximamente",
+    note: "En el navegador, sin instalar nada. La primera lectura no cuesta nada.",
+    cta: "Ver mi carta natal",
   },
   chart: {
     back: "← Tus cartas",
@@ -610,7 +645,7 @@ const es: Dict = {
   auth: {
     navEnter: "Entrar",
     title: "Entrá a tu cuenta.",
-    lede: "La misma cuenta que en la app: tus cartas y tus lecturas son las mismas.",
+    lede: "Tus cartas y tus lecturas quedan guardadas en tu cuenta.",
     loading: "Cargando…",
     blocked: "No pudimos cargar el acceso de Google. Suele pasar con bloqueadores de rastreadores: desactivalo para este sitio y recargá.",
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
@@ -649,7 +684,7 @@ const en: Dict = {
     description:
       "Your natal chart, computed from real ephemeris and written in your language. Straight from your browser, nothing to install.",
   },
-  nav: { example: "Sample chart", notes: "Notes", download: "Download" },
+  nav: { example: "Sample chart", notes: "Notes" },
   theme: { night: "Night", day: "Day", label: "Page light" },
   rail: {
     eyebrow: "Ephemeris — now",
@@ -660,7 +695,7 @@ const en: Dict = {
     lede:
       "The wheel isn't an illustration: these are the real positions of this very moment, from the same ephemeris ASTRA uses for your natal chart.",
     ledeStrong: "Enter your birth date, time and place and you'll see yours.",
-    cta: "Download ASTRA",
+    cta: "See my birth chart",
     ctaSecondary: "See a sample chart",
     wheelAlt: "Wheel showing the planetary positions of this moment",
   },
@@ -710,7 +745,7 @@ const en: Dict = {
       },
       {
         strong: "Deleting means deleting.",
-        rest: "You can remove one chart or your whole account from the app, and no copy is kept.",
+        rest: "You can remove one chart or your whole account right here, and no copy is kept.",
       },
     ],
     link: "Read the full policy →",
@@ -746,7 +781,7 @@ const en: Dict = {
       },
       {
         q: "Do I need an account?",
-        a: "You sign in with Apple or Google. No passwords to remember, no form to fill in.",
+        a: "You sign in with your Google account. No passwords to remember, no form to fill in.",
       },
       {
         q: "Can I make charts for other people?",
@@ -754,17 +789,15 @@ const en: Dict = {
       },
       {
         q: "What happens if I delete my account?",
-        a: "Your charts, readings and whatever you have available to read are erased, with no backup copy. It's permanent, and you do it yourself from the app.",
+        a: "Your charts, readings and whatever you have available to read are erased, with no backup copy. It's permanent, and you do it yourself from your account.",
       },
     ],
   },
-  download: {
-    eyebrow: "Download",
+  cierre: {
+    eyebrow: "Get started",
     title: "Start with yours.",
-    note: "Android and iOS. The first chart costs nothing.",
-    appleSmall: "Download on the",
-    playSmall: "Get it on",
-    soon: "Coming soon",
+    note: "In your browser, nothing to install. The first reading costs nothing.",
+    cta: "See my birth chart",
   },
   chart: {
     back: "← Your charts",
@@ -867,7 +900,7 @@ const en: Dict = {
   auth: {
     navEnter: "Sign in",
     title: "Sign in to your account.",
-    lede: "The same account as in the app: your charts and your readings are the same.",
+    lede: "Your charts and your readings stay saved in your account.",
     loading: "Loading…",
     blocked: "We couldn't load Google sign-in. This usually comes from a tracker blocker: allow this site and reload.",
     failed: "We couldn't sign you in. Try again.",
@@ -906,7 +939,7 @@ const pt: Dict = {
     description:
       "Seu mapa natal calculado com efemérides reais e escrito no seu idioma. Direto no navegador, sem instalar nada.",
   },
-  nav: { example: "Mapa de exemplo", notes: "Notas", download: "Baixar" },
+  nav: { example: "Mapa de exemplo", notes: "Notas" },
   theme: { night: "Noite", day: "Dia", label: "Luz da página" },
   rail: {
     eyebrow: "Efeméride — agora",
@@ -917,7 +950,7 @@ const pt: Dict = {
     lede:
       "A roda não é uma ilustração: são as posições reais deste instante, calculadas com as mesmas efemérides que o ASTRA usa no seu mapa natal.",
     ledeStrong: "Informe sua data, hora e local de nascimento e você vai ver o seu.",
-    cta: "Baixar o ASTRA",
+    cta: "Ver meu mapa natal",
     ctaSecondary: "Ver um mapa de exemplo",
     wheelAlt: "Roda com as posições planetárias deste momento",
   },
@@ -967,7 +1000,7 @@ const pt: Dict = {
       },
       {
         strong: "Apagar é apagar.",
-        rest: "Você pode excluir um mapa ou a conta inteira pelo app, e não fica cópia.",
+        rest: "Você pode excluir um mapa ou a conta inteira aqui mesmo, e não fica cópia.",
       },
     ],
     link: "Ler a política completa →",
@@ -1003,7 +1036,7 @@ const pt: Dict = {
       },
       {
         q: "Preciso criar uma conta?",
-        a: "Você entra com Apple ou Google. Sem senha para lembrar e sem formulário para preencher.",
+        a: "Você entra com sua conta do Google. Sem senha para lembrar e sem formulário para preencher.",
       },
       {
         q: "Posso fazer mapas de outras pessoas?",
@@ -1011,17 +1044,15 @@ const pt: Dict = {
       },
       {
         q: "O que acontece se eu apagar minha conta?",
-        a: "Seus mapas, leituras e o que você tiver disponível para ler são apagados, sem cópia de segurança. É definitivo e você mesmo faz pelo app.",
+        a: "Seus mapas, leituras e o que você tiver disponível para ler são apagados, sem cópia de segurança. É definitivo e você mesmo faz pela sua conta.",
       },
     ],
   },
-  download: {
-    eyebrow: "Baixar",
+  cierre: {
+    eyebrow: "Começar",
     title: "Comece pelo seu.",
-    note: "Android e iOS. O primeiro mapa não custa nada.",
-    appleSmall: "Baixar na",
-    playSmall: "Disponível no",
-    soon: "Em breve",
+    note: "No navegador, sem instalar nada. A primeira leitura não custa nada.",
+    cta: "Ver meu mapa natal",
   },
   chart: {
     back: "← Seus mapas",
@@ -1124,7 +1155,7 @@ const pt: Dict = {
   auth: {
     navEnter: "Entrar",
     title: "Entre na sua conta.",
-    lede: "A mesma conta do app: seus mapas e suas leituras são os mesmos.",
+    lede: "Seus mapas e suas leituras ficam salvos na sua conta.",
     loading: "Carregando…",
     blocked: "Não conseguimos carregar o acesso do Google. Costuma ser um bloqueador de rastreadores: libere este site e recarregue.",
     failed: "Não conseguimos entrar. Tente de novo.",

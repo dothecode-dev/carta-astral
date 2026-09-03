@@ -8,6 +8,7 @@ import {
   PLANET_NAME_BY_KEY,
   getDict,
   isLocale,
+  negociarIdioma,
 } from "@/lib/i18n";
 
 // Los tres idiomas se escriben a mano y a distinto tiempo: el hueco típico es
@@ -148,6 +149,42 @@ describe("pricing", () => {
       expect(/crédit|credit/i.test(textos), `${locale}: aparece "crédito"/"credit"`).toBe(false);
     }
   });
+
+  it("ninguna pantalla promete una app en las tiendas", () => {
+    // La home anunciaba las apps con badges de App Store y Google Play y un
+    // "Próximamente". La app no se está construyendo: el producto es la web, y
+    // prometer una descarga que no llega manda al visitante a un callejón.
+    // Si la app vuelve, este test se borra junto con el que lo decida.
+    for (const locale of LOCALES) {
+      const textos = JSON.stringify(getDict(locale));
+      expect(
+        /app store|google play|play store/i.test(textos),
+        `${locale}: el copy promete una app de tienda`,
+      ).toBe(false);
+    }
+  });
+
+  it("ninguna pantalla manda al visitante a hacer algo 'en la app'", () => {
+    // Había cuatro: borrar la cuenta, borrar una carta, el lede del login y la
+    // pregunta de la FAQ. Todas mandaban a una app que no existe a hacer algo
+    // que la web ya hace.
+    for (const locale of LOCALES) {
+      const textos = JSON.stringify(getDict(locale));
+      expect(
+        /(desde|en|pelo|do) la app|(from|in) the app|pelo app/i.test(textos),
+        `${locale}: el copy manda a hacer algo "en la app"`,
+      ).toBe(false);
+    }
+  });
+
+  it("no promete un login con Apple, que en la web no existe", () => {
+    // `APP_AUTH_ENABLED=0`: la web entra sólo con Google. La pantalla de
+    // `/entrar` no tiene botón de Apple, pero la FAQ lo prometía.
+    for (const locale of LOCALES) {
+      const textos = JSON.stringify(getDict(locale));
+      expect(/apple/i.test(textos), `${locale}: el copy promete login con Apple`).toBe(false);
+    }
+  });
 });
 
 describe("isLocale", () => {
@@ -156,5 +193,51 @@ describe("isLocale", () => {
     expect(isLocale("fr")).toBe(false);
     expect(isLocale("")).toBe(false);
     expect(isLocale("ES")).toBe(false);
+  });
+});
+
+describe("negociarIdioma", () => {
+  it("toma el idioma sin importar la región", () => {
+    expect(negociarIdioma("pt-BR")).toBe("pt");
+    expect(negociarIdioma("en-GB")).toBe("en");
+    expect(negociarIdioma("es-419")).toBe("es");
+  });
+
+  it("respeta los pesos, no el orden de aparición", () => {
+    // Chrome manda la lista ya ordenada, pero el RFC no lo exige y hay clientes
+    // que no lo hacen.
+    expect(negociarIdioma("en;q=0.4,pt;q=0.9")).toBe("pt");
+    expect(negociarIdioma("es;q=0.2,en;q=0.8")).toBe("en");
+  });
+
+  it("una entrada sin q vale 1 y le gana a las que sí lo declaran", () => {
+    expect(negociarIdioma("en,pt;q=0.9")).toBe("en");
+  });
+
+  it("salta los idiomas que no tenemos", () => {
+    expect(negociarIdioma("de,fr;q=0.9,pt;q=0.5")).toBe("pt");
+  });
+
+  it("q=0 significa que ese idioma NO lo quiere", () => {
+    expect(negociarIdioma("es;q=0,en;q=0.5")).toBe("en");
+  });
+
+  it("cae en español ante lo que no entiende", () => {
+    expect(negociarIdioma(null)).toBe("es");
+    expect(negociarIdioma("")).toBe("es");
+    expect(negociarIdioma("de,fr")).toBe("es");
+    expect(negociarIdioma("*")).toBe("es");
+    expect(negociarIdioma(";;;,,,")).toBe("es");
+  });
+
+  it("con el peso ilegible respeta igual el idioma pedido", () => {
+    // El `q` roto se ignora y la entrada vale 1. Descartarla sería mandar a
+    // español a alguien que pidió inglés por culpa de un carácter suelto.
+    expect(negociarIdioma("en;q=basura")).toBe("en");
+  });
+
+  it("no le importan las mayúsculas ni los espacios", () => {
+    expect(negociarIdioma("PT-br, EN;q=0.9")).toBe("pt");
+    expect(negociarIdioma("  en ;  q=0.9 ")).toBe("en");
   });
 });
