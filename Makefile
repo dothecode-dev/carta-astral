@@ -277,16 +277,20 @@ deploy: ## Despliega a producción sin cortar ningún informe a medias
 		: "Y no alcanza con que EXISTA uno con el sha nuevo: durante el swap"; \
 		: "conviven el nuevo y el viejo. Se espera a que no quede ninguno con"; \
 		: "otra imagen."; \
+		: "Las DOS apps, no sólo el backend. El 03-09-2026, ya con el"; \
+		: "chequeo del backend arreglado, el cartel se apagó mientras la web"; \
+		: "seguía construyendo: /precios —la página que ese deploy agregaba—"; \
+		: "respondía 404 en producción con el sitio ya abierto."; \
 		if $(VPS_SSH) "docker ps --format '{{.Names}} {{.Image}}' \
-			| grep '^jhcsvn' | grep -q $$sha \
+			| grep -E '^(jhcsvn|6kwnma)' | grep -c $$sha | grep -q '^2$$' \
 			&& ! docker ps --format '{{.Names}} {{.Image}}' \
-			| grep '^jhcsvn' | grep -qv $$sha"; then \
-			echo "   backend arriba con $${sha}"; listo=1; break; \
+			| grep -E '^(jhcsvn|6kwnma)' | grep -qv $$sha"; then \
+			echo "   backend y web arriba con $${sha}"; listo=1; break; \
 		fi; \
 		sleep 15; \
 	done; \
 	if [ "$$listo" != 1 ]; then \
-		echo "   el backend NO levantó $${sha} en 15 minutos."; \
+		echo "   backend o web NO levantaron $${sha} en 15 minutos."; \
 		echo "   El cartel se apaga igual (trap), pero revisá el deploy en Coolify."; \
 	fi; \
 	echo "→ apago el cartel"
