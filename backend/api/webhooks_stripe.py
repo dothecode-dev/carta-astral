@@ -27,7 +27,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.canje import MontoInvalido, aplicar_compra
+from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
 from api.models import Account, PasarelaCheckout
 from api.stripe_client import FirmaInvalida, codigo_de_producto, obtener_sesion, verificar_firma
@@ -39,6 +39,11 @@ logger = logging.getLogger(__name__)
 # vale es `async_payment_succeeded`. Los dos recorren el mismo camino: lo que
 # decide si se acredita es `payment_status`, no el nombre del evento.
 EVENTOS_PAGO = ("checkout.session.completed", "checkout.session.async_payment_succeeded")
+
+# `refund.created` y no `charge.refunded`: desde la actualización de octubre
+# de 2024 es el evento consistente para todos los tipos de reembolso, y trae
+# el detalle sin una llamada extra a la API.
+EVENTOS_REEMBOLSO = ("refund.created",)
 
 
 class StripeWebhookView(APIView):
@@ -62,19 +67,21 @@ class StripeWebhookView(APIView):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         tipo = evento.get("type", "")
-        if tipo not in EVENTOS_PAGO:
-            # El reembolso (`refund.created`) llega en el paso 5 de la spec.
+        objeto = (evento.get("data") or {}).get("object") or {}
+        if tipo not in EVENTOS_PAGO + EVENTOS_REEMBOLSO:
             logger.info("evento de stripe ignorado: %s", tipo)
             return Response(status=status.HTTP_200_OK)
 
-        session_id = ((evento.get("data") or {}).get("object") or {}).get("id", "")
         try:
-            _acreditar(session_id)
+            if tipo in EVENTOS_PAGO:
+                _acreditar(objeto.get("id", ""))
+            else:
+                _reembolsar(objeto)
         except Exception:
             # Transitorio hasta que se demuestre lo contrario: se pide el
-            # reintento en vez de perder la compra. Lo definitivo ya salió por
-            # `return` adentro de `_acreditar`.
-            logger.exception("no se pudo acreditar la sesión %s: se pide reintento", session_id)
+            # reintento en vez de perder la operación. Lo definitivo ya salió
+            # por `return` adentro de cada función.
+            logger.exception("entrega de stripe %s fallida: se pide reintento", tipo)
             return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(status=status.HTTP_200_OK)
 
@@ -210,3 +217,50 @@ def _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto
             "¿El precio quedó con tax_behavior=exclusive?",
             session_id, total, monto, descuento,
         )
+
+
+class ReembolsoSinCompra(Exception):
+    """No hay ninguna compra nuestra con ese `payment_intent`... todavía."""
+
+
+def _reembolsar(refund: dict) -> None:
+    """Revoca lo comprado y anota como deuda lo que ya se usó.
+
+    Nunca se le quita a nadie un informe entregado: `canje.revocar` baja el
+    derecho hasta donde alcanza y el resto queda como deuda, que se cancela
+    contra la próxima compra.
+
+    El `external_id` lleva el prefijo `stripe:refund:` y no `stripe:session:`:
+    con la misma clave que el pago, el reembolso se descartaría como duplicado
+    de la compra que lo precedió.
+    """
+    refund_id = refund.get("id", "")
+    payment_intent = refund.get("payment_intent") or ""
+    if not payment_intent:
+        # Sin `payment_intent` no hay forma de atribuir el reembolso, y buscar
+        # por vacío engancharía cualquier fila sin acreditar —incluidas las
+        # viejas de Polar, que nunca lo tuvieron—. Reintentar no lo arregla.
+        logger.error("reembolso %s sin payment_intent: no se revoca", refund_id)
+        return
+
+    fila = PasarelaCheckout.objects.filter(
+        payment_intent=payment_intent, pasarela="stripe",
+    ).first()
+    if fila is None:
+        # ESTE sí se arregla reintentando: el reembolso puede llegar antes de
+        # que la entrega del pago haya guardado el `payment_intent`. Es el
+        # único "no encuentro la compra" que merece 5xx.
+        raise ReembolsoSinCompra(
+            f"reembolso {refund_id}: ninguna compra con payment_intent {payment_intent}",
+        )
+
+    # `fila.account` puede ser None si la cuenta se borró después de comprar
+    # (RF22): `revocar` lo contempla y registra el movimiento igual, para que
+    # la contabilidad cierre aunque no haya a quién cobrarle la deuda.
+    #
+    # El contador de reembolsos suma también con los que emite Stripe por su
+    # cuenta —Managed Payments los emite sin nuestra aprobación—: decidido el
+    # 03-09-2026, porque el payload no dice quién inició el reembolso y
+    # `flagged` no bloquea nada, sólo marca la cuenta para mirarla.
+    revocar(fila.account, fila.codigo_producto, 1, external_id=f"stripe:refund:{refund_id}")
+    logger.info("reembolso %s revocado: %s", refund_id, fila.codigo_producto)
