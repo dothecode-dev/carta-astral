@@ -109,12 +109,6 @@ describe("ChartActions", () => {
     expect(body.tier).toBe("largo");
   });
 
-  it("sin lecturas gratis deshabilita la breve pero no el completo", () => {
-    renderActions({ freeCredits: 0, paidCredits: 1 });
-    expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeDisabled();
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeEnabled();
-  });
-
   it("con la breve ya leída sigue ofreciendo el informe completo", () => {
     renderActions({ interpretations: { es: ["corto"] } });
     expect(screen.queryByRole("button", { name: dict.chart.interpretBreve })).toBeNull();
@@ -199,6 +193,28 @@ describe("ChartActions", () => {
     await clickBoton(dict.chart.interpretBreve);
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinLeerBreve);
+  });
+
+  // Las tres lecturas breves son de por vida: no se venden y no se reponen.
+  // Con cero, el botón quedaba visible pero deshabilitado y la nota decía
+  // "Gratis. Te quedan 0." — un callejón sin salida ni explicación.
+  it("sin lecturas breves no deja un botón muerto", () => {
+    renderActions({ freeCredits: 0 });
+
+    expect(screen.queryByRole("button", { name: dict.chart.interpretBreve })).toBeNull();
+    expect(screen.getByText(dict.chart.sinLeerBreve)).toBeInTheDocument();
+    // La acción que sí existe sigue en pie.
+    expect(
+      screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho }),
+    ).toBeInTheDocument();
+  });
+
+  it("con cero pero ya escrita en otro idioma, el botón sigue: traducirla es gratis", () => {
+    renderActions({ freeCredits: 0, interpretations: { en: ["corto"] } });
+
+    expect(
+      screen.getByRole("button", { name: dict.chart.interpretBreve }),
+    ).toBeInTheDocument();
   });
 
   // El cupo diario del regalo se agotaba y la pantalla decía "no pudimos

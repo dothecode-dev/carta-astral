@@ -446,6 +446,9 @@ export function ChartActions({
   if (tieneCompleto) return null;
 
   const breveDisponibles = cantidad(derechos, "lectura_breve");
+  /** Sin ninguna y sin una ya escrita en otro idioma que traducir gratis: no
+   *  hay forma de conseguir otra, así que no hay botón que ofrecer. */
+  const breveAgotada = breveDisponibles === 0 && !enOtroIdioma("corto");
   /**
    * Si el informe se puede pedir sin volver a pagar: porque hay derecho, o
    * porque ya está escrito en otro idioma y traducirlo no cuesta.
@@ -463,23 +466,30 @@ export function ChartActions({
   return (
     <div className="chartActions">
       <div className="chartActionsRow">
-        {!tieneBreve && (
-          <div className="chartActionCol">
-            <button
-              type="button"
-              className="btn btnGhost"
-              disabled={!puede(derechos, "leer_breve") || busy}
-              onClick={() => interpret("corto")}
-            >
-              {dict.chart.interpretBreve}
-            </button>
-            <p className="fieldNote">
-              {enOtroIdioma("corto")
-                ? dict.chart.interpretFreeLang
-                : dict.chart.interpretBreveNota.replace("{n}", String(breveDisponibles))}
-            </p>
-          </div>
-        )}
+        {!tieneBreve &&
+          // Agotadas las tres de por vida, el botón quedaba ahí deshabilitado
+          // con "Gratis. Te quedan 0." debajo: un callejón, porque la lectura
+          // breve no se vende ni se repone nunca (`catalogo.py`). Se dice qué
+          // pasó y se deja sola la acción que sí existe, la de al lado.
+          (breveAgotada ? (
+            <p className="fieldNote">{dict.chart.sinLeerBreve}</p>
+          ) : (
+            <div className="chartActionCol">
+              <button
+                type="button"
+                className="btn btnGhost"
+                disabled={!puede(derechos, "leer_breve") || busy}
+                onClick={() => interpret("corto")}
+              >
+                {dict.chart.interpretBreve}
+              </button>
+              <p className="fieldNote">
+                {enOtroIdioma("corto")
+                  ? dict.chart.interpretFreeLang
+                  : dict.chart.interpretBreveNota.replace("{n}", String(breveDisponibles))}
+              </p>
+            </div>
+          ))}
         {!tieneCompleto && (
           <div className="chartActionCol">
             {/* Con derecho se lee; sin derecho se paga. El mismo lugar de la
