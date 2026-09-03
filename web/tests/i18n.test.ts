@@ -143,6 +143,12 @@ describe("pricing", () => {
     // Task 16: el backend ya no tiene créditos, tiene derechos sobre
     // productos concretos. Este test es el que caza cualquier reaparición
     // futura de la palabra en el copy (no en identificadores de código).
+    //
+    // OJO: sólo mira los diccionarios. Los documentos legales viven en
+    // `content/legal/` y NO pasan por acá — ahí sobrevivieron siete menciones
+    // a "crédito" por idioma hasta el 03-09-2026, más las tiendas y
+    // RevenueCat. Eso lo cubre `scripts/check-legal.mjs`, que corre en el
+    // mismo gate; el test de abajo es el que ancla que ese chequeo exista.
     for (const locale of LOCALES) {
       const dict = getDict(locale);
       const textos = JSON.stringify(dict);

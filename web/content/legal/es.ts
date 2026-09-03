@@ -11,7 +11,7 @@ export const legalEs: LegalContent = {
     blocks: [
       {
         kind: "p",
-        text: "ASTRA es una app de **dothecode**. Esta política explica qué datos tratamos y por qué.",
+        text: "ASTRA es un servicio de **dothecode, LLC**. Esta política explica qué datos tratamos y por qué.",
       },
       { kind: "h2", text: "Qué datos recopilamos" },
       {
@@ -19,17 +19,17 @@ export const legalEs: LegalContent = {
         items: [
           "**Cuenta:** al entrar con Google o Apple recibimos tu identificador del proveedor y tu email. No vemos ni guardamos tu contraseña.",
           "**Datos de nacimiento:** los que cargás para calcular una carta — nombre (opcional), fecha, hora y lugar de nacimiento.",
-          "**Compras:** el pago lo procesan Google Play / App Store; nosotros no vemos datos de tu tarjeta. Usamos RevenueCat como procesador para acreditar tus créditos, identificándote por tu id interno de cuenta.",
+          "**Compras:** el cobro lo procesa **Stripe**, que actúa como vendedor registrado. No vemos ni guardamos los datos de tu tarjeta: de Stripe recibimos la confirmación del pago y el identificador de la compra, para darte acceso a lo que compraste.",
         ],
       },
       { kind: "h2", text: "Para qué los usamos" },
       {
         kind: "ul",
         items: [
-          "Calcular tu carta astral y mostrarla en la app.",
+          "Calcular tu carta astral y mostrarla en el sitio.",
           "Generar la lectura interpretativa: los datos astronómicos de la carta se procesan con **Anthropic** (el proveedor de IA) para redactar el texto. No se usan para entrenar modelos.",
-          "Administrar tu saldo de créditos.",
-          "**Detectar fallas y entender el uso de la app y del sitio.** Usamos **Sentry** (reportes de errores) y **PostHog** (analítica de producto). Registran acciones como iniciar sesión, crear una carta, generar una lectura o descargarla, junto con el identificador interno de tu cuenta. **Nunca les enviamos tu nombre, tu fecha, hora o lugar de nacimiento, ni el texto de tus lecturas**, y tampoco tu email. Tu dirección IP se usa únicamente para deducir el país desde el que entrás y no se almacena. En el sitio web la analítica sólo se activa si la aceptás, y podés cambiar de opinión cuando quieras desde el enlace del pie de página. Ambos servicios procesan estos datos en Estados Unidos.",
+          "Llevar la cuenta de los informes que tenés disponibles para leer.",
+          "**Detectar fallas y entender el uso del sitio.** Usamos **Sentry** (reportes de errores) y **PostHog** (analítica de producto). Registran acciones como iniciar sesión, crear una carta, generar una lectura o descargarla, junto con el identificador interno de tu cuenta. **Nunca les enviamos tu nombre, tu fecha, hora o lugar de nacimiento, ni el texto de tus lecturas**, y tampoco tu email. Tu dirección IP se usa únicamente para deducir el país desde el que entrás y no se almacena. En el sitio web la analítica sólo se activa si la aceptás, y podés cambiar de opinión cuando quieras desde el enlace del pie de página. Ambos servicios procesan estos datos en Estados Unidos.",
         ],
       },
       {
@@ -39,11 +39,7 @@ export const legalEs: LegalContent = {
       { kind: "h2", text: "Borrado de tus datos" },
       {
         kind: "p",
-        text: "Podés borrar tus cartas o tu cuenta completa desde la app (Cuenta → Borrar mis datos). El borrado de cuenta es definitivo: elimina tus datos personales, cartas, lecturas y créditos. Conservamos únicamente un **hash irreversible** del identificador de tu proveedor de login — no permite identificarte ni recuperar tus datos; sólo evita que una cuenta nueva vuelva a recibir el crédito gratuito de bienvenida.",
-      },
-      {
-        kind: "p",
-        text: "Si entraste con Apple, al borrar la cuenta también revocamos el permiso de Sign in with Apple ante Apple, de modo que ASTRA deja de estar vinculada a tu Apple ID.",
+        text: "Podés borrar tus cartas o tu cuenta completa desde tu cuenta (Cuenta → Borrar mis datos). El borrado es definitivo: elimina tus datos personales, tus cartas, tus lecturas y lo que tengas disponible para leer. Conservamos únicamente un **hash irreversible** del identificador de tu proveedor de login — no permite identificarte ni recuperar tus datos; sólo evita que una cuenta nueva vuelva a recibir las tres lecturas gratuitas de bienvenida.",
       },
       { kind: "h2", text: "Seguridad y retención" },
       {
@@ -70,16 +66,17 @@ export const legalEs: LegalContent = {
       { kind: "h2", text: "Cuenta" },
       {
         kind: "p",
-        text: "Para usar ASTRA necesitás una cuenta (Google o Apple) y ser mayor de 13 años. Sos responsable del uso que se haga desde tu cuenta.",
+        text: "Para usar ASTRA necesitás una cuenta de Google y ser mayor de 13 años. Sos responsable del uso que se haga desde tu cuenta.",
       },
-      { kind: "h2", text: "Créditos y compras" },
+      { kind: "h2", text: "Compras" },
       {
         kind: "ul",
         items: [
-          "Cada interpretación nueva de una carta consume **1 crédito**. Leer esa misma carta en otros idiomas no consume créditos adicionales.",
-          "Los créditos se compran dentro de la app (Google Play / App Store), no vencen, no son transferibles y no tienen valor monetario fuera de la app.",
-          "Las compras no son reembolsables, salvo lo que exijan la ley o las políticas de la tienda donde compraste.",
-          "Si borrás tu cuenta, los créditos restantes se pierden.",
+          "Tus **primeras tres lecturas breves son gratis**. El informe completo de una carta se compra aparte, y también podés comprar packs de tres o cinco informes.",
+          "Lo que compras es el derecho a leer un informe: **no vence**, no es transferible y no tiene valor monetario fuera de ASTRA. Leer ese mismo informe en otro idioma no consume otro.",
+          "El cobro lo procesa **Stripe**, que actúa como vendedor registrado (*merchant of record*): emite el comprobante, cobra el impuesto que corresponda a tu país y atiende los reclamos de la transacción.",
+          "**Reembolsos:** Stripe puede reembolsar una compra dentro de los 60 días y aplica los plazos de arrepentimiento que exija tu país. Si te reembolsan una compra, se descuenta de los informes que tengas disponibles; si ya los usaste, queda como saldo pendiente que se cancela contra tu próxima compra. **Nunca retiramos un informe ya escrito.**",
+          "Si borrás tu cuenta, los informes que te queden disponibles se pierden.",
         ],
       },
       { kind: "h2", text: "Uso aceptable" },
@@ -90,7 +87,7 @@ export const legalEs: LegalContent = {
       { kind: "h2", text: "Disponibilidad y cambios" },
       {
         kind: "p",
-        text: "Podemos actualizar la app, estos términos o discontinuar el servicio; si un cambio es significativo lo vamos a comunicar en la app.",
+        text: "Podemos actualizar el servicio, estos términos o discontinuarlo; si un cambio es significativo lo vamos a comunicar en el sitio.",
       },
       { kind: "h2", text: "Contacto y ley aplicable" },
       {

@@ -24,11 +24,13 @@ export type LegalContent = {
 };
 
 /** Fecha de la última revisión legal. Cambiarla al tocar cualquier documento. */
-export const LEGAL_UPDATED = "2026-08-27";
+export const LEGAL_UPDATED = "2026-09-03";
 
-// Del mismo dominio que el sitio a propósito: Polar cruza el dominio del mail
-// de soporte con el de la web y marca la diferencia como inconsistencia en la
-// revisión de la cuenta. Si cambia acá, tiene que cambiar también en Polar.
+// Del mismo dominio que el sitio a propósito: las pasarelas cruzan el dominio
+// del mail de soporte con el de la web y marcan la diferencia como
+// inconsistencia en la revisión de la cuenta —Polar lo hacía y rechazaba
+// `info@dothecode.com`—. Si cambia acá, tiene que cambiar también en el panel
+// de la pasarela.
 export const LEGAL_CONTACT = "info@astraguia.com";
 
 export const LEGAL_DOCS = ["privacy", "terms"] as const;

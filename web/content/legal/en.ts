@@ -10,25 +10,25 @@ export const legalEn: LegalContent = {
     blocks: [
       {
         kind: "p",
-        text: "ASTRA is an app by **dothecode**. This policy explains what data we process and why.",
+        text: "ASTRA is a service by **dothecode, LLC**. This policy explains what data we process and why.",
       },
       { kind: "h2", text: "What we collect" },
       {
         kind: "ul",
         items: [
-          "**Account:** when you sign in with Google or Apple we receive your provider identifier and your email. We never see or store your password.",
+          "**Account:** when you sign in with Google we receive your provider identifier and your email. We never see or store your password.",
           "**Birth data:** what you enter to compute a chart — name (optional), date, time and place of birth.",
-          "**Purchases:** payments are processed by Google Play / the App Store; we never see your card details. We use RevenueCat as a processor to credit your purchases, identified by your internal account id.",
+          "**Purchases:** payments are processed by **Stripe**, acting as merchant of record. We never see or store your card details: from Stripe we receive the payment confirmation and the purchase identifier, so we can give you access to what you bought.",
         ],
       },
       { kind: "h2", text: "How we use it" },
       {
         kind: "ul",
         items: [
-          "To compute your natal chart and show it in the app.",
+          "To compute your natal chart and show it on the site.",
           "To generate the written reading: the chart's astronomical data is processed by **Anthropic** (our AI provider) to produce the text. It is not used to train models.",
-          "To manage your credit balance.",
-          "**To detect failures and understand how the app and the site are used.** We use **Sentry** (error reporting) and **PostHog** (product analytics). They record actions such as signing in, creating a chart, generating a reading or downloading it, along with your internal account identifier. **We never send them your name, your birth date, time or place, or the text of your readings**, nor your email. Your IP address is used only to infer the country you are visiting from and is not stored. On the website analytics only run if you accept them, and you can change your mind at any time from the link in the footer. Both services process this data in the United States.",
+          "To keep track of the reports you have available to read.",
+          "**To detect failures and understand how the site is used.** We use **Sentry** (error reporting) and **PostHog** (product analytics). They record actions such as signing in, creating a chart, generating a reading or downloading it, along with your internal account identifier. **We never send them your name, your birth date, time or place, or the text of your readings**, nor your email. Your IP address is used only to infer the country you are visiting from and is not stored. On the website analytics only run if you accept them, and you can change your mind at any time from the link in the footer. Both services process this data in the United States.",
         ],
       },
       {
@@ -38,11 +38,7 @@ export const legalEn: LegalContent = {
       { kind: "h2", text: "Deleting your data" },
       {
         kind: "p",
-        text: "You can delete your charts or your entire account from the app (Account → Delete my data). Account deletion is permanent: it removes your personal data, charts, readings and credits. We keep only an **irreversible hash** of your login provider identifier — it cannot identify you or recover your data; it only prevents a new account from receiving the free welcome credit again.",
-      },
-      {
-        kind: "p",
-        text: "If you signed in with Apple, deleting your account also revokes the Sign in with Apple grant with Apple, so ASTRA is no longer linked to your Apple ID.",
+        text: "You can delete your charts or your entire account from your account page (Account → Delete my data). Deletion is permanent: it removes your personal data, your charts, your readings and whatever you have available to read. We keep only an **irreversible hash** of your login provider identifier — it cannot identify you or recover your data; it only prevents a new account from receiving the three free welcome readings again.",
       },
       { kind: "h2", text: "Security and retention" },
       {
@@ -69,16 +65,17 @@ export const legalEn: LegalContent = {
       { kind: "h2", text: "Account" },
       {
         kind: "p",
-        text: "Using ASTRA requires an account (Google or Apple) and being at least 13 years old. You are responsible for activity on your account.",
+        text: "Using ASTRA requires a Google account and being at least 13 years old. You are responsible for activity on your account.",
       },
-      { kind: "h2", text: "Credits and purchases" },
+      { kind: "h2", text: "Purchases" },
       {
         kind: "ul",
         items: [
-          "Each new chart reading consumes **1 credit**. Reading that same chart in other languages costs no extra credits.",
-          "Credits are purchased in-app (Google Play / App Store), never expire, are not transferable and have no monetary value outside the app.",
-          "Purchases are non-refundable except as required by law or by the store's policies.",
-          "If you delete your account, remaining credits are lost.",
+          "Your **first three short readings are free**. The full report for a chart is a separate purchase, and you can also buy packs of three or five reports.",
+          "What you buy is the right to read a report: it **never expires**, is not transferable and has no monetary value outside ASTRA. Reading that same report in another language doesn't consume another one.",
+          "Payment is processed by **Stripe**, acting as *merchant of record*: it issues the receipt, collects any tax due in your country and handles transaction enquiries.",
+          "**Refunds:** Stripe may refund a purchase within 60 days and applies the cooling-off periods your country requires. If a purchase is refunded, it is deducted from the reports you have available; if you already used them, it stays as an outstanding balance settled against your next purchase. **We never take back a report that has already been written.**",
+          "If you delete your account, any remaining reports are lost.",
         ],
       },
       { kind: "h2", text: "Acceptable use" },
@@ -89,7 +86,7 @@ export const legalEn: LegalContent = {
       { kind: "h2", text: "Availability and changes" },
       {
         kind: "p",
-        text: "We may update the app, these terms, or discontinue the service; significant changes will be announced in the app.",
+        text: "We may update the service, these terms, or discontinue it; significant changes will be announced on the site.",
       },
       { kind: "h2", text: "Contact and governing law" },
       {

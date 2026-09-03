@@ -17,40 +17,59 @@ const REQUIRED = {
   "es.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
     ["Anthropic", "declarar el procesador que redacta las lecturas"],
-    ["RevenueCat", "declarar el procesador de pagos"],
+    ["Stripe", "declarar el procesador de pagos"],
     ["Sentry", "declarar la herramienta de reporte de errores"],
     ["PostHog", "declarar la analítica de producto"],
     ["no se almacena", "la IP se usa para deducir el país pero no se guarda"],
     ["Estados Unidos", "PostHog y Sentry procesan fuera de la UE: transferencia internacional"],
     ["hash irreversible", "el tombstone que queda tras borrar la cuenta"],
     ["no constituye consejo", "disclaimer de que la lectura no es asesoramiento"],
-    ["1 crédito", "qué consume una interpretación"],
+    ["vendedor registrado", "quién factura y cobra el impuesto frente al comprador"],
+    ["Reembolsos", "Stripe puede reembolsar por su cuenta: la política tiene que estar escrita"],
   ],
   "en.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
     ["Anthropic", "declarar el procesador que redacta las lecturas"],
-    ["RevenueCat", "declarar el procesador de pagos"],
+    ["Stripe", "declarar el procesador de pagos"],
     ["Sentry", "declarar la herramienta de reporte de errores"],
     ["PostHog", "declarar la analítica de producto"],
     ["is not stored", "la IP se usa para deducir el país pero no se guarda"],
     ["United States", "PostHog y Sentry procesan fuera de la UE: transferencia internacional"],
     ["irreversible hash", "el tombstone que queda tras borrar la cuenta"],
     ["not medical, legal, financial or professional advice", "disclaimer de asesoramiento"],
-    ["1 credit", "qué consume una interpretación"],
+    ["merchant of record", "quién factura y cobra el impuesto frente al comprador"],
+    ["Refunds", "Stripe puede reembolsar por su cuenta: la política tiene que estar escrita"],
   ],
   "pt.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
     ["Anthropic", "declarar el procesador que redacta las lecturas"],
-    ["RevenueCat", "declarar el procesador de pagos"],
+    ["Stripe", "declarar el procesador de pagos"],
     ["Sentry", "declarar la herramienta de reporte de errores"],
     ["PostHog", "declarar la analítica de producto"],
     ["não é armazenado", "la IP se usa para deducir el país pero no se guarda"],
     ["Estados Unidos", "PostHog y Sentry procesan fuera de la UE: transferencia internacional"],
     ["hash irreversível", "el tombstone que queda tras borrar la cuenta"],
     ["não constitui aconselhamento", "disclaimer de asesoramiento"],
-    ["1 crédito", "qué consume una interpretación"],
+    ["vendedora registrada", "quién factura y cobra el impuesto frente al comprador"],
+    ["Reembolsos", "a Stripe pode reembolsar por conta própria: a política tem que estar escrita"],
   ],
 };
+
+/** Lo que NO puede volver al texto, con el motivo por el que se fue.
+ *
+ * El modelo de créditos murió el 01-09-2026 y la app no se está construyendo,
+ * pero los legales siguieron prometiendo créditos comprados en Google Play y
+ * reembolsos gestionados por "la tienda" hasta el 03-09. Nadie lo vio porque el
+ * único chequeo que leía estos archivos EXIGÍA justamente esas menciones.
+ */
+const FORBIDDEN = [
+  [/RevenueCat/i, "el cobro ya no pasa por RevenueCat sino por Stripe"],
+  [/Google Play/i, "no hay app: no se compra en ninguna tienda"],
+  [/App Store/i, "no hay app: no se compra en ninguna tienda"],
+  [/cr[eé]ditos?\b/i, "no hay créditos desde el 01-09-2026: hay derechos sobre productos"],
+  [/\bcredits\b/i, "no hay créditos desde el 01-09-2026: hay derechos sobre productos"],
+  [/\b1 credit\b/i, "no hay créditos desde el 01-09-2026: hay derechos sobre productos"],
+];
 
 let failures = 0;
 
@@ -59,6 +78,13 @@ for (const [file, checks] of Object.entries(REQUIRED)) {
   for (const [needle, why] of checks) {
     if (!source.includes(needle)) {
       console.error(`✗ ${file}: falta "${needle}" — ${why}`);
+      failures += 1;
+    }
+  }
+  for (const [pattern, why] of FORBIDDEN) {
+    const hit = source.match(pattern);
+    if (hit) {
+      console.error(`✗ ${file}: dice "${hit[0]}" y no debería — ${why}`);
       failures += 1;
     }
   }
