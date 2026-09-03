@@ -28,6 +28,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.canje import MontoInvalido, aplicar_compra
+from api.compra_service import arrancar_informe
 from api.models import Account, PasarelaCheckout
 from api.stripe_client import FirmaInvalida, codigo_de_producto, obtener_sesion, verificar_firma
 
@@ -183,6 +184,15 @@ def _acreditar(session_id: str) -> None:
 
     if aplicado:
         logger.info("sesión %s acreditada: %s", session_id, codigo)
+
+    # Sin `try`: si el informe no arranca, la excepción sube y la vista pide el
+    # reintento. La plata ya está acreditada —los requests no corren en
+    # transacción y el átomo de `aplicar_compra` cerró antes— y el arranque es
+    # idempotente (`iniciar_generacion` usa `get_or_create`), así que el
+    # reintento lo único que hace es volver a intentar lo que falló. Con Polar
+    # esto se tragaba el error por obligación: allá diez fallidas seguidas
+    # deshabilitan el endpoint para todos.
+    arrancar_informe(cuenta, fila)
 
 
 def _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto) -> None:
