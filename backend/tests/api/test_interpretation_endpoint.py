@@ -220,6 +220,10 @@ def test_cap_reached_503(account_client, monkeypatch):
         f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
     )
     assert resp.status_code == 503
+    # Con `code`, como el 402: un 503 pelado la web no puede distinguirlo de
+    # una caída, y le mostraba a la persona "no pudimos generar la lectura"
+    # —o sea, se rompió algo— cuando lo que pasó es que hay que volver mañana.
+    assert resp.data["code"] == "cap_diario"
 
 
 @pytest.mark.django_db(transaction=True)

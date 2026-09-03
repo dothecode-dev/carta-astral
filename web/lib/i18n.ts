@@ -385,6 +385,14 @@ export type Dict = {
     interpretFreeLang: string;
     interpreting: string;
     readAgain: string;
+    /**
+     * 503 con code "cap_diario": el cupo de lecturas breves gratis del día se
+     * agotó. No es una caída, y decirle a la persona "no pudimos generar la
+     * lectura" le hace creer que algo se rompió y que reintentar sirve.
+     */
+    capDiario: string;
+    /** 429: demasiados intentos seguidos desde la misma cuenta o IP. */
+    demasiados: string;
     /** 402 con code "sin_leer_breve": se acabó el lote de lecturas breves gratis. */
     sinLeerBreve: string;
     /** 402 con code "sin_leer_informe": el informe completo todavía no está comprado. */
@@ -522,7 +530,7 @@ const es: Dict = {
   },
   flow: {
     eyebrow: "De tu fecha al texto",
-    title: "Tres pasos entre tu nacimiento y la lectura.",
+    title: "Tres pasos entre tu nacimiento y tu texto.",
     steps: [
       {
         label: "Tus datos",
@@ -537,7 +545,7 @@ const es: Dict = {
           "Posiciones planetarias, casas y aspectos salen de Swiss Ephemeris. El mismo motor que usan los astrólogos profesionales.",
       },
       {
-        label: "La lectura",
+        label: "El texto",
         title: "Tu carta, en tu idioma",
         body:
           "El texto se escribe sobre la carta ya calculada, y podés leerlo en español, inglés o portugués sin volver a empezar.",
@@ -573,7 +581,7 @@ const es: Dict = {
   },
   pricing: {
     eyebrow: "Precios",
-    title: "Tus primeras tres lecturas son gratis.\nEl informe completo se compra aparte.",
+    title: "Tus primeras tres lecturas breves son gratis.\nEl informe completo se compra aparte.",
     price: "US$ 29",
     priceNote: "el informe completo de una carta: ocho secciones, unas 6.000 palabras",
     terms: [
@@ -619,7 +627,7 @@ const es: Dict = {
   cierre: {
     eyebrow: "Empezar",
     title: "Empezá por la tuya.",
-    note: "En el navegador, sin instalar nada. La primera lectura no cuesta nada.",
+    note: "En el navegador, sin instalar nada. Tu primera lectura breve no cuesta nada.",
     cta: "Ver mi carta natal",
   },
   chart: {
@@ -641,6 +649,8 @@ const es: Dict = {
     interpretFreeLang: "Sin costo: ya lo leíste en otro idioma.",
     interpreting: "Escribiendo tu lectura…",
     readAgain: "Ver la lectura",
+    capDiario: "Por hoy se agotaron las lecturas breves gratis. Volvé mañana, o leé el informe completo.",
+    demasiados: "Demasiados intentos seguidos. Esperá un momento y probá de nuevo.",
     sinLeerBreve: "Te quedaste sin lecturas breves gratis.",
     sinLeerInforme: "Todavía no compraste el informe completo.",
     sinDerecho: "No tenés esta lectura disponible.",
@@ -831,7 +841,7 @@ const en: Dict = {
           "Planetary positions, houses and aspects come from the Swiss Ephemeris — the same engine professional astrologers use.",
       },
       {
-        label: "The reading",
+        label: "The text",
         title: "Your chart, in your language",
         body:
           "The text is written over the chart already calculated, and you can read it in Spanish, English or Portuguese without starting over.",
@@ -867,7 +877,7 @@ const en: Dict = {
   },
   pricing: {
     eyebrow: "Pricing",
-    title: "Your first three readings are free.\nThe full report is a separate purchase.",
+    title: "Your first three short readings are free.\nThe full report is a separate purchase.",
     price: "US$ 29",
     priceNote: "the full report for one chart: eight sections, about 6,000 words",
     terms: [
@@ -913,7 +923,7 @@ const en: Dict = {
   cierre: {
     eyebrow: "Get started",
     title: "Start with yours.",
-    note: "In your browser, nothing to install. The first reading costs nothing.",
+    note: "In your browser, nothing to install. Your first short reading costs nothing.",
     cta: "See my birth chart",
   },
   chart: {
@@ -935,6 +945,8 @@ const en: Dict = {
     interpretFreeLang: "No cost: you already read it in another language.",
     interpreting: "Writing your reading…",
     readAgain: "See the reading",
+    capDiario: "Today's free short readings are gone. Come back tomorrow, or read the full report.",
+    demasiados: "Too many attempts in a row. Wait a moment and try again.",
     sinLeerBreve: "You're out of free short readings.",
     sinLeerInforme: "You haven't bought the full report yet.",
     sinDerecho: "You don't have this reading available.",
@@ -1125,7 +1137,7 @@ const pt: Dict = {
           "Posições planetárias, casas e aspectos saem do Swiss Ephemeris — o mesmo motor que os astrólogos profissionais usam.",
       },
       {
-        label: "A leitura",
+        label: "O texto",
         title: "Seu mapa, no seu idioma",
         body:
           "O texto é escrito sobre o mapa já calculado, e você pode lê-lo em espanhol, inglês ou português sem recomeçar.",
@@ -1161,7 +1173,7 @@ const pt: Dict = {
   },
   pricing: {
     eyebrow: "Preços",
-    title: "Suas primeiras três leituras são grátis.\nO relatório completo é comprado à parte.",
+    title: "Suas primeiras três leituras breves são grátis.\nO relatório completo é comprado à parte.",
     price: "US$ 29",
     priceNote: "o relatório completo de um mapa: oito seções, cerca de 6.000 palavras",
     terms: [
@@ -1207,7 +1219,7 @@ const pt: Dict = {
   cierre: {
     eyebrow: "Começar",
     title: "Comece pelo seu.",
-    note: "No navegador, sem instalar nada. A primeira leitura não custa nada.",
+    note: "No navegador, sem instalar nada. Sua primeira leitura breve não custa nada.",
     cta: "Ver meu mapa natal",
   },
   chart: {
@@ -1229,6 +1241,8 @@ const pt: Dict = {
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     interpreting: "Escrevendo sua leitura…",
     readAgain: "Ver a leitura",
+    capDiario: "As leituras breves grátis de hoje acabaram. Volte amanhã, ou leia o relatório completo.",
+    demasiados: "Tentativas demais seguidas. Espere um momento e tente de novo.",
     sinLeerBreve: "Você ficou sem leituras breves grátis.",
     sinLeerInforme: "Você ainda não comprou o relatório completo.",
     sinDerecho: "Você não tem essa leitura disponível.",

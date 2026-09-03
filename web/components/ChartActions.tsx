@@ -379,6 +379,21 @@ export function ChartActions({
               ? dict.chart.sinLeerInforme
               : dict.chart.sinDerecho,
         );
+      } else if (res.status === 429) {
+        setError(dict.chart.demasiados);
+      } else if (res.status === 503) {
+        // El backend manda `code: "cap_diario"` cuando se agotó el cupo de
+        // lecturas breves gratis del día. Sin distinguirlo, la pantalla decía
+        // "no pudimos generar la lectura" —o sea, se rompió algo— y la persona
+        // reintentaba contra un cupo que no se repone hasta mañana. Un 503 sin
+        // ese code sí es una caída, y ahí el mensaje genérico es el correcto.
+        let code: string | undefined;
+        try {
+          code = ((await res.json()) as { code?: string }).code;
+        } catch {
+          // cuerpo no parseable: cae al genérico, como cualquier otro 503.
+        }
+        setError(code === "cap_diario" ? dict.chart.capDiario : dict.chart.failed);
       } else {
         setError(dict.chart.failed);
       }

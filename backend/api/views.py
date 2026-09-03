@@ -301,8 +301,15 @@ class InterpretationView(APIView):
                 status=status.HTTP_402_PAYMENT_REQUIRED,
             )
         except CapReached:
+            # Con `code`, igual que el 402: sin él la web no puede distinguir
+            # esto de una caída del servicio y mostraba "no pudimos generar la
+            # lectura", que le dice a la persona que algo se rompió cuando lo
+            # que pasó es que el cupo del día se acabó.
             return Response(
-                {"error": "límite diario de informes alcanzado, probá más tarde"},
+                {
+                    "error": "límite diario de informes alcanzado, probá más tarde",
+                    "code": "cap_diario",
+                },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except GenerationInProgress:

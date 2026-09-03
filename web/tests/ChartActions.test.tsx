@@ -201,6 +201,36 @@ describe("ChartActions", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sinLeerBreve);
   });
 
+  // El cupo diario del regalo se agotaba y la pantalla decía "no pudimos
+  // generar la lectura": la persona creía que algo se rompió y reintentaba
+  // contra un cupo que no se repone hasta el día siguiente.
+  it("el cupo diario agotado no se muestra como una caída", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(503, { code: "cap_diario" })));
+    renderActions();
+
+    await clickBoton(dict.chart.interpretBreve);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.capDiario);
+  });
+
+  it("un 503 que sí es una caída sigue mostrando el mensaje genérico", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(503, {})));
+    renderActions();
+
+    await clickBoton(dict.chart.interpretBreve);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.failed);
+  });
+
+  it("el 429 dice que fueron demasiados intentos, no que falló la generación", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(429, {})));
+    renderActions();
+
+    await clickBoton(dict.chart.interpretBreve);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.demasiados);
+  });
+
   it("un 402 sin code reconocido cae al mensaje genérico", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, {})));
     renderActions();
