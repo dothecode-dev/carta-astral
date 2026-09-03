@@ -88,9 +88,9 @@ export default async function SignInPage({
             <Link href={`/${locale}/legal/privacy`}>{dict.foot.privacy}</Link>
           </p>
         </section>
-
-        <Footer locale={locale} dict={dict} />
       </main>
+
+      <Footer locale={locale} dict={dict} />
     </>
   );
 }

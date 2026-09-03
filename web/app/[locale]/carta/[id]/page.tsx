@@ -261,9 +261,9 @@ export default async function ChartPage({
           dict={dict}
           locale={locale}
         />
-
-        <Footer locale={locale} dict={dict} />
       </main>
+
+      <Footer locale={locale} dict={dict} />
     </>
   );
 }

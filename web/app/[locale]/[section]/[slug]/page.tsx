@@ -103,7 +103,7 @@ export default async function NotePage({ params }: Params) {
         showExample={!signedIn}
       />
 
-      <div className="docFrame">
+      <main className="docFrame">
         <article className="doc">
           <h1 className="display docTitle">{note.title}</h1>
           <p className="docMeta">
@@ -135,7 +135,7 @@ export default async function NotePage({ params }: Params) {
             {dict.notes.back}
           </Link>
         </article>
-      </div>
+      </main>
 
       <Footer locale={locale} dict={dict} />
 

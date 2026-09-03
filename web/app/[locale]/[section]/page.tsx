@@ -76,7 +76,7 @@ export default async function NotesPage({
         showExample={!signedIn}
       />
 
-      <div className="docFrame">
+      <main className="docFrame">
         <div className="sectionHead">
           <p className="eyebrow">{dict.notes.eyebrow}</p>
           <h1 className="display sectionTitle">{dict.notes.title}</h1>
@@ -100,7 +100,7 @@ export default async function NotesPage({
             ))}
           </div>
         )}
-      </div>
+      </main>
 
       <Footer locale={locale} dict={dict} />
     </>

@@ -230,14 +230,15 @@ export default async function Home({
               </a>
             </div>
           </section>
-          <Footer locale={locale} dict={dict} />
+        </main>
+      </div>
+
+      <Footer locale={locale} dict={dict} />
 
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-        </main>
-      </div>
     </>
   );
 }

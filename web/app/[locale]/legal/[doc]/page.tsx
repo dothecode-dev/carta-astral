@@ -75,8 +75,9 @@ export default async function LegalPage({
           updated={LEGAL_UPDATED}
           contact={LEGAL_CONTACT}
         />
-        <Footer locale={locale} dict={dict} />
       </main>
+
+      <Footer locale={locale} dict={dict} />
     </>
   );
 }

@@ -209,11 +209,9 @@ export default async function PreciosPage({
             <Link href={`/${locale}/ejemplo`}>{dict.precios.verEjemplo}</Link>
           </p>
         </div>
-        {/* Dentro del marco, como en /entrar, /cuenta y /nueva: afuera pierde
-            el `max-width` y el padding de `.docFrame` y se estira hasta el
-            borde de la ventana, contra un header que sí está contenido. */}
-        <Footer locale={locale} dict={dict} />
       </main>
+
+      <Footer locale={locale} dict={dict} />
 
       {jsonLd && (
         <script

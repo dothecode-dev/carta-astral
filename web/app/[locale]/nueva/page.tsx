@@ -48,9 +48,9 @@ export default async function NewChartPage({
         </section>
 
         <NewChartForm locale={locale} dict={dict} />
-
-        <Footer locale={locale} dict={dict} />
       </main>
+
+      <Footer locale={locale} dict={dict} />
     </>
   );
 }

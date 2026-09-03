@@ -181,8 +181,9 @@ export default async function SampleChartPage({
         </div>
 
         <p className="disclaimer">{reading.disclaimer}</p>
-        <Footer locale={locale} dict={dict} />
       </main>
+
+      <Footer locale={locale} dict={dict} />
     </>
   );
 }

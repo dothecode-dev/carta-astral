@@ -125,9 +125,9 @@ export default async function AccountPage({
         <div className="accountFoot">
           <SignOutButton locale={locale} label={dict.auth.signOut} />
         </div>
-
-        <Footer locale={locale} dict={dict} />
       </main>
+
+      <Footer locale={locale} dict={dict} />
     </>
   );
 }

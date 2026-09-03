@@ -63,9 +63,9 @@ export default async function CompraPage({
             </div>
           </section>
         )}
-
-        <Footer locale={locale} dict={dict} />
       </main>
+
+      <Footer locale={locale} dict={dict} />
     </>
   );
 }
