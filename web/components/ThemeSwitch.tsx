@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 type Theme = "dark" | "light";
 
@@ -33,6 +33,30 @@ function getServerSnapshot(): Theme | null {
  *  en el que tenga puesto el sistema y de ahí lo mueve quien lee. */
 export function ThemeSwitch({ night, day, label }: { night: string; day: string; label: string }) {
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  // Repone el atributo si el DOM lo perdió.
+  //
+  // El script anti-parpadeo lo escribe una sola vez, al cargar el documento.
+  // Cambiar de idioma cambia el segmento `[locale]`, que es el del layout raíz:
+  // React remonta el <html> con el markup del servidor —que no trae
+  // `data-theme`— y el tema elegido se evapora. Quien había puesto día
+  // aterrizaba en noche, con este mismo switch marcando día (03-09-2026).
+  //
+  // Es la red de seguridad, no el arreglo principal: el selector de idioma
+  // navega con recarga completa justamente para que el script corra antes del
+  // primer paint. Esto cubre cualquier otro remonte del layout raíz, a costa
+  // de un frame en el tema del sistema.
+  useEffect(() => {
+    if (document.documentElement.dataset.theme) return;
+    try {
+      const guardado = localStorage.getItem("astra-theme");
+      if (guardado === "dark" || guardado === "light") {
+        document.documentElement.dataset.theme = guardado;
+      }
+    } catch {
+      // Storage bloqueado: manda la preferencia del sistema, como al principio.
+    }
+  }, []);
 
   function choose(next: Theme) {
     document.documentElement.dataset.theme = next;

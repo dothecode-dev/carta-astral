@@ -2329,8 +2329,14 @@ body {
   font-size: 0.875rem;
 }
 
+.preciosPie {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .preciosEjemplo {
-  margin: 0.75rem 0 0;
+  margin: 0;
   font-size: 0.9375rem;
 }
 
@@ -2339,7 +2345,12 @@ body {
   margin: 0;
   font-size: 0.875rem;
   color: var(--ink-soft);
-  max-width: 60ch;
+  /* Sin recorte de medida: es el pie de una grilla de tres tarjetas, no un
+     párrafo de lectura larga. Con 60ch ocupaba el ancho de dos columnas y se
+     leía como algo desalineado del resto de la página. */
+  /* Y sin dejar "precio." solo en la última línea, que es lo que pasa cuando
+     el párrafo entra justo en dos. */
+  text-wrap: pretty;
 }
 
 /* --- Cuenta: mail y compras ----------------------------------------------- */

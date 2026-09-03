@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeSwitch } from "@/components/ThemeSwitch";
@@ -78,5 +78,43 @@ describe("ThemeSwitch", () => {
 
     expect(() => fireEvent.click(boton("Día"))).not.toThrow();
     expect(document.documentElement.dataset.theme).toBe("light");
+  });
+});
+
+// Cambiar de idioma cambia el segmento `[locale]`, que es el del layout raíz:
+// React remonta el <html> con el markup del servidor, que no trae
+// `data-theme`, y el script anti-parpadeo no vuelve a correr en una navegación
+// de cliente. Quien había puesto día aterrizaba en noche —con este switch
+// marcando día, porque el localStorage seguía diciendo "light"—.
+//
+// El arreglo principal es que el selector de idioma navegue con recarga
+// completa (`Nav`); esto es la red de seguridad para cualquier otro remonte.
+describe("cuando el DOM pierde el tema", () => {
+  it("lo repone de lo guardado al montar", async () => {
+    guardado.set("astra-theme", "light");
+    // Sin `data-theme`, como queda el <html> recién remontado.
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+
+    render(<ThemeSwitch {...labels} />);
+
+    expect(document.documentElement.dataset.theme).toBe("light");
+    // El botón se entera por el MutationObserver, que en jsdom entrega en una
+    // microtarea: en el navegador el switch queda marcado en el mismo paint.
+    await waitFor(() => expect(boton("Día")).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  it("no pisa un tema que la página ya tiene puesto", () => {
+    guardado.set("astra-theme", "light");
+    document.documentElement.dataset.theme = "dark";
+
+    render(<ThemeSwitch {...labels} />);
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
+  it("sin nada guardado deja mandar a la preferencia del sistema", () => {
+    render(<ThemeSwitch {...labels} />);
+
+    expect(document.documentElement.dataset.theme).toBeUndefined();
   });
 });

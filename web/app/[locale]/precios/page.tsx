@@ -197,17 +197,23 @@ export default async function PreciosPage({
           </ul>
         )}
 
-        <p className="preciosNota">{dict.precios.nota}</p>
-
-        {/* En su propia línea: nadie compra 6.000 palabras a ciegas, y esto es
-            una invitación a mirar el producto —no una aclaración más sobre
-            impuestos, que es como se leía colgando del final de la nota. */}
-        <p className="preciosEjemplo">
-          <Link href={`/${locale}/ejemplo`}>{dict.precios.verEjemplo}</Link>
-        </p>
+        {/* Los dos juntos en un hijo del marco: `.docFrame` separa a sus hijos
+            directos con 3-4,5rem, así que el enlace suelto quedaba a media
+            pantalla de la nota que acompaña. */}
+        <div className="preciosPie">
+          <p className="preciosNota">{dict.precios.nota}</p>
+          {/* En su propia línea, no colgando del final: nadie compra 6.000
+              palabras a ciegas, y esto es una invitación a mirar el producto,
+              no una aclaración más sobre impuestos. */}
+          <p className="preciosEjemplo">
+            <Link href={`/${locale}/ejemplo`}>{dict.precios.verEjemplo}</Link>
+          </p>
+        </div>
+        {/* Dentro del marco, como en /entrar, /cuenta y /nueva: afuera pierde
+            el `max-width` y el padding de `.docFrame` y se estira hasta el
+            borde de la ventana, contra un header que sí está contenido. */}
+        <Footer locale={locale} dict={dict} />
       </main>
-
-      <Footer locale={locale} dict={dict} />
 
       {jsonLd && (
         <script

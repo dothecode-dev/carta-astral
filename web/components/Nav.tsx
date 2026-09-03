@@ -48,17 +48,23 @@ export function Nav({
 
         <nav className="langs" aria-label="Idioma">
           {LOCALES.map((code) => (
-            <Link
+            // `<a>` y no `<Link>`: cambiar de idioma cambia el segmento
+            // `[locale]`, que es el del layout raíz, y en una navegación de
+            // cliente React remonta el <html> con el markup del servidor, que
+            // no trae `data-theme`. El tema elegido se perdía y quien estaba en
+            // día aterrizaba en noche. Con una navegación de documento vuelve a
+            // correr el script anti-parpadeo, antes del primer paint.
+            //
+            // El costo es una recarga completa al cambiar de idioma, que no es
+            // una navegación frecuente ni encadenada.
+            <a
               key={code}
               href={`/${code}${pathPara(code)}`}
               aria-current={code === locale ? "true" : undefined}
               hrefLang={code}
-              // Es la misma página en otro idioma: mandarte al principio sería
-              // hacerte buscar de nuevo dónde estabas leyendo.
-              scroll={false}
             >
               {code.toUpperCase()}
-            </Link>
+            </a>
           ))}
         </nav>
 
