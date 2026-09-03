@@ -23,7 +23,8 @@ import pytest
 from django.db import connection, connections
 from django.db.models import Sum
 
-from api.canje import SinDerecho, canjear, otorgar, revocar
+from api.canje import SinDerecho, aplicar_compra, canjear, otorgar, revocar
+from api.catalogo import producto
 from api.models import Derecho, Movimiento
 
 # SQLite serializa la base entera e ignora `SELECT ... FOR UPDATE`, así que el
@@ -209,3 +210,59 @@ def test_canjear_y_otorgar_a_la_vez_no_pierde_ninguna_operacion(make_account, ma
         total=Sum("cantidad"),
     )["total"]
     assert _restante() == movido
+
+
+@requiere_postgres
+@pytest.mark.django_db(transaction=True)
+def test_dos_aplicar_compra_del_mismo_evento_otorgan_una_sola_vez(make_account):
+    """Test 34 de la spec de Stripe: la entrega duplicada del mismo evento.
+
+    Ninguno de los seis tests de arriba llama a `aplicar_compra` —ejercitan
+    `otorgar`, `canjear` y `revocar` sueltos—, y `aplicar_compra` pasó a tener
+    su propio `transaction.atomic` que abarca los dos: es la frontera que sale
+    a producción y hay que medirla bajo carrera real, no sólo sus partes.
+    """
+    cuenta = make_account()
+
+    resultados, errores = _en_hilos(
+        lambda _i: aplicar_compra(
+            cuenta, "pack_5_natal", producto("pack_5_natal").precio_centavos,
+            external_id="stripe:session:cs_par",
+        ),
+        3,
+    )
+
+    assert not errores, f"un error inesperado rompió la idempotencia: {errores}"
+    assert resultados.count(True) == 1
+    assert resultados.count(False) == 2
+    assert _restante() == 5  # 5, no 15
+    assert Movimiento.objects.filter(external_id="stripe:session:cs_par").count() == 1
+
+
+@requiere_postgres
+@pytest.mark.django_db(transaction=True)
+def test_dos_entregas_de_la_misma_compra_suelta_dejan_un_otorgamiento_y_un_consumo(
+    make_account, make_chart,
+):
+    """El camino completo —otorgar + canjear— bajo el átomo nuevo y en carrera.
+
+    Es el caso real: Stripe manda `checkout.session.completed` y el reintento
+    llega mientras el primero todavía está adentro del átomo, sosteniendo el
+    `select_for_update` sobre la cuenta de punta a punta.
+    """
+    cuenta = make_account()
+    carta = make_chart(account=cuenta)
+
+    resultados, errores = _en_hilos(
+        lambda _i: aplicar_compra(
+            cuenta, "informe_natal", 2900, external_id="stripe:session:cs_suelto",
+            chart=carta,
+        ),
+        3,
+    )
+
+    assert not errores, f"un error inesperado rompió la entrega: {errores}"
+    assert resultados.count(True) == 1
+    assert _restante() == 0  # el único derecho otorgado se canjeó
+    assert Movimiento.objects.filter(tipo="otorgamiento").count() == 1
+    assert Movimiento.objects.filter(tipo="consumo", chart=carta).count() == 1

@@ -147,26 +147,40 @@ def aplicar_compra(
         )
         raise MontoInvalido(codigo_producto)
 
-    # Se otorga el producto COMPRADO, no el que ese producto otorga: `otorgar`
-    # ya traduce por `Producto.otorga` (Task 3), y así el Movimiento guarda
-    # `pack_5_natal` —qué se pagó— mientras el Derecho queda en informe_natal.
-    if not otorgar(
-        account, codigo_producto, 1, origen="compra",
-        external_id=external_id, note=f"compra:{codigo_producto}",
-    ):
-        return False
+    # Otorgamiento y canje son UN solo átomo. El webhook de la pasarela
+    # responde 5xx ante un fallo transitorio para que Stripe reintente durante
+    # tres días; sin este átomo, un canje que falla después de un otorgamiento
+    # ya committeado deja el `external_id` aplicado, y cada reintento sale por
+    # el `return False` del duplicado sin llegar nunca al canje: el comprador
+    # se queda con el derecho puesto y sin informe, para siempre. O las dos
+    # cosas, o ninguna.
+    #
+    # Los `atomic` de `otorgar`, `canjear` y `_movimiento_idempotente` pasan a
+    # ser savepoints anidados. Eso es exactamente para lo que existen: el
+    # `IntegrityError` del duplicado revierte su savepoint y no envenena este
+    # átomo. No sacarlos.
+    with transaction.atomic():
+        # Se otorga el producto COMPRADO, no el que ese producto otorga:
+        # `otorgar` ya traduce por `Producto.otorga` (Task 3), y así el
+        # Movimiento guarda `pack_5_natal` —qué se pagó— mientras el Derecho
+        # queda en informe_natal.
+        if not otorgar(
+            account, codigo_producto, 1, origen="compra",
+            external_id=external_id, note=f"compra:{codigo_producto}",
+        ):
+            return False
 
-    carta = chart
-    if carta is None and chart_id is not None:
-        carta = Chart.objects.filter(pk=chart_id).first()
-    # Sólo canjea una compra suelta: un producto que otorga más de una
-    # unidad es un pack, y uno que otorga más de un producto es un combo —
-    # ninguno de los dos canjea al comprar, porque no hay una sola cosa que
-    # canjear, aunque el llamador le pase una carta. Si la carta ya no existe,
-    # el otorgamiento ya ocurrió y el canje se omite igual.
-    suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
-    if carta is not None and suelto and prod.capacidades:
-        canjear(account, prod.capacidades[0], carta)
+        carta = chart
+        if carta is None and chart_id is not None:
+            carta = Chart.objects.filter(pk=chart_id).first()
+        # Sólo canjea una compra suelta: un producto que otorga más de una
+        # unidad es un pack, y uno que otorga más de un producto es un combo —
+        # ninguno de los dos canjea al comprar, porque no hay una sola cosa que
+        # canjear, aunque el llamador le pase una carta. Si la carta ya no
+        # existe, el otorgamiento ya ocurrió y el canje se omite igual.
+        suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
+        if carta is not None and suelto and prod.capacidades:
+            canjear(account, prod.capacidades[0], carta)
     return True
 
 
