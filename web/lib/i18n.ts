@@ -182,7 +182,7 @@ export const PLANET_NAME_BY_KEY: Record<Locale, Record<string, string>> = {
 
 export type Dict = {
   meta: { title: string; description: string };
-  nav: { example: string; notes: string };
+  nav: { example: string; notes: string; precios: string };
   theme: { night: string; day: string; label: string };
   rail: { eyebrow: string; note: string };
   hero: { title: string; lede: string; ledeStrong: string; cta: string; ctaSecondary: string; wheelAlt: string };
@@ -223,6 +223,22 @@ export type Dict = {
   };
   foot: { brand: string; privacy: string; terms: string; contact: string };
   consent: { text: string; accept: string; reject: string; more: string; footLink: string };
+  precios: {
+    title: string;
+    lede: string;
+    /** Nombre de cada producto, por código del catálogo. */
+    nombre: Record<string, string>;
+    /** Qué incluye cada producto, por código. */
+    detalle: Record<string, string>;
+    /** Precio por unidad en los packs. Lleva "{precio}". */
+    porUnidad: string;
+    comprar: string;
+    abriendo: string;
+    fallo: string;
+    /** Si el catálogo no se pudo cargar. */
+    sinCatalogo: string;
+    nota: string;
+  };
   auth: {
     navEnter: string;
     title: string;
@@ -243,8 +259,20 @@ export type Dict = {
     sinDerechos: string;
     /** CTA de esa oferta: comprar el informe completo (la única compra que existe hoy). */
     comprarInforme: string;
-    /** Nota bajo esa CTA: el cobro en la web todavía no está activo. */
+    /** Nota bajo esa CTA. */
     comprarNota: string;
+    /** Con qué mail entró la persona. Lleva "{email}". */
+    conectadoComo: string;
+    /** Cuando la cuenta no tiene mail (se puede entrar con Apple ocultándolo). */
+    conectadoSinMail: string;
+    /** Título de la lista de compras. */
+    comprasTitle: string;
+    /** Cuando todavía no compró nada. */
+    comprasEmpty: string;
+    /** Una compra pagada cuyo webhook todavía no acreditó. */
+    compraPendiente: string;
+    /** Enlace a la página de precios desde la cuenta. */
+    verPrecios: string;
     account: string;
     signOut: string;
     chartsTitle: string;
@@ -429,7 +457,7 @@ const es: Dict = {
     description:
       "Tu carta natal calculada con efemérides reales y leída en tu idioma. Directo en el navegador, sin instalar nada.",
   },
-  nav: { example: "Carta de ejemplo", notes: "Notas" },
+  nav: { example: "Carta de ejemplo", notes: "Notas", precios: "Precios" },
   theme: { night: "Noche", day: "Día", label: "Luz de la página" },
   rail: {
     eyebrow: "Efeméride — ahora",
@@ -642,6 +670,26 @@ const es: Dict = {
     more: "Cómo tratamos tus datos",
     footLink: "Analítica",
   },
+  precios: {
+    title: "Elegí cómo querés leerte.",
+    lede: "Comprás una vez y lo usás cuando quieras: los informes de un pack no vencen.",
+    nombre: {
+      informe_natal: "Informe completo",
+      pack_3_natal: "Tres informes",
+      pack_5_natal: "Cinco informes",
+    },
+    detalle: {
+      informe_natal: "Tu carta natal interpretada en ocho secciones, unas 6.000 palabras. Se lee en la web y se descarga en PDF.",
+      pack_3_natal: "Tres informes completos para usar en las cartas que elijas, cuando quieras.",
+      pack_5_natal: "Cinco informes completos para usar en las cartas que elijas, cuando quieras.",
+    },
+    porUnidad: "{precio} cada uno",
+    comprar: "Comprar",
+    abriendo: "Abriendo el pago…",
+    fallo: "No pudimos abrir el pago. Probá de nuevo.",
+    sinCatalogo: "No pudimos cargar los precios. Volvé a intentar en un momento.",
+    nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
+  },
   auth: {
     navEnter: "Entrar",
     title: "Entrá a tu cuenta.",
@@ -656,7 +704,13 @@ const es: Dict = {
     derechosInformeUno: "1 informe completo",
     sinDerechos: "Todavía no tenés ninguna lectura ni informe disponible.",
     comprarInforme: "Comprar el informe completo",
-    comprarNota: "Por ahora no podés comprarlo desde la web: el cobro todavía no está activo.",
+    comprarNota: "También podés llevarte un pack de 3 o 5 y usarlos cuando quieras.",
+    conectadoComo: "Estás dentro como {email}.",
+    conectadoSinMail: "Estás dentro con tu cuenta.",
+    comprasTitle: "Tus compras",
+    comprasEmpty: "Todavía no compraste nada.",
+    compraPendiente: "Procesando el pago…",
+    verPrecios: "Ver precios",
     account: "Tu cuenta",
     signOut: "Salir",
     chartsTitle: "Tus cartas",
@@ -684,7 +738,7 @@ const en: Dict = {
     description:
       "Your natal chart, computed from real ephemeris and written in your language. Straight from your browser, nothing to install.",
   },
-  nav: { example: "Sample chart", notes: "Notes" },
+  nav: { example: "Sample chart", notes: "Notes", precios: "Pricing" },
   theme: { night: "Night", day: "Day", label: "Page light" },
   rail: {
     eyebrow: "Ephemeris — now",
@@ -897,6 +951,26 @@ const en: Dict = {
     more: "How we handle your data",
     footLink: "Analytics",
   },
+  precios: {
+    title: "Choose how you want to read yourself.",
+    lede: "Buy once, use it whenever: the reports in a pack don't expire.",
+    nombre: {
+      informe_natal: "Full report",
+      pack_3_natal: "Three reports",
+      pack_5_natal: "Five reports",
+    },
+    detalle: {
+      informe_natal: "Your birth chart interpreted in eight sections, around 6,000 words. Read it on the web and download the PDF.",
+      pack_3_natal: "Three full reports to use on the charts you choose, whenever you want.",
+      pack_5_natal: "Five full reports to use on the charts you choose, whenever you want.",
+    },
+    porUnidad: "{precio} each",
+    comprar: "Buy",
+    abriendo: "Opening checkout…",
+    fallo: "We couldn't open the checkout. Please try again.",
+    sinCatalogo: "We couldn't load pricing. Please try again in a moment.",
+    nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
+  },
   auth: {
     navEnter: "Sign in",
     title: "Sign in to your account.",
@@ -911,7 +985,13 @@ const en: Dict = {
     derechosInformeUno: "1 full report",
     sinDerechos: "You don't have any reading or report available yet.",
     comprarInforme: "Buy the full report",
-    comprarNota: "You can't buy it from the web yet: checkout isn't live.",
+    comprarNota: "You can also get a pack of 3 or 5 and use them whenever you want.",
+    conectadoComo: "You're signed in as {email}.",
+    conectadoSinMail: "You're signed in.",
+    comprasTitle: "Your purchases",
+    comprasEmpty: "You haven't bought anything yet.",
+    compraPendiente: "Processing payment…",
+    verPrecios: "See pricing",
     account: "Your account",
     signOut: "Sign out",
     chartsTitle: "Your charts",
@@ -939,7 +1019,7 @@ const pt: Dict = {
     description:
       "Seu mapa natal calculado com efemérides reais e escrito no seu idioma. Direto no navegador, sem instalar nada.",
   },
-  nav: { example: "Mapa de exemplo", notes: "Notas" },
+  nav: { example: "Mapa de exemplo", notes: "Notas", precios: "Preços" },
   theme: { night: "Noite", day: "Dia", label: "Luz da página" },
   rail: {
     eyebrow: "Efeméride — agora",
@@ -1152,6 +1232,26 @@ const pt: Dict = {
     more: "Como tratamos os seus dados",
     footLink: "Analítica",
   },
+  precios: {
+    title: "Escolha como quer se ler.",
+    lede: "Compre uma vez e use quando quiser: os relatórios de um pacote não expiram.",
+    nombre: {
+      informe_natal: "Relatório completo",
+      pack_3_natal: "Três relatórios",
+      pack_5_natal: "Cinco relatórios",
+    },
+    detalle: {
+      informe_natal: "Seu mapa natal interpretado em oito seções, cerca de 6.000 palavras. Leia na web e baixe o PDF.",
+      pack_3_natal: "Três relatórios completos para usar nos mapas que você escolher, quando quiser.",
+      pack_5_natal: "Cinco relatórios completos para usar nos mapas que você escolher, quando quiser.",
+    },
+    porUnidad: "{precio} cada um",
+    comprar: "Comprar",
+    abriendo: "Abrindo o pagamento…",
+    fallo: "Não conseguimos abrir o pagamento. Tente de novo.",
+    sinCatalogo: "Não conseguimos carregar os preços. Tente de novo em instantes.",
+    nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
+  },
   auth: {
     navEnter: "Entrar",
     title: "Entre na sua conta.",
@@ -1166,7 +1266,13 @@ const pt: Dict = {
     derechosInformeUno: "1 relatório completo",
     sinDerechos: "Você ainda não tem nenhuma leitura nem relatório disponível.",
     comprarInforme: "Comprar o relatório completo",
-    comprarNota: "Por enquanto não é possível comprá-lo pela web: o pagamento ainda não está ativo.",
+    comprarNota: "Você também pode levar um pacote de 3 ou 5 e usá-los quando quiser.",
+    conectadoComo: "Você entrou como {email}.",
+    conectadoSinMail: "Você entrou na sua conta.",
+    comprasTitle: "Suas compras",
+    comprasEmpty: "Você ainda não comprou nada.",
+    compraPendiente: "Processando o pagamento…",
+    verPrecios: "Ver preços",
     account: "Sua conta",
     signOut: "Sair",
     chartsTitle: "Seus mapas",

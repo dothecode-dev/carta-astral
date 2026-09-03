@@ -39,6 +39,7 @@ export function Nav({
         <div className="navLinks">
           <Link href={`/${locale}/nueva`}>{dict.newChart.navNew}</Link>
           {showExample && <Link href={`/${locale}/ejemplo`}>{dict.nav.example}</Link>}
+          <Link href={`/${locale}/precios`}>{dict.nav.precios}</Link>
           <Link href={`/${locale}/${NOTES_SLUG[locale]}`}>{dict.nav.notes}</Link>
           <Link className="navEnter" href={`/${locale}${signedIn ? "/cuenta" : "/entrar"}`}>
             {signedIn ? dict.auth.account : dict.auth.navEnter}

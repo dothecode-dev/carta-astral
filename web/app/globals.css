@@ -369,11 +369,6 @@ body {
   gap: 0.4rem;
 }
 
-.buyBlock .btn[disabled] {
-  opacity: 0.45;
-  cursor: default;
-}
-
 .buyNote {
   margin: 0;
   font-size: 0.75rem;
@@ -2173,4 +2168,130 @@ body {
 
 .footLinkButton:hover {
   color: var(--accent);
+}
+
+
+/* --- Precios ---------------------------------------------------------------
+   La página que faltaba: hasta el 03-09-2026 el único lugar donde se podía
+   comprar estaba dentro de una carta ya generada, y los packs no se podían
+   comprar en ningún lado. Tres tarjetas en una grilla que colapsa a una
+   columna: son tres opciones del mismo producto, no un comparador de planes
+   con veinte filas de checks. */
+/* `docFrame` está calibrado para leer prosa —unos 620px—, y con ese ancho las
+   tres tarjetas entran de a dos y la tercera queda huérfana abajo. Acá el
+   contenido no es un texto para leer en columna, son tres opciones para
+   comparar de un vistazo. */
+.preciosFrame {
+  max-width: 960px;
+}
+
+.preciosHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 46ch;
+}
+
+.preciosLede {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 1.0625rem;
+}
+
+.preciosGrid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* `auto-fit` y no un número fijo de columnas: con tres productos son tres,
+     y el día que haya cuatro no hay que tocar el CSS. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: clamp(1rem, 3vw, 1.75rem);
+}
+
+.precioCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  border: 1px solid var(--hairline);
+  border-radius: 0.75rem;
+}
+
+.precioNombre {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.precioMonto {
+  margin: 0;
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  line-height: 1.1;
+}
+
+.precioUnidad {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.precioDetalle {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+  /* Empuja el botón al pie de la tarjeta: con textos de distinto largo, los
+     tres botones quedan alineados. */
+  flex: 1;
+}
+
+.preciosNota,
+.preciosVacio {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  max-width: 60ch;
+}
+
+/* --- Cuenta: mail y compras ----------------------------------------------- */
+.accountEmail {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.derechosMas {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.compras {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.compra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  font-size: 0.9375rem;
+}
+
+.compraFecha,
+.compraPendiente {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.comprasVacio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }

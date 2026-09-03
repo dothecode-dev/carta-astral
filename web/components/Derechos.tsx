@@ -1,4 +1,6 @@
-import type { Dict } from "@/lib/i18n";
+import Link from "next/link";
+
+import type { Dict, Locale } from "@/lib/i18n";
 import { cantidad, type Derecho } from "@/lib/derechos";
 
 /**
@@ -28,7 +30,15 @@ const PRODUCTOS = [
   },
 ] as const;
 
-export function Derechos({ derechos, dict }: { derechos: Derecho[]; dict: Dict }) {
+export function Derechos({
+  derechos,
+  dict,
+  locale,
+}: {
+  derechos: Derecho[];
+  dict: Dict;
+  locale: Locale;
+}) {
   // `cantidad` ya trae 0 para lo que no está en la lista o ya se agotó
   // (`cantidad_restante: 0`): filtrar por > 0 es lo que evita mostrar "0
   // lecturas breves" en vez de simplemente no listar esa línea.
@@ -42,9 +52,9 @@ export function Derechos({ derechos, dict }: { derechos: Derecho[]; dict: Dict }
       <div className="derechos derechosVacio">
         <p className="derechosOferta">{dict.auth.sinDerechos}</p>
         <div className="buyBlock">
-          <button type="button" className="btn btnGhost" disabled>
+          <Link className="btn btnPrimary" href={`/${locale}/precios`}>
             {dict.auth.comprarInforme}
-          </button>
+          </Link>
           <p className="buyNote">{dict.auth.comprarNota}</p>
         </div>
       </div>
@@ -61,6 +71,9 @@ export function Derechos({ derechos, dict }: { derechos: Derecho[]; dict: Dict }
           <span className="derechoTexto">{linea.texto(dict, linea.n)}</span>
         </p>
       ))}
+      <Link className="derechosMas" href={`/${locale}/precios`}>
+        {dict.auth.verPrecios}
+      </Link>
     </div>
   );
 }

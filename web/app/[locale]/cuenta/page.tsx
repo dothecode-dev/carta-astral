@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AccountCharts, type ChartSummary } from "@/components/AccountCharts";
 import { DangerZone } from "@/components/DangerZone";
+import { Compras } from "@/components/Compras";
 import { Derechos } from "@/components/Derechos";
 import { Nav } from "@/components/Nav";
 import { SignOutButton } from "@/components/SignOutButton";
@@ -12,11 +13,19 @@ import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/
 import { Footer } from "@/components/Footer";
 import type { Derecho } from "@/lib/derechos";
 
-/** Lo que devuelve /api/account/: no hay email ni nombre. */
 type AccountResponse = {
+  /** Con qué mail entró. Puede venir vacío: Apple deja ocultarlo. */
+  email: string;
   derechos: Derecho[];
   deuda: number;
   account_id: number;
+};
+
+/** Lo que compró la cuenta, de la más nueva a la más vieja. */
+type Compra = {
+  codigo_producto: string;
+  acreditada: boolean;
+  created_at: string;
 };
 
 export function generateStaticParams() {
@@ -46,11 +55,13 @@ export default async function AccountPage({
 
   let account: AccountResponse;
   let charts: ChartSummary[];
+  let compras: Compra[];
   try {
     // En paralelo: son independientes y la pantalla necesita las dos.
-    [account, charts] = await Promise.all([
+    [account, charts, compras] = await Promise.all([
       callApi<AccountResponse>("/api/account/"),
       callApi<{ results: ChartSummary[] }>("/api/charts/").then((r) => r.results),
+      callApi<{ compras: Compra[] }>("/api/compras/").then((r) => r.compras),
     ]);
   } catch (error) {
     // Sesión vencida o cuenta borrada desde otro lado: se vuelve a entrar, pero
@@ -67,7 +78,17 @@ export default async function AccountPage({
       <main className="docFrame accountFrame">
         <section className="accountHead">
           <p className="eyebrow">{dict.auth.account}</p>
-          <Derechos derechos={account.derechos} dict={dict} />
+          <p className="accountEmail">
+            {account.email
+              ? dict.auth.conectadoComo.replace("{email}", account.email)
+              : dict.auth.conectadoSinMail}
+          </p>
+          <Derechos derechos={account.derechos} dict={dict} locale={locale} />
+        </section>
+
+        <section className="accountSection">
+          <p className="eyebrow">{dict.auth.comprasTitle}</p>
+          <Compras compras={compras} locale={locale} dict={dict} />
         </section>
 
         <section className="accountSection">
