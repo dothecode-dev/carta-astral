@@ -206,6 +206,16 @@ if not WEB_BASE_URL:
         "los enlaces internos del cuerpo de una nota resolverían contra localhost."
     )
 
+# --- Avisos por mail (Resend) ---
+# Sin la key, `notificaciones` deja el aviso en el log y no intenta mandarlo:
+# eso es lo que corre en desarrollo y en los tests. En producción, sin esto,
+# quien paga y cierra la pestaña no se entera nunca de que su informe está listo.
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+# En un SUBDOMINIO, no en el dominio raíz: el SPF de `astraguia.com` es el de
+# ImprovMX, que hace andar el correo entrante, y sumarle el include de otro
+# proveedor rompe las dos cosas a la vez.
+MAIL_FROM = os.environ.get("MAIL_FROM", "ASTRA <hola@send.astraguia.com>")
+
 # Un formulario de login expuesto a internet sin límite de intentos no es una
 # hipótesis de riesgo: es un problema conocido.
 AXES_FAILURE_LIMIT = 5

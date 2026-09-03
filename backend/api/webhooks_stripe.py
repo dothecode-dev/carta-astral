@@ -194,7 +194,14 @@ def _acreditar(session_id: str) -> None:
         logger.info("sesión %s acreditada: %s", session_id, codigo)
         # Dentro del `if`: en un reintento la compra ya se acreditó y avisar de
         # nuevo sería un segundo mail por la misma compra.
-        notificaciones.notificar(cuenta, "compra_acreditada", {"producto": codigo}, lang="es")
+        # En el idioma en que compró, no en español siempre: el locale queda
+        # guardado al abrir el checkout. Sin `fila` no hay de dónde sacarlo
+        # —una sesión que Stripe reporta y nosotros no registramos— y ahí sí
+        # cae el default.
+        notificaciones.notificar(
+            cuenta, "compra_acreditada", {"producto": codigo},
+            lang=fila.locale if fila is not None else "es",
+        )
 
     # Sin `try`: si el informe no arranca, la excepción sube y la vista pide el
     # reintento. La plata ya está acreditada —los requests no corren en
