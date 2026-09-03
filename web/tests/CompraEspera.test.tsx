@@ -6,7 +6,7 @@ import { getDict } from "@/lib/i18n";
 
 // Adónde va quien vuelve de pagar, y qué ve mientras tanto.
 //
-// La pantalla existe por una carrera: Polar redirige el navegador al instante y
+// La pantalla existe por una carrera: Stripe redirige el navegador al instante y
 // su webhook —el que acredita— puede llegar unos segundos después. Mandar de
 // una a la carta sería mostrarle el botón de comprar a alguien que acaba de
 // pagar, que es el bug que costó el 02-09-2026.
@@ -18,7 +18,7 @@ const routerMock = { replace };
 vi.mock("next/navigation", () => ({ useRouter: () => routerMock }));
 
 const dict = getDict("es");
-const CHECKOUT = "polar_c_Kx5P6blTxLQQE4yA69NVfeLeMowXxRac";
+const CHECKOUT = "cs_test_a1Sh1ZbUWea0ALlpcnM7qsHid0vYGjWtPNhtxZOwIt1";
 const CARTA = "58712ace-2602-4319-b8ed-785585b80955";
 
 const reply = (status: number, body: unknown = {}) => ({

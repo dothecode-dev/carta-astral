@@ -652,7 +652,7 @@ describe("volver a la carta después de cerrar la pestaña", () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { assign, href: "" });
     const fetchMock = vi.fn().mockResolvedValue(
-      reply(200, { url: "https://polar.sh/checkout/xyz" }),
+      reply(200, { url: "https://checkout.stripe.com/c/pay/cs_test_xyz" }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -667,7 +667,7 @@ describe("volver a la carta después de cerrar la pestaña", () => {
       // Vuelve a la página en el idioma en que estaba navegando.
       locale: "es",
     });
-    expect(assign).toHaveBeenCalledWith("https://polar.sh/checkout/xyz");
+    expect(assign).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_test_xyz");
   });
 
   it("con derecho, el mismo botón lee en vez de cobrar de nuevo", async () => {

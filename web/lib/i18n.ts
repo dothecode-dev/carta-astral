@@ -360,7 +360,7 @@ export type Dict = {
     /** Cierre del pie, invitando a comprar el informe completo. */
     resumenCta: string;
   };
-  /** La pantalla de vuelta del pago (`POLAR_SUCCESS_URL`). */
+  /** La pantalla de vuelta del pago (`STRIPE_SUCCESS_URL`). */
   compra: {
     /** Mientras se espera la confirmación del pago, que tarda segundos. */
     title: string;

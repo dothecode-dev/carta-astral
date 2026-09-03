@@ -9,7 +9,7 @@ import type { Dict, Locale } from "@/lib/i18n";
 
 // Adónde va quien vuelve de pagar.
 //
-// Existe por una carrera que no se puede evitar: Polar redirige el navegador al
+// Existe por una carrera que no se puede evitar: Stripe redirige el navegador al
 // instante y su webhook —el que acredita la compra y arranca el informe— puede
 // llegar unos segundos después. Esta pantalla espera esa confirmación y recién
 // entonces manda a la carta o a la cuenta, según lo que se haya comprado.

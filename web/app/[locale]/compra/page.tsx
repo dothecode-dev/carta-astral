@@ -8,8 +8,8 @@ import { Nav } from "@/components/Nav";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSessionToken } from "@/lib/session";
 
-// Adonde Polar devuelve a quien terminó de pagar (`POLAR_SUCCESS_URL`), con el
-// `checkout_id` que Polar reemplaza en la URL.
+// Adonde Stripe devuelve a quien terminó de pagar (`STRIPE_SUCCESS_URL`), con
+// el `checkout_id` que Stripe reemplaza en la URL por `{CHECKOUT_SESSION_ID}`.
 //
 // No hay `generateStaticParams`: leer `searchParams` opta la página a
 // renderizado dinámico, y además no hay nada que prerenderizar — lo único que

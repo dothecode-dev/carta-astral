@@ -4,7 +4,7 @@ import { ApiError, callApi } from "@/lib/session";
 
 // Abre el pago del producto elegido. Del navegador viaja QUÉ se compra y, si se
 // compra desde una carta, cuál — nunca el precio: eso lo pone el catálogo del
-// backend y lo vuelve a validar el webhook contra la orden de Polar.
+// backend y lo vuelve a validar el webhook contra la sesión de Stripe.
 
 export const dynamic = "force-dynamic";
 

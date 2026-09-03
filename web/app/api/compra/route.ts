@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { ApiError, callApi } from "@/lib/session";
 
-// En qué quedó una compra: lo sondea la página de retorno de Polar mientras
+// En qué quedó una compra: lo sondea la página de retorno de Stripe mientras
 // espera que llegue el webhook que acredita. Sin este proxy, el fetch del
 // cliente iría directo al backend, que no tiene CORS abierto (el token de
 // sesión vive en una cookie httpOnly que sólo este servidor puede leer).

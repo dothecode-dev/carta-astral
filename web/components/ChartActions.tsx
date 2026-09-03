@@ -298,7 +298,7 @@ export function ChartActions({
   /**
    * Manda a pagar el informe, con esta carta atada.
    *
-   * El backend guarda esa relación (`PolarCheckout.chart`) y el webhook la usa
+   * El backend guarda esa relación (`PasarelaCheckout.chart`) y el webhook la usa
    * para que el informe arranque solo al acreditar el pago: la diferencia
    * entre "pagué y ya se está escribiendo" y "pagué y ahora buscá dónde
    * usarlo".
@@ -318,7 +318,7 @@ export function ChartActions({
         return;
       }
       const { url } = (await res.json()) as { url: string };
-      // Polar es otro sitio: no es una navegación de Next.
+      // El checkout de Stripe es otro sitio: no es una navegación de Next.
       window.location.assign(url);
     } catch (err) {
       console.error("no se pudo abrir el checkout", err);
