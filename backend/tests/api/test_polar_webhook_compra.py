@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-from api.models import Derecho, Movimiento, PolarCheckout
+from api.models import Derecho, Movimiento, PasarelaCheckout
 from tests.api.polar_firma import SECRETO, firmar as _firmar
 
 pytestmark = pytest.mark.django_db
@@ -60,7 +60,7 @@ def _restante(cuenta, codigo="informe_natal") -> int:
 @pytest.fixture
 def checkout(make_account):
     cuenta = make_account()
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
     )
     return cuenta
@@ -74,7 +74,7 @@ def test_order_paid_otorga_el_derecho(client, checkout):
 
 def test_el_pack_otorga_sus_cinco_unidades(client, make_account):
     cuenta = make_account()
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_5", account=cuenta, codigo_producto="pack_5_natal",
     )
 
@@ -134,7 +134,7 @@ def test_con_carta_atada_el_informe_arranca_solo(client, make_account, make_char
     `aplicar_compra` canjea en el acto cuando el producto da una sola unidad."""
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal", chart=carta,
     )
 

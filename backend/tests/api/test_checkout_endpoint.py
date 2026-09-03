@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from api import polar
-from api.models import PolarCheckout
+from api.models import PasarelaCheckout
 
 pytestmark = pytest.mark.django_db
 
@@ -60,7 +60,7 @@ def test_devuelve_la_url_y_guarda_a_quien_compra(account_client, polar_responde)
     datos = account_client.post("/api/checkout/", {"producto": "informe_natal"}).json()
 
     assert datos["url"] == "https://polar.sh/pay/chk_1"
-    guardado = PolarCheckout.objects.get(checkout_id="chk_1")
+    guardado = PasarelaCheckout.objects.get(checkout_id="chk_1")
     assert guardado.account_id == account_client.account.pk
     assert guardado.codigo_producto == "informe_natal"
 
@@ -87,7 +87,7 @@ def test_la_carta_queda_atada_a_la_compra(account_client, polar_responde, make_c
         "/api/checkout/", {"producto": "informe_natal", "chart_id": str(carta.uuid)}
     )
 
-    assert PolarCheckout.objects.get(checkout_id="chk_1").chart_id == carta.pk
+    assert PasarelaCheckout.objects.get(checkout_id="chk_1").chart_id == carta.pk
 
 
 def test_una_carta_ajena_no_se_puede_atar(account_client, polar_responde, make_chart, make_account):
@@ -100,7 +100,7 @@ def test_una_carta_ajena_no_se_puede_atar(account_client, polar_responde, make_c
     )
 
     assert resp.status_code == 404
-    assert PolarCheckout.objects.count() == 0
+    assert PasarelaCheckout.objects.count() == 0
 
 
 def test_un_producto_que_no_existe_es_400(account_client):
@@ -118,12 +118,12 @@ def test_sin_producto_es_400(account_client):
 
 
 def test_si_polar_falla_no_deja_basura(account_client, polar_responde):
-    """502 y ni una fila: un PolarCheckout huérfano haría que el webhook de
+    """502 y ni una fila: un PasarelaCheckout huérfano haría que el webhook de
     otra orden pudiera resolver contra él."""
     polar_responde(status=500, body={"detail": "boom"})
 
     assert account_client.post("/api/checkout/", {"producto": "informe_natal"}).status_code == 502
-    assert PolarCheckout.objects.count() == 0
+    assert PasarelaCheckout.objects.count() == 0
 
 
 def test_sin_token_configurado_es_503(account_client, settings):

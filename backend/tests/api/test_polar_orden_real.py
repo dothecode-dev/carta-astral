@@ -21,7 +21,7 @@ import json
 
 import pytest
 
-from api.models import Derecho, Movimiento, PolarCheckout
+from api.models import Derecho, Movimiento, PasarelaCheckout
 from tests.api.polar_firma import SECRETO
 from tests.api.polar_firma import firmar as _firmar
 
@@ -74,7 +74,7 @@ def _entregar(client, orden=None, tipo="order.paid"):
 @pytest.fixture
 def checkout(make_account):
     cuenta = make_account()
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="c7487b81-903c-47bb-8f22-430e2ca75bda",
         account=cuenta,
         codigo_producto="informe_natal",

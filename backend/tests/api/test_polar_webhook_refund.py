@@ -15,7 +15,7 @@ import json
 import pytest
 
 from api.canje import canjear, otorgar
-from api.models import Derecho, Movimiento, PolarCheckout
+from api.models import Derecho, Movimiento, PasarelaCheckout
 from tests.api.polar_firma import SECRETO, firmar as _firmar
 
 pytestmark = pytest.mark.django_db
@@ -56,7 +56,7 @@ def _restante(cuenta, codigo="informe_natal") -> int:
 def compro(make_account):
     """Una cuenta que pagó un informe suelto y todavía no lo usó."""
     cuenta = make_account()
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
     )
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="polar:order:ord_1")
@@ -86,7 +86,7 @@ def test_reembolsar_un_pack_descuenta_sus_cinco_unidades(client, make_account):
     """`revocar` traduce por el multiplicador del catálogo: una unidad
     reembolsada del pack son cinco informes, no uno."""
     cuenta = make_account()
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_5", account=cuenta, codigo_producto="pack_5_natal",
     )
     otorgar(cuenta, "pack_5_natal", 1, origen="compra", external_id="polar:order:ord_5")
@@ -121,7 +121,7 @@ def test_un_reembolso_de_una_cuenta_ya_borrada_no_explota(client, make_account):
     tolera `account=None` y registra el movimiento igual, para que la
     contabilidad cierre."""
     cuenta = make_account()
-    fila = PolarCheckout.objects.create(
+    fila = PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
     )
     cuenta.delete()

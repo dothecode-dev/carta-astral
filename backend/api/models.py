@@ -332,14 +332,14 @@ class Movimiento(models.Model):
         return f"{self.tipo} {self.cantidad} (acc={self.account_id})"
 
 
-class PolarCheckout(models.Model):
-    """Quién abrió esta sesión de pago, y para qué.
+class PasarelaCheckout(models.Model):
+    """Quién abrió esta sesión de pago, en qué pasarela, y para qué.
 
-    Existe porque el webhook necesita saber a qué cuenta acreditarle la orden, y
-    la propagación de `metadata` del checkout a la orden **no está en el
-    contrato publicado** de Polar: se confirmó leyendo su fuente, que puede
-    cambiar sin aviso. `order.checkout_id` sí está garantizado, así que la
-    relación se guarda de este lado y la metadata queda como respaldo.
+    Existe porque el webhook necesita saber a qué cuenta acreditarle la compra,
+    y la metadata de la pasarela no alcanza: con Polar su propagación del
+    checkout a la orden no estaba en el contrato publicado, y con Stripe la
+    fila propia igual guarda cosas que la pasarela no conoce —la carta y el
+    idioma—. La fila es la fuente de verdad; la metadata, el respaldo.
 
     `chart` es opcional y es lo que hace que comprar desde una carta termine
     con esa carta escribiéndose, en vez de con un derecho suelto que hay que ir
@@ -349,11 +349,11 @@ class PolarCheckout(models.Model):
 
     checkout_id = models.CharField(max_length=100, unique=True)
     account = models.ForeignKey(
-        "Account", on_delete=models.SET_NULL, null=True, related_name="checkouts_polar",
+        "Account", on_delete=models.SET_NULL, null=True, related_name="checkouts",
     )
     codigo_producto = models.CharField(max_length=50)
     chart = models.ForeignKey(
-        "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts_polar",
+        "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts",
     )
     # En qué idioma se compró, para escribir el informe en ése. El webhook no
     # tiene otra forma de saberlo: quien paga puede cerrar la pestaña en Polar
@@ -367,10 +367,20 @@ class PolarCheckout(models.Model):
     # Se guarda acá y no se deduce mirando movimientos por fecha: dos compras
     # del mismo producto en el mismo minuto no se distinguirían así.
     acreditado_at = models.DateTimeField(null=True, blank=True)
+    # El `PaymentIntent` de Stripe, que se completa al acreditar el pago.
+    # `refund.created` llega con `payment_intent` y `charge`, NUNCA con el id de
+    # la sesión: sin guardarlo acá, un reembolso no se puede atribuir a ninguna
+    # compra. No es único a propósito: mientras el webhook no acredite queda
+    # vacío en todas las filas abiertas, y un índice único las haría chocar.
+    payment_intent = models.CharField(max_length=100, blank=True, default="")
+    # Con qué pasarela se pagó. Las filas anteriores al 03-09-2026 son de Polar
+    # y hay que poder reembolsarlas: sin esto, un reembolso de una compra vieja
+    # se buscaría contra la API de Stripe, donde esa sesión no existe.
+    pasarela = models.CharField(max_length=20, default="stripe")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.checkout_id} ({self.codigo_producto})"
+        return f"{self.checkout_id} ({self.codigo_producto}, {self.pasarela})"

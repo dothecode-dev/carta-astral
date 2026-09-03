@@ -92,7 +92,7 @@ def test_la_carta_viaja_en_la_metadata_cuando_se_compra_desde_una(
     polar_responde, make_account, make_chart,
 ):
     """El webhook la necesita para arrancar el informe apenas entra la plata.
-    Va como respaldo de `PolarCheckout`, que es quien la guarda de este lado."""
+    Va como respaldo de `PasarelaCheckout`, que es quien la guarda de este lado."""
     pedidos = polar_responde()
     cuenta = make_account()
     carta = make_chart(account=cuenta)

@@ -44,7 +44,7 @@ class PolarError(Exception):
     """Polar respondió algo que no es un checkout.
 
     Propia y no `httpx.HTTPError` a secas para que la vista pueda distinguirla
-    y responder 502 sin dejar un `PolarCheckout` a medias.
+    y responder 502 sin dejar un `PasarelaCheckout` a medias.
     """
 
 
@@ -98,7 +98,7 @@ def crear_checkout(
     errores de configuración nuestra, no del comprador.
 
     La `metadata` viaja como respaldo. La relación que manda es
-    `PolarCheckout`, porque la propagación de `metadata` del checkout a la orden
+    `PasarelaCheckout`, porque la propagación de `metadata` del checkout a la orden
     no está en el contrato publicado de Polar (se confirmó leyendo su fuente,
     que puede cambiar); `order.checkout_id` sí está garantizado.
     """

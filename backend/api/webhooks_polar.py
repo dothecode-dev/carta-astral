@@ -30,7 +30,7 @@ from standardwebhooks.webhooks import Webhook, WebhookVerificationError
 
 from api import catalogo, interpretation_service, mantenimiento, notificaciones, polar
 from api.canje import MontoInvalido, aplicar_compra, revocar
-from api.models import Account, PolarCheckout
+from api.models import Account, PasarelaCheckout
 from interpret.prompts import TIER_LARGO
 
 logger = logging.getLogger(__name__)
@@ -130,12 +130,12 @@ class PolarWebhookView(APIView):
 def _resolver_cuenta_y_checkout(orden: dict):
     """A quién le corresponde esta orden, y con qué carta si vino de una.
 
-    Manda `PolarCheckout` porque `order.checkout_id` es lo único que Polar
+    Manda `PasarelaCheckout` porque `order.checkout_id` es lo único que Polar
     garantiza; la `metadata` es respaldo, porque su propagación del checkout a
     la orden no está en el contrato publicado (se confirmó leyendo su fuente,
     que puede cambiar).
     """
-    fila = PolarCheckout.objects.filter(checkout_id=orden.get("checkout_id", "")).first()
+    fila = PasarelaCheckout.objects.filter(checkout_id=orden.get("checkout_id", "")).first()
     if fila is not None and fila.account is not None:
         return fila.account, fila
 

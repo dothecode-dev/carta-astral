@@ -18,7 +18,7 @@ from rest_framework.views import APIView
 from api import catalogo, mantenimiento, polar
 from api.auth import AccountTokenAuthentication
 from api.permissions import HasAccount
-from api.models import Chart, PolarCheckout
+from api.models import Chart, PasarelaCheckout
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ class CheckoutView(APIView):
 
         # Después del éxito y no antes: una fila huérfana dejaría que el webhook
         # de otra orden resolviera contra ella.
-        PolarCheckout.objects.create(
+        PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
             chart=carta, locale=idioma,
         )
@@ -106,7 +106,7 @@ class CheckoutEstadoView(APIView):
     permission_classes = [HasAccount]
 
     def get(self, request, checkout_id: str):
-        fila = get_object_or_404(PolarCheckout, checkout_id=checkout_id, account=request.user)
+        fila = get_object_or_404(PasarelaCheckout, checkout_id=checkout_id, account=request.user)
 
         if fila.acreditado_at is None:
             return Response({"estado": "pendiente"})

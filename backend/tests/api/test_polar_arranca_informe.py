@@ -17,7 +17,7 @@ import json
 import pytest
 
 from api import interpretation_service as svc
-from api.models import Interpretation, PolarCheckout
+from api.models import Interpretation, PasarelaCheckout
 from tests.api.polar_firma import SECRETO
 from tests.api.polar_firma import firmar as _firmar
 
@@ -68,7 +68,7 @@ def test_pagar_desde_una_carta_deja_el_informe_arrancado(
 ):
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
         chart=carta, locale="es",
     )
@@ -92,7 +92,7 @@ def test_el_informe_se_escribe_en_el_idioma_en_que_se_compro(
     """
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
         chart=carta, locale="pt",
     )
@@ -105,7 +105,7 @@ def test_el_informe_se_escribe_en_el_idioma_en_que_se_compro(
 def test_una_compra_sin_carta_no_arranca_nada(client, make_account, sin_hilo):
     """Un informe comprado suelto no sabe sobre qué carta se escribe."""
     cuenta = make_account()
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
     )
 
@@ -120,7 +120,7 @@ def test_un_pack_no_arranca_nada(client, make_account, make_chart, sin_hilo):
     una carta por ella sería gastarle uno sin que lo pida."""
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_5", account=cuenta, codigo_producto="pack_5_natal",
         chart=carta, locale="es",
     )
@@ -144,7 +144,7 @@ def test_si_la_generacion_no_arranca_el_pago_queda_acreditado_igual(
     """
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
         chart=carta, locale="es",
     )
@@ -174,7 +174,7 @@ def test_en_mantenimiento_la_compra_se_acredita_pero_el_hilo_no_arranca(
 
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    PolarCheckout.objects.create(
+    PasarelaCheckout.objects.create(
         checkout_id="chk_1", account=cuenta, codigo_producto="informe_natal",
         chart=carta, locale="es",
     )
