@@ -263,10 +263,30 @@ deploy: ## Despliega a producción sin cortar ningún informe a medias
 	git push origin main; \
 	sha=$$(git rev-parse HEAD); \
 	echo "→ esperando que producción levante $${sha}"; \
+	listo=0; \
 	for i in $$(seq 1 60); do \
-		if $(VPS_SSH) "docker ps --format '{{.Image}}' | grep -q $$sha"; then \
-			echo "   arriba"; break; \
+		\
+		: "El chequeo mira el contenedor del BACKEND, no cualquiera con ese sha."; \
+		: "El 03-09-2026 esto decía \`docker ps | grep -q $$sha\` a secas: matcheó"; \
+		: "el contenedor del FRONTEND —que buildea mucho más rápido—, dio el"; \
+		: "deploy por terminado y apagó el cartel mientras el backend seguía"; \
+		: "construyendo. O sea que el swap del backend, que es el que corre las"; \
+		: "migraciones, ocurrió con el sitio ya abierto: exactamente lo que este"; \
+		: "target existe para evitar."; \
+		: ""; \
+		: "Y no alcanza con que EXISTA uno con el sha nuevo: durante el swap"; \
+		: "conviven el nuevo y el viejo. Se espera a que no quede ninguno con"; \
+		: "otra imagen."; \
+		if $(VPS_SSH) "docker ps --format '{{.Names}} {{.Image}}' \
+			| grep '^jhcsvn' | grep -q $$sha \
+			&& ! docker ps --format '{{.Names}} {{.Image}}' \
+			| grep '^jhcsvn' | grep -qv $$sha"; then \
+			echo "   backend arriba con $${sha}"; listo=1; break; \
 		fi; \
 		sleep 15; \
 	done; \
+	if [ "$$listo" != 1 ]; then \
+		echo "   el backend NO levantó $${sha} en 15 minutos."; \
+		echo "   El cartel se apaga igual (trap), pero revisá el deploy en Coolify."; \
+	fi; \
 	echo "→ apago el cartel"
