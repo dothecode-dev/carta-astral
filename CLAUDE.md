@@ -132,9 +132,11 @@ cerrada. Si el drenaje no termina en doce minutos, no despliega.
 
 Mientras el cartel está puesto, el sitio responde 503 (`web/proxy.ts` — en Next
 16 el middleware se llama así) y el backend rechaza arrancar informes y abrir
-checkouts. El webhook de Polar es la excepción: sigue acreditando —rechazar
-suma a las diez entregas fallidas que apagan el endpoint— pero deja el informe
-sin arrancar, para que lo termine el cron.
+checkouts. El webhook de Stripe es la excepción: sigue acreditando, pero deja
+el informe sin arrancar para que lo termine el cron. Acreditar igual es lo
+correcto: la plata ya entró, y con Stripe además un rechazo se recupera solo
+—reintenta tres días—, así que el 5xx se reserva para lo que un reintento
+puede arreglar.
 
 `git push` directo sigue funcionando y está bien para la web o para cualquier
 cambio que no toque la generación. El flag vive en la caché de la base, así que
