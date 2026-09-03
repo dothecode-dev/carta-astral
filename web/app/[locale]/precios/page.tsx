@@ -197,9 +197,12 @@ export default async function PreciosPage({
           </ul>
         )}
 
-        <p className="preciosNota">
-          {dict.precios.nota}{" "}
-          {/* Nadie compra 6.000 palabras a ciegas: acá está lo que se lee. */}
+        <p className="preciosNota">{dict.precios.nota}</p>
+
+        {/* En su propia línea: nadie compra 6.000 palabras a ciegas, y esto es
+            una invitación a mirar el producto —no una aclaración más sobre
+            impuestos, que es como se leía colgando del final de la nota. */}
+        <p className="preciosEjemplo">
           <Link href={`/${locale}/ejemplo`}>{dict.precios.verEjemplo}</Link>
         </p>
       </main>

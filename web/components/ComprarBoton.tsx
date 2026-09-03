@@ -91,14 +91,19 @@ export function ComprarBoton({
 
   return (
     <>
-      <button type="button" className="btn btnPrimary" disabled={busy} onClick={comprar}>
-        {busy ? dict.precios.abriendo : dict.precios.comprar}
-      </button>
+      {/* Antes del botón, no después: el detalle de arriba tiene `flex: 1` y
+          empuja el botón al pie de la tarjeta, así que un error debajo lo
+          levantaba y los tres botones dejaban de estar a la misma altura.
+          Acá el error se come parte del espacio flexible y el botón no se
+          mueve — y de paso se lee antes de volver a apretarlo. */}
       {error && (
-        <p className="fieldNote" role="alert">
+        <p className="compraError" role="alert">
           {error}
         </p>
       )}
+      <button type="button" className="btn btnPrimary" disabled={busy} onClick={comprar}>
+        {busy ? dict.precios.abriendo : dict.precios.comprar}
+      </button>
     </>
   );
 }
