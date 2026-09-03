@@ -11,6 +11,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import json
+import sys
+
+
 import os
 from pathlib import Path
 
@@ -18,6 +21,33 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
 from config.observabilidad import init_sentry
+
+
+def _mapa_json(nombre: str) -> dict:
+    """Un mapeo `{clave: valor}` que llega por variable de entorno.
+
+    Con `json.loads` a secas, una variable mal escrita —comillas de más al
+    pegarla en el panel de deploy, una coma suelta— levanta al IMPORTAR este
+    módulo, así que Django no arranca y se cae el sitio entero por un error en
+    una variable del cobro. Acá se degrada a un mapeo vacío y se avisa por
+    stderr, que es donde se lee el log del contenedor.
+
+    Lo que queda roto es sólo lo que depende del mapeo, y ruidosamente: el
+    checkout responde 503 y el webhook descarta con "precio que no mapeamos".
+    Eso se arregla corrigiendo la variable; una API caída, no.
+    """
+    crudo = os.environ.get(nombre, "").strip()
+    if not crudo:
+        return {}
+    try:
+        valor = json.loads(crudo)
+    except ValueError as exc:
+        print(f"[settings] {nombre} no es JSON válido ({exc}): se ignora", file=sys.stderr)
+        return {}
+    if not isinstance(valor, dict):
+        print(f"[settings] {nombre} no es un mapeo JSON: se ignora", file=sys.stderr)
+        return {}
+    return valor
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -293,7 +323,7 @@ APPLE_PRIVATE_KEY = os.environ.get("APPLE_PRIVATE_KEY", "")  # contenido PEM del
 # Header Authorization que RevenueCat manda en cada webhook (Dashboard → Webhooks).
 REVENUECAT_WEBHOOK_AUTH = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")
 # Mapa product_id (App Store / Play) → créditos que otorga. JSON en env.
-REVENUECAT_PRODUCT_CREDITS = json.loads(os.environ.get("REVENUECAT_PRODUCT_CREDITS", "{}"))
+REVENUECAT_PRODUCT_CREDITS = _mapa_json("REVENUECAT_PRODUCT_CREDITS")
 
 # --- Polar (cobro en la web) -------------------------------------------------
 # El sandbox es OTRA organización: cuenta, productos y token propios. El default
@@ -306,7 +336,7 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # `price_id → código del catálogo`, en la dirección en que lo consulta el
 # webhook. Los ids de Stripe no se comparten entre modo test y live, así que
 # este mapeo es distinto en cada entorno y el código, el mismo.
-STRIPE_PRECIOS = json.loads(os.environ.get("STRIPE_PRECIOS", "{}"))
+STRIPE_PRECIOS = _mapa_json("STRIPE_PRECIOS")
 # Plantilla con `{locale}` (lo pone el checkout, de la lista blanca) y con
 # `{CHECKOUT_SESSION_ID}`, que reemplaza Stripe al redirigir.
 STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL", "")
