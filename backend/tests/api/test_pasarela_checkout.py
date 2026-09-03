@@ -1,8 +1,8 @@
-"""El modelo que ata una sesión de pago a una cuenta, ahora con dos pasarelas.
+"""El modelo que ata una sesión de pago a una cuenta.
 
-`PasarelaCheckout` pasó a `PasarelaCheckout` porque el cobro se mudó a Stripe y
-las filas de Polar tienen que seguir existiendo: hay compras reales hechas con
-esa pasarela y un reembolso puede llegar meses después.
+Se llamaba `PolarCheckout`. El nombre nuevo es de la pasarela en general y no
+de Stripe: es la fila que guarda lo que la pasarela no sabe —de quién es la
+compra, sobre qué carta y en qué idioma—, y eso no cambia si la pasarela cambia.
 """
 
 import pytest
@@ -10,14 +10,6 @@ import pytest
 from api.models import PasarelaCheckout
 
 pytestmark = pytest.mark.django_db
-
-
-def test_una_fila_nueva_es_de_stripe(make_account):
-    fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_test_1", account=make_account(), codigo_producto="informe_natal",
-    )
-
-    assert fila.pasarela == "stripe"
 
 
 def test_el_payment_intent_arranca_vacio_y_resuelve_el_reembolso(make_account):
@@ -35,8 +27,8 @@ def test_el_payment_intent_arranca_vacio_y_resuelve_el_reembolso(make_account):
 
 
 def test_dos_compras_sin_payment_intent_conviven(make_account):
-    """El campo no es único: mientras el webhook no acredite, queda vacío en
-    todas las filas abiertas y un índice único las haría chocar entre sí."""
+    """El campo no es único: mientras el webhook no acredite queda vacío en
+    todas las filas abiertas, y un índice único las haría chocar entre sí."""
     cuenta = make_account()
     PasarelaCheckout.objects.create(
         checkout_id="cs_test_3", account=cuenta, codigo_producto="informe_natal",

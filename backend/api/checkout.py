@@ -1,4 +1,4 @@
-"""`POST /api/checkout/`: abre una sesión de pago en Polar.
+"""`POST /api/checkout/`: abre una sesión de pago en Stripe.
 
 En módulo propio y no en `api/views.py`, que ya pasó las 250 líneas que el
 CLAUDE.md marca como techo — mismo criterio que `api/webhooks.py`.
@@ -15,7 +15,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api import catalogo, mantenimiento, polar
+from api import catalogo, mantenimiento, stripe_client
 from api.auth import AccountTokenAuthentication
 from api.permissions import HasAccount
 from api.models import Chart, PasarelaCheckout
@@ -50,16 +50,18 @@ class CheckoutView(APIView):
         if chart_id:
             carta = get_object_or_404(Chart, uuid=chart_id, account=request.user)
 
-        # El idioma en el que está navegando. Decide dos cosas: a qué página lo
-        # devuelve Polar después de pagar, y en qué idioma se escribe el
-        # informe cuando el webhook lo arranque. Se valida contra la lista
+        # El idioma en el que está navegando. Decide tres cosas: en qué idioma
+        # ve el checkout de Stripe, a qué página vuelve después de pagar, y en
+        # qué idioma se escribe el informe cuando el webhook lo arranque. Se valida contra la lista
         # blanca acá —no se concatena ni se guarda tal cual— porque viene del
         # navegador y termina en una URL y en la base.
-        pedido = request.data.get("locale") or polar.LOCALE_POR_DEFECTO
-        idioma = pedido if pedido in polar.LOCALES else polar.LOCALE_POR_DEFECTO
+        pedido = request.data.get("locale") or stripe_client.LOCALE_POR_DEFECTO
+        idioma = (
+            pedido if pedido in stripe_client.LOCALES else stripe_client.LOCALE_POR_DEFECTO
+        )
 
         try:
-            checkout_id, url = polar.crear_checkout(
+            checkout_id, url = stripe_client.crear_checkout(
                 request.user, codigo, chart=carta, locale=idioma,
             )
         except (KeyError, ValueError) as exc:
@@ -67,16 +69,16 @@ class CheckoutView(APIView):
             # armado, no una falla nuestra.
             logger.warning("checkout rechazado para %r: %s", codigo, exc)
             return Response({"error": "producto inválido"}, status=status.HTTP_400_BAD_REQUEST)
-        except polar.PolarNoConfigurado:
-            # Falta el token o la ficha en Polar: problema de configuración
+        except stripe_client.StripeNoConfigurado:
+            # Falta la clave o el precio en Stripe: problema de configuración
             # nuestro, no de quien compra.
             logger.exception("checkout sin configurar para %r", codigo)
             return Response(
                 {"error": "el cobro no está disponible"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except polar.PolarError:
-            logger.exception("polar no pudo abrir el checkout de %r", codigo)
+        except stripe_client.StripeError:
+            logger.exception("stripe no pudo abrir el checkout de %r", codigo)
             return Response(
                 {"error": "no pudimos abrir el pago"}, status=status.HTTP_502_BAD_GATEWAY
             )
@@ -94,7 +96,7 @@ class CheckoutEstadoView(APIView):
     """En qué quedó una compra, y a dónde mandar a quien volvió de pagar.
 
     Lo consulta la página de retorno. Existe por una carrera que no se puede
-    evitar: Polar redirige el navegador al instante y su webhook —el que
+    evitar: Stripe redirige el navegador al instante y su webhook —el que
     acredita— puede llegar después. Sin esto la página tendría que adivinar, y
     adivinar mal es mostrarle el botón de comprar a alguien que acaba de pagar.
 

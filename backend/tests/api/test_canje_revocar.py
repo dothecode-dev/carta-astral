@@ -11,7 +11,7 @@ def test_revocar_lo_no_canjeado_baja_el_saldo_y_no_deja_deuda(make_account):
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:1")
 
-    assert revocar(cuenta, "informe_natal", 1, external_id="polar:refund:1") is True
+    assert revocar(cuenta, "informe_natal", 1, external_id="stripe:refund:1") is True
 
     cuenta.refresh_from_db()
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
@@ -24,7 +24,7 @@ def test_revocar_algo_ya_canjeado_deja_deuda_y_no_toca_el_informe(make_account, 
     carta = make_chart(account=cuenta)
     canjear(cuenta, "leer_informe", carta)
 
-    revocar(cuenta, "informe_natal", 1, external_id="polar:refund:2")
+    revocar(cuenta, "informe_natal", 1, external_id="stripe:refund:2")
 
     cuenta.refresh_from_db()
     assert cuenta.deuda == 1
@@ -39,7 +39,7 @@ def test_reembolso_parcial_de_un_pack_revoca_lo_no_usado(make_account, make_char
     for _ in range(2):
         canjear(cuenta, "leer_informe", make_chart(account=cuenta))
 
-    revocar(cuenta, "informe_natal", 3, external_id="polar:refund:3")
+    revocar(cuenta, "informe_natal", 3, external_id="stripe:refund:3")
 
     cuenta.refresh_from_db()
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
@@ -49,9 +49,9 @@ def test_reembolso_parcial_de_un_pack_revoca_lo_no_usado(make_account, make_char
 def test_el_mismo_external_id_no_revoca_dos_veces(make_account):
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:4")
-    revocar(cuenta, "informe_natal", 1, external_id="polar:refund:4")
+    revocar(cuenta, "informe_natal", 1, external_id="stripe:refund:4")
 
-    assert revocar(cuenta, "informe_natal", 1, external_id="polar:refund:4") is False
+    assert revocar(cuenta, "informe_natal", 1, external_id="stripe:refund:4") is False
 
     cuenta.refresh_from_db()
     assert (Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante, cuenta.refund_count) == (1, 1)
@@ -61,8 +61,8 @@ def test_el_mismo_external_id_no_revoca_dos_veces(make_account):
 def test_al_cruzar_el_umbral_la_cuenta_queda_marcada(make_account):
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:5")
-    revocar(cuenta, "informe_natal", 1, external_id="polar:refund:5")
-    revocar(cuenta, "informe_natal", 1, external_id="polar:refund:6")
+    revocar(cuenta, "informe_natal", 1, external_id="stripe:refund:5")
+    revocar(cuenta, "informe_natal", 1, external_id="stripe:refund:6")
 
     cuenta.refresh_from_db()
     assert cuenta.flagged is True
@@ -70,8 +70,8 @@ def test_al_cruzar_el_umbral_la_cuenta_queda_marcada(make_account):
 
 def test_revocar_sobre_una_cuenta_borrada_registra_y_no_explota():
     # Chargeback meses después, con la cuenta ya borrada (spec RF22).
-    assert revocar(None, "informe_natal", 1, external_id="polar:refund:7") is True
-    assert Movimiento.objects.get(external_id="polar:refund:7").account_id is None
+    assert revocar(None, "informe_natal", 1, external_id="stripe:refund:7") is True
+    assert Movimiento.objects.get(external_id="stripe:refund:7").account_id is None
 
 
 def test_reembolsar_un_pack_baja_el_derecho_que_ese_pack_otorgo(make_account):
@@ -83,13 +83,13 @@ def test_reembolsar_un_pack_baja_el_derecho_que_ese_pack_otorgo(make_account):
     busca un `Derecho` de `pack_5_natal` que no existe, lo crea en 0, no baja
     nada, y manda las cinco unidades a deuda — el usuario cobra el reembolso y
     se queda con los cinco informes. Los tests de arriba no lo veían porque
-    pasan a mano el código ya traducido; el webhook de Polar va a pasar el
+    pasan a mano el código ya traducido; el webhook de la pasarela va a pasar el
     producto que se compró.
     """
     cuenta = make_account()
     otorgar(cuenta, "pack_5_natal", 1, origen="compra", external_id="p:pack")
 
-    revocar(cuenta, "pack_5_natal", 1, external_id="polar:refund:pack")
+    revocar(cuenta, "pack_5_natal", 1, external_id="stripe:refund:pack")
 
     cuenta.refresh_from_db()
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
@@ -107,7 +107,7 @@ def test_reembolsar_un_pack_ya_usado_deja_la_deuda_de_todas_sus_unidades(
     for _ in range(5):
         canjear(cuenta, "leer_informe", make_chart(account=cuenta))
 
-    revocar(cuenta, "pack_5_natal", 1, external_id="polar:refund:pack2")
+    revocar(cuenta, "pack_5_natal", 1, external_id="stripe:refund:pack2")
 
     cuenta.refresh_from_db()
     assert cuenta.deuda == 5

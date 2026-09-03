@@ -16,7 +16,7 @@ def test_una_compra_suelta_otorga_uno_y_lo_canjea_contra_la_carta(make_account, 
     cuenta = make_account()
     carta = make_chart(account=cuenta)
 
-    aplicar_compra(cuenta, "informe_natal", 2900, external_id="polar:1", chart=carta)
+    aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:1", chart=carta)
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
     assert Movimiento.objects.filter(tipo="consumo", chart=carta).count() == 1
@@ -25,7 +25,7 @@ def test_una_compra_suelta_otorga_uno_y_lo_canjea_contra_la_carta(make_account, 
 def test_el_pack_otorga_cinco_y_no_canjea_nada(make_account):
     cuenta = make_account()
 
-    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="polar:2")
+    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="stripe:2")
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
     assert Movimiento.objects.filter(tipo="consumo").count() == 0
@@ -38,41 +38,41 @@ def test_si_la_carta_ya_no_existe_otorga_igual_y_no_canjea(make_account, make_ch
     carta_id = carta.id
     carta.delete()
 
-    aplicar_compra(cuenta, "informe_natal", 2900, external_id="polar:3", chart_id=carta_id)
+    aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:3", chart_id=carta_id)
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
 
 
 def test_un_monto_distinto_al_del_catalogo_se_rechaza(make_account):
     with pytest.raises(MontoInvalido):
-        aplicar_compra(make_account(), "informe_natal", 100, external_id="polar:4")
+        aplicar_compra(make_account(), "informe_natal", 100, external_id="stripe:4")
 
 
 def test_un_monto_mayor_tambien_se_rechaza(make_account):
     with pytest.raises(MontoInvalido):
-        aplicar_compra(make_account(), "informe_natal", 5000, external_id="polar:5")
+        aplicar_compra(make_account(), "informe_natal", 5000, external_id="stripe:5")
 
 
 def test_un_monto_menor_con_descuento_declarado_se_acepta(make_account):
     cuenta = make_account()
 
-    aplicar_compra(cuenta, "informe_natal", 2320, external_id="polar:6", descuento_centavos=580)
+    aplicar_compra(cuenta, "informe_natal", 2320, external_id="stripe:6", descuento_centavos=580)
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
 
 
 def test_el_rechazo_avisa_con_los_tres_datos(make_account, caplog):
     with pytest.raises(MontoInvalido):
-        aplicar_compra(make_account(), "informe_natal", 100, external_id="polar:7")
+        aplicar_compra(make_account(), "informe_natal", 100, external_id="stripe:7")
 
     assert "informe_natal" in caplog.text and "2900" in caplog.text and "100" in caplog.text
 
 
 def test_el_mismo_evento_no_se_aplica_dos_veces(make_account):
     cuenta = make_account()
-    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="polar:8")
+    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="stripe:8")
 
-    assert aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="polar:8") is False
+    assert aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="stripe:8") is False
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
 
@@ -80,7 +80,7 @@ def test_el_mismo_evento_no_se_aplica_dos_veces(make_account):
 def test_un_descuento_negativo_se_rechaza(make_account):
     with pytest.raises(MontoInvalido):
         aplicar_compra(
-            make_account(), "informe_natal", 3200, external_id="polar:9",
+            make_account(), "informe_natal", 3200, external_id="stripe:9",
             descuento_centavos=-300,
         )
 
@@ -88,7 +88,7 @@ def test_un_descuento_negativo_se_rechaza(make_account):
 def test_un_descuento_mayor_al_precio_se_rechaza(make_account):
     with pytest.raises(MontoInvalido):
         aplicar_compra(
-            make_account(), "informe_natal", 0, external_id="polar:10",
+            make_account(), "informe_natal", 0, external_id="stripe:10",
             descuento_centavos=3000,
         )
 
@@ -97,7 +97,7 @@ def test_el_pack_no_canjea_aunque_llegue_con_carta(make_account, make_chart):
     cuenta = make_account()
     carta = make_chart(account=cuenta)
 
-    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="polar:11", chart=carta)
+    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="stripe:11", chart=carta)
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
     assert Movimiento.objects.filter(tipo="consumo").count() == 0

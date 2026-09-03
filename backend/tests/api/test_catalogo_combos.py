@@ -36,7 +36,7 @@ def _derechos(cuenta) -> dict:
 def test_un_combo_otorga_los_dos_productos(make_account, combo):
     cuenta = make_account()
 
-    aplicar_compra(cuenta, "combo_carta_horoscopo", 3900, external_id="polar:order:c1")
+    aplicar_compra(cuenta, "combo_carta_horoscopo", 3900, external_id="stripe:order:c1")
 
     tiene = _derechos(cuenta)
     assert tiene.get("informe_natal") == 1
@@ -46,9 +46,9 @@ def test_un_combo_otorga_los_dos_productos(make_account, combo):
 def test_reembolsar_un_combo_baja_los_dos(make_account, combo):
     """Si el reembolso sólo bajara uno, la mitad del combo queda regalada."""
     cuenta = make_account()
-    aplicar_compra(cuenta, "combo_carta_horoscopo", 3900, external_id="polar:order:c2")
+    aplicar_compra(cuenta, "combo_carta_horoscopo", 3900, external_id="stripe:order:c2")
 
-    revocar(cuenta, "combo_carta_horoscopo", 1, external_id="polar:refund:c2")
+    revocar(cuenta, "combo_carta_horoscopo", 1, external_id="stripe:refund:c2")
 
     tiene = _derechos(cuenta)
     assert tiene.get("informe_natal") == 0

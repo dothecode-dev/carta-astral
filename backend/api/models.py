@@ -336,10 +336,9 @@ class PasarelaCheckout(models.Model):
     """Quién abrió esta sesión de pago, en qué pasarela, y para qué.
 
     Existe porque el webhook necesita saber a qué cuenta acreditarle la compra,
-    y la metadata de la pasarela no alcanza: con Polar su propagación del
-    checkout a la orden no estaba en el contrato publicado, y con Stripe la
-    fila propia igual guarda cosas que la pasarela no conoce —la carta y el
-    idioma—. La fila es la fuente de verdad; la metadata, el respaldo.
+    y la metadata de la sesión no alcanza: la fila propia guarda cosas que la
+    pasarela no conoce —la carta y el idioma—. La fila es la fuente de verdad;
+    la metadata que viaja a Stripe es el respaldo.
 
     `chart` es opcional y es lo que hace que comprar desde una carta termine
     con esa carta escribiéndose, en vez de con un derecho suelto que hay que ir
@@ -373,14 +372,10 @@ class PasarelaCheckout(models.Model):
     # compra. No es único a propósito: mientras el webhook no acredite queda
     # vacío en todas las filas abiertas, y un índice único las haría chocar.
     payment_intent = models.CharField(max_length=100, blank=True, default="")
-    # Con qué pasarela se pagó. Las filas anteriores al 03-09-2026 son de Polar
-    # y hay que poder reembolsarlas: sin esto, un reembolso de una compra vieja
-    # se buscaría contra la API de Stripe, donde esa sesión no existe.
-    pasarela = models.CharField(max_length=20, default="stripe")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.checkout_id} ({self.codigo_producto}, {self.pasarela})"
+        return f"{self.checkout_id} ({self.codigo_producto})"

@@ -27,7 +27,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api import catalogo
+from api import catalogo, notificaciones
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
 from api.models import Account, PasarelaCheckout
@@ -192,6 +192,9 @@ def _acreditar(session_id: str) -> None:
 
     if aplicado:
         logger.info("sesión %s acreditada: %s", session_id, codigo)
+        # Dentro del `if`: en un reintento la compra ya se acreditó y avisar de
+        # nuevo sería un segundo mail por la misma compra.
+        notificaciones.notificar(cuenta, "compra_acreditada", {"producto": codigo}, lang="es")
 
     # Sin `try`: si el informe no arranca, la excepción sube y la vista pide el
     # reintento. La plata ya está acreditada —los requests no corren en
@@ -239,14 +242,12 @@ def _reembolsar(refund: dict) -> None:
     payment_intent = refund.get("payment_intent") or ""
     if not payment_intent:
         # Sin `payment_intent` no hay forma de atribuir el reembolso, y buscar
-        # por vacío engancharía cualquier fila sin acreditar —incluidas las
-        # viejas de Polar, que nunca lo tuvieron—. Reintentar no lo arregla.
+        # por vacío engancharía cualquier compra abierta y todavía sin
+        # acreditar: revocaría la de cualquiera. Reintentar no lo arregla.
         logger.error("reembolso %s sin payment_intent: no se revoca", refund_id)
         return
 
-    fila = PasarelaCheckout.objects.filter(
-        payment_intent=payment_intent, pasarela="stripe",
-    ).first()
+    fila = PasarelaCheckout.objects.filter(payment_intent=payment_intent).first()
     if fila is None:
         # ESTE sí se arregla reintentando: el reembolso puede llegar antes de
         # que la entrega del pago haya guardado el `payment_intent`. Es el

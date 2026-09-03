@@ -299,24 +299,17 @@ REVENUECAT_PRODUCT_CREDITS = json.loads(os.environ.get("REVENUECAT_PRODUCT_CREDI
 # El sandbox es OTRA organización: cuenta, productos y token propios. El default
 # es producción a propósito — un valor mal escrito no puede mandar los pagos
 # reales al sandbox, que no cobra.
-# Stripe reemplaza a Polar como pasarela (Polar rechazó el rubro el 03-09-2026).
-# Las variables de Polar siguen abajo: hacen falta para los reembolsos de las
-# compras que entraron por ahí.
+# Stripe es la pasarela: cobra como merchant of record (Managed Payments), se
+# ocupa del IVA en más de 80 países y avisa por webhook.
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # `price_id → código del catálogo`, en la dirección en que lo consulta el
 # webhook. Los ids de Stripe no se comparten entre modo test y live, así que
 # este mapeo es distinto en cada entorno y el código, el mismo.
 STRIPE_PRECIOS = json.loads(os.environ.get("STRIPE_PRECIOS", "{}"))
-
-POLAR_ENVIRONMENT = os.environ.get("POLAR_ENVIRONMENT", "")
-POLAR_ACCESS_TOKEN = os.environ.get("POLAR_ACCESS_TOKEN", "")
-POLAR_WEBHOOK_SECRET = os.environ.get("POLAR_WEBHOOK_SECRET", "")
-POLAR_SUCCESS_URL = os.environ.get("POLAR_SUCCESS_URL", "")
-# Mapeo id de Polar → código del catálogo, en JSON. En ese sentido porque así lo
-# consume el webhook, que es quien recibe el id. Mismo patrón que
-# REVENUECAT_PRODUCT_CREDITS, arriba.
-POLAR_PRODUCTOS = json.loads(os.environ.get("POLAR_PRODUCTOS", "{}"))
+# Plantilla con `{locale}` (lo pone el checkout, de la lista blanca) y con
+# `{CHECKOUT_SESSION_ID}`, que reemplaza Stripe al redirigir.
+STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL", "")
 # Cantidad de reembolsos que marca una cuenta como abuso.
 REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 

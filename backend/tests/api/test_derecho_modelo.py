@@ -55,12 +55,12 @@ def test_dos_movimientos_no_comparten_external_id(make_account):
     cuenta = make_account()
     Movimiento.objects.create(
         account=cuenta, codigo_producto="informe_natal", tipo="otorgamiento",
-        cantidad=1, origen="compra", external_id="polar:evt_1",
+        cantidad=1, origen="compra", external_id="stripe:evt_1",
     )
     with pytest.raises(IntegrityError):
         Movimiento.objects.create(
             account=cuenta, codigo_producto="informe_natal", tipo="otorgamiento",
-            cantidad=1, origen="compra", external_id="polar:evt_1",
+            cantidad=1, origen="compra", external_id="stripe:evt_1",
         )
 
 

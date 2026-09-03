@@ -108,12 +108,12 @@ def test_el_mismo_reembolso_dos_veces_revoca_una_sola(client, comprado):
     assert comprado.account.refund_count == 1
 
 
-def test_una_compra_de_polar_no_la_atiende_el_webhook_de_stripe(client, make_account):
-    """Las filas viejas no tienen `payment_intent`: si el reembolso llegara sin
-    uno, un filtro por vacío las engancharía a todas."""
+def test_un_reembolso_sin_payment_intent_no_engancha_ninguna_compra(client, make_account):
+    """Una compra abierta y todavía sin acreditar tiene el `payment_intent`
+    vacío: un filtro por vacío las engancharía a todas y terminaría revocando
+    la compra de cualquiera."""
     PasarelaCheckout.objects.create(
-        checkout_id="chk_polar", account=make_account(), codigo_producto="informe_natal",
-        pasarela="polar",
+        checkout_id="cs_abierta", account=make_account(), codigo_producto="informe_natal",
     )
 
     r = _entregar(client, _refund(payment_intent=None))

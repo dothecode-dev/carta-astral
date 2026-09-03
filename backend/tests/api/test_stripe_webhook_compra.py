@@ -240,3 +240,30 @@ def test_el_reintento_deja_la_marca_aunque_la_compra_ya_estuviera_aplicada(
     compra.refresh_from_db()
     assert compra.acreditado_at is not None
     assert compra.payment_intent == "pi_1"
+
+
+def test_al_acreditar_se_le_avisa_a_quien_compro(client, monkeypatch, compra):
+    """El aviso existía sólo en el webhook de Polar y sin ningún test que lo
+    cubriera: viajó a Stripe cuando Polar se borró."""
+    avisos = []
+    monkeypatch.setattr(
+        webhooks_stripe.notificaciones, "notificar",
+        lambda cuenta, evento, contexto, lang: avisos.append((evento, contexto)),
+    )
+
+    _entregar(client, monkeypatch)
+
+    assert avisos == [("compra_acreditada", {"producto": "informe_natal"})]
+
+
+def test_el_reintento_no_avisa_dos_veces(client, monkeypatch, compra):
+    avisos = []
+    monkeypatch.setattr(
+        webhooks_stripe.notificaciones, "notificar",
+        lambda cuenta, evento, contexto, lang: avisos.append(evento),
+    )
+
+    _entregar(client, monkeypatch)
+    _entregar(client, monkeypatch)
+
+    assert avisos == ["compra_acreditada"]
