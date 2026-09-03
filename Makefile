@@ -292,5 +292,11 @@ deploy: ## Despliega a producción sin cortar ningún informe a medias
 	if [ "$$listo" != 1 ]; then \
 		echo "   backend o web NO levantaron $${sha} en 15 minutos."; \
 		echo "   El cartel se apaga igual (trap), pero revisá el deploy en Coolify."; \
+		: "Y falla. Esto salía con código 0: el 03-09-2026 la web no levantó"; \
+		: "—Coolify la revirtió porque el cartel hacía responder 503 a"; \
+		: "/healthz— y el deploy informó exito igual. Quedó producción con el"; \
+		: "backend nuevo y la web dos commits atras, y el aviso perdido entre"; \
+		: "el resto de la salida. Un deploy que no desplego tiene que fallar."; \
+		exit 1; \
 	fi; \
 	echo "→ apago el cartel"

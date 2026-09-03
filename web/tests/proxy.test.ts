@@ -51,6 +51,20 @@ describe("proxy de mantenimiento", () => {
     expect(await res.text()).toContain("Estamos aceitando el universo");
   });
 
+  // El 03-09-2026 el cartel tumbó su propio deploy: `/healthz` caía en el 503,
+  // Coolify lo leyó como contenedor enfermo y revirtió al viejo. La web se
+  // quedó dos commits atrás mientras `make deploy` decía que todo bien. Un
+  // liveness dice si el proceso está vivo; no puede depender de un flag de
+  // negocio que justamente se prende durante el deploy.
+  it("el liveness contesta aunque el cartel esté puesto", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: true })));
+    const proxy = await cargarProxy();
+
+    const res = await proxy(pedir("/healthz"));
+
+    expect(res.status).not.toBe(503);
+  });
+
   it("el cartel habla el idioma de la URL", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: true })));
     const proxy = await cargarProxy();

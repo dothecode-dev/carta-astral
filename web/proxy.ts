@@ -87,6 +87,20 @@ function pagina(locale: Locale): string {
 }
 
 export async function proxy(request: NextRequest) {
+  // El liveness pasa siempre, con cartel o sin cartel. Es lo que Coolify le
+  // pregunta al contenedor recién arrancado para decidir si lo deja vivo, y
+  // durante un deploy el cartel está puesto por definición: el 03-09-2026
+  // `/healthz` respondía 503, Coolify lo leyó como "contenedor enfermo" y
+  // revirtió al anterior diez veces seguidas. La web se quedó dos commits
+  // atrás mientras `make deploy` informaba éxito. O sea: el mecanismo que
+  // protege los informes en curso impedía desplegar la web.
+  //
+  // También está en el `matcher` de abajo, que es lo que evita que este
+  // archivo se ejecute para esa ruta. Acá igual, por si el matcher cambia:
+  // que el liveness dependa de una sola línea de regex es demasiado frágil
+  // para lo que cuesta equivocarse.
+  if (request.nextUrl.pathname === "/healthz") return NextResponse.next();
+
   if (!(await enMantenimiento())) {
     // La raíz no tiene página propia: manda al idioma que pide el navegador.
     // Estaba en `redirects()` de `next.config.ts` con destino fijo a `/es`, y
@@ -126,5 +140,9 @@ export const config = {
   // Las páginas sí; los assets y las rutas internas no. Esas últimas sostienen
   // el sondeo de quien está esperando un informe ya empezado, y cortarlas sería
   // romper justamente lo que el mantenimiento existe para cuidar.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|fonts|.*\\.(?:png|jpg|jpeg|svg|webp|ico|txt|xml)$).*)"],
+  //
+  // `healthz` tampoco: es lo que Coolify consulta para decidir si el contenedor
+  // recién desplegado vive. Con el cartel puesto respondía 503 y el deploy se
+  // revertía solo (ver el comentario de arriba).
+  matcher: ["/((?!api|healthz|_next/static|_next/image|favicon.ico|fonts|.*\\.(?:png|jpg|jpeg|svg|webp|ico|txt|xml)$).*)"],
 };
