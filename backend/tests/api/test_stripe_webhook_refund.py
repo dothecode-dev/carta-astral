@@ -16,6 +16,7 @@ import json
 import pytest
 
 from api.canje import aplicar_compra, canjear
+from api.catalogo import producto
 from api.models import Account, Derecho, Movimiento, PasarelaCheckout
 from tests.api.stripe_firma import SECRETO, firmar
 
@@ -151,3 +152,55 @@ def test_los_reembolsos_de_la_pasarela_cuentan_para_el_contador(client, comprado
 
     comprado.account.refresh_from_db()
     assert comprado.account.refund_count == 1
+
+
+# --- Reembolso parcial (test 39) --------------------------------------------
+#
+# Decidido el 03-09-2026: se revoca la proporción redondeada HACIA ARRIBA. Ante
+# la duda no se regala producto, y lo que la persona ya usó no se le saca igual
+# —eso va a deuda—. En un producto suelto cualquier reembolso parcial revoca su
+# única unidad: no existe medio informe.
+
+PRECIO_PACK = producto("pack_5_natal").precio_centavos
+
+
+@pytest.fixture
+def pack_comprado(make_account):
+    cuenta = make_account()
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
+        payment_intent=PI,
+    )
+    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="stripe:session:cs_pack")
+    return fila
+
+
+def test_medio_pack_reembolsado_revoca_tres_de_cinco(client, pack_comprado):
+    r = _entregar(client, _refund(amount=PRECIO_PACK // 2))
+
+    assert r.status_code == 200
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 2
+
+
+def test_el_pack_entero_reembolsado_revoca_los_cinco(client, pack_comprado):
+    r = _entregar(client, _refund(amount=PRECIO_PACK))
+
+    assert r.status_code == 200
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
+
+
+def test_un_reembolso_parcial_de_un_suelto_revoca_su_unica_unidad(client, comprado):
+    r = _entregar(client, _refund(amount=1450))
+
+    assert r.status_code == 200
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
+
+
+def test_un_reembolso_mayor_al_precio_no_revoca_de_mas(client, pack_comprado):
+    """Un monto raro no puede inventar unidades: la proporción se acota en 1."""
+    r = _entregar(client, _refund(amount=PRECIO_PACK * 3))
+
+    assert r.status_code == 200
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
+    pack_comprado.account.refresh_from_db()
+    assert pack_comprado.account.deuda == 0

@@ -27,6 +27,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api import catalogo
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
 from api.models import Account, PasarelaCheckout
@@ -262,5 +263,42 @@ def _reembolsar(refund: dict) -> None:
     # cuenta —Managed Payments los emite sin nuestra aprobación—: decidido el
     # 03-09-2026, porque el payload no dice quién inició el reembolso y
     # `flagged` no bloquea nada, sólo marca la cuenta para mirarla.
-    revocar(fila.account, fila.codigo_producto, 1, external_id=f"stripe:refund:{refund_id}")
-    logger.info("reembolso %s revocado: %s", refund_id, fila.codigo_producto)
+    external_id = f"stripe:refund:{refund_id}"
+    prod = catalogo.producto(fila.codigo_producto)
+    monto = refund.get("amount") or 0
+
+    if monto >= prod.precio_centavos:
+        # Reembolso total: se revoca el producto COMPRADO, que es lo que deja
+        # el Movimiento diciendo qué se reembolsó, y `revocar` traduce a lo que
+        # ese producto otorgó.
+        revocar(fila.account, fila.codigo_producto, 1, external_id=external_id)
+        logger.info("reembolso %s revocado entero: %s", refund_id, fila.codigo_producto)
+        return
+
+    if len(prod.otorga) != 1:
+        # Un combo devuelto a medias no tiene una respuesta obvia —¿qué mitad
+        # de "carta + horóscopo" se revoca?— y hoy no existe ninguno en el
+        # catálogo. Antes que inventar una regla, queda a la vista.
+        logger.error(
+            "reembolso %s parcial sobre un producto que otorga %s cosas (%s): "
+            "no se revoca, resolver a mano",
+            refund_id, len(prod.otorga), fila.codigo_producto,
+        )
+        return
+
+    # Proporción redondeada HACIA ARRIBA (decidido el 03-09-2026): media
+    # devolución de un pack de 5 revoca 3, y cualquier reembolso parcial de un
+    # producto suelto revoca su única unidad, porque no existe medio informe.
+    # Ante la duda no se regala producto; lo que ya se usó no se le saca a
+    # nadie igual, eso va a deuda. En enteros, para no arrastrar floats.
+    codigo_otorgado, multiplicador = prod.otorga[0]
+    unidades = -(-monto * multiplicador // prod.precio_centavos)
+    if unidades <= 0:
+        logger.error("reembolso %s por %s: no alcanza a una unidad", refund_id, monto)
+        return
+
+    revocar(fila.account, codigo_otorgado, unidades, external_id=external_id)
+    logger.info(
+        "reembolso %s parcial (%s de %s): revocadas %s de %s unidades de %s",
+        refund_id, monto, prod.precio_centavos, unidades, multiplicador, codigo_otorgado,
+    )
