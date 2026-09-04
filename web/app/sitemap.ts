@@ -6,8 +6,11 @@ import { SITE_URL } from "@/lib/config";
 import { fetchNotesOrNone } from "@/lib/notes";
 
 // Sólo lo que es público e indexable. Las páginas con sesión (`cuenta`,
-// `carta/[id]`, `nueva`) y la de acceso son `noindex` y no entran acá.
-const PATHS = ["", "/precios", "/ejemplo", "/legal/privacy", "/legal/terms"] as const;
+// `carta/[id]`) y la de acceso son `noindex` y no entran acá.
+//
+// `/nueva` entró el 04-09-2026, cuando dejó de exigir cuenta: es el calculador
+// abierto, y "calcular carta natal gratis" es la búsqueda que trae gente.
+const PATHS = ["", "/nueva", "/precios", "/ejemplo", "/legal/privacy", "/legal/terms"] as const;
 
 function url(locale: string, path: string) {
   return `${SITE_URL}/${locale}${path}`;

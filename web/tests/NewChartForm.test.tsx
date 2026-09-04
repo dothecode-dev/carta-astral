@@ -53,7 +53,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   replace.mockClear();
   refresh.mockClear();
-  render(<NewChartForm locale="es" dict={dict} />);
+  render(<NewChartForm locale="es" dict={dict} signedIn />);
 });
 
 afterEach(() => {

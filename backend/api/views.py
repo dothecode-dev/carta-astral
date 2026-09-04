@@ -17,7 +17,7 @@ from api.auth import (
     create_session,
 )
 from api.deletion import delete_account, delete_charts
-from api.chart_service import create_chart
+from api.chart_service import CartaCalculada, calcular, create_chart
 from api.canje import SinDerecho, derechos_de
 from api.exceptions import CapReached, GenerationInProgress
 from api.interpretation_service import DISCLAIMERS
@@ -25,6 +25,8 @@ from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 from api import apple
 from api.models import Chart, Interpretation, ProviderIdentity
 from api.permissions import HasAccount
+from api.serializers import serialize_chart_data
+from api.versioning import engine_version
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
 logger = logging.getLogger(__name__)
@@ -181,6 +183,71 @@ class ChartCollectionView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+def _preview_repr(carta: CartaCalculada) -> dict:
+    """La misma forma que `_chart_repr`, menos lo que sólo existe guardado.
+
+    Sin `id`: no hay fila, y un identificador invitaría a la web a pedirle al
+    backend algo que no está. `interpretations` y `en_curso` van vacíos —no
+    ausentes— para que los componentes de la carta no tengan que distinguir
+    este caso del de una carta propia recién creada.
+    """
+    bi = carta.birth_input
+    return {
+        "house_system": carta.data.house_system,
+        "zodiac": carta.data.zodiac,
+        "data": serialize_chart_data(carta.data),
+        "engine_version": engine_version(),
+        "interpretation_langs": [],
+        "interpretations": {},
+        "en_curso": {},
+        "birth": {
+            "name": bi.name,
+            "date": bi.date.isoformat(),
+            "time": bi.time.strftime("%H:%M") if bi.time else None,
+            "time_known": carta.data.time_known,
+            "lat": bi.lat,
+            "lng": bi.lng,
+            "tz_name": carta.tz_name,
+            "place_label": carta.place_label,
+        },
+    }
+
+
+class ChartPreviewView(APIView):
+    """La carta de quien todavía no tiene cuenta.
+
+    El CTA de la home mandaba a `/nueva`, que exigía entrar: el visitante frío
+    chocaba con un login antes de ver nada, mientras `/precios` le prometía
+    tres lecturas gratis. Acá ve SU rueda —no la carta de ejemplo, que es la
+    de otra persona— y la cuenta se pide recién para la interpretación, que es
+    lo que cuesta plata.
+
+    Calcula y no guarda: la fecha, la hora y el lugar de nacimiento son dato
+    sensible de alguien que todavía no aceptó nada. Si después entra, la web
+    reenvía esos datos y ahí sí se crea la carta.
+
+    El techo es por IP porque no hay cuenta a la que atribuir el gasto. No
+    cubre el costo del LLM —el preview no lo usa— sino la CPU de las
+    efemérides, que es lo único que se puede quemar desde acá.
+    """
+
+    authentication_classes = [AccountTokenAuthentication]
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "preview"
+
+    def post(self, request):
+        try:
+            carta = calcular(request.data)
+        except (KeyError, ValueError, CoreError) as exc:
+            # Sin `exc_info` y sin el payload: el traceback de Sentry adjunta
+            # las variables locales del marco, y acá adentro está la fecha de
+            # nacimiento de una persona que ni siquiera tiene cuenta.
+            logger.warning("preview rechazado: %s", type(exc).__name__)
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_preview_repr(carta))
+
+
 class ChartDetailView(APIView):
     authentication_classes = [AccountTokenAuthentication]
     permission_classes = [HasAccount]
@@ -191,6 +258,15 @@ class ChartDetailView(APIView):
 
 
 class GeocodeView(APIView):
+    # Abierta desde el 04-09-2026: el formulario de `/nueva` funciona sin
+    # cuenta, y sin esto el visitante no podía ni decir dónde nació (heredaba
+    # `HasAccount` del default de DRF por no declarar permiso propio).
+    # El techo es por IP y generoso: el campo autocompleta mientras se
+    # escribe, así que completar un formulario son varias consultas.
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "geocode"
+
     def post(self, request):
         q = request.data.get("q", "")
         try:

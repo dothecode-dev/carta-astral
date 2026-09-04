@@ -7,6 +7,14 @@ import type { SampleChart } from "@/content/sample-chart";
 // nombres del motor—, así que se traduce en un solo lugar y el componente que
 // dibuja no se entera de la diferencia.
 
+/** Lo que alcanza para DIBUJAR una carta.
+ *
+ * Una carta calculada para alguien sin cuenta (`/api/charts/preview`) no tiene
+ * `id` ni interpretaciones —no existe como fila—, pero se dibuja igual: la
+ * rueda y las tablas sólo miran `data`. Tipar por lo que se usa es lo que
+ * permite reusar los mismos componentes sin inventarle un id falso. */
+export type CartaDibujable = Pick<ApiChart, "data">;
+
 export type ApiChart = {
   id: string;
   interpretation_langs: string[];
@@ -93,7 +101,7 @@ export function toWheelInput(chart: SampleChart): WheelInput {
  * Devuelve null si la carta no tiene casas ni ángulos: eso pasa cuando no se
  * conoce la hora de nacimiento, y una rueda sin Ascendente no se puede orientar.
  */
-export function toWheel(chart: ApiChart): SampleChart | null {
+export function toWheel(chart: CartaDibujable): SampleChart | null {
   const { houses, angles, placements, aspects } = chart.data;
   if (!houses || !angles) return null;
 

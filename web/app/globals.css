@@ -841,6 +841,91 @@ body > .frame {
   color: var(--ink-soft);
 }
 
+/* --- La carta de quien todavía no tiene cuenta --------------------------- */
+
+/* El formulario vive en una medida angosta (560px), que es la correcta para
+   llenar campos y la equivocada para mirar una carta: la rueda y la matriz de
+   aspectos piden el ancho de `/carta`. Como el preview aparece por estado del
+   cliente, el ancho lo decide el propio contenido con `:has()` en vez de
+   volver a renderizar la página desde el servidor. */
+.formFrame:has(.previewCarta) {
+  max-width: 1080px;
+}
+
+.previewCarta {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2rem, 5vw, 3rem);
+}
+
+.previewHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.previewTitle {
+  font-size: var(--step-3);
+}
+
+.previewLede {
+  margin: 0;
+  color: var(--ink-soft);
+  max-width: 60ch;
+}
+
+/* La invitación a leer: centrada y con aire, para que no se lea como un pie de
+   la tabla que tiene encima. */
+.previewCta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.previewPie {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--hairline);
+}
+
+/* El texto que hace indexable a `/nueva`. Va debajo del formulario y en la
+   medida de lectura, no en la del formulario. */
+.formSeo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 62ch;
+  padding-top: 2.5rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.seoTitle {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: var(--step-1);
+  font-weight: 400;
+  margin: 1rem 0 0;
+}
+
+.seoTitle:first-child {
+  margin-top: 0;
+}
+
+.seoBody {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
 .form {
   display: flex;
   flex-direction: column;

@@ -20,7 +20,17 @@ export type EventoProps = {
    *  viaja en la ruta: no hacen falta eventos propios para eso. */
   pagina_vista: { locale: string; ruta: string };
   login: { provider: "google" | "apple" };
-  carta_creada: Record<string, never>;
+  /** Calculó su rueda. `con_sesion: false` es el visitante frío que entró
+   *  por la home o por una nota y llegó a ver algo suyo sin registrarse: es el
+   *  primer escalón del embudo que antes empezaba directamente en el login. */
+  carta_calculada: { con_sesion: boolean };
+  /** Vio su rueda sin cuenta y apretó para leer la interpretación, o sea que
+   *  la puerta del registro aparece recién acá. La distancia entre este evento
+   *  y `login` es lo que mide cuánta gente se cae en esa puerta. */
+  lectura_pedida_sin_cuenta: Record<string, never>;
+  /** `desde` distingue al que llenó el formulario ya con sesión del que venía
+   *  del preview anónimo: son dos costos de adquisición distintos. */
+  carta_creada: { desde: "formulario" | "preview" };
   interpretacion_generada: { lang: string; tier: "corto" | "largo" };
   carta_descargada: { formato: "pdf" | "imagen" };
   /** Apretó Comprar y se lo mandó a Stripe. La otra mitad del embudo de pago

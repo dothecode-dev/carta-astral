@@ -10,8 +10,13 @@ def test_charts_requires_token():
     assert APIClient().post("/api/charts/", {}, format="json").status_code == 401
 
 
-def test_geocode_requires_token():
-    assert APIClient().post("/api/geocode/", {"q": "x"}, format="json").status_code == 401
+def test_geocode_no_requiere_token():
+    """Cambió a propósito el 04-09-2026: el formulario de `/nueva` funciona sin
+    cuenta y necesita resolver el lugar de nacimiento. Lo que protege este
+    endpoint ya no es la sesión sino el techo por IP, que prueba
+    `test_geocode_publico.py`. Sigue sin exponer nada de ninguna cuenta: busca
+    en la base de GeoNames, que es pública."""
+    assert APIClient().post("/api/geocode/", {"q": "x"}, format="json").status_code != 401
 
 
 def test_geocode_accepts_account_token(account_client):

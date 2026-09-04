@@ -72,7 +72,7 @@ describe("sin token de PostHog", () => {
   it("track no explota ni manda nada", async () => {
     const { track } = await import("@/lib/telemetry");
 
-    expect(() => track("carta_creada", {})).not.toThrow();
+    expect(() => track("carta_creada", { desde: "formulario" })).not.toThrow();
     expect(capture).not.toHaveBeenCalled();
   });
 });
@@ -165,19 +165,19 @@ describe("con token", () => {
 
     desactivar();
     await activar();
-    track("carta_creada", {});
+    track("carta_creada", { desde: "formulario" });
 
     // `init` corre una vez sola —el SDK es un singleton—, así que lo que
     // rehabilita la captura es `opt_in_capturing`.
     expect(init).toHaveBeenCalledOnce();
     expect(optIn).toHaveBeenCalledOnce();
-    expect(capture).toHaveBeenCalledWith("carta_creada", {});
+    expect(capture).toHaveBeenCalledWith("carta_creada", { desde: "formulario" });
   });
 
   it("no manda eventos mientras no se haya activado", async () => {
     const { track } = await import("@/lib/telemetry");
 
-    track("carta_creada", {});
+    track("carta_creada", { desde: "formulario" });
 
     expect(capture).not.toHaveBeenCalled();
   });

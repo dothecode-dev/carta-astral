@@ -314,6 +314,11 @@ REST_FRAMEWORK = {
         "install": os.environ.get("INSTALL_RATE", "30/day"),
         "auth": os.environ.get("AUTH_RATE", "30/day"),
         "chart": os.environ.get("CHART_RATE", "60/day"),
+        # Sin cuenta el techo cae sobre la IP, que comparten todos los que
+        # salen por un mismo NAT: generoso a propósito, porque lo que
+        # frena es el abuso automatizado, no una oficina entera.
+        "preview": os.environ.get("PREVIEW_RATE", "60/hour"),
+        "geocode": os.environ.get("GEOCODE_RATE", "240/hour"),
         # El PDF no cobra créditos, pero cada uno son ~300 ms de CPU en un worker
         # sincrónico de los tres: sin techo, un bucle de fetch deja el sitio sin
         # workers. Generoso a propósito: bajarse las cartas propias es legítimo.

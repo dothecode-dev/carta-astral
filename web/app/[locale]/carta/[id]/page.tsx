@@ -5,32 +5,17 @@ import { notFound, redirect } from "next/navigation";
 import { ChartActions } from "@/components/ChartActions";
 import { ChartShare } from "@/components/ChartShare";
 import { AspectMatrix } from "@/components/AspectMatrix";
+import { ChartBody } from "@/components/ChartBody";
 import { ChartTables } from "@/components/ChartTables";
 import { Nav } from "@/components/Nav";
-import { NatalWheel } from "@/components/NatalWheel";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import type { Derecho } from "@/lib/derechos";
-import { signOf } from "@/lib/ephemeris";
-import { INTL_LOCALE, type Locale, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
+import { INTL_LOCALE, type Locale, getDict, isLocale } from "@/lib/i18n";
 import { buildPdfPayload } from "@/lib/pdfPayload";
 import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
 import { Footer } from "@/components/Footer";
-
-const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-const HOUSE_INDEX: Record<string, number> = {
-  First_House: 1, Second_House: 2, Third_House: 3, Fourth_House: 4,
-  Fifth_House: 5, Sixth_House: 6, Seventh_House: 7, Eighth_House: 8,
-  Ninth_House: 9, Tenth_House: 10, Eleventh_House: 11, Twelfth_House: 12,
-};
-
-function degreeLabel(lon: number): string {
-  const inSign = lon % 30;
-  const deg = Math.floor(inSign);
-  const min = Math.floor((inSign - deg) * 60);
-  return `${String(deg).padStart(2, "0")}°${String(min).padStart(2, "0")}′`;
-}
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -45,7 +30,6 @@ export default async function ChartPage({
     redirect(`/${locale}/entrar?next=${encodeURIComponent(`/${locale}/carta/${id}`)}`);
 
   const dict = getDict(locale);
-  const names = PLANET_NAME_BY_KEY[locale];
 
   let chart: ApiChart;
   try {
@@ -150,65 +134,7 @@ export default async function ChartPage({
           )}
         </section>
 
-        <div className="chartBody">
-          {wheel ? (
-            <NatalWheel chart={wheel} alt={dict.chart.back} />
-          ) : (
-            <div className="emptyCharts">
-              <p className="emptyChartsText">
-                <strong>{dict.chart.noWheel}</strong>
-              </p>
-              <p className="emptyChartsText">{dict.chart.noWheelBody}</p>
-            </div>
-          )}
-
-          <div className="tableBlock">
-            <div className="tableWrap">
-              <table className="chartTable">
-                <thead>
-                  <tr>
-                    <th colSpan={2}>{dict.chart.columns.body}</th>
-                    <th>{dict.chart.columns.position}</th>
-                    <th className="cellRight">{dict.chart.columns.house}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* Los ejes primero, como en el PDF. DC e IC no se listan:
-                      son los opuestos exactos de AC y MC. */}
-                  {(chart.data.angles ?? [])
-                    .filter((a) => a.name === "Ascendant" || a.name === "Medium_Coeli")
-                    .map((a) => (
-                      <tr key={a.name}>
-                        <td className="cellGlyph">{a.name === "Ascendant" ? "AC" : "MC"}</td>
-                        <td className="cellBody">
-                          {dict.chart.axisNames[a.name === "Ascendant" ? "AC" : "MC"]}
-                        </td>
-                        <td>
-                          {degreeLabel(a.abs_pos)} {signOf(a.abs_pos)}
-                        </td>
-                        <td className="cellRight" />
-                        <td className="cellRetro" />
-                      </tr>
-                    ))}
-                  {chart.data.placements.map((p) => (
-                    <tr key={p.name}>
-                      <td className="cellGlyph">{PLANET_GLYPHS[p.name] ?? "·"}</td>
-                      <td className="cellBody">{names[p.name] ?? p.name.replace(/_/g, " ")}</td>
-                      <td>
-                        {degreeLabel(p.abs_pos)} {signOf(p.abs_pos)}
-                      </td>
-                      <td className="cellRight">
-                        {p.house ? ROMAN[HOUSE_INDEX[p.house] - 1] : "—"}
-                      </td>
-                      <td className="cellRetro">{p.retrograde ? "℞" : ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <ChartBody chart={chart} dict={dict} locale={locale} />
 
         {/* Sin lectura todavía, acá: es lo único que hay para hacer en esta
             página, y más abajo quedaba enterrado bajo las tablas y la matriz de

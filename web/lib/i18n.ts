@@ -530,6 +530,24 @@ export type Dict = {
     failed: string;
     /** 402 con code "sin_leer_breve": no hay lectura breve gratis disponible para esta carta nueva. */
     sinLeerBreve: string;
+    /** Lo que ve quien calculó su carta sin tener cuenta: la rueda es suya y
+     *  está completa; lo que falta —y lo que pide cuenta— es la lectura. */
+    previewTitle: string;
+    previewLede: string;
+    previewCta: string;
+    previewNote: string;
+    previewPrivacidad: string;
+    previewRetomando: string;
+    /** Copy indexable: sin esto la página es un formulario vacío para Google. */
+    seoTitle: string;
+    seoDescription: string;
+    seoIntro: string;
+    seoQueEs: string;
+    seoQueEsBody: string;
+    seoHora: string;
+    seoHoraBody: string;
+    seoGratis: string;
+    seoGratisBody: string;
   };
 };
 
@@ -753,6 +771,26 @@ const es: Dict = {
     badDate: "Revisá la fecha: tiene que ser posterior a 1800 y no puede estar en el futuro.",
     failed: "No pudimos calcular la carta. Revisá los datos y probá de nuevo.",
     sinLeerBreve: "Ya usaste tus lecturas breves gratis.",
+    previewTitle: "Tu carta natal",
+    previewLede: "Es tuya y está completa: las posiciones, las casas y los aspectos del cielo del día en que naciste.",
+    previewCta: "Leer qué dice",
+    previewNote: "Creás tu cuenta y la primera lectura va de regalo.",
+    previewPrivacidad: "No guardamos nada de esto. Si querés conservarla, hace falta una cuenta.",
+    previewRetomando: "Guardando tu carta…",
+    seoTitle: "Calculá tu carta natal gratis",
+    seoDescription:
+      "Tu carta natal completa —posiciones, casas y aspectos— calculada con efemérides suizas. Sin registrarte: ponés fecha, hora y lugar y la ves.",
+    seoIntro:
+      "Poné tu fecha, tu hora y el lugar donde naciste y vas a ver tu carta natal completa, con las posiciones de los planetas, las doce casas y los aspectos entre ellos. No hace falta registrarse para verla.",
+    seoQueEs: "Qué es una carta natal",
+    seoQueEsBody:
+      "Es el mapa del cielo en el momento exacto en que naciste, visto desde el lugar exacto donde naciste. Cada planeta estaba en un punto del zodíaco y en una zona del cielo sobre ese horizonte; eso es lo que la carta dibuja. No predice nada: describe una configuración.",
+    seoHora: "Qué pasa si no sé la hora",
+    seoHoraBody:
+      "Se puede calcular igual. Sin hora quedan las posiciones de los planetas por signo, que cambian lento, pero no hay Ascendente ni casas —dependen de la rotación de la Tierra, o sea de la hora— y la Luna queda aproximada, porque se mueve unos trece grados por día.",
+    seoGratis: "Hasta dónde es gratis",
+    seoGratisBody:
+      "Calcular la carta es gratis y no pide cuenta. La lectura escrita sí necesita una, y la primera va de regalo. El informe completo es lo único que se paga.",
   },
   foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto" },
   consent: {
@@ -1055,6 +1093,26 @@ const en: Dict = {
     badDate: "Check the date: it has to be after 1800 and can't be in the future.",
     failed: "We couldn't compute the chart. Check the details and try again.",
     sinLeerBreve: "You've used up your free short readings.",
+    previewTitle: "Your birth chart",
+    previewLede: "It's yours and it's complete: the positions, the houses and the aspects of the sky on the day you were born.",
+    previewCta: "Read what it says",
+    previewNote: "Create your account and the first reading is on us.",
+    previewPrivacidad: "We're not storing any of this. To keep the chart you'll need an account.",
+    previewRetomando: "Saving your chart…",
+    seoTitle: "Calculate your birth chart, free",
+    seoDescription:
+      "Your full birth chart — positions, houses and aspects — computed with Swiss ephemeris. No sign-up: enter date, time and place and see it.",
+    seoIntro:
+      "Enter your date, your time and the place you were born and you'll see your complete birth chart, with the positions of the planets, the twelve houses and the aspects between them. No account needed to see it.",
+    seoQueEs: "What a birth chart is",
+    seoQueEsBody:
+      "It's the map of the sky at the exact moment you were born, seen from the exact place you were born. Each planet was at a point of the zodiac and in a region of the sky above that horizon; that's what the chart draws. It predicts nothing: it describes a configuration.",
+    seoHora: "What if I don't know the time",
+    seoHoraBody:
+      "It can still be calculated. Without a time you keep the planets' positions by sign, which change slowly, but there's no Ascendant and no houses — they depend on the Earth's rotation, that is, on the time — and the Moon is approximate, because it moves about thirteen degrees a day.",
+    seoGratis: "How far it's free",
+    seoGratisBody:
+      "Calculating the chart is free and needs no account. The written reading does need one, and the first is on us. Only the full report is paid.",
   },
   foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact" },
   consent: {
@@ -1357,6 +1415,26 @@ const pt: Dict = {
     badDate: "Revise a data: precisa ser posterior a 1800 e não pode estar no futuro.",
     failed: "Não conseguimos calcular o mapa. Revise os dados e tente de novo.",
     sinLeerBreve: "Você já usou suas leituras breves grátis.",
+    previewTitle: "Seu mapa natal",
+    previewLede: "É seu e está completo: as posições, as casas e os aspectos do céu do dia em que você nasceu.",
+    previewCta: "Ler o que diz",
+    previewNote: "Você cria sua conta e a primeira leitura é por nossa conta.",
+    previewPrivacidad: "Não guardamos nada disso. Para conservar o mapa é preciso uma conta.",
+    previewRetomando: "Salvando seu mapa…",
+    seoTitle: "Calcule seu mapa natal grátis",
+    seoDescription:
+      "Seu mapa natal completo — posições, casas e aspectos — calculado com efemérides suíças. Sem cadastro: você põe data, hora e lugar e vê.",
+    seoIntro:
+      "Coloque sua data, sua hora e o lugar onde nasceu e você verá seu mapa natal completo, com as posições dos planetas, as doze casas e os aspectos entre eles. Não é preciso se cadastrar para ver.",
+    seoQueEs: "O que é um mapa natal",
+    seoQueEsBody:
+      "É o mapa do céu no momento exato em que você nasceu, visto do lugar exato onde nasceu. Cada planeta estava num ponto do zodíaco e numa região do céu sobre aquele horizonte; é isso que o mapa desenha. Não prevê nada: descreve uma configuração.",
+    seoHora: "E se eu não souber a hora",
+    seoHoraBody:
+      "Dá para calcular do mesmo jeito. Sem hora ficam as posições dos planetas por signo, que mudam devagar, mas não há Ascendente nem casas — dependem da rotação da Terra, ou seja, da hora — e a Lua fica aproximada, porque se move uns treze graus por dia.",
+    seoGratis: "Até onde é grátis",
+    seoGratisBody:
+      "Calcular o mapa é grátis e não pede conta. A leitura escrita precisa de uma, e a primeira é por nossa conta. Só o informe completo é pago.",
   },
   foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato" },
   consent: {

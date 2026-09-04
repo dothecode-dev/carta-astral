@@ -1,6 +1,6 @@
 import { signOf } from "@/lib/ephemeris";
 import { type Dict } from "@/lib/i18n";
-import type { ApiChart } from "@/lib/chart";
+import type { CartaDibujable } from "@/lib/chart";
 
 // Las casas, plegadas. Arranca cerrada porque la carta ya entra con la rueda y
 // las posiciones, y quien quiere el detalle lo abre. Se usa <details>, que
@@ -23,7 +23,7 @@ function degreeLabel(lon: number): string {
   return `${String(deg).padStart(2, "0")}°${String(min).padStart(2, "0")}′`;
 }
 
-export function ChartTables({ chart, dict }: { chart: ApiChart; dict: Dict }) {
+export function ChartTables({ chart, dict }: { chart: CartaDibujable; dict: Dict }) {
   const { houses } = chart.data;
 
   return (
