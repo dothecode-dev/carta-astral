@@ -186,6 +186,23 @@ body > .frame {
   color: var(--ink);
 }
 
+/* Dónde estás parado. No usa el acento: ese color ya es del acceso
+   (`.navEnter`), y con los dos iguales vuelve la confusión que esto arregla —
+   dos cosas resaltadas y ninguna diciendo cuál es cuál. Acá es contraste y un
+   subrayado corto, que se lee como posición y no como llamada a la acción. */
+.navLinks a.navActual {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.4em;
+  text-decoration-thickness: 1px;
+}
+
+/* El acceso conserva su color de acento aunque esté activo: es el único enlace
+   del nav que además es un CTA. */
+.navLinks a.navEnter.navActual {
+  color: var(--accent);
+}
+
 .langs {
   display: flex;
   gap: 0.75rem;
@@ -2211,6 +2228,48 @@ body > .frame {
    tres tarjetas entran de a dos y la tercera queda huérfana abajo. Acá el
    contenido no es un texto para leer en columna, son tres opciones para
    comparar de un vistazo. */
+/* El cierre de una nota: lo que la conecta con el producto. Enmarcado y con
+   aire propio para que se lea como un final y no como un párrafo más del
+   texto. */
+/* En qué carta se puede usar un informe ya comprado. Con el acento, porque es
+   una oportunidad y no un dato más de la ficha. */
+.chartBadge {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.notaCta {
+  margin: clamp(2.5rem, 6vw, 3.5rem) 0 2rem;
+  padding: clamp(1.5rem, 4vw, 2rem);
+  border: 1px solid var(--hairline);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.notaCtaTitle {
+  margin: 0;
+  font-size: clamp(1.375rem, 3vw, 1.75rem);
+  line-height: 1.2;
+}
+
+.notaCtaLede {
+  margin: 0;
+  color: var(--ink-soft);
+  max-width: 52ch;
+}
+
 .pricingCta {
   margin: 1.5rem 0 0;
 }

@@ -6,6 +6,7 @@ import { AccountCharts, type ChartSummary } from "@/components/AccountCharts";
 import { DangerZone } from "@/components/DangerZone";
 import { Compras } from "@/components/Compras";
 import { Derechos } from "@/components/Derechos";
+import { cantidad } from "@/lib/derechos";
 import { Nav } from "@/components/Nav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
@@ -101,7 +102,12 @@ export default async function AccountPage({
 
         <section className="accountSection" id="tus-cartas">
           <h2 className="eyebrow">{dict.auth.chartsTitle}</h2>
-          <AccountCharts charts={charts} locale={locale} dict={dict} />
+          <AccountCharts
+            charts={charts}
+            locale={locale}
+            dict={dict}
+            informesDisponibles={cantidad(account.derechos, "informe_natal")}
+          />
         </section>
 
         {/* Después de las cartas: el historial es para consultar, no para

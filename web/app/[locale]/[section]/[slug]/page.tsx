@@ -131,6 +131,23 @@ export default async function NotePage({ params }: Params) {
               a las declaradas en `features` (`cms/models.py`). */}
           <div className="noteBody" dangerouslySetInnerHTML={{ __html: note.cuerpo }} />
 
+          {/* El puente al producto. Las notas son el único tráfico orgánico que
+              hay —217 de las 438 impresiones de tres meses son las de la hora
+              de nacimiento— y terminaban en un solo enlace: volver al índice.
+              Quien busca cómo averiguar su hora de nacimiento está buscando el
+              dato que hace falta para calcular una carta; que la única salida
+              fuera el listado de notas era dejarlo ahí.
+
+              Va después del cuerpo y antes del "volver": el que llegó hasta el
+              final es el que leyó. */}
+          <aside className="notaCta">
+            <h2 className="display notaCtaTitle">{dict.notes.ctaTitle}</h2>
+            <p className="notaCtaLede">{dict.notes.ctaLede}</p>
+            <Link className="btn btnPrimary" href={`/${locale}/nueva`}>
+              {dict.notes.ctaBoton}
+            </Link>
+          </aside>
+
           <Link className="promiseLink" href={`/${locale}/${section}`}>
             {dict.notes.back}
           </Link>

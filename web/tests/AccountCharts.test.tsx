@@ -135,3 +135,50 @@ describe("ChartTables", () => {
   });
 
 });
+
+// La cuenta preguntaba "tengo un informe, ¿dónde lo uso?" en el bloque de
+// derechos y la lista de cartas no contestaba. El dato ya venía en el payload
+// (`interpretations` por carta), sólo que la lista no lo miraba.
+describe("dónde se puede usar un informe comprado", () => {
+  const carta = (id: string, interpretations = {}) => ({
+    id,
+    interpretation_langs: Object.keys(interpretations),
+    interpretations,
+    birth: { name: `Carta ${id}`, date: "1990-05-17", time: "10:00", place_label: "Rosario" },
+    data: { placements: [{ name: "Sun", abs_pos: 56 }] },
+  });
+
+  it("marca las cartas que todavía pueden recibirlo", () => {
+    render(
+      <AccountCharts
+        charts={[carta("a")]}
+        locale="es"
+        dict={dict}
+        informesDisponibles={2}
+      />,
+    );
+
+    expect(screen.getByText(dict.auth.informeDisponible)).toBeInTheDocument();
+  });
+
+  it("no marca la que ya tiene el informe, en el idioma que sea", () => {
+    render(
+      <AccountCharts
+        charts={[carta("a", { en: ["corto", "largo"] })]}
+        locale="es"
+        dict={dict}
+        informesDisponibles={2}
+      />,
+    );
+
+    expect(screen.queryByText(dict.auth.informeDisponible)).toBeNull();
+  });
+
+  it("sin informes comprados no marca nada: sería ruido", () => {
+    render(
+      <AccountCharts charts={[carta("a")]} locale="es" dict={dict} informesDisponibles={0} />,
+    );
+
+    expect(screen.queryByText(dict.auth.informeDisponible)).toBeNull();
+  });
+});

@@ -81,3 +81,45 @@ describe("Nav: cambiar de idioma", () => {
     expect(screen.queryByRole("link", { name: dict.nav.example })).toBeNull();
   });
 });
+
+// El nav no marcaba en ninguna parte dónde estabas: lo único con color era el
+// acceso (`.navEnter`), y eso se lee como "estás acá". Leyendo una nota, el
+// resaltado decía "Tu cuenta".
+describe("Nav: en qué página estoy", () => {
+  const activo = () =>
+    screen.queryAllByRole("link").find((a) => a.getAttribute("aria-current") === "page")
+      ?.textContent;
+
+  it("marca la sección en la que estás", () => {
+    render(<Nav locale="es" dict={dict} path="/precios" />);
+
+    expect(activo()).toBe(dict.nav.precios);
+  });
+
+  it("dentro de una nota, marca Notas", () => {
+    // El `path` de una nota resuelve al listado, porque cambiar de idioma
+    // desde una nota lleva al índice del otro idioma (la traducción puede no
+    // existir todavía).
+    render(<Nav locale="es" dict={dict} path={(code) => `/${NOTES_SLUG[code]}`} />);
+
+    expect(activo()).toBe(dict.nav.notes);
+  });
+
+  it("no marca la cuenta cuando no estás en la cuenta", () => {
+    render(<Nav locale="es" dict={dict} path={(code) => `/${NOTES_SLUG[code]}`} signedIn />);
+
+    expect(activo()).not.toBe(dict.auth.account);
+  });
+
+  it("en la cuenta sí la marca", () => {
+    render(<Nav locale="es" dict={dict} path="/cuenta" signedIn />);
+
+    expect(activo()).toBe(dict.auth.account);
+  });
+
+  it("en la portada no marca ninguna, que es lo honesto", () => {
+    render(<Nav locale="es" dict={dict} />);
+
+    expect(activo()).toBeUndefined();
+  });
+});

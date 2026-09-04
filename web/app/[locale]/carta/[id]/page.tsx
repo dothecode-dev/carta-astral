@@ -210,6 +210,14 @@ export default async function ChartPage({
           </div>
         </div>
 
+        {/* Sin lectura todavía, acá: es lo único que hay para hacer en esta
+            página, y más abajo quedaba enterrado bajo las tablas y la matriz de
+            aspectos —que en un teléfono son decenas de filas—. Con lectura ya
+            escrita se muestra al final (ver abajo): ahí el momento de decidir
+            es cuando terminó de leer la breve y está mirando el índice de lo
+            que se pierde. */}
+        {!reading && acciones}
+
         <ChartTables chart={chart} dict={dict} />
 
         {chart.data.aspects.length > 0 && (
@@ -226,15 +234,6 @@ export default async function ChartPage({
             orbeLabel={dict.chart.aspectColumns.orb}
           />
         )}
-
-        {/* Antes de la lectura, arriba: es lo único que hay para hacer en esta
-            página y quedaba enterrado bajo la rueda, las tablas y la matriz de
-            aspectos. Después de la lectura, abajo: el momento en que alguien
-            decide comprar el informe es cuando terminó de leer la breve y está
-            mirando el índice de lo que se pierde, y ahí no había dónde hacer
-            clic —el cierre de `ResumenCompleto` es un párrafo, y el botón había
-            quedado media pantalla más arriba—. */}
-        {!reading && acciones}
 
         {reading && (
           <section className="reading">

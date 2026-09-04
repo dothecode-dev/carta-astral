@@ -28,6 +28,25 @@ export function Nav({
   path?: string | ((code: Locale) => string);
 }) {
   const pathPara = (code: Locale) => (typeof path === "function" ? path(code) : path);
+
+  /**
+   * En qué sección está parada la persona.
+   *
+   * El nav no lo decía en ningún lado: lo único con color era el acceso
+   * (`.navEnter`), y al ser el único resaltado se leía como "estás acá" —
+   * leyendo una nota, el nav decía "Tu cuenta" (03-09-2026).
+   *
+   * `startsWith` con la barra y no una igualdad: `/carta/<uuid>` no es una
+   * sección del nav, pero `/legal/privacy` sí cuelga de una, y una nota
+   * resuelve al listado (su `path` es el índice, porque cambiar de idioma
+   * desde una nota lleva al índice del otro idioma).
+   */
+  const aqui = pathPara(locale);
+  const enSeccion = (ruta: string) => aqui === ruta || aqui.startsWith(`${ruta}/`);
+  /** Lo que distingue "estoy acá" de un enlace más, para quien no ve el color. */
+  const marca = (ruta: string) =>
+    enSeccion(ruta) ? ({ "aria-current": "page" as const, className: "navActual" }) : {};
+
   return (
     <nav className="nav">
       <div className="navInner">
@@ -37,11 +56,25 @@ export function Nav({
         </Link>
 
         <div className="navLinks">
-          <Link href={`/${locale}/nueva`}>{dict.newChart.navNew}</Link>
-          {showExample && <Link href={`/${locale}/ejemplo`}>{dict.nav.example}</Link>}
-          <Link href={`/${locale}/precios`}>{dict.nav.precios}</Link>
-          <Link href={`/${locale}/${NOTES_SLUG[locale]}`}>{dict.nav.notes}</Link>
-          <Link className="navEnter" href={`/${locale}${signedIn ? "/cuenta" : "/entrar"}`}>
+          <Link href={`/${locale}/nueva`} {...marca("/nueva")}>
+            {dict.newChart.navNew}
+          </Link>
+          {showExample && (
+            <Link href={`/${locale}/ejemplo`} {...marca("/ejemplo")}>
+              {dict.nav.example}
+            </Link>
+          )}
+          <Link href={`/${locale}/precios`} {...marca("/precios")}>
+            {dict.nav.precios}
+          </Link>
+          <Link href={`/${locale}/${NOTES_SLUG[locale]}`} {...marca(`/${NOTES_SLUG[locale]}`)}>
+            {dict.nav.notes}
+          </Link>
+          <Link
+            href={`/${locale}${signedIn ? "/cuenta" : "/entrar"}`}
+            {...marca(signedIn ? "/cuenta" : "/entrar")}
+            className={`navEnter${enSeccion(signedIn ? "/cuenta" : "/entrar") ? " navActual" : ""}`}
+          >
             {signedIn ? dict.auth.account : dict.auth.navEnter}
           </Link>
         </div>

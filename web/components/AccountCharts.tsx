@@ -9,6 +9,10 @@ import { INTL_LOCALE } from "@/lib/i18n";
 export type ChartSummary = {
   id: string;
   interpretation_langs: string[];
+  /** Por idioma, qué tiers están listos. Ya venía en el payload del listado
+   *  (`_chart_repr` en `api/views.py`); acá sirve para saber en qué carta se
+   *  puede usar un informe comprado y en cuál ya se usó. */
+  interpretations?: Record<string, string[]>;
   birth: {
     name: string | null;
     date: string;
@@ -37,14 +41,25 @@ function birthLine(chart: ChartSummary, locale: Locale): string {
   return chart.birth.time ? `${fecha} · ${chart.birth.time}` : fecha;
 }
 
+/** Si esta carta ya tiene el informe completo, en el idioma que sea. */
+function tieneInforme(chart: ChartSummary): boolean {
+  return Object.values(chart.interpretations ?? {}).some((tiers) => tiers.includes("largo"));
+}
+
 export function AccountCharts({
   charts,
   locale,
   dict,
+  informesDisponibles = 0,
 }: {
   charts: ChartSummary[];
   locale: Locale;
   dict: Dict;
+  /** Informes comprados sin usar. Con al menos uno, las cartas que todavía no
+   *  lo tienen se marcan: era la pregunta sin responder de la cuenta —"tengo un
+   *  informe, ¿dónde lo uso?"—, que el bloque de derechos plantea y esta lista
+   *  no contestaba. */
+  informesDisponibles?: number;
 }) {
   if (charts.length === 0) {
     return (
@@ -69,6 +84,9 @@ export function AccountCharts({
               <span className="chartLangs">
                 {dict.auth.readIn} {chart.interpretation_langs.join(" · ").toUpperCase()}
               </span>
+            )}
+            {informesDisponibles > 0 && !tieneInforme(chart) && (
+              <span className="chartBadge">{dict.auth.informeDisponible}</span>
             )}
           </span>
           <span className="noteSign" aria-hidden="true">

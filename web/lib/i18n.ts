@@ -200,6 +200,17 @@ export type Dict = {
     back: string;
     /** "3 de agosto de 2026" se arma con `Intl`; esto es lo que va antes. */
     publishedOn: string;
+    /**
+     * El cierre de cada nota, que lleva a calcular la carta.
+     *
+     * Las notas son el único tráfico orgánico que existe —217 de las 438
+     * impresiones de tres meses son las de la hora de nacimiento— y terminaban
+     * en un solo enlace: volver al índice. Quien busca "cómo saber a qué hora
+     * nací" está a un paso de querer su carta, y no había puente.
+     */
+    ctaTitle: string;
+    ctaLede: string;
+    ctaBoton: string;
   };
   privacy: { eyebrow: string; title: string; points: { strong: string; rest: string }[]; link: string };
   pricing: {
@@ -277,6 +288,11 @@ export type Dict = {
     listoUsar: string;
     /** El paso siguiente cuando todavía no hay ninguna carta. */
     listoUsarSinCartas: string;
+    /** En la lista de cartas, sobre las que todavía pueden recibir un informe
+     *  comprado. Sólo aparece si hay alguno sin usar: es la respuesta a la
+     *  pregunta que abre el bloque de derechos —"tengo un informe, ¿dónde lo
+     *  uso?"— y sin derechos sería ruido. */
+    informeDisponible: string;
     /** Derecho de lectura breve con más de una disponible. Lleva "{n}". */
     derechosBreve: string;
     /** El mismo derecho con exactamente una disponible: singular, no "{n}" a secas. */
@@ -558,6 +574,9 @@ const es: Dict = {
     lede: "Astrología explicada sin misticismo: qué mide cada pieza de la carta y qué no.",
     empty: "Todavía no hay notas publicadas en español. Están en camino.",
     back: "Todas las notas",
+    ctaTitle: "Y la tuya, ¿cómo está?",
+    ctaLede: "Poné tu fecha, hora y lugar de nacimiento y mirá tu carta natal, calculada con las mismas efemérides. La primera lectura breve no cuesta nada.",
+    ctaBoton: "Ver mi carta natal",
     publishedOn: "Publicada el",
   },
   privacy: {
@@ -768,6 +787,7 @@ const es: Dict = {
     legal: "Al entrar aceptás los términos y la política de privacidad.",
     listoTitle: "Listo para usar",
     listoUsar: "Elegí una carta para usarlo",
+    informeDisponible: "Informe disponible",
     listoUsarSinCartas: "Calculá una carta para usarlo",
     derechosBreve: "{n} lecturas breves",
     derechosBreveUno: "1 lectura breve",
@@ -854,6 +874,9 @@ const en: Dict = {
     lede: "Astrology explained without the mysticism: what each piece of the chart measures, and what it doesn't.",
     empty: "No notes published in English yet. They're on the way.",
     back: "All notes",
+    ctaTitle: "And yours, how does it look?",
+    ctaLede: "Enter your birth date, time and place and see your own chart, calculated with the same ephemerides. The first short reading costs nothing.",
+    ctaBoton: "See my birth chart",
     publishedOn: "Published on",
   },
   privacy: {
@@ -1064,6 +1087,7 @@ const en: Dict = {
     legal: "By signing in you accept the terms and the privacy policy.",
     listoTitle: "Ready to use",
     listoUsar: "Pick a chart to use it on",
+    informeDisponible: "Report available",
     listoUsarSinCartas: "Calculate a chart to use it on",
     derechosBreve: "{n} short readings",
     derechosBreveUno: "1 short reading",
@@ -1150,6 +1174,9 @@ const pt: Dict = {
     lede: "Astrologia explicada sem misticismo: o que cada peça do mapa mede e o que não mede.",
     empty: "Ainda não há notas publicadas em português. Estão a caminho.",
     back: "Todas as notas",
+    ctaTitle: "E o seu, como está?",
+    ctaLede: "Coloque sua data, hora e local de nascimento e veja seu mapa natal, calculado com as mesmas efemérides. A primeira leitura breve não custa nada.",
+    ctaBoton: "Ver meu mapa natal",
     publishedOn: "Publicada em",
   },
   privacy: {
@@ -1360,6 +1387,7 @@ const pt: Dict = {
     legal: "Ao entrar você aceita os termos e a política de privacidade.",
     listoTitle: "Pronto para usar",
     listoUsar: "Escolha um mapa para usar",
+    informeDisponible: "Relatório disponível",
     listoUsarSinCartas: "Calcule um mapa para usar",
     derechosBreve: "{n} leituras breves",
     derechosBreveUno: "1 leitura breve",
