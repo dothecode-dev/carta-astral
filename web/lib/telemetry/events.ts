@@ -23,6 +23,15 @@ export type EventoProps = {
   carta_creada: Record<string, never>;
   interpretacion_generada: { lang: string; tier: "corto" | "largo" };
   carta_descargada: { formato: "pdf" | "imagen" };
+  /** Apretó Comprar y se lo mandó a Stripe. La otra mitad del embudo de pago
+   *  —que la plata haya entrado— la emite el backend desde el webhook
+   *  (`compra_completada`), que es donde se sabe de verdad: quien paga y cierra
+   *  la pestaña no vuelve a ejecutar nada de esta página.
+   *
+   *  `desde` separa las dos puertas de compra, que no valen lo mismo: en
+   *  /precios se compra a secas, y dentro de una carta se compra el informe DE
+   *  esa carta, después de haber leído la breve. */
+  checkout_iniciado: { producto: string; desde: "precios" | "carta" };
   /** Cuántos aceptan el banner. Sin esto no se sabe cuánto sesga el resto:
    *  si acepta el 40%, todos los números de arriba son el 40% de la verdad. */
   consentimiento: { decision: "si" | "no" };

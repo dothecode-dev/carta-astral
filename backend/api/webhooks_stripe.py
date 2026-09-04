@@ -27,7 +27,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api import catalogo, notificaciones
+from api import analitica, catalogo, notificaciones
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
 from api.models import Account, PasarelaCheckout
@@ -194,13 +194,19 @@ def _acreditar(session_id: str) -> None:
         logger.info("sesión %s acreditada: %s", session_id, codigo)
         # Dentro del `if`: en un reintento la compra ya se acreditó y avisar de
         # nuevo sería un segundo mail por la misma compra.
+        lang = fila.locale if fila is not None else "es"
         # En el idioma en que compró, no en español siempre: el locale queda
         # guardado al abrir el checkout. Sin `fila` no hay de dónde sacarlo
         # —una sesión que Stripe reporta y nosotros no registramos— y ahí sí
         # cae el default.
-        notificaciones.notificar(
-            cuenta, "compra_acreditada", {"producto": codigo},
-            lang=fila.locale if fila is not None else "es",
+        notificaciones.notificar(cuenta, "compra_acreditada", {"producto": codigo}, lang=lang)
+        # Acá y no en el navegador: quien paga cierra la pestaña —el informe
+        # tarda seis minutos— y esa compra no la mediría nadie. Dentro del
+        # mismo `if aplicado`, que es lo que ya hace idempotente al aviso: un
+        # reintento de Stripe no puede contar la compra dos veces.
+        analitica.evento(
+            cuenta, "compra_completada",
+            {"producto": codigo, "monto_centavos": monto, "locale": lang},
         )
 
     # Sin `try`: si el informe no arranca, la excepción sube y la vista pide el

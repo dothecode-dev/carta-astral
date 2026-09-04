@@ -98,6 +98,63 @@ def test_la_misma_entrega_dos_veces_otorga_una_sola(client, monkeypatch, compra)
     assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
 
 
+def test_la_compra_se_mide_una_vez_por_mas_que_stripe_reintente(client, monkeypatch, compra):
+    """El evento va dentro del mismo `if aplicado` que el aviso por mail.
+
+    Stripe reintenta un webhook tres días, y un reintento posterior a un fallo
+    tardío vuelve a entrar acá con la compra YA acreditada. Si el evento saliera
+    fuera de ese `if`, cada reintento contaría una venta que no existió: el
+    embudo mostraría más compras que plata en la cuenta, que es peor que no
+    medir nada —lleva a decidir sobre ads con números inflados—."""
+    medidos = []
+    monkeypatch.setattr(
+        webhooks_stripe.analitica, "evento",
+        lambda cuenta, nombre, props: medidos.append((nombre, props)),
+    )
+
+    _entregar(client, monkeypatch)
+    _entregar(client, monkeypatch)
+
+    assert len(medidos) == 1
+    nombre, props = medidos[0]
+    assert nombre == "compra_completada"
+    assert props["producto"] == "informe_natal"
+    assert props["monto_centavos"] == 2900
+
+
+def test_una_compra_que_no_se_acredita_no_se_mide(client, monkeypatch, compra):
+    """Sin plata no hay venta que contar."""
+    medidos = []
+    monkeypatch.setattr(
+        webhooks_stripe.analitica, "evento",
+        lambda cuenta, nombre, props: medidos.append(nombre),
+    )
+
+    _entregar(client, monkeypatch, _sesion(payment_status="unpaid"))
+
+    assert medidos == []
+
+
+def test_medir_no_puede_romper_el_cobro(client, monkeypatch, compra, settings):
+    """Si esto propagara, el webhook devolvería 5xx y Stripe reintentaría una
+    compra ya acreditada. El derecho tiene que quedar igual y la respuesta 200.
+
+    Se rompe `_capturar` y no `evento`: `evento` ES el try/except que protege
+    al webhook, así que reemplazarlo entero probaría que un mock no explota, no
+    que la protección existe."""
+    settings.POSTHOG_KEY = "phc_test"
+
+    def explota(*a, **kw):
+        raise RuntimeError("posthog caído")
+
+    monkeypatch.setattr(webhooks_stripe.analitica, "_capturar", explota)
+
+    r = _entregar(client, monkeypatch)
+
+    assert r.status_code == 200
+    assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
+
+
 def test_una_sesion_sin_pagar_no_otorga(client, monkeypatch, compra):
     r = _entregar(client, monkeypatch, _sesion(payment_status="unpaid"))
 

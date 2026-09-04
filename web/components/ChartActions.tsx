@@ -306,6 +306,10 @@ export function ChartActions({
   async function comprar() {
     setBusy(true);
     setError(null);
+    // La otra puerta de compra: acá se compra el informe DE esta carta, con la
+    // lectura breve ya leída. Vale distinto que la de /precios y por eso el
+    // evento las distingue.
+    track("checkout_iniciado", { producto: "informe_natal", desde: "carta" });
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",

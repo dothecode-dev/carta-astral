@@ -216,6 +216,14 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 # proveedor rompe las dos cosas a la vez.
 MAIL_FROM = os.environ.get("MAIL_FROM", "ASTRA <hola@send.astraguia.com>")
 
+# --- Medición de negocio (PostHog) ---
+# Sólo lo que el navegador no puede medir: que la plata haya entrado. Sin la
+# key no sale nada, que es lo que corre en desarrollo y en los tests. Es la
+# misma cuenta de PostHog que usa la web; el proyecto distingue el origen por
+# `$lib`.
+POSTHOG_KEY = os.environ.get("POSTHOG_KEY", "")
+POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
+
 # Un formulario de login expuesto a internet sin límite de intentos no es una
 # hipótesis de riesgo: es un problema conocido.
 AXES_FAILURE_LIMIT = 5

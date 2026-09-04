@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Dict, Locale } from "@/lib/i18n";
+import { track } from "@/lib/telemetry";
 
 /**
  * Comprar un producto suelto, sin carta atada.
@@ -41,6 +42,9 @@ export function ComprarBoton({
   const comprar = useCallback(async () => {
     setBusy(true);
     setError(null);
+    // Antes de salir del sitio: lo que sigue es una redirección a Stripe, y si
+    // el checkout no abre igual interesa saber que alguien quiso comprar.
+    track("checkout_iniciado", { producto: codigo, desde: "precios" });
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",

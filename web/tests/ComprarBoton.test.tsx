@@ -3,12 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ComprarBoton } from "@/components/ComprarBoton";
+import { track } from "@/lib/telemetry";
 import { getDict } from "@/lib/i18n";
+
+vi.mock("@/lib/telemetry", () => ({ track: vi.fn() }));
 
 const dict = getDict("es");
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // `restoreAllMocks` no toca los mocks de módulo: sin esto, las llamadas a
+  // `track` de un test se cuentan en el siguiente.
+  vi.mocked(track).mockClear();
 });
 
 describe("ComprarBoton", () => {
@@ -89,5 +95,43 @@ describe("ComprarBoton", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(dict.precios.fallo);
     expect(screen.getByRole("button", { name: dict.precios.comprar })).toBeEnabled();
+  });
+});
+
+// Sin esto no hay embudo de pago: se ve quién entra a /precios y quién compra,
+// pero no quién quiso comprar y no llegó. Es la mitad que decide si vale la
+// pena pagar por tráfico.
+describe("medición del embudo de pago", () => {
+  it("avisa que arrancó el checkout, antes de salir del sitio", async () => {
+    Object.defineProperty(window, "location", {
+      value: { assign: vi.fn() }, writable: true, configurable: true,
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ url: "https://checkout.stripe.com/c/pay/cs_test_1" }),
+    }));
+
+    render(<ComprarBoton codigo="pack_3_natal" locale="es" dict={dict} signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
+
+    expect(track).toHaveBeenCalledWith("checkout_iniciado", {
+      producto: "pack_3_natal", desde: "precios",
+    });
+  });
+
+  it("también cuando el checkout no abre: querer comprar y no poder es el dato", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
+
+    expect(track).toHaveBeenCalledWith("checkout_iniciado", {
+      producto: "informe_natal", desde: "precios",
+    });
+  });
+
+  it("sin sesión no mide nada: es un enlace al login, no una compra", () => {
+    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn={false} />);
+
+    expect(track).not.toHaveBeenCalled();
   });
 });
