@@ -102,6 +102,47 @@ def _price_de(codigo_producto: str) -> str:
     raise StripeNoConfigurado(f"{codigo_producto} no tiene precio en Stripe")
 
 
+#: Cómo se llama, en la URL de retorno, el parámetro con la sesión de Stripe.
+#: Lo lee `web/app/[locale]/compra/page.tsx` para preguntar en qué quedó la
+#: compra y mostrar el informe escribiéndose.
+PARAM_RETORNO = "checkout_id"
+
+#: El nombre que usa la documentación de Stripe en sus ejemplos, y por eso el
+#: que termina copiado en la variable de entorno. La web lo acepta también.
+PARAM_RETORNO_ALIAS = "session_id"
+
+
+def _validar_success_url(url: str) -> None:
+    """Que la URL de retorno traiga lo que la página de retorno va a buscar.
+
+    Esto existe por un fallo del 04-09-2026, encontrado probando la compra
+    entera en el staging: `STRIPE_SUCCESS_URL` decía
+    `?session_id={CHECKOUT_SESSION_ID}` y la página lee `checkout_id`, así que
+    quien terminaba de pagar caía en la pantalla genérica —"lo que compraste te
+    espera en tu cuenta"— en vez de ver su informe escribiéndose. No rompía
+    nada visible: la compra se acreditaba igual y el informe arrancaba igual.
+    Sólo estaba mal la única pantalla que ve el que acaba de pagar.
+
+    El acuerdo entre una variable de entorno y una página del otro proyecto no
+    lo chequeaba nadie. Falla ACÁ, antes de abrir el pago, porque un error de
+    configuración nuestro tiene que aparecer antes de cobrarle a alguien y no
+    después.
+    """
+    if not url:
+        raise StripeNoConfigurado("STRIPE_SUCCESS_URL no configurado")
+    if "{CHECKOUT_SESSION_ID}" not in url:
+        raise StripeNoConfigurado(
+            "STRIPE_SUCCESS_URL no trae {CHECKOUT_SESSION_ID}: "
+            "la página de retorno no puede saber qué compra mostrar",
+        )
+    if f"{PARAM_RETORNO}=" not in url and f"{PARAM_RETORNO_ALIAS}=" not in url:
+        raise StripeNoConfigurado(
+            f"STRIPE_SUCCESS_URL tiene que pasar la sesión como "
+            f"`{PARAM_RETORNO}=` (o `{PARAM_RETORNO_ALIAS}=`): con otro nombre, "
+            f"quien termina de pagar ve la pantalla genérica en vez de su compra",
+        )
+
+
 def crear_checkout(
     account, codigo_producto: str, chart=None, locale: str = LOCALE_POR_DEFECTO,
 ) -> tuple[str, str]:
@@ -120,6 +161,8 @@ def crear_checkout(
         raise ValueError(f"{codigo_producto} es gratis: no se cobra")
     if not settings.STRIPE_SECRET_KEY:
         raise StripeNoConfigurado("STRIPE_SECRET_KEY no configurado")
+
+    _validar_success_url(settings.STRIPE_SUCCESS_URL)
 
     price_id = _price_de(codigo_producto)
     idioma = locale if locale in LOCALES else LOCALE_POR_DEFECTO

@@ -40,7 +40,14 @@ export default async function CompraPage({
   if (!(await getSessionToken())) redirect(`/${locale}/entrar`);
 
   const dict = getDict(locale);
-  const checkoutId = (await searchParams).checkout_id;
+  // Los dos nombres: la variable `STRIPE_SUCCESS_URL` la escribe una persona
+  // en el panel de deploy, y la documentación de Stripe usa `session_id` en
+  // todos sus ejemplos. El 04-09-2026 el staging tenía justamente ese, y quien
+  // terminaba de pagar caía en la pantalla genérica en vez de ver su informe
+  // escribiéndose. Aceptar los dos cuesta una línea; que dependa de que nadie
+  // copie el ejemplo de Stripe, una compra.
+  const sp = await searchParams;
+  const checkoutId = sp.checkout_id ?? sp.session_id;
 
   return (
     <>

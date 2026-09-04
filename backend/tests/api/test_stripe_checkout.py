@@ -148,3 +148,41 @@ def test_la_sesion_lleva_el_id_de_la_cuenta_como_respaldo(account_client, stripe
     account_client.post(URL, {"producto": "informe_natal"})
 
     assert stripe_responde[0]["metadata"]["account_id"] == str(account_client.account.pk)
+
+
+# --- La URL de retorno (04-09-2026) ---------------------------------------
+#
+# El acuerdo entre `STRIPE_SUCCESS_URL` —que se escribe a mano en el panel de
+# deploy— y el parámetro que lee la página de retorno no lo chequeaba nadie. En
+# el staging decía `session_id` y la web leía `checkout_id`: la compra se
+# acreditaba y el informe arrancaba, pero quien terminaba de pagar veía la
+# pantalla genérica en vez de su informe escribiéndose.
+
+
+def test_success_url_con_el_nombre_de_stripe_tambien_sirve(account_client, settings, stripe_responde):
+    """`session_id` es el que usan los ejemplos de Stripe: la web lo acepta."""
+    settings.STRIPE_SUCCESS_URL = (
+        "https://astraguia.com/{locale}/compra?session_id={CHECKOUT_SESSION_ID}"
+    )
+    assert account_client.post(URL, {"producto": "informe_natal"}).status_code == 200
+
+
+def test_success_url_sin_la_sesion_no_abre_el_pago(account_client, settings, stripe_responde):
+    """Sin `{CHECKOUT_SESSION_ID}` la pantalla de retorno no sabe qué mostrar.
+
+    Falla ANTES de cobrar: un error de configuración nuestro no puede aparecer
+    recién después de que alguien pagó.
+    """
+    settings.STRIPE_SUCCESS_URL = "https://astraguia.com/es/compra"
+    assert account_client.post(URL, {"producto": "informe_natal"}).status_code == 503
+    assert stripe_responde == []
+
+
+def test_success_url_con_otro_nombre_de_parametro_no_abre_el_pago(
+    account_client, settings, stripe_responde,
+):
+    settings.STRIPE_SUCCESS_URL = (
+        "https://astraguia.com/es/compra?pago={CHECKOUT_SESSION_ID}"
+    )
+    assert account_client.post(URL, {"producto": "informe_natal"}).status_code == 503
+    assert stripe_responde == []
