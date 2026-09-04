@@ -210,3 +210,33 @@ describe("GET /api/session/expirada", () => {
     expect(res.headers.get("location")).toBe("/es/entrar");
   });
 });
+
+// Con la cookie vencida, /precios igual pinta botones "Comprar" —`haySesion()`
+// sólo mira que la cookie exista, para no pegarle al backend en cada página
+// pública—. Al apretar, el checkout devuelve 401 y hasta el 04-09-2026 la
+// pantalla mostraba "No pudimos abrir el pago. Probá de nuevo": un error que se
+// echa la culpa, sin salida, y que reintentar no arregla nunca. Justo en el
+// momento de pagar.
+describe("la salida de emergencia conserva la compra", () => {
+  it("limpia la cookie y lleva al login con el destino y el producto", async () => {
+    const res = await expiradaGet(
+      new Request("http://x/api/session/expirada?locale=es&next=%2Fes%2Fprecios&comprar=informe_natal"),
+    );
+
+    expect(res.headers.get("location")).toBe("/es/entrar?next=%2Fes%2Fprecios&comprar=informe_natal");
+  });
+
+  it("un next de otro sitio se ignora, como en /entrar", async () => {
+    const res = await expiradaGet(
+      new Request("http://x/api/session/expirada?locale=es&next=https%3A%2F%2Fevil.com"),
+    );
+
+    expect(res.headers.get("location")).toBe("/es/entrar");
+  });
+
+  it("sin next sigue yendo al login pelado", async () => {
+    const res = await expiradaGet(new Request("http://x/api/session/expirada?locale=es"));
+
+    expect(res.headers.get("location")).toBe("/es/entrar");
+  });
+});

@@ -228,6 +228,14 @@ MAIL_FROM = os.environ.get("MAIL_FROM", "ASTRA <info@astraguia.com>")
 # key no sale nada, que es lo que corre en desarrollo y en los tests. Es la
 # misma cuenta de PostHog que usa la web; el proyecto distingue el origen por
 # `$lib`.
+# De dónde viene cada evento. El staging local es un espejo de producción
+# —mismas credenciales, salvo Stripe, que va en modo test—, así que sin esta
+# marca una compra de prueba con la tarjeta 4242 entraría al mismo embudo que
+# las de verdad e inflaría la tasa de conversión, que es el número del que
+# depende decidir sobre tráfico pago. El default es "produccion" a propósito:
+# olvidarse de declararla en el servidor no puede hacer desaparecer ventas
+# reales del embudo.
+ENTORNO = os.environ.get("ENTORNO", "produccion")
 POSTHOG_KEY = os.environ.get("POSTHOG_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
 

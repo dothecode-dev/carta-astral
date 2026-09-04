@@ -6,62 +6,106 @@ import { getDict } from "@/lib/i18n";
 
 const dict = getDict("es");
 
-describe("Derechos", () => {
-  it("dice qué puede hacer la persona, no cuántos créditos tiene", () => {
-    render(<Derechos derechos={[
-      { codigo_producto: "lectura_breve", cantidad_restante: 2, vigente_hasta: null },
-      { codigo_producto: "informe_natal", cantidad_restante: 1, vigente_hasta: null },
-    ]} dict={dict} locale="es" hayCartas />);
+const derecho = (codigo: string, n: number) => ({
+  codigo_producto: codigo,
+  cantidad_restante: n,
+  vigente_hasta: null,
+});
 
-    expect(screen.getByText(/2 lecturas breves/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 informe completo/i)).toBeInTheDocument();
+/** Las líneas de la lista, por su texto visible. */
+const lineas = () => screen.queryAllByRole("listitem").map((li) => li.textContent);
+
+describe("Derechos", () => {
+  it("abre una línea por unidad disponible, no un recuento", () => {
+    // El bloque decía "3 lecturas breves": informa cuántas hay, no qué hacer
+    // con ellas. Cada línea es ahora una cosa que se puede hacer.
+    render(
+      <Derechos
+        derechos={[derecho("lectura_breve", 3), derecho("informe_natal", 1)]}
+        dict={dict}
+        locale="es"
+        hayCartas
+      />,
+    );
+
+    expect(lineas().filter((t) => t?.includes(dict.auth.usoBreve))).toHaveLength(3);
+    expect(lineas().filter((t) => t?.includes(dict.auth.usoInforme))).toHaveLength(1);
+  });
+
+  it("no habla de créditos en ninguna parte", () => {
+    render(
+      <Derechos derechos={[derecho("lectura_breve", 2)]} dict={dict} locale="es" hayCartas />,
+    );
+
     expect(screen.queryByText(/crédito/i)).toBeNull();
   });
 
   it("sin derechos ofrece el informe en vez de mostrar un cero", () => {
     render(<Derechos derechos={[]} dict={dict} locale="es" hayCartas />);
+
     expect(screen.queryByText("0")).toBeNull();
-    // No sólo evita el "0": ofrece algo en su lugar.
     expect(screen.getByText(dict.auth.sinDerechos)).toBeInTheDocument();
   });
 
-  it("con un solo derecho usa singular, no '1 lecturas breves'", () => {
-    render(<Derechos derechos={[
-      { codigo_producto: "lectura_breve", cantidad_restante: 1, vigente_hasta: null },
-    ]} dict={dict} locale="es" hayCartas />);
-    expect(screen.getByText(/1 lectura breve\b/i)).toBeInTheDocument();
-    expect(screen.queryByText(/1 lecturas breves/i)).toBeNull();
+  it("no lista lo que ya se agotó", () => {
+    render(
+      <Derechos
+        derechos={[derecho("lectura_breve", 0), derecho("informe_natal", 1)]}
+        dict={dict}
+        locale="es"
+        hayCartas
+      />,
+    );
+
+    expect(lineas()).toHaveLength(1);
+    expect(lineas()[0]).toContain(dict.auth.usoInforme);
   });
 
-  it("un derecho agotado (cantidad 0) no cuenta como disponible", () => {
-    render(<Derechos derechos={[
-      { codigo_producto: "lectura_breve", cantidad_restante: 0, vigente_hasta: null },
-      { codigo_producto: "informe_natal", cantidad_restante: 0, vigente_hasta: null },
-    ]} dict={dict} locale="es" hayCartas />);
-    expect(screen.getByText(dict.auth.sinDerechos)).toBeInTheDocument();
+  // Un pack de cinco da cinco renglones, que se leen bien. Tres packs darían
+  // quince idénticos: ahí la lista deja de informar y se vuelve ruido.
+  it("con demasiadas de un tipo vuelve al recuento agrupado", () => {
+    render(
+      <Derechos derechos={[derecho("informe_natal", 12)]} dict={dict} locale="es" hayCartas />,
+    );
+
+    expect(lineas()).toHaveLength(1);
+    expect(screen.getByText(/12/)).toBeInTheDocument();
+  });
+
+  it("cinco todavía se listan de a una", () => {
+    render(
+      <Derechos derechos={[derecho("informe_natal", 5)]} dict={dict} locale="es" hayCartas />,
+    );
+
+    expect(lineas()).toHaveLength(5);
   });
 });
 
-// El bloque enumeraba lo que la cuenta tiene y su único enlace era "Ver
-// precios": la única salida de lo que ya estaba pago era volver a la caja.
-describe("dónde se usa lo que ya está pago", () => {
-  const conInforme = [
-    { codigo_producto: "informe_natal", cantidad_restante: 1, vigente_hasta: null },
-  ];
+describe("a dónde lleva cada línea", () => {
+  const unInforme = [derecho("informe_natal", 1)];
 
-  it("con cartas, lleva a elegir una", () => {
-    render(<Derechos derechos={conInforme} dict={dict} locale="es" hayCartas />);
+  it("con cartas, a elegir una", () => {
+    render(<Derechos derechos={unInforme} dict={dict} locale="es" hayCartas />);
 
-    expect(screen.getByRole("link", { name: dict.auth.listoUsar })).toHaveAttribute(
-      "href", "#tus-cartas",
+    expect(screen.getByRole("link", { name: /Informe completo/ })).toHaveAttribute(
+      "href",
+      "#tus-cartas",
     );
   });
 
-  it("sin ninguna carta todavía, lleva a calcular la primera", () => {
-    render(<Derechos derechos={conInforme} dict={dict} locale="es" hayCartas={false} />);
+  it("sin ninguna carta todavía, a calcular la primera", () => {
+    render(<Derechos derechos={unInforme} dict={dict} locale="es" hayCartas={false} />);
 
-    expect(screen.getByRole("link", { name: dict.auth.listoUsarSinCartas })).toHaveAttribute(
-      "href", "/es/nueva",
+    expect(screen.getByRole("link", { name: /Informe completo/ })).toHaveAttribute(
+      "href",
+      "/es/nueva",
     );
+  });
+
+  it("comprar más queda debajo del listado, no en el medio", () => {
+    render(<Derechos derechos={unInforme} dict={dict} locale="es" hayCartas />);
+
+    const enlaces = screen.getAllByRole("link").map((a) => a.textContent);
+    expect(enlaces[enlaces.length - 1]).toContain(dict.auth.verPrecios);
   });
 });

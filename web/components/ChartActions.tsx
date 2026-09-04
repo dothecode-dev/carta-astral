@@ -316,6 +316,16 @@ export function ChartActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ producto: "informe_natal", chart_id: chartId, locale }),
       });
+      if (res.status === 401) {
+        // Misma salida que en /precios: la cookie muerta se borra y se vuelve
+        // acá con la compra, en vez de un error que no lleva a ningún lado.
+        window.location.assign(
+          `/api/session/expirada?locale=${locale}&next=${encodeURIComponent(
+            `/${locale}/carta/${chartId}`,
+          )}`,
+        );
+        return;
+      }
       if (!res.ok) {
         setBusy(false);
         setError(dict.chart.compraFallo);

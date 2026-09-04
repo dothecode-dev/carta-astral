@@ -51,6 +51,23 @@ export function ComprarBoton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ producto: codigo, locale }),
       });
+      if (res.status === 401) {
+        // La sesión se venció mientras miraba la página. `haySesion()` sólo
+        // mira que la cookie exista —para no pegarle al backend en cada página
+        // pública—, así que /precios igual pintó el botón "Comprar". Mostrar
+        // acá "no pudimos abrir el pago" era echarse la culpa de algo que
+        // reintentar no arregla nunca, y justo en el momento de pagar.
+        //
+        // Va por la ruta que BORRA la cookie muerta: mandarlo derecho a
+        // /entrar la dejaría viva y volvería a rebotar. Y lleva a dónde volver
+        // y qué compraba, así el checkout se reabre solo después del login.
+        window.location.assign(
+          `/api/session/expirada?locale=${locale}&next=${encodeURIComponent(
+            `/${locale}/precios`,
+          )}&comprar=${encodeURIComponent(codigo)}`,
+        );
+        return;
+      }
       if (!res.ok) {
         setBusy(false);
         setError(dict.precios.fallo);

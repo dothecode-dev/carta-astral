@@ -359,8 +359,81 @@ body > .frame {
 
 .derechos {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 2rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+/* Cada unidad disponible, una línea. Antes era una fila con el recuento
+   ("3 lecturas breves"), que informa cuántas hay y no qué hacer con ellas. */
+.usos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 34rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* El renglón entero es el enlace: el área clickeable es la línea, no el texto.
+   El hilo de arriba separa sin encerrar, como el resto de la página. */
+.uso {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.75rem 0.25rem;
+  border-top: 1px solid var(--hairline);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.18s ease;
+}
+
+.usos li:last-child .uso {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.uso:hover,
+.uso:focus-visible {
+  background: var(--surface);
+}
+
+.usoGlifo {
+  color: var(--accent);
+  font-size: 1.0625rem;
+  line-height: 1;
+}
+
+.usoNombre {
+  font-size: 1.0625rem;
+}
+
+/* El destino, a la derecha y en silencio hasta que hace falta: con tres líneas
+   iguales, repetir la frase tres veces sería ruido; escondida del todo, no se
+   entendería que son accionables. Aparece al apuntar o al llegar con el
+   teclado. */
+.usoAccion {
+  margin-left: auto;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.uso:hover .usoAccion,
+.uso:focus-visible .usoAccion {
+  opacity: 1;
+}
+
+/* Sin puntero fino —un teléfono— no hay hover: ahí se muestra siempre, porque
+   si no la acción no existiría para nadie que entre desde el celular. */
+@media (hover: none) {
+  .usoAccion {
+    opacity: 1;
+  }
 }
 
 .derechosVacio {

@@ -56,7 +56,12 @@ def _capturar(account, nombre, propiedades):
             "event": nombre,
             # El mismo que `identificar()` en la web: `String(accountId)`.
             "distinct_id": str(account.pk),
-            "properties": {**propiedades, "$lib": "astra-backend"},
+            "properties": {
+                **propiedades,
+                "$lib": "astra-backend",
+                # Para poder mirar el embudo real sin las pruebas del staging.
+                "entorno": settings.ENTORNO,
+            },
         },
         timeout=_TIMEOUT,
     )

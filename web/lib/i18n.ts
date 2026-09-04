@@ -288,6 +288,16 @@ export type Dict = {
     listoUsar: string;
     /** El paso siguiente cuando todavía no hay ninguna carta. */
     listoUsarSinCartas: string;
+    /**
+     * El nombre de UNA unidad disponible, en singular.
+     *
+     * El bloque listaba "3 lecturas breves": un inventario. Ahora cada unidad
+     * es una línea propia y clickeable, porque lo que la persona necesita
+     * saber no es cuántas tiene sino qué puede hacer con ellas — que es
+     * justamente lo que nadie encontraba.
+     */
+    usoBreve: string;
+    usoInforme: string;
     /** En la lista de cartas, sobre las que todavía pueden recibir un informe
      *  comprado. Sólo aparece si hay alguno sin usar: es la respuesta a la
      *  pregunta que abre el bloque de derechos —"tengo un informe, ¿dónde lo
@@ -787,6 +797,8 @@ const es: Dict = {
     legal: "Al entrar aceptás los términos y la política de privacidad.",
     listoTitle: "Listo para usar",
     listoUsar: "Elegí una carta para usarlo",
+    usoBreve: "Lectura breve",
+    usoInforme: "Informe completo",
     informeDisponible: "Informe disponible",
     listoUsarSinCartas: "Calculá una carta para usarlo",
     derechosBreve: "{n} lecturas breves",
@@ -1087,6 +1099,8 @@ const en: Dict = {
     legal: "By signing in you accept the terms and the privacy policy.",
     listoTitle: "Ready to use",
     listoUsar: "Pick a chart to use it on",
+    usoBreve: "Short reading",
+    usoInforme: "Full report",
     informeDisponible: "Report available",
     listoUsarSinCartas: "Calculate a chart to use it on",
     derechosBreve: "{n} short readings",
@@ -1387,6 +1401,8 @@ const pt: Dict = {
     legal: "Ao entrar você aceita os termos e a política de privacidade.",
     listoTitle: "Pronto para usar",
     listoUsar: "Escolha um mapa para usar",
+    usoBreve: "Leitura breve",
+    usoInforme: "Relatório completo",
     informeDisponible: "Relatório disponível",
     listoUsarSinCartas: "Calcule um mapa para usar",
     derechosBreve: "{n} leituras breves",

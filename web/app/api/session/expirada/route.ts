@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { destinoSeguro } from "@/lib/destino";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n";
 import { clearSessionToken } from "@/lib/session";
 
@@ -16,8 +17,21 @@ export async function GET(request: Request) {
   // El locale sale de una lista cerrada, nunca del parámetro tal cual: armar
   // el destino con lo que venga en la URL sería un redirect abierto servido
   // desde nuestro propio dominio.
-  const pedido = new URL(request.url).searchParams.get("locale") ?? "";
+  const params = new URL(request.url).searchParams;
+  const pedido = params.get("locale") ?? "";
   const locale = isLocale(pedido) ? pedido : DEFAULT_LOCALE;
+
+  // A dónde volvía y qué estaba por comprar. Sin esto, a quien se le vence la
+  // sesión mirando /precios lo mandábamos al login y ahí terminaba el camino:
+  // la compra se perdía, que es el mismo agujero que `next` vino a tapar en
+  // /entrar. Se valida con la misma lista cerrada, por la misma razón —este
+  // Location se arma con lo que venga en la URL—.
+  const destino = destinoSeguro(params.get("next"), locale);
+  const producto = params.get("comprar");
+  const compra = destino && producto && /^[a-z0-9_]{1,40}$/.test(producto) ? producto : null;
+  const query = destino
+    ? `?next=${encodeURIComponent(destino)}${compra ? `&comprar=${encodeURIComponent(compra)}` : ""}`
+    : "";
 
   await clearSessionToken();
 
@@ -26,5 +40,8 @@ export async function GET(request: Request) {
   // la interna del contenedor: en producción eso mandaba al navegador a
   // https://0.0.0.0:3000/es/entrar, un host que no existe. El destino relativo
   // lo resuelve el navegador contra el dominio por el que entró.
-  return new NextResponse(null, { status: 307, headers: { Location: `/${locale}/entrar` } });
+  return new NextResponse(null, {
+    status: 307,
+    headers: { Location: `/${locale}/entrar${query}` },
+  });
 }

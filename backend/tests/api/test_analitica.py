@@ -43,6 +43,27 @@ def posthog(monkeypatch, settings):
     return enviados
 
 
+def test_el_evento_dice_de_qué_entorno_viene(cuenta, posthog, settings):
+    """Sin esto, una compra de prueba del staging entra al mismo embudo que las
+    reales: con la tarjeta 4242 se pueden inventar diez ventas en un minuto, y
+    la tasa de conversión —el número que decide si conviene pagar tráfico—
+    quedaría inflada sin que nadie lo note. El staging es espejo de producción,
+    credenciales incluidas, así que la separación tiene que estar en el dato."""
+    settings.ENTORNO = "staging"
+
+    analitica.evento(cuenta, "compra_completada", {"producto": "informe_natal"})
+
+    assert posthog[0]["json"]["properties"]["entorno"] == "staging"
+
+
+def test_por_defecto_el_entorno_es_produccion(cuenta, posthog, settings):
+    settings.ENTORNO = "produccion"
+
+    analitica.evento(cuenta, "compra_completada", {"producto": "informe_natal"})
+
+    assert posthog[0]["json"]["properties"]["entorno"] == "produccion"
+
+
 def test_manda_el_evento_con_sus_propiedades(cuenta, posthog):
     analitica.evento(
         cuenta, "compra_completada",

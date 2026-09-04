@@ -135,3 +135,48 @@ describe("medición del embudo de pago", () => {
     expect(track).not.toHaveBeenCalled();
   });
 });
+
+// Encontrado recorriendo el embudo en staging el 04-09-2026: con una cookie que
+// el backend ya no reconoce, /precios igual pinta "Comprar" y el checkout
+// devuelve 401. La pantalla mostraba "No pudimos abrir el pago. Probá de
+// nuevo" — un error que se echa la culpa, sin salida, y que reintentar no
+// arregla. Le pasa a cualquiera con la sesión vencida, justo al pagar.
+describe("cuando la sesión se venció mirando la página", () => {
+  it("lleva a limpiar la cookie y volver, con la compra puesta", async () => {
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { assign }, writable: true, configurable: true,
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+
+    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
+
+    // Por `expirada` y no derecho a /entrar: la cookie muerta tiene que
+    // borrarse o el login rebota de vuelta.
+    expect(assign).toHaveBeenCalledWith(
+      "/api/session/expirada?locale=es&next=%2Fes%2Fprecios&comprar=informe_natal",
+    );
+  });
+
+  it("no muestra el error genérico en ese caso", async () => {
+    Object.defineProperty(window, "location", {
+      value: { assign: vi.fn() }, writable: true, configurable: true,
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+
+    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
+
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("un fallo que sí es nuestro sigue mostrando el error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 502 }));
+
+    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.precios.fallo);
+  });
+});
