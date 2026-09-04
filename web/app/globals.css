@@ -2033,8 +2033,36 @@ body > .frame {
 }
 
 @media (max-width: 640px) {
+  /* La barra es sticky: lo que mida se lo lleva de la pantalla en todas las
+     páginas. Medido en producción el 04-09-2026 sobre un teléfono de 390px,
+     ocupaba 177px —el 21% del alto— repartidos en tres filas, y la del medio
+     era el switch de tema solo: a la primera le faltaban 15px para que entrara
+     al lado de la marca y los idiomas.
+
+     Estos cuatro ajustes le consiguen esos píxeles —el switch pasa de 136 a
+     119, los idiomas y la palabra ASTRA ceden 16 entre los dos— y con eso el
+     switch sube. De 360px para arriba el nav pasa a 100px con sesión y 136 sin
+     ella. Por debajo de 344px no alcanza y el switch vuelve a bajar, que es
+     exactamente como está hoy: degrada, no empeora.
+
+     La alternativa conversada era mandar "Notas" al pie. Rendía menos —37px
+     contra 41— y las notas son hoy la única entrada de tráfico orgánico: es la
+     misma razón por la que el nav no es una hamburguesa. */
   .navInner {
-    gap: 0.9rem 1.25rem;
+    gap: 0.9rem 0.6rem;
+  }
+
+  .langs {
+    gap: 0.5rem;
+  }
+
+  .wordmark {
+    font-size: 1.25rem;
+  }
+
+  .switch button {
+    padding: 0.3rem 0.4rem;
+    letter-spacing: 0.1em;
   }
 
   .navLinks {
