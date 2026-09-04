@@ -236,6 +236,18 @@ MAIL_FROM = os.environ.get("MAIL_FROM", "ASTRA <info@astraguia.com>")
 # olvidarse de declararla en el servidor no puede hacer desaparecer ventas
 # reales del embudo.
 ENTORNO = os.environ.get("ENTORNO", "produccion")
+
+# --- Informe diario de actividad --------------------------------------------
+# Leer eventos de PostHog necesita una Personal API Key: la del sitio
+# (`NEXT_PUBLIC_POSTHOG_KEY`) sólo escribe. Search Console se consulta con una
+# cuenta de servicio de Google, cuyo JSON entra entero por variable. Sin estas
+# credenciales el informe sale igual, diciendo qué fuente le faltó.
+POSTHOG_PERSONAL_API_KEY = os.environ.get("POSTHOG_PERSONAL_API_KEY", "")
+POSTHOG_PROJECT_ID = os.environ.get("POSTHOG_PROJECT_ID", "")
+GSC_CREDENCIALES = os.environ.get("GSC_CREDENCIALES", "")
+GSC_SITE_URL = os.environ.get("GSC_SITE_URL", "")
+#: A quién le llega el informe. Vacío = no se manda (desarrollo y tests).
+INFORME_DESTINO = os.environ.get("INFORME_DESTINO", "")
 POSTHOG_KEY = os.environ.get("POSTHOG_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
 
