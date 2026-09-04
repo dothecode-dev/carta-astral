@@ -16,6 +16,8 @@ const capture = vi.fn();
 const optIn = vi.fn();
 const optOut = vi.fn();
 const reset = vi.fn();
+/** Las propiedades que viajan en TODOS los eventos (hoy, el entorno). */
+const register = vi.fn();
 /** El orden de apagado importa y hay un test que lo mira. */
 const orden: string[] = [];
 
@@ -23,6 +25,7 @@ vi.mock("posthog-js", () => ({
   default: {
     init,
     capture,
+    register,
     identify: vi.fn(),
     opt_in_capturing: () => optIn(),
     opt_out_capturing: () => void (optOut(), orden.push("opt_out")),
@@ -172,6 +175,18 @@ describe("con token", () => {
     expect(init).toHaveBeenCalledOnce();
     expect(optIn).toHaveBeenCalledOnce();
     expect(capture).toHaveBeenCalledWith("carta_creada", { desde: "formulario" });
+  });
+
+  it("marca de qué entorno sale cada evento", async () => {
+    // El staging usa la MISMA key que producción. Sin esta marca sus eventos
+    // entran al embudo real sin distinguirse: el 04-09-2026 seis eventos de
+    // prueba —incluida una compra con la 4242— quedaron mezclados con los
+    // datos de tres usuarios reales.
+    const { activar } = await import("@/lib/telemetry");
+
+    await activar();
+
+    expect(register).toHaveBeenCalledWith({ entorno: "produccion" });
   });
 
   it("no manda eventos mientras no se haya activado", async () => {

@@ -79,6 +79,9 @@ services:
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
         NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
         NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION:-}
+        # Sin esto los eventos de la web del staging entran al embudo real
+        # sin marca: la key de PostHog es la misma que producción.
+        NEXT_PUBLIC_ENTORNO: ${ENTORNO:-staging}
     environment:
       # Server-side de Next: habla con el backend por la red interna.
       API_URL: http://backend:8000

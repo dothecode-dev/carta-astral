@@ -16,6 +16,19 @@ export type { EventoNombre, EventoProps } from "./events";
 
 const CLAVE = process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "";
 
+/** De qué entorno sale cada evento.
+ *
+ * El staging usa la MISMA key de PostHog que producción —es espejo a
+ * propósito—, así que sin esto sus eventos entran al mismo embudo y no hay
+ * forma de distinguirlos. El backend ya lo mandaba (`api/analitica.py`); la
+ * web no, y el 04-09-2026 se vio en el panel: una compra de prueba con la
+ * tarjeta 4242 y seis eventos del staging quedaron mezclados con los datos
+ * reales, sobre una muestra de tres usuarios.
+ *
+ * El default es producción porque es lo que corre sin que nadie configure
+ * nada, y porque un `ARG` ausente en el Dockerfile deja la variable en `""`. */
+const ENTORNO = process.env.NEXT_PUBLIC_ENTORNO || "produccion";
+
 /** Si hay algo que medir.
  *
  * Sin token no se mide nada, y entonces tampoco corresponde pedir permiso:
@@ -114,6 +127,9 @@ export async function activar(): Promise<void> {
         });
         iniciado = true;
       }
+      // `register` y no una prop por evento: así viaja en TODOS, incluidos los
+      // que manda el propio SDK y los que se agreguen después sin acordarse.
+      posthog.register({ entorno: ENTORNO });
       ph = posthog;
     } catch {
       // Un bloqueador, una red caída o un import que falla no pueden romper la
