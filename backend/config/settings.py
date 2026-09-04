@@ -243,8 +243,19 @@ ENTORNO = os.environ.get("ENTORNO", "produccion")
 # cuenta de servicio de Google, cuyo JSON entra entero por variable. Sin estas
 # credenciales el informe sale igual, diciendo qué fuente le faltó.
 POSTHOG_PERSONAL_API_KEY = os.environ.get("POSTHOG_PERSONAL_API_KEY", "")
+#: El host de la APLICACIÓN, distinto del de ingesta (`POSTHOG_HOST`): las
+#: consultas contra `us.i.posthog.com` responden 403.
+POSTHOG_API_HOST = os.environ.get("POSTHOG_API_HOST", "https://us.posthog.com")
 POSTHOG_PROJECT_ID = os.environ.get("POSTHOG_PROJECT_ID", "")
-GSC_CREDENCIALES = os.environ.get("GSC_CREDENCIALES", "")
+# Search Console se lee con un refresh token de la cuenta dueña de la
+# propiedad, no con una cuenta de servicio: Google bloquea las claves de esas
+# cuentas por Organization Policy desde su política "Secure by Default", y la
+# excepción habría quedado abierta en el proyecto que tiene los client ID del
+# login de producción. El token se saca una vez con
+# `manage.py autorizar_search_console` y se revoca desde la cuenta de Google.
+GSC_CLIENT_ID = os.environ.get("GSC_CLIENT_ID", "")
+GSC_CLIENT_SECRET = os.environ.get("GSC_CLIENT_SECRET", "")
+GSC_REFRESH_TOKEN = os.environ.get("GSC_REFRESH_TOKEN", "")
 GSC_SITE_URL = os.environ.get("GSC_SITE_URL", "")
 #: A quién le llega el informe. Vacío = no se manda (desarrollo y tests).
 INFORME_DESTINO = os.environ.get("INFORME_DESTINO", "")

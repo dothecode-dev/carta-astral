@@ -25,6 +25,7 @@ para que nadie lea "0 impresiones" como si fuera lo de ayer.
 import datetime
 import json
 import logging
+import urllib.parse
 
 import httpx
 from django.conf import settings
@@ -36,7 +37,8 @@ _TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 #: Search Console publica con 2-3 días de atraso: pedir "ayer" devuelve vacío.
 DIAS_DE_ATRASO_GSC = 3
 
-_SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly"
+#: Sólo lectura: el informe mira, nunca toca la propiedad.
+SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 MODELO = "claude-sonnet-5"
@@ -58,14 +60,35 @@ def _consultar_posthog(sql: str) -> list[list]:
     if not settings.POSTHOG_PERSONAL_API_KEY or not settings.POSTHOG_PROJECT_ID:
         raise FuenteCaida("PostHog sin credenciales de lectura")
 
+    # Las dos claves de PostHog se parecen y hacen lo contrario: `phc_` es la
+    # del proyecto —pública, sólo escribe eventos, la que usa la web— y `phx_`
+    # es la personal, que es la única que puede leer. Pegar la primera devuelve
+    # un 403 que dice "invalid", no "esta clave no sirve para esto"; pasó el
+    # 04-09-2026 y llevó un rato.
+    if settings.POSTHOG_PERSONAL_API_KEY.startswith("phc_"):
+        raise FuenteCaida(
+            "POSTHOG_PERSONAL_API_KEY tiene una clave `phc_`, que es la pública "
+            "del proyecto y sólo escribe: hace falta una Personal API key (`phx_`)",
+        )
+
     respuesta = httpx.post(
-        f"{settings.POSTHOG_HOST.rstrip('/')}/api/projects/"
+        # `POSTHOG_API_HOST`, no `POSTHOG_HOST`: son dos hosts distintos y se
+        # parecen. El de ingesta (`us.i.posthog.com`) recibe eventos y responde
+        # 403 a cualquier consulta; el de la aplicación (`us.posthog.com`) es el
+        # que atiende la API de lectura. Costó un 403 averiguarlo.
+        f"{settings.POSTHOG_API_HOST.rstrip('/')}/api/projects/"
         f"{settings.POSTHOG_PROJECT_ID}/query/",
         headers={"Authorization": f"Bearer {settings.POSTHOG_PERSONAL_API_KEY}"},
         json={"query": {"kind": "HogQLQuery", "query": sql}},
         timeout=_TIMEOUT,
     )
-    respuesta.raise_for_status()
+    if respuesta.status_code >= 400:
+        # El cuerpo trae el motivo (scope faltante, clave de otra organización).
+        # Sin esto, el informe diría sólo "403" y habría que salir a probar.
+        raise FuenteCaida(
+            f"PostHog rechazó la consulta ({respuesta.status_code}): "
+            f"{respuesta.text[:200]}",
+        )
     return respuesta.json().get("results", [])
 
 
@@ -103,43 +126,52 @@ def actividad_del_sitio(dias: int = 1) -> dict:
 
 
 def _token_google() -> str:
-    """Un access token a partir de la service account, sin `google-auth`.
+    """Un access token de Google a partir del refresh token de la cuenta.
 
-    Es un JWT firmado con la clave privada de la cuenta de servicio, canjeado
-    por un token. `pyjwt[crypto]` ya es dependencia del proyecto (lo usa el
-    login con Apple), así que esto no agrega ninguna librería.
+    **Por qué no una cuenta de servicio:** el 04-09-2026 Google rechazó crear su
+    clave con `iam.disableServiceAccountKeyCreation`, una Organization Policy
+    que ahora viene activada por defecto ("Secure by Default"). Se podía hacer
+    una excepción para el proyecto, pero ese proyecto es el que tiene los client
+    ID del login con Google de producción y la excepción quedaba para siempre.
+
+    Un refresh token de usuario no toca ninguna política, se revoca desde la
+    propia cuenta de Google, y para leer Search Console alcanza igual: la
+    propiedad ya es de esa cuenta, así que tampoco hay que darle permisos a
+    nadie nuevo.
+
+    Los tokens de acceso duran una hora; el informe corre una vez por día, así
+    que se pide uno nuevo en cada corrida y no se cachea nada.
     """
-    if not settings.GSC_CREDENCIALES:
-        raise FuenteCaida("Search Console sin credenciales")
+    faltan = [
+        nombre
+        for nombre, valor in (
+            ("GSC_CLIENT_ID", settings.GSC_CLIENT_ID),
+            ("GSC_CLIENT_SECRET", settings.GSC_CLIENT_SECRET),
+            ("GSC_REFRESH_TOKEN", settings.GSC_REFRESH_TOKEN),
+        )
+        if not valor
+    ]
+    if faltan:
+        raise FuenteCaida(f"Search Console sin credenciales: falta {', '.join(faltan)}")
 
-    import jwt  # local: sólo lo necesita esta rama
-
-    try:
-        cuenta = json.loads(settings.GSC_CREDENCIALES)
-    except ValueError as exc:
-        raise FuenteCaida(f"GSC_CREDENCIALES no es JSON válido: {exc}") from exc
-
-    ahora = int(datetime.datetime.now(datetime.UTC).timestamp())
-    afirmacion = jwt.encode(
-        {
-            "iss": cuenta["client_email"],
-            "scope": _SCOPE_GSC,
-            "aud": _TOKEN_URL,
-            "iat": ahora,
-            "exp": ahora + 3600,
-        },
-        cuenta["private_key"],
-        algorithm="RS256",
-    )
     respuesta = httpx.post(
         _TOKEN_URL,
         data={
-            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "assertion": afirmacion,
+            "client_id": settings.GSC_CLIENT_ID,
+            "client_secret": settings.GSC_CLIENT_SECRET,
+            "refresh_token": settings.GSC_REFRESH_TOKEN,
+            "grant_type": "refresh_token",
         },
         timeout=_TIMEOUT,
     )
-    respuesta.raise_for_status()
+    if respuesta.status_code >= 400:
+        # El caso que importa: un refresh token revocado o vencido por desuso
+        # (Google los caduca a los seis meses sin usar). Sin este mensaje, el
+        # informe diría "400" y habría que adivinar.
+        raise FuenteCaida(
+            f"Google rechazó el refresh token ({respuesta.status_code}): "
+            f"volvé a autorizar con `manage.py autorizar_search_console`",
+        )
     return respuesta.json()["access_token"]
 
 
@@ -158,8 +190,12 @@ def busquedas(dias: int = 7) -> dict:
 
     def pedir(dimensiones: list[str], limite: int) -> list[dict]:
         respuesta = httpx.post(
+            # El identificador de la propiedad va percent-encodeado DENTRO de
+            # la ruta: `sc-domain:astraguia.com` tiene dos puntos, y sin
+            # escapar Google responde 404 sobre una propiedad que sí existe.
             "https://searchconsole.googleapis.com/webmasters/v3/sites/"
-            f"{httpx.URL(settings.GSC_SITE_URL)}/searchAnalytics/query",
+            f"{urllib.parse.quote(settings.GSC_SITE_URL, safe='')}"
+            "/searchAnalytics/query",
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "startDate": desde.isoformat(),
