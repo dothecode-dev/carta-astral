@@ -1967,6 +1967,18 @@ body > .frame {
   .navLinks {
     order: 3;
     width: 100%;
+    /* Los cinco enlaces no entran a lo ancho de un teléfono. Sin esto el texto
+       envolvía DENTRO de cada uno —"New / chart", "Sample / chart", "Sign /
+       in"—, que es lo que se veía roto: no eran tres filas de nav, era cada
+       etiqueta partida al medio. Con `nowrap` en el enlace y `wrap` en la
+       fila, el que no entra baja entero. En español pesa más todavía: "Carta
+       de ejemplo" es el doble de largo que "Sample chart". */
+    flex-wrap: wrap;
+    gap: 0.75rem 1.125rem;
+  }
+
+  .navLinks a {
+    white-space: nowrap;
   }
 }
 
