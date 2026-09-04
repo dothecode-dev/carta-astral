@@ -211,10 +211,17 @@ if not WEB_BASE_URL:
 # eso es lo que corre en desarrollo y en los tests. En producción, sin esto,
 # quien paga y cierra la pestaña no se entera nunca de que su informe está listo.
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-# En un SUBDOMINIO, no en el dominio raíz: el SPF de `astraguia.com` es el de
-# ImprovMX, que hace andar el correo entrante, y sumarle el include de otro
-# proveedor rompe las dos cosas a la vez.
-MAIL_FROM = os.environ.get("MAIL_FROM", "ASTRA <hola@send.astraguia.com>")
+# La misma dirección que el sitio publica en el pie y en los legales
+# (`LEGAL_CONTACT`): un aviso de compra que llega desde otra dirección se lee
+# como si fuera de otro.
+#
+# Enviar desde la raíz NO obliga a tocar el SPF: un registro SPF admite varios
+# `include:` y el de ImprovMX sigue igual (lo que no se puede es tener DOS
+# registros SPF). Lo que sí hay que dejar afuera es el MX que Resend ofrece
+# para la raíz: viene con prioridad 9 contra el 10 de ImprovMX, así que
+# cargarlo desviaría todo el correo ENTRANTE. Sin ese MX se envía igual; sólo
+# se pierde la recepción por Resend, que no usamos.
+MAIL_FROM = os.environ.get("MAIL_FROM", "ASTRA <info@astraguia.com>")
 
 # --- Medición de negocio (PostHog) ---
 # Sólo lo que el navegador no puede medir: que la plata haya entrado. Sin la

@@ -6,10 +6,14 @@ para esto —que el mail llegue sin montar infraestructura—: 3.000 mensajes po
 mes sin cargo alcanzan de sobra para el volumen de hoy, y el DNS del dominio ya
 está en Route 53.
 
-**El remitente va en un subdominio** (`send.astraguia.com`, `MAIL_FROM`), no en
-`astraguia.com` a secas: el dominio raíz tiene el SPF de ImprovMX, que es lo
-que hace andar el correo ENTRANTE, y meterle el include de otro proveedor es la
-forma clásica de romper las dos cosas a la vez.
+**El remitente es `info@astraguia.com`** (`MAIL_FROM`), la misma dirección que
+el sitio publica en el pie y en los legales: un aviso de compra que llega desde
+otra dirección se lee como si fuera de otro.
+
+Eso no obliga a tocar el SPF —un registro admite varios `include:`, y el de
+ImprovMX quedó igual—, pero sí obliga a NO cargar el MX que Resend ofrece para
+la raíz: viene con prioridad 9 contra el 10 de ImprovMX y se llevaría todo el
+correo entrante. Sin ese MX se envía igual.
 
 Nunca propaga una excepción. Esto corre DESPUÉS de mover plata —acreditar una
 compra, devolver el derecho de un informe que no se pudo entregar—, así que un
