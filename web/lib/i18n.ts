@@ -239,6 +239,13 @@ export type Dict = {
   consent: { text: string; accept: string; reject: string; more: string; footLink: string };
   precios: {
     title: string;
+    /** El `<title>` de la página, que no es el encabezado.
+     *
+     *  `title` es lo que se lee arriba de la página y está escrito para quien
+     *  ya entró; esto es lo que se lee en Google, donde la misma frase no
+     *  sirve: nadie busca "elegí cómo querés leerte", y el resultado tiene que
+     *  decir de qué se trata en los ~60 caracteres que se muestran. */
+    seoTitle: string;
     lede: string;
     /** Nombre de cada producto, por código del catálogo. */
     nombre: Record<string, string>;
@@ -553,7 +560,7 @@ export type Dict = {
 
 const es: Dict = {
   meta: {
-    title: "ASTRA — cartas astrales",
+    title: "Carta natal gratis, calculada con efemérides reales · ASTRA",
     description:
       "Tu carta natal calculada con efemérides reales y leída en tu idioma. Directo en el navegador, sin instalar nada.",
   },
@@ -802,6 +809,7 @@ const es: Dict = {
   },
   precios: {
     title: "Elegí cómo querés leerte.",
+    seoTitle: "Precios: cuánto sale tu carta natal completa",
     lede: "Comprás una vez y lo usás cuando quieras: los informes de un pack no vencen.",
     nombre: {
       informe_natal: "Informe completo",
@@ -875,7 +883,7 @@ const es: Dict = {
 
 const en: Dict = {
   meta: {
-    title: "ASTRA — astrological charts",
+    title: "Free birth chart, calculated with real ephemeris · ASTRA",
     description:
       "Your natal chart, computed from real ephemeris and written in your language. Straight from your browser, nothing to install.",
   },
@@ -1124,6 +1132,7 @@ const en: Dict = {
   },
   precios: {
     title: "Choose how you want to read yourself.",
+    seoTitle: "Pricing: what a full birth chart reading costs",
     lede: "Buy once, use it whenever: the reports in a pack don't expire.",
     nombre: {
       informe_natal: "Full report",
@@ -1197,7 +1206,7 @@ const en: Dict = {
 
 const pt: Dict = {
   meta: {
-    title: "ASTRA — mapas astrais",
+    title: "Mapa natal grátis, calculado com efemérides reais · ASTRA",
     description:
       "Seu mapa natal calculado com efemérides reais e escrito no seu idioma. Direto no navegador, sem instalar nada.",
   },
@@ -1446,6 +1455,7 @@ const pt: Dict = {
   },
   precios: {
     title: "Escolha como quer se ler.",
+    seoTitle: "Preços: quanto custa seu mapa natal completo",
     lede: "Compre uma vez e use quando quiser: os relatórios de um pacote não expiram.",
     nombre: {
       informe_natal: "Relatório completo",

@@ -28,7 +28,7 @@ export async function generateMetadata({
   if (!isLocale(locale)) return {};
   const dict = getDict(locale);
   return {
-    title: `${dict.precios.title} · ASTRA`,
+    title: `${dict.precios.seoTitle} · ASTRA`,
     description: dict.precios.lede,
     alternates: {
       canonical: `${SITE_URL}/${locale}/precios`,
@@ -48,13 +48,13 @@ export async function generateMetadata({
       type: "website",
       siteName: "ASTRA",
       locale,
-      title: `${dict.precios.title} · ASTRA`,
+      title: `${dict.precios.seoTitle} · ASTRA`,
       description: dict.precios.lede,
       url: `${SITE_URL}/${locale}/precios`,
     },
     twitter: {
       card: "summary_large_image",
-      title: `${dict.precios.title} · ASTRA`,
+      title: `${dict.precios.seoTitle} · ASTRA`,
       description: dict.precios.lede,
     },
   };
