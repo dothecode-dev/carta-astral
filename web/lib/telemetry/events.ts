@@ -31,7 +31,52 @@ export type EventoProps = {
   /** `desde` distingue al que llenó el formulario ya con sesión del que venía
    *  del preview anónimo: son dos costos de adquisición distintos. */
   carta_creada: { desde: "formulario" | "preview" };
+  /** Apretó el botón de leer. Se emite en el CLICK, no al terminar.
+   *
+   *  `interpretacion_generada` (abajo) no alcanza para saber cuánta gente
+   *  pidió una lectura: se emite del lado del cliente cuando el sondeo
+   *  termina, y el informe completo tarda unos seis minutos — quien cierra la
+   *  pestaña, cambia de app o pierde la red no lo dispara nunca. La distancia
+   *  entre este evento y aquél es exactamente cuánta gente pide y no se queda
+   *  a ver el resultado; sin él, ese abandono se ve igual que no haber
+   *  apretado nunca.
+   *
+   *  Comprar el informe NO lo dispara: eso es `checkout_iniciado`. */
+  interpretacion_pedida: { tier: "corto" | "largo" };
+  /** Pidió una lectura y el backend no la arrancó.
+   *
+   *  Sin esto, quien choca contra un 402, un 429 o el cupo diario agotado se
+   *  cuenta igual que quien abandonó la espera: dos problemas distintos, con
+   *  arreglos opuestos —uno es de producto, el otro de paciencia—.
+   *
+   *  `sin_derecho` cubre los dos códigos del 402 (`sin_leer_breve` y
+   *  `sin_leer_informe`): cuál de los dos ya lo dice `tier`. `red` es el
+   *  `fetch` que ni siquiera llegó, y es el único que no deja rastro del lado
+   *  del servidor. */
+  interpretacion_rechazada: {
+    tier: "corto" | "largo";
+    motivo: "sin_derecho" | "cap_diario" | "en_curso" | "demasiados" | "red" | "fallo";
+  };
   interpretacion_generada: { lang: string; tier: "corto" | "largo" };
+  /** Qué ofrecía la carta cuando la persona la tuvo delante.
+   *
+   *  Es el denominador que faltaba: `/carta/[id]` es donde se decide todo, y
+   *  medir sólo lo que se aprieta deja "creó su carta y no leyó nada" como una
+   *  cifra que tapa tres situaciones —vio los dos botones y no quiso, no le
+   *  quedaban lecturas breves, o ya tenía todo leído—.
+   *
+   *  `agotada` es el callejón: gastó las tres de por vida, no hay nada que
+   *  traducir gratis y la lectura breve no se vende ni se repone, así que
+   *  donde iba el botón hay un aviso. `no_se_ofrece` es que ese producto ya
+   *  está leído para esta carta.
+   *
+   *  Se emite cuando los botones se muestran de verdad, no mientras corre la
+   *  espera: quien vuelve a la pestaña con el informe escribiéndose ve el
+   *  sistema solar y nunca tuvo la decisión delante. */
+  acciones_carta_vistas: {
+    breve: "disponible" | "agotada" | "no_se_ofrece";
+    completo: "comprar" | "leer" | "no_se_ofrece";
+  };
   carta_descargada: { formato: "pdf" | "imagen" };
   /** Apretó Comprar y se lo mandó a Stripe. La otra mitad del embudo de pago
    *  —que la plata haya entrado— la emite el backend desde el webhook

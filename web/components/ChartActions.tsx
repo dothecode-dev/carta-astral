@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { SolarSystem } from "@/components/SolarSystem";
 import { cantidad, puede, type Derecho } from "@/lib/derechos";
 import type { Dict, Locale } from "@/lib/i18n";
-import { track } from "@/lib/telemetry";
+import { track, type EventoProps } from "@/lib/telemetry";
 
 // Los dos botones de la carta, y la espera mientras se escribe el producto
 // elegido.
@@ -38,6 +38,9 @@ const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 type Tier = "corto" | "largo";
 
 type Estado = { completa: boolean; hechas: number; total: number };
+
+/** Por qué el backend no arrancó la lectura que se le pidió. */
+type MotivoRechazo = EventoProps["interpretacion_rechazada"]["motivo"];
 
 /**
  * Qué tier se pidió para esta carta e idioma en esta pestaña, si alguno.
@@ -103,6 +106,64 @@ function marcarReintentado(chartId: string, locale: string, tier: Tier): void {
   }
 }
 
+/**
+ * Qué tier declara el SERVIDOR escribiéndose ahora para esta carta e idioma.
+ *
+ * `en_curso` sale de que el lock de generación siga vivo, así que manda sobre
+ * `sessionStorage`: éste sobrevive un F5 pero muere al cerrar la pestaña, y el
+ * caso que importa es volver más tarde. Si hay dos escribiéndose, el completo
+ * es el que la persona pagó y el que tarda seis minutos.
+ *
+ * Devuelve `null` también cuando lo que el servidor declara en curso ya figura
+ * completo: es una foto que puede llegar vieja, y creerle ahí dejaría la
+ * espera encendida sobre algo que ya está escrito.
+ */
+function tierEnCursoServidor(
+  enCurso: Record<string, Tier[]>,
+  locale: string,
+  tieneBreve: boolean,
+  tieneCompleto: boolean,
+): Tier | null {
+  const aqui = enCurso[locale] ?? [];
+  const tier = aqui.includes("largo") ? "largo" : (aqui[0] ?? null);
+  if (!tier) return null;
+  if (tier === "corto" && tieneBreve) return null;
+  if (tier === "largo" && tieneCompleto) return null;
+  return tier;
+}
+
+/** Qué se le ofreció a la persona para cada producto de esta carta. */
+type OfertaBreve = "disponible" | "agotada" | "no_se_ofrece";
+type OfertaCompleto = "comprar" | "leer" | "no_se_ofrece";
+
+/**
+ * Cuenta la oferta que quedó a la vista. Es un componente y no un efecto del
+ * padre por una razón concreta: sólo se monta en la rama que muestra los
+ * botones, y así no hay forma de que la medición se dispare mientras corre la
+ * espera. Un efecto arriba, con `if (busy) return`, mediría igual en el primer
+ * pase —el efecto de recuperación prende `busy` en ese mismo render, y el
+ * estado nuevo recién se ve en el siguiente—, contando como "vio los botones" a
+ * quien volvió a la pestaña con el informe escribiéndose.
+ *
+ * El anti-duplicados vive en el padre (`medir`), que sobrevive al desmontaje:
+ * volver de una generación cambia la oferta y eso sí es un dato nuevo, pero
+ * volver de un error la deja igual y sería contar dos veces la misma pantalla.
+ */
+function MedirOferta({
+  breve,
+  completo,
+  medir,
+}: {
+  breve: OfertaBreve;
+  completo: OfertaCompleto;
+  medir: (breve: OfertaBreve, completo: OfertaCompleto) => void;
+}) {
+  useEffect(() => {
+    medir(breve, completo);
+  }, [breve, completo, medir]);
+  return null;
+}
+
 export function ChartActions({
   locale,
   chartId,
@@ -138,8 +199,21 @@ export function ChartActions({
   timeKnown: boolean;
   dict: Dict;
 }) {
+  const tiersAqui = interpretations[locale] ?? [];
+  const tieneBreve = tiersAqui.includes("corto");
+  const tieneCompleto = tiersAqui.includes("largo");
+  /** Lo que el servidor dice que se está escribiendo ahora mismo. */
+  const tierServidor = tierEnCursoServidor(enCurso, locale, tieneBreve, tieneCompleto);
+
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  // Arranca en espera cuando el servidor ya declara una generación viva: el
+  // efecto de recuperación (más abajo) la retoma igual, pero corre después del
+  // primer render, y hasta entonces la pantalla mostraba los botones de una
+  // carta que se está escribiendo — un parpadeo con un botón clickeable, y
+  // una oferta contada como vista que nadie llegó a decidir. Como `enCurso`
+  // viene del servidor, el valor inicial es el mismo de los dos lados y no
+  // rompe la hidratación.
+  const [busy, setBusy] = useState(tierServidor !== null);
   // `router.refresh()` no avisa cuándo terminó. Envuelto en una transición,
   // `refrescando` dice cuándo el servidor ya devolvió la lectura: sin eso la
   // animación se quedaba encendida para siempre debajo del texto ya escrito.
@@ -151,11 +225,21 @@ export function ChartActions({
   // del primer sondeo, cuando `progreso` todavía es `null` y no hay otra
   // forma de saber si se está escribiendo un informe de ocho secciones o una
   // sola lectura breve.
-  const [tierEnCurso, setTierEnCurso] = useState<Tier | null>(null);
+  const [tierEnCurso, setTierEnCurso] = useState<Tier | null>(tierServidor);
 
-  const tiersAqui = interpretations[locale] ?? [];
-  const tieneBreve = tiersAqui.includes("corto");
-  const tieneCompleto = tiersAqui.includes("largo");
+  /** Última oferta medida, para no contar dos veces la misma pantalla.
+   *
+   *  Vive acá y no en `MedirOferta` porque ese componente se desmonta cada vez
+   *  que arranca una generación: un error que devuelve los botones tal cual
+   *  estaban no es una pantalla nueva, pero terminar la breve sí cambia lo que
+   *  se ofrece y vuelve a contar. */
+  const ultimaOferta = useRef<string | null>(null);
+  const medirOferta = useCallback((breve: OfertaBreve, completo: OfertaCompleto) => {
+    const clave = `${breve}:${completo}`;
+    if (ultimaOferta.current === clave) return;
+    ultimaOferta.current = clave;
+    track("acciones_carta_vistas", { breve, completo });
+  }, []);
 
   /**
    * Si `tier` ya está completo en algún OTRO idioma de esta carta. El
@@ -241,14 +325,6 @@ export function ChartActions({
   // de seguridad ante HALLAZGO 3 (el proceso que muere a mitad de camino).
   useEffect(() => {
     if (tieneBreve && tieneCompleto) return;
-    // Lo que el servidor declara en curso manda sobre `sessionStorage`: éste
-    // sobrevive un F5 pero muere al cerrar la pestaña, y el caso que importa
-    // es volver más tarde. Si hay dos tiers escribiéndose, el completo es el
-    // que la persona pagó y el que tarda seis minutos.
-    const enCursoAqui = enCurso[locale] ?? [];
-    const tierServidor = enCursoAqui.includes("largo")
-      ? "largo"
-      : (enCursoAqui[0] ?? null);
     const tier = tierServidor ?? tierPedido(chartId, locale);
     if (!tier) return;
     if ((tier === "corto" && tieneBreve) || (tier === "largo" && tieneCompleto)) return;
@@ -293,7 +369,7 @@ export function ChartActions({
     return () => {
       cancelado = true;
     };
-  }, [chartId, locale, enCurso, tieneBreve, tieneCompleto, seguirGenerando]);
+  }, [chartId, locale, tierServidor, tieneBreve, tieneCompleto, seguirGenerando]);
 
   /**
    * Manda a pagar el informe, con esta carta atada.
@@ -342,6 +418,11 @@ export function ChartActions({
   }
 
   async function interpret(tier: Tier) {
+    // En el click, no al terminar: `interpretacion_generada` sale del sondeo,
+    // que necesita la pestaña abierta seis minutos. Sin este evento, quien
+    // pide el informe y se va a hacer otra cosa se cuenta igual que quien
+    // nunca apretó el botón — y son dos problemas distintos.
+    track("interpretacion_pedida", { tier });
     setProgreso(null);
     setBusy(true);
     setTierEnCurso(tier);
@@ -364,6 +445,9 @@ export function ChartActions({
       // rechazo del backend, y sin este catch dejaba la animación encendida
       // para siempre en vez de devolver el botón.
       console.error(`inicio del informe ${chartId} falló`, err);
+      // El único rechazo que no deja rastro del lado del servidor: el pedido
+      // no llegó nunca.
+      track("interpretacion_rechazada", { tier, motivo: "red" });
       setBusy(false);
       setError(dict.chart.failed);
       return;
@@ -371,10 +455,14 @@ export function ChartActions({
 
     if (!res.ok) {
       setBusy(false);
+      // Qué le pasó a este pedido, para el evento de abajo. El default cubre
+      // cualquier status que no tenga rama propia.
+      let motivo: MotivoRechazo = "fallo";
       if (res.status === 409) {
         // HALLAZGO 2: el backend responde 409 cuando ya hay una generación en
         // curso para esta carta en OTRO idioma (`_sibling_en_curso`). No es
         // un fallo duro — es "esperá unos segundos y reintentá".
+        motivo = "en_curso";
         setError(dict.chart.generationInProgress);
       } else if (res.status === 402) {
         // El 402 trae `code: "sin_leer_breve" | "sin_leer_informe"` para
@@ -386,6 +474,9 @@ export function ChartActions({
         } catch {
           // cuerpo no parseable: se cae al mensaje genérico de abajo.
         }
+        // Un solo motivo para los dos códigos: cuál de los dos productos era
+        // ya lo dice `tier`.
+        motivo = "sin_derecho";
         setError(
           code === "sin_leer_breve"
             ? dict.chart.sinLeerBreve
@@ -394,6 +485,7 @@ export function ChartActions({
               : dict.chart.sinDerecho,
         );
       } else if (res.status === 429) {
+        motivo = "demasiados";
         setError(dict.chart.demasiados);
       } else if (res.status === 503) {
         // El backend manda `code: "cap_diario"` cuando se agotó el cupo de
@@ -407,10 +499,15 @@ export function ChartActions({
         } catch {
           // cuerpo no parseable: cae al genérico, como cualquier otro 503.
         }
+        motivo = code === "cap_diario" ? "cap_diario" : "fallo";
         setError(code === "cap_diario" ? dict.chart.capDiario : dict.chart.failed);
       } else {
         setError(dict.chart.failed);
       }
+      // Quien choca acá se queda sin lectura igual que quien abandona la
+      // espera, y en el panel se veían idénticos: uno se arregla con producto
+      // —más lecturas, otro precio, otro cupo— y el otro no.
+      track("interpretacion_rechazada", { tier, motivo });
       return;
     }
 
@@ -418,6 +515,44 @@ export function ChartActions({
     // existe. Si el sondeo se agota, se avisa y se deja reintentar (RF7).
     await seguirGenerando(true, tier);
   }
+
+  // Todo esto se calcula antes de las dos salidas tempranas de abajo porque
+  // también describe la oferta que se mide: qué había para hacer en esta
+  // pantalla no depende de si en este instante corre una generación.
+  const breveDisponibles = cantidad(derechos, "lectura_breve");
+  /** Sin ninguna y sin una ya escrita en otro idioma que traducir gratis: no
+   *  hay forma de conseguir otra, así que no hay botón que ofrecer.
+   *
+   *  Lo decide `puede()` y no `breveDisponibles === 0`: `cantidad()` devuelve 0
+   *  para un derecho sin tope (`cantidad_restante: null`, lo que dejaría una
+   *  suscripción), y con esa comparación el botón desaparecería justo para
+   *  quien más derecho tiene. Hoy no hay ningún producto así en el catálogo
+   *  —son todos consumibles—, pero el criterio correcto es el mismo que
+   *  habilita el botón, no uno parecido. */
+  const breveAgotada = !puede(derechos, "leer_breve") && !enOtroIdioma("corto");
+  /**
+   * Si el informe se puede pedir sin volver a pagar: porque hay derecho, o
+   * porque ya está escrito en otro idioma y traducirlo no cuesta.
+   *
+   * El backend no cobra por traducir una lectura ya escrita
+   * (`_sibling_completo` en `interpretation_service.py`), y la nota de abajo
+   * ya lo decía —`interpretFreeLang`—, pero el botón mandaba a pagar igual:
+   * US$ 29 por algo gratis, con el aviso de que era gratis al lado.
+   */
+  const puedeLeerlo = puede(derechos, "leer_informe") || enOtroIdioma("largo");
+  /** Informes comprados sin usar. Distinto de `puedeLeerlo`, que también es
+   *  cierto por una traducción gratis: ahí no hay nada pago que descontar. */
+  const informesPagos = cantidad(derechos, "informe_natal");
+
+  // Lo que se le ofreció, tal como se va a ver. `no_se_ofrece` es que ese
+  // producto ya está leído para esta carta y no hay nada que proponer.
+  const ofertaBreve: OfertaBreve =
+    tieneBreve || tieneCompleto ? "no_se_ofrece" : breveAgotada ? "agotada" : "disponible";
+  const ofertaCompleto: OfertaCompleto = tieneCompleto
+    ? "no_se_ofrece"
+    : puedeLeerlo
+      ? "leer"
+      : "comprar";
 
   if (busy || refrescando) {
     return (
@@ -457,28 +592,11 @@ export function ChartActions({
   // que una breve generada después de esto es contenido que nadie ve nunca
   // — gastar una de las tres lecturas breves de por vida en eso es puro
   // desperdicio.
-  if (tieneCompleto) return null;
-
-  const breveDisponibles = cantidad(derechos, "lectura_breve");
-  /** Sin ninguna y sin una ya escrita en otro idioma que traducir gratis: no
-   *  hay forma de conseguir otra, así que no hay botón que ofrecer. */
-  const breveAgotada = breveDisponibles === 0 && !enOtroIdioma("corto");
-  /**
-   * Si el informe se puede pedir sin volver a pagar: porque hay derecho, o
-   * porque ya está escrito en otro idioma y traducirlo no cuesta.
-   *
-   * El backend no cobra por traducir una lectura ya escrita
-   * (`_sibling_completo` en `interpretation_service.py`), y la nota de abajo
-   * ya lo decía —`interpretFreeLang`—, pero el botón mandaba a pagar igual:
-   * US$ 29 por algo gratis, con el aviso de que era gratis al lado.
-   */
-  const puedeLeerlo = puede(derechos, "leer_informe") || enOtroIdioma("largo");
-  /** Informes comprados sin usar. Distinto de `puedeLeerlo`, que también es
-   *  cierto por una traducción gratis: ahí no hay nada pago que descontar. */
-  const informesPagos = cantidad(derechos, "informe_natal");
+  if (tieneCompleto) return <MedirOferta breve={ofertaBreve} completo={ofertaCompleto} medir={medirOferta} />;
 
   return (
     <div className="chartActions">
+      <MedirOferta breve={ofertaBreve} completo={ofertaCompleto} medir={medirOferta} />
       <div className="chartActionsRow">
         {!tieneBreve &&
           // Agotadas las tres de por vida, el botón quedaba ahí deshabilitado
@@ -492,7 +610,11 @@ export function ChartActions({
               <button
                 type="button"
                 className="btn btnGhost"
-                disabled={!puede(derechos, "leer_breve") || busy}
+                // `enOtroIdioma` habilita igual que en el completo: con la
+                // breve ya escrita en otro idioma el backend la traduce sin
+                // tocar el ledger, así que deshabilitar acá dejaba un botón
+                // muerto abajo del cartel que anuncia que es gratis.
+                disabled={(!puede(derechos, "leer_breve") && !enOtroIdioma("corto")) || busy}
                 onClick={() => interpret("corto")}
               >
                 {dict.chart.interpretBreve}

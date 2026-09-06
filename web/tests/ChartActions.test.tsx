@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChartActions, POLL_MS, POLL_TRIES } from "@/components/ChartActions";
 import { getDict } from "@/lib/i18n";
+import { track as trackReal } from "@/lib/telemetry";
+
+// Sin token de PostHog `track` ya es no-op, así que el resto de los tests corría
+// sin mock; los de medición necesitan ver qué se manda, no que no rompa.
+vi.mock("@/lib/telemetry", () => ({ track: vi.fn() }));
+const track = vi.mocked(trackReal);
 
 const refresh = vi.fn();
 // Referencia estable a propósito, como el `useRouter()` real: uno nuevo en
@@ -70,6 +76,9 @@ beforeEach(() => {
   // recuerdan en sessionStorage por pestaña: sin limpiarlo, un test
   // contamina al siguiente porque todos usan el mismo CHART.
   window.sessionStorage.clear();
+  // `vi.mock` es de módulo: `restoreAllMocks` no lo toca y las llamadas de un
+  // test se contarían en el siguiente.
+  track.mockClear();
 });
 
 afterEach(() => {
@@ -774,5 +783,158 @@ describe("volver a la carta después de cerrar la pestaña", () => {
 
     expect(screen.getByText(dict.chart.compraFallo)).toBeInTheDocument();
     expect(assign).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChartActions — medición del momento de decidir", () => {
+  // `/carta/[id]` es donde se decide leer, comprar o irse, y hasta el 06-09-2026
+  // no emitía un solo evento en ese momento: el único de la pantalla era
+  // `interpretacion_generada`, que se dispara del lado del cliente recién al
+  // terminar el sondeo y con la pestaña abierta —seis minutos después—, así que
+  // subcuenta. En el panel, "creó su carta y no leyó nada" tapaba tres cosas con
+  // arreglos distintos: no quiso, no tenía con qué, o pidió y no aguantó la espera.
+
+  it("cuenta el pedido en el momento del click, no cuando la lectura termina", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(false, 0, 1));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions();
+    await clickBoton(dict.chart.interpretBreve);
+
+    // Sin avanzar el reloj: el evento ya salió, aunque la lectura no exista.
+    expect(track).toHaveBeenCalledWith("interpretacion_pedida", { tier: "corto" });
+    expect(track).not.toHaveBeenCalledWith("interpretacion_generada", expect.anything());
+  });
+
+  it("distingue el informe pago de la breve al contar el pedido", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(false, 0, 8));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ paidCredits: 2 });
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
+
+    expect(track).toHaveBeenCalledWith("interpretacion_pedida", { tier: "largo" });
+  });
+
+  it("comprar no cuenta como pedido de lectura", async () => {
+    // El que va a Stripe todavía no pidió nada que se escriba: mezclarlos haría
+    // que la caída entre pedir y leer incluya a quien está pagando.
+    vi.stubGlobal("location", { assign: vi.fn(), href: "" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(200, { url: "https://stripe.test/c" })));
+
+    renderActions({ paidCredits: 0 });
+    await clickBoton(dict.chart.interpretCompleto);
+
+    expect(track).toHaveBeenCalledWith("checkout_iniciado", { producto: "informe_natal", desde: "carta" });
+    expect(track).not.toHaveBeenCalledWith("interpretacion_pedida", expect.anything());
+  });
+
+  it("mide en qué estado se ofrecieron los botones, una sola vez", () => {
+    renderActions({ freeCredits: 3, paidCredits: 0 });
+
+    expect(track).toHaveBeenCalledWith("acciones_carta_vistas", {
+      breve: "disponible",
+      completo: "comprar",
+    });
+    expect(track.mock.calls.filter(([e]) => e === "acciones_carta_vistas")).toHaveLength(1);
+  });
+
+  it("mide el callejón: sin lecturas breves y sin nada que traducir", () => {
+    // Es el caso que hoy es invisible y no se arregla con copy: la persona ve un
+    // aviso donde esperaba un botón. Sin este evento se cuenta igual que quien
+    // miró los dos botones y se fue.
+    renderActions({ freeCredits: 0, paidCredits: 1 });
+
+    expect(track).toHaveBeenCalledWith("acciones_carta_vistas", {
+      breve: "agotada",
+      completo: "leer",
+    });
+  });
+
+  it("no cuenta como oferta la pantalla de espera", async () => {
+    // Quien vuelve a la pestaña con el informe escribiéndose ve el sistema solar,
+    // no los botones. Contarlo sería inflar el numerador del embudo con gente que
+    // nunca tuvo la decisión delante.
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(false, 2, 8));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ enCurso: { es: ["largo"] } });
+    await correr();
+
+    expect(track).not.toHaveBeenCalledWith("acciones_carta_vistas", expect.anything());
+  });
+
+  it("con todo leído mide que no quedaba nada para ofrecer", () => {
+    renderActions({ interpretations: { es: ["corto", "largo"] } });
+
+    expect(track).toHaveBeenCalledWith("acciones_carta_vistas", {
+      breve: "no_se_ofrece",
+      completo: "no_se_ofrece",
+    });
+  });
+
+  it("cuenta el rechazo del backend, que no se distingue de un abandono", async () => {
+    // 402, 429 y 503 dejan a la persona con un cartel y sin lectura. Sin evento,
+    // en el panel se ven igual que quien cerró la pestaña a los dos minutos.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(402, { code: "sin_leer_breve" })));
+
+    renderActions();
+    await clickBoton(dict.chart.interpretBreve);
+
+    expect(track).toHaveBeenCalledWith("interpretacion_rechazada", {
+      tier: "corto",
+      motivo: "sin_derecho",
+    });
+  });
+
+  it("separa el cupo diario agotado de una caída del backend", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(503, { code: "cap_diario" })));
+
+    renderActions();
+    await clickBoton(dict.chart.interpretBreve);
+
+    expect(track).toHaveBeenCalledWith("interpretacion_rechazada", {
+      tier: "corto",
+      motivo: "cap_diario",
+    });
+  });
+
+  it("cuenta también el corte de red, que no deja rastro en el servidor", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+
+    renderActions({ paidCredits: 2 });
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
+
+    expect(track).toHaveBeenCalledWith("interpretacion_rechazada", {
+      tier: "largo",
+      motivo: "red",
+    });
+  });
+});
+
+describe("ChartActions — la breve ya escrita en otro idioma", () => {
+  it("con las tres gastadas, el botón traduce en vez de quedar muerto", async () => {
+    // El backend no cobra por traducir una lectura ya escrita
+    // (`_sibling_completo` sale antes de tocar el ledger y antes del cap), y la
+    // nota bajo el botón ya decía que era gratis — pero el botón estaba
+    // deshabilitado, que es el mismo bug que se arregló para el informe completo.
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue(estado(true, 1, 1));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderActions({ freeCredits: 0, interpretations: { en: ["corto"] } });
+
+    expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeEnabled();
+    expect(screen.getByText(dict.chart.interpretFreeLang)).toBeInTheDocument();
+
+    await clickBoton(dict.chart.interpretBreve);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ lang: "es", tier: "corto" });
   });
 });
