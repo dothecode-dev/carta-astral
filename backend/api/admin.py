@@ -199,7 +199,8 @@ admin.site.index_title = "Sólo lectura. Las mutaciones van por management comma
 
 
 def _dolares(centavos: int) -> str:
-    return f"US$ {centavos // 100},{centavos % 100:02d}"
+    # Espacio duro: que el precio no se parta de su símbolo al final de línea.
+    return f"US$\u00a0{centavos // 100},{centavos % 100:02d}"
 
 
 def _productos_con_precio():
@@ -261,6 +262,7 @@ class CuponAdmin(admin.ModelAdmin):
 
     class Media:
         js = ("admin/cupon_preview.js",)
+        css = {"all": ("admin/cupon.css",)}
 
     # Explícitos, para que `test_admin.py` los interrogue igual que a los de
     # sólo lectura. Entrar al panel ya exige staff: acá no se afina más.

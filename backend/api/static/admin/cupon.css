@@ -1,0 +1,18 @@
+/* El admin fija todas las etiquetas de un form alineado a 160px para que las
+   columnas cierren; a las de cada checkbox de la lista de productos también,
+   y «informe_natal — US$ 29,00» se partía en dos líneas. */
+#id_productos li label {
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+#cupon-precios table {
+  margin-top: 0.25rem;
+}
+
+#cupon-precios td,
+#cupon-precios th {
+  padding: 0.15rem 0.75rem 0.15rem 0;
+  text-align: left;
+}
