@@ -2608,30 +2608,60 @@ body > .frame {
   margin-right: 0.1em;
 }
 
+.preciosOferta {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Sin cupón: una línea discreta que abre el campo. */
+.cuponLinea {
+  margin: 0;
+}
+
+.cuponAbrir {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.cuponAbrir:hover {
+  color: var(--ink);
+}
+
 .cuponForm {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
 }
 
 .cuponLabel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   color: var(--ink-soft);
 }
 
 .cuponInput {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--hairline);
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--hairline-strong);
   border-radius: 0.5rem;
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: 0.9375rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  min-width: 12rem;
+  width: 11rem;
+}
+
+.cuponBoton {
+  padding-block: 0.45rem;
 }
 
 .cuponEstado {
@@ -2641,8 +2671,26 @@ body > .frame {
   color: var(--danger);
 }
 
-.cuponEstadoOk {
+/* Con cupón: una etiqueta pegada a la grilla, y nada más. Los precios
+   tachados de abajo ya cuentan el resto. */
+.cuponAplicado {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.cuponChip {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
   color: var(--accent);
+}
+
+.cuponQuitar {
+  color: var(--ink-soft);
 }
 
 /* El pago que no abre es lo único que puede pasar en esta pantalla y que la

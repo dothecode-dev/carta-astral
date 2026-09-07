@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // La página de precios con `?cupon=`: el precio tachado sale del backend, el
@@ -115,10 +116,29 @@ describe("/precios?cupon=", () => {
     expect(fetchMock.mock.calls.every(([url]) => !String(url).includes("/api/cupones/"))).toBe(true);
   });
 
-  it("hay un campo para escribir el código", async () => {
+  it("sin cupón sólo hay una línea, y el campo aparece al tocarla", async () => {
     stubBackend(CUPON);
     await pagina({});
 
+    expect(screen.queryByRole("textbox")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /cupón/i }));
     expect(screen.getByRole("textbox", { name: /cup/i })).toBeInTheDocument();
+  });
+
+  it("con cupón válido queda la etiqueta con el código y un «quitar» que vuelve a la lista", async () => {
+    stubBackend(CUPON);
+    await pagina({ cupon: "PROMO30" });
+
+    expect(screen.getByRole("status")).toHaveTextContent(/PROMO30/);
+    expect(screen.getByRole("status")).toHaveTextContent(/30/);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByRole("link", { name: /quitar/i })).toHaveAttribute("href", "/es/precios");
+  });
+
+  it("con cupón rechazado el campo queda abierto con el código escrito", async () => {
+    stubBackend({ valido: false, motivo: "vencido" });
+    await pagina({ cupon: "PROMO30" });
+
+    expect(screen.getByRole("textbox")).toHaveValue("PROMO30");
   });
 });

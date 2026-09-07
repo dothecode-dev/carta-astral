@@ -153,7 +153,10 @@ export default async function PreciosPage({
           </Link>
         </section>
 
-        {/* Antes de la grilla: lo que diga acá cambia los precios de abajo. */}
+        {/* El cupón y la grilla en una misma sección: lo que diga el cupón
+            cambia los precios de abajo, y separados por el aire que el marco
+            pone entre hermanos parecía un formulario perdido. */}
+        <section className="preciosOferta">
         <CuponInput
           locale={locale}
           dict={dict}
@@ -231,6 +234,7 @@ export default async function PreciosPage({
             })}
           </ul>
         )}
+        </section>
 
         {/* Los dos juntos en un hijo del marco: `.docFrame` separa a sus hijos
             directos con 3-4,5rem, así que el enlace suelto quedaba a media
