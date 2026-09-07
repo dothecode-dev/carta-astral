@@ -2600,6 +2600,51 @@ body > .frame {
   color: var(--accent);
 }
 
+/* El precio de lista tachado, al lado del final con cupón. Más chico y en
+   el gris de las notas: lo que importa es lo que se paga. */
+.precioTachado {
+  font-size: 0.6em;
+  color: var(--ink-soft);
+  margin-right: 0.1em;
+}
+
+.cuponForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.cuponLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.cuponInput {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--hairline);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: uppercase;
+  min-width: 12rem;
+}
+
+.cuponEstado {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--danger);
+}
+
+.cuponEstadoOk {
+  color: var(--accent);
+}
+
 /* El pago que no abre es lo único que puede pasar en esta pantalla y que la
    persona necesita ver sí o sí: en el gris de las notas se perdía entre el
    detalle del producto y el botón. */

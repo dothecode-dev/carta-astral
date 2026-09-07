@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { normalizarCupon } from "@/lib/cupon";
 import { destinoSeguro } from "@/lib/destino";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n";
 import { clearSessionToken } from "@/lib/session";
@@ -29,8 +30,11 @@ export async function GET(request: Request) {
   const destino = destinoSeguro(params.get("next"), locale);
   const producto = params.get("comprar");
   const compra = destino && producto && /^[a-z0-9_]{1,40}$/.test(producto) ? producto : null;
+  const cupon = destino ? normalizarCupon(params.get("cupon")) : null;
   const query = destino
-    ? `?next=${encodeURIComponent(destino)}${compra ? `&comprar=${encodeURIComponent(compra)}` : ""}`
+    ? `?next=${encodeURIComponent(destino)}${compra ? `&comprar=${encodeURIComponent(compra)}` : ""}${
+        cupon ? `&cupon=${encodeURIComponent(cupon)}` : ""
+      }`
     : "";
 
   await clearSessionToken();

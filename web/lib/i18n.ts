@@ -273,6 +273,13 @@ export type Dict = {
     recomendado: string;
     /** A la muestra de lectura: nadie compra 6.000 palabras a ciegas. */
     verEjemplo: string;
+    /** El campo del cupón y lo que la página dice del que trae la URL. */
+    cuponLabel: string;
+    cuponAplicar: string;
+    /** Lleva "{codigo}" y "{porcentaje}". */
+    cuponAplicado: string;
+    /** Por qué un cupón no sirve, por motivo del backend. */
+    cuponMotivo: Record<string, string>;
   };
   auth: {
     navEnter: string;
@@ -832,6 +839,17 @@ const es: Dict = {
     recomendado: "El más elegido",
     verEjemplo: "Ver un ejemplo",
     nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
+    cuponLabel: "Cupón",
+    cuponAplicar: "Aplicar",
+    cuponAplicado: "Cupón {codigo}: {porcentaje}% de descuento, ya aplicado.",
+    cuponMotivo: {
+      invalido: "Ese cupón no existe o ya no está vigente.",
+      vencido: "Ese cupón venció.",
+      agotado: "Ese cupón ya se agotó: lo usaron todos los que podían.",
+      no_aplica: "Ese cupón no aplica a este producto.",
+      ya_usado: "Ya usaste ese cupón.",
+      cuenta_no_habilitada: "Esta cuenta no puede usar cupones. Escribinos si creés que es un error.",
+    },
   },
   auth: {
     navEnter: "Entrar",
@@ -1155,6 +1173,17 @@ const en: Dict = {
     recomendado: "Most chosen",
     verEjemplo: "See an example",
     nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
+    cuponLabel: "Coupon",
+    cuponAplicar: "Apply",
+    cuponAplicado: "Coupon {codigo}: {porcentaje}% off, applied.",
+    cuponMotivo: {
+      invalido: "That coupon doesn't exist or is no longer active.",
+      vencido: "That coupon has expired.",
+      agotado: "That coupon is used up: everyone who could use it already did.",
+      no_aplica: "That coupon doesn't apply to this product.",
+      ya_usado: "You already used that coupon.",
+      cuenta_no_habilitada: "This account can't use coupons. Write to us if you think that's a mistake.",
+    },
   },
   auth: {
     navEnter: "Sign in",
@@ -1478,6 +1507,17 @@ const pt: Dict = {
     recomendado: "O mais escolhido",
     verEjemplo: "Ver um exemplo",
     nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
+    cuponLabel: "Cupom",
+    cuponAplicar: "Aplicar",
+    cuponAplicado: "Cupom {codigo}: {porcentaje}% de desconto, já aplicado.",
+    cuponMotivo: {
+      invalido: "Esse cupom não existe ou não está mais ativo.",
+      vencido: "Esse cupom venceu.",
+      agotado: "Esse cupom esgotou: todos que podiam já usaram.",
+      no_aplica: "Esse cupom não vale para este produto.",
+      ya_usado: "Você já usou esse cupom.",
+      cuenta_no_habilitada: "Esta conta não pode usar cupons. Escreva para nós se achar que é um erro.",
+    },
   },
   auth: {
     navEnter: "Entrar",

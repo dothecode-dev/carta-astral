@@ -6,6 +6,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dict, Locale } from "@/lib/i18n";
 import { track } from "@/lib/telemetry";
 
+async function motivoDe(res: Response): Promise<string | null> {
+  try {
+    const cuerpo = (await res.json()) as { motivo?: unknown };
+    return typeof cuerpo.motivo === "string" ? cuerpo.motivo : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Comprar un producto suelto, sin carta atada.
  *
@@ -25,11 +34,15 @@ export function ComprarBoton({
   dict,
   signedIn,
   reanudar = false,
+  cupon = null,
 }: {
   codigo: string;
   locale: Locale;
   dict: Dict;
   signedIn: boolean;
+  /** El cupón ya validado por la página, como prop y nunca leído de
+   *  `window.location`: el efecto de reanudar borra la URL antes de comprar. */
+  cupon?: string | null;
   /** Este es el producto que la persona había pedido antes de que el login se
    *  interpusiera: se abre el checkout sola, sin pedirle el mismo clic dos
    *  veces. Lo decide la página, comparando el `?comprar=` contra el catálogo
@@ -38,18 +51,19 @@ export function ComprarBoton({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cuponQuery = cupon ? `&cupon=${encodeURIComponent(cupon)}` : "";
 
   const comprar = useCallback(async () => {
     setBusy(true);
     setError(null);
     // Antes de salir del sitio: lo que sigue es una redirección a Stripe, y si
     // el checkout no abre igual interesa saber que alguien quiso comprar.
-    track("checkout_iniciado", { producto: codigo, desde: "precios" });
+    track("checkout_iniciado", { producto: codigo, desde: "precios", ...(cupon ? { cupon } : {}) });
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ producto: codigo, locale }),
+        body: JSON.stringify({ producto: codigo, locale, ...(cupon ? { cupon } : {}) }),
       });
       if (res.status === 401) {
         // La sesión se venció mientras miraba la página. `haySesion()` sólo
@@ -64,13 +78,16 @@ export function ComprarBoton({
         window.location.assign(
           `/api/session/expirada?locale=${locale}&next=${encodeURIComponent(
             `/${locale}/precios`,
-          )}&comprar=${encodeURIComponent(codigo)}`,
+          )}&comprar=${encodeURIComponent(codigo)}${cuponQuery}`,
         );
         return;
       }
       if (!res.ok) {
         setBusy(false);
-        setError(dict.precios.fallo);
+        // Un cupón que se agotó entre pintar la página y apretar no es «no
+        // pudimos abrir el pago»: es otra cosa, y tiene sus palabras.
+        const motivo = res.status === 400 ? await motivoDe(res) : null;
+        setError((motivo && dict.precios.cuponMotivo[motivo]) || dict.precios.fallo);
         return;
       }
       const { url } = (await res.json()) as { url: string };
@@ -80,7 +97,7 @@ export function ComprarBoton({
       setBusy(false);
       setError(dict.precios.fallo);
     }
-  }, [codigo, locale, dict.precios.fallo]);
+  }, [codigo, locale, cupon, cuponQuery, dict.precios]);
 
   // Una sola vez por montaje: sin el guard, volver de Stripe con el botón
   // "atrás" —que restaura la URL con `?comprar=` incluido— relanzaría el
@@ -103,7 +120,7 @@ export function ComprarBoton({
         // cuenta vacía y la compra se perdía en el camino.
         href={`/${locale}/entrar?next=${encodeURIComponent(
           `/${locale}/precios`,
-        )}&comprar=${encodeURIComponent(codigo)}`}
+        )}&comprar=${encodeURIComponent(codigo)}${cuponQuery}`}
       >
         {dict.precios.comprar}
       </Link>

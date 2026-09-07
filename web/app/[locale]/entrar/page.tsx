@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { Nav } from "@/components/Nav";
+import { normalizarCupon } from "@/lib/cupon";
 import { destinoSeguro } from "@/lib/destino";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { sessionIsLive } from "@/lib/session";
@@ -50,10 +51,16 @@ export default async function SignInPage({
   const query = await searchParams;
   const destino = destinoSeguro(query.next, locale);
   const producto = productoPedido(query.comprar);
+  // El cupón con el que llegó, si tiene forma de código: /precios lo vuelve a
+  // validar contra el backend, acá sólo se cuida que no se cuele otra cosa.
+  const cupon = normalizarCupon(query.cupon);
   // La compra viaja aparte de la ruta: `destinoSeguro` rechaza cualquier `next`
   // con query justamente para no tener que razonar sobre lo que venga pegado.
-  const volverA =
-    destino && producto ? `${destino}?comprar=${encodeURIComponent(producto)}` : destino;
+  const extras = [
+    producto ? `comprar=${encodeURIComponent(producto)}` : null,
+    cupon ? `cupon=${encodeURIComponent(cupon)}` : null,
+  ].filter(Boolean);
+  const volverA = destino && extras.length ? `${destino}?${extras.join("&")}` : destino;
 
   // Quien ya entró no tiene nada que hacer acá. Se le pregunta al backend en
   // vez de confiar en que exista la cookie: una cookie que él ya no reconoce

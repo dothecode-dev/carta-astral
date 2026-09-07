@@ -86,7 +86,11 @@ export type EventoProps = {
    *  `desde` separa las dos puertas de compra, que no valen lo mismo: en
    *  /precios se compra a secas, y dentro de una carta se compra el informe DE
    *  esa carta, después de haber leído la breve. */
-  checkout_iniciado: { producto: string; desde: "precios" | "carta" };
+  checkout_iniciado: { producto: string; desde: "precios" | "carta"; cupon?: string };
+  /** Llegó con un cupón (por link o por el campo) y la página ya sabe si
+   *  sirvió. `resultado` es `valido` o el motivo: es lo que separa «el cupón
+   *  vendió» de «la gente lo intentó y estaba agotado». */
+  cupon_aplicado: { codigo: string; resultado: string };
   /** Cuántos aceptan el banner. Sin esto no se sabe cuánto sesga el resto:
    *  si acepta el 40%, todos los números de arriba son el 40% de la verdad. */
   consentimiento: { decision: "si" | "no" };

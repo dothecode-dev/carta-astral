@@ -240,3 +240,47 @@ describe("la salida de emergencia conserva la compra", () => {
     expect(res.headers.get("location")).toBe("/es/entrar");
   });
 });
+
+describe("el cupón sobrevive al login", () => {
+  it("/entrar vuelve a /precios con la compra y el cupón", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(json({ free_credits: 3, paid_credits: 0, account_id: 1 })),
+    );
+
+    const destino = await destinoDe(() =>
+      SignInPage({
+        ...params,
+        searchParams: Promise.resolve({ next: "/es/precios", comprar: "pack_5_natal", cupon: "promo30" }),
+      }),
+    );
+
+    expect(destino).toBe("/es/precios?comprar=pack_5_natal&cupon=PROMO30");
+  });
+
+  it("/entrar descarta un cupón que no tiene la forma de un código", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(json({ free_credits: 3, paid_credits: 0, account_id: 1 })),
+    );
+
+    const destino = await destinoDe(() =>
+      SignInPage({
+        ...params,
+        searchParams: Promise.resolve({ next: "/es/precios", cupon: "promo 30&x=1" }),
+      }),
+    );
+
+    expect(destino).toBe("/es/precios");
+  });
+
+  it("la ruta que borra la cookie reinyecta el cupón", async () => {
+    const res = await expiradaGet(
+      new Request("https://astraguia.com/api/session/expirada?locale=es&next=%2Fes%2Fprecios&comprar=pack_5_natal&cupon=promo30"),
+    );
+
+    expect(res.headers.get("location")).toBe(
+      "/es/entrar?next=%2Fes%2Fprecios&comprar=pack_5_natal&cupon=PROMO30",
+    );
+  });
+});

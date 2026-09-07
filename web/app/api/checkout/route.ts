@@ -8,8 +8,18 @@ import { ApiError, callApi } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+function motivoDe(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  try {
+    const cuerpo = JSON.parse(error.body) as { motivo?: unknown };
+    return typeof cuerpo.motivo === "string" && /^[a-z_]{1,40}$/.test(cuerpo.motivo) ? cuerpo.motivo : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
-  let cuerpo: { producto?: string; chart_id?: string; locale?: string } = {};
+  let cuerpo: { producto?: string; chart_id?: string; locale?: string; cupon?: string } = {};
   try {
     cuerpo = await request.json();
   } catch {
@@ -29,6 +39,8 @@ export async function POST(request: Request) {
         producto: cuerpo.producto,
         chart_id: cuerpo.chart_id,
         locale: cuerpo.locale,
+        // El backend lo valida y decide el descuento; acá sólo viaja.
+        cupon: cuerpo.cupon,
       }),
     });
     return NextResponse.json(data);
@@ -39,7 +51,13 @@ export async function POST(request: Request) {
     // no se pudo cobrar.
     if (status !== 401) console.error(`checkout de ${cuerpo.producto}: backend ${status}`);
     if (status === 401) return NextResponse.json({ error: "sin sesión" }, { status: 401 });
-    if (status === 400) return NextResponse.json({ error: "producto inválido" }, { status: 400 });
+    if (status === 400) {
+      // Con cupón el 400 trae un motivo (`agotado`, `ya_usado`…) que la
+      // pantalla traduce: es lo único del cuerpo del backend que se reenvía.
+      const motivo = motivoDe(error);
+      if (motivo) return NextResponse.json({ error: "el cupón no sirve", motivo }, { status: 400 });
+      return NextResponse.json({ error: "producto inválido" }, { status: 400 });
+    }
     if (status === 503) {
       return NextResponse.json({ error: "el cobro no está disponible" }, { status: 503 });
     }

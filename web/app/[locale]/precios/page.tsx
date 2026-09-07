@@ -3,9 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ComprarBoton } from "@/components/ComprarBoton";
+import { CuponInput } from "@/components/CuponInput";
 import { Footer } from "@/components/Footer";
 import { Nav } from "@/components/Nav";
 import { fetchCatalogo, formatearPrecio, unidades } from "@/lib/catalogo";
+import { fetchCupon, normalizarCupon } from "@/lib/cupon";
 import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { haySesion } from "@/lib/session";
@@ -73,11 +75,22 @@ export default async function PreciosPage({
   const dict = getDict(locale);
   // En paralelo: la sesión decide si el botón compra o manda a entrar, y el
   // catálogo qué se muestra. Ninguna depende de la otra.
-  const [productos, signedIn, query] = await Promise.all([
+  const query = await searchParams;
+  // El cupón que trae la URL, por link o por el campo. Se valida en el
+  // backend —la misma función que cobra— y sólo con forma de código: lo
+  // demás ni se consulta. Sin respuesta, precio de lista.
+  const codigoCupon = normalizarCupon(query.cupon);
+  const [productos, signedIn, cupon] = await Promise.all([
     fetchCatalogo(),
     haySesion(),
-    searchParams,
+    codigoCupon ? fetchCupon(codigoCupon) : Promise.resolve(null),
   ]);
+  const cuponValido = cupon?.valido ? cupon : null;
+  const estadoCupon = cupon === null ? null : cupon.valido ? "valido" : cupon.motivo;
+  // El precio final por producto, sólo para los que el cupón abarca.
+  const finales = new Map(
+    (cuponValido?.productos ?? []).map((p) => [p.codigo, p.precio_final_centavos]),
+  );
   // Lo que pidió comprar antes de que el login se interpusiera (lo puso
   // `ComprarBoton` al mandarlo a /entrar). Se contrasta contra el catálogo que
   // acaba de llegar: un código inventado en la URL no reanuda nada.
@@ -140,6 +153,15 @@ export default async function PreciosPage({
           </Link>
         </section>
 
+        {/* Antes de la grilla: lo que diga acá cambia los precios de abajo. */}
+        <CuponInput
+          locale={locale}
+          dict={dict}
+          inicial={codigoCupon}
+          estado={codigoCupon ? estadoCupon : null}
+          porcentaje={cuponValido?.porcentaje}
+        />
+
         {productos === null ? (
           // El backend no respondió. Un aviso y la página en pie: mostrar
           // precios inventados sería peor que no mostrar ninguno.
@@ -153,6 +175,7 @@ export default async function PreciosPage({
               const precio = formatearPrecio(
                 producto.precio_centavos, producto.moneda, INTL_LOCALE[locale],
               );
+              const final = finales.get(producto.codigo);
               // El del medio: baja la unidad de US$ 29 a US$ 26,33 sin pedir
               // US$ 125 de una. Tres tarjetas iguales no ayudan a elegir, y
               // quien no sabe cuál mirar no elige ninguna.
@@ -166,7 +189,16 @@ export default async function PreciosPage({
                   <h2 className="precioNombre">
                     {dict.precios.nombre[producto.codigo] ?? producto.codigo}
                   </h2>
-                  <p className="precioMonto">{precio}</p>
+                  {final === undefined ? (
+                    <p className="precioMonto">{precio}</p>
+                  ) : (
+                    // La lista tachada y el final al lado: el descuento se ve
+                    // ANTES de ir a pagar, que es lo que pide el cupón.
+                    <p className="precioMonto">
+                      <s className="precioTachado">{precio}</s>{" "}
+                      {formatearPrecio(final, producto.moneda, INTL_LOCALE[locale])}
+                    </p>
+                  )}
                   {n > 1 && (
                     // Lo que hace comparable un pack con el suelto: sin esto,
                     // "US$ 125" al lado de "US$ 29" parece más caro.
@@ -190,6 +222,7 @@ export default async function PreciosPage({
                     dict={dict}
                     signedIn={signedIn}
                     reanudar={pedido === producto.codigo}
+                    cupon={final === undefined ? null : cuponValido?.codigo}
                   />
                 </li>
               );

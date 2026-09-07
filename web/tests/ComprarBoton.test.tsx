@@ -180,3 +180,56 @@ describe("cuando la sesión se venció mirando la página", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(dict.precios.fallo);
   });
 });
+
+describe("ComprarBoton con cupón", () => {
+  it("sin sesión, el cupón viaja al login junto con la compra", () => {
+    render(
+      <ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn={false} cupon="PROMO30" />,
+    );
+
+    expect(screen.getByRole("link", { name: dict.precios.comprar })).toHaveAttribute(
+      "href", "/es/entrar?next=%2Fes%2Fprecios&comprar=pack_5_natal&cupon=PROMO30",
+    );
+  });
+
+  it("con sesión manda el cupón en el pedido y lo mide", async () => {
+    Object.defineProperty(window, "location", { value: { assign: vi.fn() }, writable: true, configurable: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: "https://x" }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
+    await userEvent.click(screen.getByRole("button"));
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      producto: "pack_5_natal", locale: "es", cupon: "PROMO30",
+    });
+    expect(track).toHaveBeenCalledWith("checkout_iniciado", {
+      producto: "pack_5_natal", desde: "precios", cupon: "PROMO30",
+    });
+  });
+
+  it("si el cupón se agotó lo dice con sus palabras, no con «no pudimos abrir el pago»", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false, status: 400, json: async () => ({ error: "el cupón no sirve", motivo: "agotado" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
+    await userEvent.click(screen.getByRole("button"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(dict.precios.cuponMotivo.agotado);
+  });
+
+  it("la sesión vencida se lleva el cupón al limpiar la cookie", async () => {
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", { value: { assign }, writable: true, configurable: true });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }));
+
+    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
+    await userEvent.click(screen.getByRole("button"));
+
+    expect(assign).toHaveBeenCalledWith(
+      "/api/session/expirada?locale=es&next=%2Fes%2Fprecios&comprar=pack_5_natal&cupon=PROMO30",
+    );
+  });
+});
