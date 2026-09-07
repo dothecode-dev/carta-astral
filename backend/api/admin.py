@@ -224,8 +224,11 @@ class CuponForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # En la ficha de un cupón creado `productos` es sólo lectura y no
-        # está en el form.
+        # En la ficha de un cupón creado `productos` es sólo lectura: se saca
+        # del form a mano, porque un campo declarado en la clase entra aunque
+        # el admin no lo pida (y quedaría «requerido» sin estar en la página).
+        if self.instance.pk:
+            self.fields.pop("productos", None)
         if "productos" in self.fields:
             self.fields["productos"].choices = [
                 (p.codigo, f"{p.codigo} — {_dolares(p.precio_centavos)}") for p in _productos_con_precio()
@@ -239,12 +242,26 @@ class FalloStripe(Exception):
 
 
 class CuponUsoInline(SoloLecturaInline):
+    """Quién usó este cupón: en la ficha del cupón, con la cuenta legible y
+    los montos en dólares, no en centavos."""
+
     model = CuponUso
-    fields = (
-        "account", "codigo_producto", "descuento_centavos", "monto_pagado_centavos",
-        "external_id", "revocado_at", "created_at",
-    )
+    fields = ("cuenta", "codigo_producto", "descuento", "pagado", "external_id", "revocado_at", "created_at")
     readonly_fields = fields
+
+    @admin.display(description="cuenta")
+    def cuenta(self, obj):
+        if obj.account is None:
+            return "cuenta borrada"
+        return f"{obj.account_id} · {obj.account.email or 'sin mail'}"
+
+    @admin.display(description="descuento")
+    def descuento(self, obj):
+        return _dolares(obj.descuento_centavos)
+
+    @admin.display(description="pagado")
+    def pagado(self, obj):
+        return _dolares(obj.monto_pagado_centavos)
 
 
 @admin.register(Cupon)
@@ -254,7 +271,6 @@ class CuponAdmin(admin.ModelAdmin):
     Stripe tampoco lo permite. Para cambiar eso: desactivar y crear otro."""
 
     form = CuponForm
-    INMUTABLES = ("codigo", "porcentaje", "productos", "usos_maximos", "vence_el")
     list_display = ("codigo", "porcentaje", "productos_texto", "usos", "vence_el", "activo", "created_at")
     list_filter = ("activo",)
     search_fields = ("codigo", "descripcion")
@@ -278,10 +294,38 @@ class CuponAdmin(admin.ModelAdmin):
     def get_inlines(self, request, obj=None):
         return [] if obj is None else self.inlines  # sin cupón no hay usos que mostrar
 
+    def get_fieldsets(self, request, obj=None):
+        """El alta es un formulario; la ficha es para LEER el cupón: primero
+        qué es, después lo poco que se edita, después lo derivado."""
+        if obj is None:
+            return (
+                (None, {"fields": (
+                    "codigo", "descripcion", "porcentaje", "productos", "usos_maximos",
+                    "activo", "vence_el", "precios_resultantes",
+                )}),
+            )
+        return (
+            (None, {"fields": ("codigo", "porcentaje", "productos_texto", "usos_maximos", "vence_el", "usos")}),
+            ("Estado", {
+                "fields": ("activo", "descripcion"),
+                "description": (
+                    "Porcentaje, productos, tope y vencimiento no se editan: Stripe no lo "
+                    "permite una vez creado el cupón. Para cambiarlos, desactivá este y creá "
+                    "otro (puede llevar el mismo código)."
+                ),
+            }),
+            ("Precio final por producto", {"fields": ("precios_resultantes",)}),
+            ("Stripe", {
+                "fields": ("stripe_coupon_id", "stripe_promotion_code_id", "created_at"),
+                "classes": ("collapse",),
+            }),
+        )
+
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
             return ("precios_resultantes",)
-        return self.INMUTABLES + (
+        return (
+            "codigo", "porcentaje", "productos_texto", "usos_maximos", "vence_el", "usos",
             "precios_resultantes", "stripe_coupon_id", "stripe_promotion_code_id", "created_at",
         )
 

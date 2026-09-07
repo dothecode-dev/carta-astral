@@ -254,3 +254,30 @@ def test_el_preview_apunta_al_endpoint_tambien_en_el_alta(staff, stripe_captura)
     c = Cupon.objects.create(codigo="FICHA2", porcentaje=30, productos=["informe_natal"], usos_maximos=1)
     ficha = staff.get(f"/panel-test/api/cupon/{c.pk}/change/").content.decode()
     assert re.search(r'id="cupon-precios" data-url="/panel-test/api/cupon/precios/"', ficha)
+
+
+def test_la_ficha_esta_planteada_para_leer_el_cupon(staff):
+    """Visto en staging: lo editable arriba, la identidad abajo, los productos
+    como JSON crudo, sin cuántos usos lleva, y el inline con «Account object
+    (2)» y centavos. La ficha es para saber qué es este cupón y quién lo usó."""
+    c = Cupon.objects.create(codigo="LEER", porcentaje=30, productos=["informe_natal", "pack_5_natal"],
+                             usos_maximos=10, stripe_promotion_code_id="promo_1")
+    acc = Account.objects.create(email="quien@x.com")
+    CuponUso.objects.create(cupon=c, account=acc, codigo_producto="informe_natal",
+                            descuento_centavos=870, monto_pagado_centavos=2030,
+                            external_id="stripe:session:cs_test_muy_largo_" + "x" * 50)
+
+    html = staff.get(f"/panel-test/api/cupon/{c.pk}/change/").content.decode()
+
+    assert '["informe_natal", "pack_5_natal"]' not in html
+    assert "informe_natal, pack_5_natal" in html
+    assert "1 / 10" in html  # cuántos usos lleva, también en la ficha
+    # La identidad antes que lo editable.
+    assert html.index('name="activo"') > html.index("LEER")
+    assert html.index('name="activo"') > html.index("informe_natal, pack_5_natal")
+    # Por qué no se edita, dicho en la ficha.
+    assert "Stripe no" in html
+    # El inline dice quién, y en dólares.
+    assert "quien@x.com" in html
+    assert "Account object" not in html
+    assert "20,30" in html and "8,70" in html
