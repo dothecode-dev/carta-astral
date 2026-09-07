@@ -1,7 +1,7 @@
 /* El admin fija todas las etiquetas de un form alineado a 160px para que las
    columnas cierren; a las de cada checkbox de la lista de productos también,
    y «informe_natal — US$ 29,00» se partía en dos líneas. */
-#id_productos li label {
+#id_productos label {
   width: auto;
   min-width: 0;
   white-space: nowrap;
