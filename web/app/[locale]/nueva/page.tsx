@@ -6,6 +6,7 @@ import { NewChartForm } from "@/components/NewChartForm";
 import { DEFAULT_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { haySesion } from "@/lib/session";
+import { normalizarUsar } from "@/lib/usar";
 import { Footer } from "@/components/Footer";
 
 // Se entra sin cuenta desde el 04-09-2026. Antes esta página redirigía al
@@ -59,14 +60,20 @@ export async function generateMetadata({
 
 export default async function NewChartPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
   const dict = getDict(locale);
-  const signedIn = await haySesion();
+  // Leer `searchParams` vuelve dinámica la página, como en /precios. Vale la
+  // pena: es lo que lleva «usar en una carta nueva» desde la cuenta hasta la
+  // carta calculada, y de la URL sólo pasa lo que está en la lista cerrada.
+  const [signedIn, query] = await Promise.all([haySesion(), searchParams]);
+  const usar = normalizarUsar(query.usar);
   const t = dict.newChart;
 
   return (
@@ -79,7 +86,7 @@ export default async function NewChartPage({
           <p className="formLede">{signedIn ? t.lede : t.seoIntro}</p>
         </section>
 
-        <NewChartForm locale={locale} dict={dict} signedIn={signedIn} />
+        <NewChartForm locale={locale} dict={dict} signedIn={signedIn} usar={usar} />
 
         {/* El texto va DEBAJO del formulario y sólo para quien no entró: es lo
             que hace la página indexable —un formulario solo no es contenido

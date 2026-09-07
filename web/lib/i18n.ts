@@ -302,9 +302,13 @@ export type Dict = {
      */
     listoTitle: string;
     /** El paso siguiente cuando ya hay cartas donde gastar el derecho. */
-    listoUsar: string;
-    /** El paso siguiente cuando todavía no hay ninguna carta. */
-    listoUsarSinCartas: string;
+    /** «Usar en una carta nueva» / «…en una de mis cartas». */
+    usarEnNueva: string;
+    usarEnMisCartas: string;
+    /** Nada se gasta hasta pedirlo en la carta. */
+    listoNota: string;
+    /** Sin cartas: por qué hace falta una y que es gratis. */
+    listoSinCartasNota: string;
     /**
      * El nombre de UNA unidad disponible, en singular.
      *
@@ -871,11 +875,13 @@ const es: Dict = {
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
     legal: "Al entrar aceptás los términos y la política de privacidad.",
     listoTitle: "Listo para usar",
-    listoUsar: "Elegí una carta para usarlo",
+    usarEnNueva: "Usar en una carta nueva",
+    usarEnMisCartas: "Usar en una de mis cartas",
+    listoNota: "Nada se gasta hasta que lo pidas en la carta.",
+    listoSinCartasNota: "Para leer hace falta una carta natal: calcularla es gratis y tarda un minuto.",
     usoBreve: "Lectura breve",
     usoInforme: "Informe completo",
     informeDisponible: "Informe disponible",
-    listoUsarSinCartas: "Calculá una carta para usarlo",
     derechosBreve: "{n} lecturas breves",
     derechosBreveUno: "1 lectura breve",
     derechosInforme: "{n} informes completos",
@@ -1210,11 +1216,13 @@ const en: Dict = {
     failed: "We couldn't sign you in. Try again.",
     legal: "By signing in you accept the terms and the privacy policy.",
     listoTitle: "Ready to use",
-    listoUsar: "Pick a chart to use it on",
+    usarEnNueva: "Use on a new chart",
+    usarEnMisCartas: "Use on one of my charts",
+    listoNota: "Nothing is spent until you ask for it on the chart.",
+    listoSinCartasNota: "Reading needs a birth chart: calculating one is free and takes a minute.",
     usoBreve: "Short reading",
     usoInforme: "Full report",
     informeDisponible: "Report available",
-    listoUsarSinCartas: "Calculate a chart to use it on",
     derechosBreve: "{n} short readings",
     derechosBreveUno: "1 short reading",
     derechosInforme: "{n} full reports",
@@ -1549,11 +1557,13 @@ const pt: Dict = {
     failed: "Não conseguimos entrar. Tente de novo.",
     legal: "Ao entrar você aceita os termos e a política de privacidade.",
     listoTitle: "Pronto para usar",
-    listoUsar: "Escolha um mapa para usar",
+    usarEnNueva: "Usar em um mapa novo",
+    usarEnMisCartas: "Usar em um dos meus mapas",
+    listoNota: "Nada é gasto até você pedir no mapa.",
+    listoSinCartasNota: "Para ler é preciso um mapa natal: calcular é grátis e leva um minuto.",
     usoBreve: "Leitura breve",
     usoInforme: "Relatório completo",
     informeDisponible: "Relatório disponível",
-    listoUsarSinCartas: "Calcule um mapa para usar",
     derechosBreve: "{n} leituras breves",
     derechosBreveUno: "1 leitura breve",
     derechosInforme: "{n} relatórios completos",

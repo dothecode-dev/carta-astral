@@ -9,6 +9,7 @@ import { track } from "@/lib/telemetry";
 import { PlaceField } from "@/components/PlaceField";
 import type { CartaDibujable } from "@/lib/chart";
 import type { Dict, Locale } from "@/lib/i18n";
+import type { Usar } from "@/lib/usar";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
 // es el único que sabe de efemérides. Lo único que resuelve acá es que no se
@@ -41,15 +42,29 @@ type DatosCarta = {
  * útil es exactamente la del viaje de ida y vuelta al login. Muere con la
  * pestaña aunque algo falle en el medio. */
 const PENDIENTE = "astra-carta-pendiente";
+/** Lo que se venía a usar en la carta nueva (`?usar=`), para que el viaje al
+ *  login no lo pierda. Aparte de los datos, que viajan tal cual al backend. */
+const USAR_PENDIENTE = "astra-usar-pendiente";
+
+/** A la carta recién calculada, con lo que se venía a usar en ella. */
+function destinoDe(locale: Locale, id: string | undefined, usar: Usar | null): string {
+  if (!id) return `/${locale}/cuenta`;
+  return `/${locale}/carta/${id}${usar ? `?usar=${encodeURIComponent(usar)}` : ""}`;
+}
 
 export function NewChartForm({
   locale,
   dict,
   signedIn = false,
+  usar = null,
 }: {
   locale: Locale;
   dict: Dict;
   signedIn?: boolean;
+  /** Qué se va a usar en la carta apenas se calcule («Usar en una carta
+   *  nueva» desde la cuenta). Ya validado por la página contra la lista
+   *  cerrada; acá sólo viaja hasta la carta. */
+  usar?: Usar | null;
 }) {
   const router = useRouter();
   const t = dict.newChart;
@@ -75,9 +90,13 @@ export function NewChartForm({
     retomado.current = true;
 
     let guardado: string | null = null;
+    let usarGuardado: Usar | null = null;
     try {
       guardado = sessionStorage.getItem(PENDIENTE);
       sessionStorage.removeItem(PENDIENTE);
+      const u = sessionStorage.getItem(USAR_PENDIENTE);
+      sessionStorage.removeItem(USAR_PENDIENTE);
+      usarGuardado = u === "lectura_breve" || u === "informe_natal" ? u : null;
     } catch {
       // Storage bloqueado: no hay nada que retomar, se muestra el formulario.
       return;
@@ -102,7 +121,7 @@ export function NewChartForm({
         if (!res.ok) throw new Error(String(res.status));
         track("carta_creada", { desde: "preview" });
         const chart: { id?: string } = await res.json();
-        router.replace(chart.id ? `/${locale}/carta/${chart.id}` : `/${locale}/cuenta`);
+        router.replace(destinoDe(locale, chart.id, usarGuardado));
         router.refresh();
       } catch {
         // El formulario sigue ahí y los datos están a un tipeo: mejor eso que
@@ -163,7 +182,7 @@ export function NewChartForm({
 
     // Directo a la carta recién calculada, que es lo que se vino a ver.
     const chart: { id?: string } = await res.json();
-    router.replace(chart.id ? `/${locale}/carta/${chart.id}` : `/${locale}/cuenta`);
+    router.replace(destinoDe(locale, chart.id, usar));
     router.refresh();
   }
 
@@ -171,6 +190,7 @@ export function NewChartForm({
   function pedirLectura() {
     try {
       if (datos.current) sessionStorage.setItem(PENDIENTE, JSON.stringify(datos.current));
+      if (usar) sessionStorage.setItem(USAR_PENDIENTE, usar);
     } catch {
       // Sin storage se pierde lo cargado y hay que reescribirlo después de
       // entrar. Peor sería no dejarlo entrar.

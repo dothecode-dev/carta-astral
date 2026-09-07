@@ -4,32 +4,34 @@ import type { Dict, Locale } from "@/lib/i18n";
 import { cantidad, type Derecho } from "@/lib/derechos";
 
 /**
- * Qué puede hacer la cuenta ahora mismo — no cuánta moneda tiene.
+ * Qué puede hacer la cuenta ahora mismo, y a qué se le asigna.
  *
- * El backend ya no habla de créditos: habla de derechos sobre productos
- * concretos (Task 16). Esta pantalla es la que dejaba de reflejarlo: mostraba
- * "☉ 3 · ☾ 0" como si fueran dos saldos, y nadie sabía qué significaba un
- * "crédito".
+ * El backend no habla de créditos: habla de derechos sobre productos
+ * concretos. Acá cada producto disponible es una línea con cuántas quedan y
+ * dos salidas: usarlo en una carta nueva —calcularla y que arranque solo— o en
+ * una de las que ya existen. Antes había una fila por unidad que sólo hacía
+ * scroll a «Tus cartas», y el caso real no tenía camino: «tengo un informe
+ * pago y quiero dárselo a Carlos, que todavía no tiene carta, sin gastar una
+ * lectura gratuita» (06-09-2026).
  *
- * Después pasó a decir "3 lecturas breves", que sigue siendo un inventario: un
- * número. Ahora cada unidad disponible es UNA LÍNEA, y cada línea es el enlace
- * a usarla. Lo que la persona necesita saber no es cuántas tiene sino qué
- * puede hacer con ellas — y eso era exactamente lo que no encontraba: de tres
- * usuarios reales, ninguno llegó a generar una lectura (04-09-2026).
+ * Una lectura es la interpretación de una carta: sin fecha, hora y lugar de
+ * nacimiento no hay nada que leer. Por eso las dos salidas terminan en una
+ * carta, y por eso, sin ninguna, se dice que calcularla es gratis.
  */
 const PRODUCTOS = [
-  { codigo: "lectura_breve", glifo: "☉", nombre: (dict: Dict) => dict.auth.usoBreve },
-  { codigo: "informe_natal", glifo: "☾", nombre: (dict: Dict) => dict.auth.usoInforme },
+  {
+    codigo: "lectura_breve",
+    glifo: "☉",
+    texto: (dict: Dict, n: number) =>
+      n === 1 ? dict.auth.derechosBreveUno : dict.auth.derechosBreve.replace("{n}", String(n)),
+  },
+  {
+    codigo: "informe_natal",
+    glifo: "☾",
+    texto: (dict: Dict, n: number) =>
+      n === 1 ? dict.auth.derechosInformeUno : dict.auth.derechosInforme.replace("{n}", String(n)),
+  },
 ] as const;
-
-/**
- * Cuántas líneas individuales se abren por producto.
- *
- * Con un pack de cinco son cinco renglones, que se leen bien. Con tres packs
- * serían quince idénticos: ahí la lista deja de informar y se vuelve ruido, y
- * conviene volver al recuento agrupado.
- */
-const MAX_LINEAS = 5;
 
 export function Derechos({
   derechos,
@@ -40,16 +42,10 @@ export function Derechos({
   derechos: Derecho[];
   dict: Dict;
   locale: Locale;
-  /** Decide a dónde va cada línea: a elegir entre las cartas que ya existen, o
-   *  a calcular la primera. Sin esto el bloque enumeraba lo que la cuenta tiene
-   *  y no decía en ningún lado dónde se usa. */
+  /** Con cartas se ofrece también usarlo en una de ellas; sin ninguna, sólo
+   *  la nueva, y se explica por qué hace falta una. */
   hayCartas: boolean;
 }) {
-  // El destino es el mismo para todas las líneas: el derecho se gasta sobre una
-  // carta, así que primero hay que elegir una (o crearla).
-  const destino = hayCartas ? "#tus-cartas" : `/${locale}/nueva`;
-  const accion = hayCartas ? dict.auth.listoUsar : dict.auth.listoUsarSinCartas;
-
   // `cantidad` ya trae 0 para lo que no está en la lista o ya se agotó, así que
   // filtrar por > 0 es lo que evita mostrar "0 lecturas breves" en vez de
   // simplemente no listar esa línea.
@@ -75,46 +71,30 @@ export function Derechos({
   return (
     <div className="derechos">
       <ul className="usos">
-        {disponibles.flatMap((linea) =>
-          linea.n <= MAX_LINEAS
-            ? // Una línea por unidad: cada una es algo que se puede hacer.
-              Array.from({ length: linea.n }, (_, i) => (
-                <li key={`${linea.codigo}-${i}`}>
-                  <Link className="uso" href={destino}>
-                    <span className="usoGlifo" aria-hidden="true">
-                      {linea.glifo}
-                    </span>
-                    <span className="usoNombre">{linea.nombre(dict)}</span>
-                    {/* El destino, a la derecha. Aparece al apuntar o al llegar
-                        con el teclado: es lo que convierte tres renglones
-                        iguales en tres cosas para hacer, sin repetir la misma
-                        frase tres veces en pantalla. */}
-                    <span className="usoAccion" aria-hidden="true">
-                      {accion}
-                    </span>
-                  </Link>
-                </li>
-              ))
-            : // Demasiadas para listar de a una: vuelve el recuento.
-              [
-                <li key={linea.codigo}>
-                  <Link className="uso" href={destino}>
-                    <span className="usoGlifo" aria-hidden="true">
-                      {linea.glifo}
-                    </span>
-                    <span className="usoNombre">
-                      {linea.codigo === "lectura_breve"
-                        ? dict.auth.derechosBreve.replace("{n}", String(linea.n))
-                        : dict.auth.derechosInforme.replace("{n}", String(linea.n))}
-                    </span>
-                    <span className="usoAccion" aria-hidden="true">
-                      {accion}
-                    </span>
-                  </Link>
-                </li>,
-              ],
-        )}
+        {disponibles.map((linea) => (
+          <li key={linea.codigo} className="uso">
+            <span className="usoGlifo" aria-hidden="true">
+              {linea.glifo}
+            </span>
+            <span className="usoNombre">{linea.texto(dict, linea.n)}</span>
+            <span className="usoAcciones">
+              {/* Primero la nueva: es el camino que no existía, y el que no
+                  depende de nada. */}
+              <Link className="usoAccion" href={`/${locale}/nueva?usar=${linea.codigo}`}>
+                {dict.auth.usarEnNueva}
+              </Link>
+              {hayCartas && (
+                <Link className="usoAccion" href="#tus-cartas">
+                  {dict.auth.usarEnMisCartas}
+                </Link>
+              )}
+            </span>
+          </li>
+        ))}
       </ul>
+
+      <p className="derechosNota">{dict.auth.listoNota}</p>
+      {!hayCartas && <p className="derechosNota">{dict.auth.listoSinCartasNota}</p>}
 
       {/* Debajo del listado y en gris: comprar más es lo que se hace cuando ya
           no queda nada de lo de arriba, no la acción principal de este bloque. */}

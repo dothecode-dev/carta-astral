@@ -15,10 +15,13 @@ const derecho = (codigo: string, n: number) => ({
 /** Las líneas de la lista, por su texto visible. */
 const lineas = () => screen.queryAllByRole("listitem").map((li) => li.textContent);
 
+// Lo que la cuenta tiene para usar, y a qué se le asigna. El caso que esto
+// tiene que cubrir (06-09-2026): «tengo un informe pago y quiero dárselo a
+// Carlos, que todavía no tiene carta, sin gastar una lectura gratuita». Antes
+// había una fila por unidad que sólo hacía scroll, y ese camino no existía.
+
 describe("Derechos", () => {
-  it("abre una línea por unidad disponible, no un recuento", () => {
-    // El bloque decía "3 lecturas breves": informa cuántas hay, no qué hacer
-    // con ellas. Cada línea es ahora una cosa que se puede hacer.
+  it("una línea por producto, con cuántas quedan", () => {
     render(
       <Derechos
         derechos={[derecho("lectura_breve", 3), derecho("informe_natal", 1)]}
@@ -28,8 +31,9 @@ describe("Derechos", () => {
       />,
     );
 
-    expect(lineas().filter((t) => t?.includes(dict.auth.usoBreve))).toHaveLength(3);
-    expect(lineas().filter((t) => t?.includes(dict.auth.usoInforme))).toHaveLength(1);
+    expect(lineas()).toHaveLength(2);
+    expect(lineas()[0]).toContain(dict.auth.derechosBreve.replace("{n}", "3"));
+    expect(lineas()[1]).toContain(dict.auth.derechosInformeUno);
   });
 
   it("no habla de créditos en ninguna parte", () => {
@@ -58,52 +62,47 @@ describe("Derechos", () => {
     );
 
     expect(lineas()).toHaveLength(1);
-    expect(lineas()[0]).toContain(dict.auth.usoInforme);
-  });
-
-  // Un pack de cinco da cinco renglones, que se leen bien. Tres packs darían
-  // quince idénticos: ahí la lista deja de informar y se vuelve ruido.
-  it("con demasiadas de un tipo vuelve al recuento agrupado", () => {
-    render(
-      <Derechos derechos={[derecho("informe_natal", 12)]} dict={dict} locale="es" hayCartas />,
-    );
-
-    expect(lineas()).toHaveLength(1);
-    expect(screen.getByText(/12/)).toBeInTheDocument();
-  });
-
-  it("cinco todavía se listan de a una", () => {
-    render(
-      <Derechos derechos={[derecho("informe_natal", 5)]} dict={dict} locale="es" hayCartas />,
-    );
-
-    expect(lineas()).toHaveLength(5);
+    expect(lineas()[0]).toContain(dict.auth.derechosInformeUno);
   });
 });
 
-describe("a dónde lleva cada línea", () => {
-  const unInforme = [derecho("informe_natal", 1)];
+describe("a qué se asigna cada cosa", () => {
+  const ambos = [derecho("lectura_breve", 2), derecho("informe_natal", 1)];
 
-  it("con cartas, a elegir una", () => {
-    render(<Derechos derechos={unInforme} dict={dict} locale="es" hayCartas />);
+  it("cada producto se puede usar en una carta nueva, sin pasar por las que existen", () => {
+    render(<Derechos derechos={ambos} dict={dict} locale="es" hayCartas />);
 
-    expect(screen.getByRole("link", { name: /Informe completo/ })).toHaveAttribute(
-      "href",
-      "#tus-cartas",
-    );
+    const nuevas = screen.getAllByRole("link", { name: dict.auth.usarEnNueva });
+    expect(nuevas.map((a) => a.getAttribute("href"))).toEqual([
+      "/es/nueva?usar=lectura_breve",
+      "/es/nueva?usar=informe_natal",
+    ]);
   });
 
-  it("sin ninguna carta todavía, a calcular la primera", () => {
-    render(<Derechos derechos={unInforme} dict={dict} locale="es" hayCartas={false} />);
+  it("con cartas, también en una de las que ya tiene", () => {
+    render(<Derechos derechos={ambos} dict={dict} locale="es" hayCartas />);
 
-    expect(screen.getByRole("link", { name: /Informe completo/ })).toHaveAttribute(
-      "href",
-      "/es/nueva",
-    );
+    const mias = screen.getAllByRole("link", { name: dict.auth.usarEnMisCartas });
+    expect(mias).toHaveLength(2);
+    expect(mias[0]).toHaveAttribute("href", "#tus-cartas");
+  });
+
+  it("sin ninguna carta, sólo la nueva, y dice por qué hace falta una", () => {
+    render(<Derechos derechos={ambos} dict={dict} locale="es" hayCartas={false} />);
+
+    expect(screen.queryByRole("link", { name: dict.auth.usarEnMisCartas })).toBeNull();
+    expect(screen.getAllByRole("link", { name: dict.auth.usarEnNueva })).toHaveLength(2);
+    expect(screen.getByText(dict.auth.listoSinCartasNota)).toBeInTheDocument();
+  });
+
+  it("aclara que nada se gasta hasta pedirlo en la carta", () => {
+    render(<Derechos derechos={ambos} dict={dict} locale="es" hayCartas />);
+
+    expect(screen.getByText(dict.auth.listoNota)).toBeInTheDocument();
   });
 
   it("comprar más queda debajo del listado, no en el medio", () => {
-    render(<Derechos derechos={unInforme} dict={dict} locale="es" hayCartas />);
+    render(<Derechos derechos={ambos} dict={dict} locale="es" hayCartas />);
 
     const enlaces = screen.getAllByRole("link").map((a) => a.textContent);
     expect(enlaces[enlaces.length - 1]).toContain(dict.auth.verPrecios);

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NewChartForm } from "@/components/NewChartForm";
@@ -216,5 +216,55 @@ describe("NewChartForm", () => {
     fireEvent.click(screen.getByRole("button", { name: t.changePlace }));
 
     expect(screen.getByLabelText(t.place)).toHaveValue("");
+  });
+});
+
+
+// Lo que se vino a usar en la carta nueva viaja con ella. Es el camino
+// «Usar en una carta nueva» de la cuenta: calcular a Carlos y que el informe
+// arranque solo, sin otro clic.
+describe("NewChartForm con ?usar=", () => {
+  it("sin `usar`, el destino es el de siempre", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    llenarFecha("1989-07-14");
+    await elegirLugar(fetchMock);
+    fetchMock.mockResolvedValueOnce(created("abc-123"));
+    await enviar();
+
+    expect(replace).toHaveBeenCalledWith("/es/carta/abc-123");
+  });
+
+  it("con `usar`, la carta recién calculada lo recibe", async () => {
+    cleanup();
+    render(<NewChartForm locale="es" dict={dict} signedIn usar="informe_natal" />);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    llenarFecha("1989-07-14");
+    await elegirLugar(fetchMock);
+    fetchMock.mockResolvedValueOnce(created("abc-123"));
+    await enviar();
+
+    expect(replace).toHaveBeenCalledWith("/es/carta/abc-123?usar=informe_natal");
+  });
+
+  it("sobrevive al ida y vuelta por el login", async () => {
+    cleanup();
+    // Lo que dejó guardado la vez anterior, antes de mandar a entrar.
+    window.sessionStorage.setItem("astra-carta-pendiente", JSON.stringify({
+      date: "1989-07-14", time: null, time_known: false, lat: ROSARIO.lat, lng: ROSARIO.lng,
+      tz_name: ROSARIO.tz_name, place_label: ROSARIO.place_query,
+    }));
+    window.sessionStorage.setItem("astra-usar-pendiente", "lectura_breve");
+    const fetchMock = vi.fn().mockResolvedValueOnce(created("xyz"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<NewChartForm locale="es" dict={dict} signedIn />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(replace).toHaveBeenCalledWith("/es/carta/xyz?usar=lectura_breve");
+    expect(window.sessionStorage.getItem("astra-usar-pendiente")).toBeNull();
   });
 });

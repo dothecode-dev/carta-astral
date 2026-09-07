@@ -172,6 +172,7 @@ export function ChartActions({
   derechos,
   timeKnown,
   dict,
+  arrancar = null,
 }: {
   locale: Locale;
   chartId: string;
@@ -198,6 +199,13 @@ export function ChartActions({
   /** RF12: si la carta no tiene hora, el informe sale sin la sección de casas. */
   timeKnown: boolean;
   dict: Dict;
+  /**
+   * Qué pedir apenas se monte, una sola vez: es «Usar en una carta nueva»
+   * desde la cuenta. Lo resuelve la página en el servidor (`tierParaArrancar`)
+   * con derecho, sin ese tier escrito y sin nada en curso; acá se vuelve a
+   * mirar el derecho por si la foto llegó vieja, y nunca se paga.
+   */
+  arrancar?: Tier | null;
 }) {
   const tiersAqui = interpretations[locale] ?? [];
   const tieneBreve = tiersAqui.includes("corto");
@@ -370,6 +378,29 @@ export function ChartActions({
       cancelado = true;
     };
   }, [chartId, locale, tierServidor, tieneBreve, tieneCompleto, seguirGenerando]);
+
+  // «Usar en una carta nueva»: la carta llegó con un tier resuelto y se pide
+  // como si se hubiera apretado el botón. Una sola vez por montaje (React
+  // monta dos veces en desarrollo) y borrando el `?usar=` de la URL antes,
+  // para que volver con «atrás» no lo relance. Si el servidor ya declara algo
+  // en curso o el tier ya está escrito, no hay nada que pedir. Sin derecho
+  // —la foto del servidor puede llegar vieja— tampoco: el botón queda, y
+  // jamás se cae en `comprar()`.
+  const arrancado = useRef(false);
+  useEffect(() => {
+    if (!arrancar || arrancado.current || tierServidor) return;
+    if ((arrancar === "corto" && tieneBreve) || (arrancar === "largo" && tieneCompleto)) return;
+    const habilitado =
+      arrancar === "largo"
+        ? puede(derechos, "leer_informe") || enOtroIdioma("largo")
+        : puede(derechos, "leer_breve") || enOtroIdioma("corto");
+    if (!habilitado) return;
+    arrancado.current = true;
+    window.history.replaceState(null, "", `/${locale}/carta/${chartId}`);
+    void interpret(arrancar);
+    // Sólo al montar: `interpret` cambia estado y no tiene que volver a correr.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Manda a pagar el informe, con esta carta atada.
