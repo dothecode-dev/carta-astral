@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AccountCharts, type ChartSummary } from "@/components/AccountCharts";
 import { DangerZone } from "@/components/DangerZone";
-import { Compras } from "@/components/Compras";
+import { Compras, type Compra } from "@/components/Compras";
 import { Derechos } from "@/components/Derechos";
 import { cantidad } from "@/lib/derechos";
 import { Nav } from "@/components/Nav";
@@ -22,12 +22,6 @@ type AccountResponse = {
   account_id: number;
 };
 
-/** Lo que compró la cuenta, de la más nueva a la más vieja. */
-type Compra = {
-  codigo_producto: string;
-  acreditada: boolean;
-  created_at: string;
-};
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));

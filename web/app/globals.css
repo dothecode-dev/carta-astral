@@ -2766,9 +2766,30 @@ body > .frame {
 }
 
 .compraFecha,
-.compraPendiente {
+.compraPendiente,
+.compraCupon,
+.compraEstado {
   color: var(--ink-soft);
   font-size: 0.8125rem;
+}
+
+.compraMonto {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Con qué cupón se pagó: una marca chica, en el acento, como en /precios. */
+.compraCupon {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+}
+
+/* Lo reembolsado se lee tachado y en el gris de las notas: la compra existió,
+   pero ya no vale. */
+.compraReembolsada .compraNombre,
+.compraReembolsada .compraMonto {
+  text-decoration: line-through;
+  color: var(--ink-soft);
 }
 
 .comprasVacio {

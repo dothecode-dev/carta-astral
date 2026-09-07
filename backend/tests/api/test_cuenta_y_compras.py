@@ -78,7 +78,9 @@ def test_no_expone_el_payment_intent_ni_el_id_de_stripe(account_client):
 
     compra = account_client.get("/api/compras/").json()["compras"][0]
 
-    assert set(compra) == {"codigo_producto", "acreditada", "created_at"}
+    assert set(compra) == {
+        "codigo_producto", "acreditada", "created_at", "monto_centavos", "cupon", "reembolsado_centavos",
+    }
 
 
 def test_vienen_de_la_mas_nueva_a_la_mas_vieja(account_client):
@@ -91,3 +93,55 @@ def test_vienen_de_la_mas_nueva_a_la_mas_vieja(account_client):
     fechas = [c["created_at"] for c in account_client.get("/api/compras/").json()["compras"]]
 
     assert fechas == sorted(fechas, reverse=True)
+
+
+# --- Lo que la lista tiene que decir de cada compra (06-09-2026) -------------
+#
+# Visto en staging con los cupones: cinco filas «Informe completo · 7 sept»
+# idénticas, sin distinguir la que se pagó entera de la que tuvo cupón, del
+# regalo del 100 % y de la reembolsada; y un checkout abandonado que decía
+# «Procesando el pago…» para siempre.
+
+
+def test_dice_cuanto_se_pago_y_con_que_cupon(account_client):
+    from api.models import Cupon
+
+    cupon = Cupon.objects.create(codigo="PROMO30", porcentaje=30, productos=["informe_natal"], usos_maximos=5)
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_c", account=account_client.account, codigo_producto="informe_natal",
+        acreditado_at=timezone.now(), cupon=cupon, descuento_centavos=870,
+    )
+
+    compra = account_client.get("/api/compras/").json()["compras"][0]
+
+    assert compra["monto_centavos"] == 2030
+    assert compra["cupon"] == "PROMO30"
+    assert compra["reembolsado_centavos"] == 0
+
+
+def test_una_compra_sin_cupon_paga_la_lista(account_client):
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_l", account=account_client.account, codigo_producto="pack_5_natal",
+        acreditado_at=timezone.now(),
+    )
+    compra = account_client.get("/api/compras/").json()["compras"][0]
+    assert (compra["monto_centavos"], compra["cupon"]) == (12500, None)
+
+
+def test_un_checkout_abandonado_deja_de_verse_como_pendiente(account_client):
+    """Stripe vence la sesión a las 24 h: después de eso no es una compra que
+    esté «procesándose», es alguien que no compró."""
+    import datetime as dt
+
+    viejo = PasarelaCheckout.objects.create(
+        checkout_id="cs_viejo", account=account_client.account, codigo_producto="informe_natal",
+    )
+    PasarelaCheckout.objects.filter(pk=viejo.pk).update(created_at=timezone.now() - dt.timedelta(hours=25))
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_reciente", account=account_client.account, codigo_producto="informe_natal",
+    )
+
+    compras = account_client.get("/api/compras/").json()["compras"]
+
+    assert [c["acreditada"] for c in compras] == [False]
+    assert len(compras) == 1

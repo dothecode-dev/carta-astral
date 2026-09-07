@@ -204,3 +204,20 @@ def test_un_reembolso_mayor_al_precio_no_revoca_de_mas(client, pack_comprado):
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
     pack_comprado.account.refresh_from_db()
     assert pack_comprado.account.deuda == 0
+
+
+def test_el_reembolso_queda_anotado_en_la_compra(client, comprado):
+    """Para que la cuenta pueda decir «reembolsada» sin sumar movimientos."""
+    _entregar(client, _refund(amount=2900))
+    _entregar(client, _refund(amount=2900))  # el mismo, reentregado: no suma dos veces
+
+    comprado.refresh_from_db()
+    assert comprado.reembolsado_centavos == 2900
+
+
+def test_dos_reembolsos_parciales_se_suman(client, pack_comprado):
+    _entregar(client, _refund(id="re_a", amount=2500))
+    _entregar(client, _refund(id="re_b", amount=2500))
+
+    pack_comprado.refresh_from_db()
+    assert pack_comprado.reembolsado_centavos == 5000

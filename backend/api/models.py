@@ -383,6 +383,9 @@ class PasarelaCheckout(models.Model):
         "Cupon", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts",
     )
     descuento_centavos = models.PositiveIntegerField(default=0)
+    # Cuánto devolvió Stripe de esta compra, sumando reembolsos. Es lo que
+    # deja que la pantalla de cuenta diga «reembolsada» sin sumar movimientos.
+    reembolsado_centavos = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

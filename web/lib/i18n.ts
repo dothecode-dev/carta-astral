@@ -344,6 +344,12 @@ export type Dict = {
     comprasEmpty: string;
     /** Una compra pagada cuyo webhook todavía no acreditó. */
     compraPendiente: string;
+    /** Con qué cupón se pagó. Lleva "{codigo}". */
+    compraCupon: string;
+    /** Stripe devolvió todo lo pagado. */
+    compraReembolsada: string;
+    /** Devolvió una parte. Lleva "{monto}". */
+    compraReembolsoParcial: string;
     /** Enlace a la página de precios desde la cuenta. */
     verPrecios: string;
     account: string;
@@ -882,6 +888,9 @@ const es: Dict = {
     comprasTitle: "Tus compras",
     comprasEmpty: "Todavía no compraste nada.",
     compraPendiente: "Procesando el pago…",
+    compraCupon: "cupón {codigo}",
+    compraReembolsada: "Reembolsada",
+    compraReembolsoParcial: "Reembolso de {monto}",
     verPrecios: "Ver precios",
     account: "Tu cuenta",
     signOut: "Salir",
@@ -1218,6 +1227,9 @@ const en: Dict = {
     comprasTitle: "Your purchases",
     comprasEmpty: "You haven't bought anything yet.",
     compraPendiente: "Processing payment…",
+    compraCupon: "coupon {codigo}",
+    compraReembolsada: "Refunded",
+    compraReembolsoParcial: "{monto} refunded",
     verPrecios: "See pricing",
     account: "Your account",
     signOut: "Sign out",
@@ -1554,6 +1566,9 @@ const pt: Dict = {
     comprasTitle: "Suas compras",
     comprasEmpty: "Você ainda não comprou nada.",
     compraPendiente: "Processando o pagamento…",
+    compraCupon: "cupom {codigo}",
+    compraReembolsada: "Reembolsada",
+    compraReembolsoParcial: "Reembolso de {monto}",
     verPrecios: "Ver preços",
     account: "Sua conta",
     signOut: "Sair",

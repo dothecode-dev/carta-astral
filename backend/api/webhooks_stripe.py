@@ -27,7 +27,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db import IntegrityError
+from django.db import IntegrityError, models
 
 from api import analitica, catalogo, notificaciones
 from api.canje import MontoInvalido, aplicar_compra, revocar
@@ -351,6 +351,14 @@ def _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto
         )
 
 
+def _anotar_reembolso(fila, monto: int) -> None:
+    """Suma lo devuelto a la compra. Sólo cuando `revocar` hizo algo: así el
+    mismo `refund.created` reentregado no cuenta dos veces."""
+    PasarelaCheckout.objects.filter(pk=fila.pk).update(
+        reembolsado_centavos=models.F("reembolsado_centavos") + monto,
+    )
+
+
 class ReembolsoSinCompra(Exception):
     """No hay ninguna compra nuestra con ese `payment_intent`... todavía."""
 
@@ -405,7 +413,8 @@ def _reembolsar(refund: dict) -> None:
         # Reembolso total: se revoca el producto COMPRADO, que es lo que deja
         # el Movimiento diciendo qué se reembolsó, y `revocar` traduce a lo que
         # ese producto otorgó.
-        revocar(fila.account, fila.codigo_producto, 1, external_id=external_id)
+        if revocar(fila.account, fila.codigo_producto, 1, external_id=external_id):
+            _anotar_reembolso(fila, monto)
         logger.info("reembolso %s revocado entero: %s", refund_id, fila.codigo_producto)
         return
 
@@ -431,7 +440,8 @@ def _reembolsar(refund: dict) -> None:
         logger.error("reembolso %s por %s: no alcanza a una unidad", refund_id, monto)
         return
 
-    revocar(fila.account, codigo_otorgado, unidades, external_id=external_id)
+    if revocar(fila.account, codigo_otorgado, unidades, external_id=external_id):
+        _anotar_reembolso(fila, monto)
     logger.info(
         "reembolso %s parcial (%s de %s): revocadas %s de %s unidades de %s",
         refund_id, monto, precio_pagado, unidades, multiplicador, codigo_otorgado,
