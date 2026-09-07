@@ -27,10 +27,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.db import IntegrityError
+
 from api import analitica, catalogo, notificaciones
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
-from api.models import Account, PasarelaCheckout
+from api.models import Account, CuponUso, PasarelaCheckout
 from api.stripe_client import FirmaInvalida, codigo_de_producto, obtener_sesion, verificar_firma
 
 logger = logging.getLogger(__name__)
@@ -164,16 +166,90 @@ def _acreditar(session_id: str) -> None:
     _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto)
 
     try:
+        descuento, cupon = _descuento_de(session_id, sesion, fila)
+    except DescuentoNoCierra:
+        # Ya logueado con los tres valores. Reintentar no lo arregla: lo
+        # resuelve a mano `manage.py acreditar_sesion`.
+        return
+
+    _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
+
+
+class DescuentoNoCierra(Exception):
+    """La sesión trae un descuento que no es el que congelamos al abrir."""
+
+
+def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
+    """`(descuento, cupon)` con los que se acredita, validando la sesión contra
+    la fila congelada al abrir el checkout.
+
+    La autoridad es NUESTRA fila, no Stripe: el descuento que se le pasa a
+    `aplicar_compra` sale de acá, y así su `monto == precio − descuento` sigue
+    comparando dos fuentes independientes. Tres cosas tienen que cerrar: el
+    promotion code de la sesión es exactamente el nuestro, el descuento que
+    Stripe reporta es el congelado, y (lo chequea `aplicar_compra`) el
+    subtotal es el precio de lista.
+
+    La única combinación distinta que se acredita, MEDIDA en sandbox el
+    06-09-2026: el cupón se agotó entre abrir y pagar, Stripe le quitó el
+    descuento y cobró la lista. Llega sin `discounts` y con `amount_discount`
+    en 0 aunque la fila tenga cupón. La persona pagó entero: se acredita
+    entero, sin contar un uso del cupón.
+    """
+    reportado = (sesion.get("total_details") or {}).get("amount_discount") or 0
+    promos = [d.get("promotion_code") for d in (sesion.get("discounts") or [])]
+    esperado = fila.descuento_centavos if fila is not None else 0
+    cupon = fila.cupon if fila is not None else None
+
+    if cupon is None or esperado == 0:
+        if promos or reportado:
+            # A1: un descuento que nuestra base no conoce. Es la puerta que
+            # `allow_promotion_codes` abriría, y se queda cerrada acá también.
+            logger.error(
+                "sesión %s trae un descuento que no abrimos nosotros (promos=%s, "
+                "amount_discount=%s): no se acredita", session_id, promos, reportado,
+            )
+            raise DescuentoNoCierra
+        return 0, None
+
+    if not promos and reportado == 0:
+        logger.warning(
+            "sesión %s: cupón %s removido por Stripe (se agotó entre abrir y pagar); "
+            "se acredita a precio de lista sin contar el uso", session_id, cupon.codigo,
+        )
+        fila.descuento_centavos = 0
+        fila.save(update_fields=["descuento_centavos"])
+        return 0, None
+
+    if promos != [cupon.stripe_promotion_code_id] or reportado != esperado:
+        logger.error(
+            "sesión %s: el descuento no cierra contra la fila. cupón=%s promo esperado=%s "
+            "promos=%s descuento esperado=%s reportado=%s: no se acredita",
+            session_id, cupon.codigo, cupon.stripe_promotion_code_id, promos, esperado, reportado,
+        )
+        raise DescuentoNoCierra
+    return esperado, cupon
+
+
+def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon) -> None:
+    """Otorga, marca la fila, deja constancia del cupón, avisa, mide y arranca
+    el informe. Lo comparten el webhook y `acreditar_sesion`."""
+    external_id = f"stripe:session:{session_id}"
+    pagado = monto - descuento
+    try:
         # `amount_subtotal` y no `amount_total`: MEDIDO el 03-09-2026 contra una
         # sesión pagada de verdad con dirección española. Con Managed Payments
         # el subtotal NO baja —los dos campos llegan en el precio de lista y el
         # impuesto va aparte, en `total_details`—, así que el subtotal vale 2900
         # con impuesto incluido y también con impuesto encima. `amount_total`
         # sólo coincide con el catálogo mientras el precio esté en `inclusive`.
+        # Con cupón (medido el 06-09-2026) tampoco baja: el descuento va en
+        # `total_details.amount_discount`, y acá se resta el congelado.
         aplicado = aplicar_compra(
-            cuenta, codigo, monto,
-            external_id=f"stripe:session:{session_id}",
+            cuenta, codigo, pagado,
+            external_id=external_id,
             chart=fila.chart if fila is not None else None,
+            descuento_centavos=descuento,
         )
     except MontoInvalido:
         # Ya lo logueó `aplicar_compra` con los dos montos: acá no se repite.
@@ -190,6 +266,9 @@ def _acreditar(session_id: str) -> None:
         fila.acreditado_at = fila.acreditado_at or timezone.now()
         fila.save(update_fields=["payment_intent", "acreditado_at"])
 
+    if cupon is not None:
+        _registrar_uso(cupon, cuenta, fila, codigo, descuento, pagado, external_id)
+
     if aplicado:
         logger.info("sesión %s acreditada: %s", session_id, codigo)
         # Dentro del `if`: en un reintento la compra ya se acreditó y avisar de
@@ -203,10 +282,14 @@ def _acreditar(session_id: str) -> None:
         # Acá y no en el navegador: quien paga cierra la pestaña —el informe
         # tarda seis minutos— y esa compra no la mediría nadie. Dentro del
         # mismo `if aplicado`, que es lo que ya hace idempotente al aviso: un
-        # reintento de Stripe no puede contar la compra dos veces.
+        # reintento de Stripe no puede contar la compra dos veces. El monto es
+        # LO PAGADO, no la lista: con cupón, la lista sería un ingreso mentira.
         analitica.evento(
             cuenta, "compra_completada",
-            {"producto": codigo, "monto_centavos": monto, "locale": lang},
+            {
+                "producto": codigo, "monto_centavos": pagado, "locale": lang,
+                "cupon": cupon.codigo if cupon is not None else None,
+            },
         )
 
     # Sin `try`: si el informe no arranca, la excepción sube y la vista pide el
@@ -217,6 +300,38 @@ def _acreditar(session_id: str) -> None:
     # esto se tragaba el error por obligación: allá diez fallidas seguidas
     # deshabilitan el endpoint para todos.
     arrancar_informe(cuenta, fila)
+
+
+def _registrar_uso(cupon, cuenta, fila, codigo, descuento, pagado, external_id) -> None:
+    """La constancia del cupón, FUERA del átomo de la compra y sin poder
+    revertirla: un fallo acá se loguea y la persona se queda con lo que pagó.
+    Idempotente por `external_id`, así `completed` y `async_payment_succeeded`
+    de la misma sesión cuentan un solo uso."""
+    try:
+        CuponUso.objects.get_or_create(
+            external_id=external_id,
+            defaults=dict(
+                cupon=cupon, account=cuenta, codigo_producto=codigo, checkout=fila,
+                descuento_centavos=descuento, monto_pagado_centavos=pagado,
+            ),
+        )
+    except IntegrityError:
+        logger.exception(
+            "no se pudo registrar el uso del cupón %s en %s; la compra queda acreditada igual",
+            cupon.codigo, external_id,
+        )
+
+
+def acreditar_a_mano(fila, sesion: dict) -> None:
+    """Para `manage.py acreditar_sesion`: acredita confiando en la fila
+    congelada, salteando la comparación con lo que Stripe reporta. Quien lo
+    corre ya miró los dos valores."""
+    codigo = fila.codigo_producto
+    precio = catalogo.producto(codigo).precio_centavos
+    _entregar(
+        fila.checkout_id, sesion, fila.account, fila, codigo,
+        precio, fila.descuento_centavos, fila.cupon if fila.descuento_centavos else None,
+    )
 
 
 def _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto) -> None:
@@ -280,8 +395,13 @@ def _reembolsar(refund: dict) -> None:
     external_id = f"stripe:refund:{refund_id}"
     prod = catalogo.producto(fila.codigo_producto)
     monto = refund.get("amount") or 0
+    # Sobre LO PAGADO, no sobre la lista: un pack de 5 al 50 % (paga 6250)
+    # reembolsado entero caía en la rama parcial y revocaba 3, y la persona se
+    # quedaba con dos informes y toda la plata. Con un regalo del 100 % lo
+    # pagado es 0: cualquier reembolso es total, y no hay división que hacer.
+    precio_pagado = prod.precio_centavos - fila.descuento_centavos
 
-    if monto >= prod.precio_centavos:
+    if precio_pagado == 0 or monto >= precio_pagado:
         # Reembolso total: se revoca el producto COMPRADO, que es lo que deja
         # el Movimiento diciendo qué se reembolsó, y `revocar` traduce a lo que
         # ese producto otorgó.
@@ -306,7 +426,7 @@ def _reembolsar(refund: dict) -> None:
     # Ante la duda no se regala producto; lo que ya se usó no se le saca a
     # nadie igual, eso va a deuda. En enteros, para no arrastrar floats.
     codigo_otorgado, multiplicador = prod.otorga[0]
-    unidades = -(-monto * multiplicador // prod.precio_centavos)
+    unidades = -(-monto * multiplicador // precio_pagado)
     if unidades <= 0:
         logger.error("reembolso %s por %s: no alcanza a una unidad", refund_id, monto)
         return
@@ -314,5 +434,5 @@ def _reembolsar(refund: dict) -> None:
     revocar(fila.account, codigo_otorgado, unidades, external_id=external_id)
     logger.info(
         "reembolso %s parcial (%s de %s): revocadas %s de %s unidades de %s",
-        refund_id, monto, prod.precio_centavos, unidades, multiplicador, codigo_otorgado,
+        refund_id, monto, precio_pagado, unidades, multiplicador, codigo_otorgado,
     )
