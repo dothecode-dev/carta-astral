@@ -5,8 +5,7 @@ import { Nav } from "@/components/Nav";
 import { NewChartForm } from "@/components/NewChartForm";
 import { DEFAULT_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
-import { type Derecho, cantidad } from "@/lib/derechos";
-import { callApi, haySesion } from "@/lib/session";
+import { haySesion } from "@/lib/session";
 import { normalizarUsar } from "@/lib/usar";
 import { Footer } from "@/components/Footer";
 
@@ -75,21 +74,6 @@ export default async function NewChartPage({
   // carta calculada, y de la URL sólo pasa lo que está en la lista cerrada.
   const [signedIn, query] = await Promise.all([haySesion(), searchParams]);
   const usar = normalizarUsar(query.usar);
-  // Con sesión, qué tiene la cuenta para usar en la carta que va a calcular.
-  // Sin sesión —o con una cookie que el backend ya no reconoce— no se ofrece
-  // nada: la página es pública y no redirige a nadie (ver nueva-abierta.test).
-  let disponibles: { lectura_breve: number; informe_natal: number } | null = null;
-  if (signedIn) {
-    try {
-      const { derechos } = await callApi<{ derechos: Derecho[] }>("/api/account/");
-      disponibles = {
-        lectura_breve: cantidad(derechos, "lectura_breve"),
-        informe_natal: cantidad(derechos, "informe_natal"),
-      };
-    } catch {
-      disponibles = null;
-    }
-  }
   const t = dict.newChart;
 
   return (
@@ -102,13 +86,7 @@ export default async function NewChartPage({
           <p className="formLede">{signedIn ? t.lede : t.seoIntro}</p>
         </section>
 
-        <NewChartForm
-          locale={locale}
-          dict={dict}
-          signedIn={signedIn}
-          usar={usar}
-          disponibles={disponibles}
-        />
+        <NewChartForm locale={locale} dict={dict} signedIn={signedIn} usar={usar} />
 
         {/* El texto va DEBAJO del formulario y sólo para quien no entró: es lo
             que hace la página indexable —un formulario solo no es contenido

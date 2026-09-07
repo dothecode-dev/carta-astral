@@ -235,14 +235,9 @@ describe("NewChartForm con ?usar=", () => {
     expect(replace).toHaveBeenCalledWith("/es/carta/abc-123");
   });
 
-  it("con `usar` y el informe disponible, la carta recién calculada lo recibe", async () => {
+  it("con `usar`, la carta recién calculada lo recibe", async () => {
     cleanup();
-    render(
-      <NewChartForm
-        locale="es" dict={dict} signedIn usar="informe_natal"
-        disponibles={{ lectura_breve: 3, informe_natal: 1 }}
-      />,
-    );
+    render(<NewChartForm locale="es" dict={dict} signedIn usar="informe_natal" />);
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     llenarFecha("1989-07-14");
@@ -274,62 +269,25 @@ describe("NewChartForm con ?usar=", () => {
   });
 });
 
-// Calcular la carta no genera ninguna lectura: con sesión y algo disponible,
-// el formulario ofrece elegir qué hacer con ella antes de calcularla. La
-// opción elegida es el aviso: nada se gasta sin que la pantalla lo diga.
-describe("NewChartForm: qué hacer con la carta al calcularla", () => {
-  const disponibles = { lectura_breve: 3, informe_natal: 1 };
-
-  it("con algo disponible ofrece las opciones, y por defecto se decide en la carta", () => {
-    cleanup();
-    render(<NewChartForm locale="es" dict={dict} signedIn disponibles={disponibles} />);
-
-    expect(screen.getByRole("radio", { name: t.decidoEnLaCarta })).toBeChecked();
-    expect(screen.getByRole("radio", { name: t.usarInforme.replace("{n}", "1") })).not.toBeChecked();
-    expect(screen.getByRole("radio", { name: t.leerBreve.replace("{n}", "3") })).not.toBeChecked();
-  });
-
-  it("elegir el informe lo lleva a la carta recién calculada", async () => {
-    cleanup();
-    render(<NewChartForm locale="es" dict={dict} signedIn disponibles={disponibles} />);
-    fireEvent.click(screen.getByRole("radio", { name: t.usarInforme.replace("{n}", "1") }));
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    llenarFecha("1989-07-14");
-    await elegirLugar(fetchMock);
-    fetchMock.mockResolvedValueOnce(created("abc-123"));
-    await enviar();
-
-    expect(replace).toHaveBeenCalledWith("/es/carta/abc-123?usar=informe_natal");
-  });
-
-  it("lo que trae la URL viene preseleccionado", () => {
-    cleanup();
-    render(<NewChartForm locale="es" dict={dict} signedIn usar="lectura_breve" disponibles={disponibles} />);
-
-    expect(screen.getByRole("radio", { name: t.leerBreve.replace("{n}", "3") })).toBeChecked();
-  });
-
-  it("sólo ofrece lo que hay", () => {
-    cleanup();
-    render(<NewChartForm locale="es" dict={dict} signedIn disponibles={{ lectura_breve: 0, informe_natal: 1 }} />);
-
-    expect(screen.queryByRole("radio", { name: /lectura breve/i })).toBeNull();
-    expect(screen.getByRole("radio", { name: t.usarInforme.replace("{n}", "1") })).toBeInTheDocument();
-  });
-
-  it("sin nada disponible no hay opciones, y un ?usar= tecleado a mano se ignora", async () => {
+// El link `/nueva?usar=` puede llegar de afuera: quien tiene un informe pago
+// tiene que ver que la carta que calcule lo va a usar, y poder no usarlo.
+describe("NewChartForm avisa qué va a usar", () => {
+  it("con `usar`, dice qué se gasta y deja no usarlo", () => {
     cleanup();
     render(<NewChartForm locale="es" dict={dict} signedIn usar="informe_natal" />);
 
-    expect(screen.queryByRole("radio")).toBeNull();
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    llenarFecha("1989-07-14");
-    await elegirLugar(fetchMock);
-    fetchMock.mockResolvedValueOnce(created("abc-123"));
-    await enviar();
+    expect(screen.getByRole("status")).toHaveTextContent(t.usaraInforme);
+    expect(screen.getByRole("link", { name: t.noUsar })).toHaveAttribute("href", "/es/nueva");
+  });
 
-    expect(replace).toHaveBeenCalledWith("/es/carta/abc-123");
+  it("con la lectura breve, lo dice con sus palabras", () => {
+    cleanup();
+    render(<NewChartForm locale="es" dict={dict} signedIn usar="lectura_breve" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(t.usaraBreve);
+  });
+
+  it("sin `usar`, no hay aviso", () => {
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });

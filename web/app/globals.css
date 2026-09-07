@@ -429,27 +429,16 @@ body > .frame {
   color: var(--ink-soft);
 }
 
-/* Qué hacer con la carta al calcularla: las opciones en columna, al lado del
-   botón que las hace efectivas. */
+/* Lo que la carta nueva va a gastar: visible, al lado del botón que lo gasta. */
 .formUsar {
   margin: 0;
-  padding: 0;
-  border: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.formUsarOpcion {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   font-size: 0.9375rem;
-  cursor: pointer;
+  color: var(--accent);
 }
 
-.formUsarOpcion input {
-  accent-color: var(--accent);
+.formUsar a {
+  margin-left: 0.25rem;
+  color: var(--ink-soft);
 }
 
 .derechosNota + .derechosNota {
