@@ -196,3 +196,61 @@ def crear_checkout(
         raise StripeError(type(exc).__name__) from exc
 
     return sesion.id, sesion.url
+
+
+def _product_de(codigo_producto: str) -> str:
+    """El id del Product de Stripe para ese producto nuestro.
+
+    `STRIPE_PRECIOS` sólo mapea precios; el producto se le pregunta a Stripe,
+    que es la única fuente que no puede desalinearse con el precio.
+    """
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    return stripe.Price.retrieve(_price_de(codigo_producto)).product
+
+
+def crear_cupon(cupon) -> tuple[str, str]:
+    """Crea en Stripe el Coupon y el Promotion Code de un cupón nuestro y
+    devuelve `(coupon_id, promotion_code_id)`.
+
+    El tope y el vencimiento van en los dos objetos: Stripe exige que los del
+    promotion code no superen los del coupon, y dejarlos iguales es lo que
+    hace que «se agotó» signifique lo mismo en los dos lados. Ninguno se puede
+    editar después: para cambiar algo se desactiva y se crea otro.
+    """
+    if not settings.STRIPE_SECRET_KEY:
+        raise StripeNoConfigurado("STRIPE_SECRET_KEY no configurado")
+    productos = [_product_de(codigo) for codigo in cupon.productos]
+    vence = cupon.vence_at
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    try:
+        coupon_params: dict = dict(
+            percent_off=cupon.porcentaje, duration="once", max_redemptions=cupon.usos_maximos,
+            applies_to={"products": productos}, name=cupon.codigo,
+            metadata={"cupon_id": str(cupon.pk)},
+        )
+        promo_params: dict = dict(
+            code=cupon.codigo, max_redemptions=cupon.usos_maximos,
+            metadata={"cupon_id": str(cupon.pk)},
+        )
+        if vence is not None:
+            coupon_params["redeem_by"] = int(vence.timestamp())
+            promo_params["expires_at"] = int(vence.timestamp())
+        coupon = stripe.Coupon.create(**coupon_params)
+        promo = stripe.PromotionCode.create(
+            promotion={"type": "coupon", "coupon": coupon.id}, **promo_params,
+        )
+    except stripe.StripeError as exc:
+        logger.exception("stripe no pudo crear el cupón %s", cupon.codigo)
+        raise StripeError(type(exc).__name__) from exc
+    return coupon.id, promo.id
+
+
+def activar_cupon(promotion_code_id: str, activo: bool) -> None:
+    """Prende o apaga el Promotion Code. Reactivar uno agotado o vencido lo
+    rechaza Stripe («permanently inactive»): se propaga como `StripeError`."""
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    try:
+        stripe.PromotionCode.modify(promotion_code_id, active=activo)
+    except stripe.StripeError as exc:
+        logger.exception("stripe no pudo cambiar active=%s de %s", activo, promotion_code_id)
+        raise StripeError(type(exc).__name__) from exc
