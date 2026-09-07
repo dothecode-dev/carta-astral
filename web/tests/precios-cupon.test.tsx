@@ -74,6 +74,16 @@ describe("/precios?cupon=", () => {
     expect(screen.getByText(/125/)).toBeInTheDocument();
   });
 
+  it("el precio por unidad de un pack se calcula sobre lo que se paga", async () => {
+    const pack = { ...CATALOGO.productos[1], precio_final_centavos: 8750, descuento_centavos: 3750 };
+    stubBackend({ ...CUPON, productos: [pack] });
+    await pagina({ cupon: "PROMO30" });
+
+    // 87,50 / 5, no 125 / 5.
+    expect(screen.getByText(/17,50/)).toBeInTheDocument();
+    expect(screen.queryByText(/US\$\s?25 cada uno/)).toBeNull();
+  });
+
   it("el JSON-LD sigue publicando el precio de lista", async () => {
     stubBackend(CUPON);
     const { container } = await pagina({ cupon: "PROMO30" });

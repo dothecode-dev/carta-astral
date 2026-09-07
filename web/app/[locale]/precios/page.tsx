@@ -205,8 +205,10 @@ export default async function PreciosPage({
                     <p className="precioUnidad">
                       {dict.precios.porUnidad.replace(
                         "{precio}",
+                        // Sobre lo que se paga: con cupón, «US$ 25 cada uno»
+                        // al lado de US$ 87,50 era la cuenta del precio viejo.
                         formatearPrecio(
-                          Math.round(producto.precio_centavos / n),
+                          Math.round((final ?? producto.precio_centavos) / n),
                           producto.moneda,
                           INTL_LOCALE[locale],
                         ),

@@ -841,7 +841,7 @@ const es: Dict = {
     nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
     cuponLabel: "Cupón",
     cuponAplicar: "Aplicar",
-    cuponAplicado: "Cupón {codigo}: {porcentaje}% de descuento, ya aplicado.",
+    cuponAplicado: "Cupón {codigo} aplicado: {porcentaje}% de descuento en los precios marcados.",
     cuponMotivo: {
       invalido: "Ese cupón no existe o ya no está vigente.",
       vencido: "Ese cupón venció.",
@@ -1175,7 +1175,7 @@ const en: Dict = {
     nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
     cuponLabel: "Coupon",
     cuponAplicar: "Apply",
-    cuponAplicado: "Coupon {codigo}: {porcentaje}% off, applied.",
+    cuponAplicado: "Coupon {codigo} applied: {porcentaje}% off the marked prices.",
     cuponMotivo: {
       invalido: "That coupon doesn't exist or is no longer active.",
       vencido: "That coupon has expired.",
@@ -1509,7 +1509,7 @@ const pt: Dict = {
     nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
     cuponLabel: "Cupom",
     cuponAplicar: "Aplicar",
-    cuponAplicado: "Cupom {codigo}: {porcentaje}% de desconto, já aplicado.",
+    cuponAplicado: "Cupom {codigo} aplicado: {porcentaje}% de desconto nos preços marcados.",
     cuponMotivo: {
       invalido: "Esse cupom não existe ou não está mais ativo.",
       vencido: "Esse cupom venceu.",
