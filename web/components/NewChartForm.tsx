@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -293,6 +295,16 @@ export function NewChartForm({
       {error && (
         <p className="formError" role="alert">
           {error}
+        </p>
+      )}
+
+      {/* Lo que la carta va a gastar apenas se calcule. El `?usar=` puede
+          llegar de afuera —un link—, y un informe pago no se gasta sin que la
+          pantalla lo diga. «No usarlo» vuelve al formulario limpio. */}
+      {usar && (
+        <p className="formUsar" role="status">
+          {usar === "informe_natal" ? t.usaraInforme : t.usaraBreve}{" "}
+          <Link href={`/${locale}/nueva`}>{t.noUsar}</Link>
         </p>
       )}
 

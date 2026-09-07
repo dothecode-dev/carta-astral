@@ -268,3 +268,26 @@ describe("NewChartForm con ?usar=", () => {
     expect(window.sessionStorage.getItem("astra-usar-pendiente")).toBeNull();
   });
 });
+
+// El link `/nueva?usar=` puede llegar de afuera: quien tiene un informe pago
+// tiene que ver que la carta que calcule lo va a usar, y poder no usarlo.
+describe("NewChartForm avisa qué va a usar", () => {
+  it("con `usar`, dice qué se gasta y deja no usarlo", () => {
+    cleanup();
+    render(<NewChartForm locale="es" dict={dict} signedIn usar="informe_natal" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(t.usaraInforme);
+    expect(screen.getByRole("link", { name: t.noUsar })).toHaveAttribute("href", "/es/nueva");
+  });
+
+  it("con la lectura breve, lo dice con sus palabras", () => {
+    cleanup();
+    render(<NewChartForm locale="es" dict={dict} signedIn usar="lectura_breve" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(t.usaraBreve);
+  });
+
+  it("sin `usar`, no hay aviso", () => {
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});

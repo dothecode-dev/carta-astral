@@ -429,6 +429,18 @@ body > .frame {
   color: var(--ink-soft);
 }
 
+/* Lo que la carta nueva va a gastar: visible, al lado del botón que lo gasta. */
+.formUsar {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--accent);
+}
+
+.formUsar a {
+  margin-left: 0.25rem;
+  color: var(--ink-soft);
+}
+
 .derechosNota + .derechosNota {
   margin-top: 0.25rem;
 }
