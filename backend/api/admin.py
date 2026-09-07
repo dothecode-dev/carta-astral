@@ -27,7 +27,7 @@ import secrets
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect, JsonResponse
-from django.urls import path
+from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
@@ -308,7 +308,11 @@ class CuponAdmin(admin.ModelAdmin):
                 ),
             )
             filas = format_html("<table><tr><th>producto</th><th>lista</th><th>descuento</th><th>final</th></tr>{}</table>", filas)
-        return format_html('<div id="cupon-precios" data-url="{}">{}</div>', "../precios/" if obj is None else "../../precios/", filas or "—")
+        # Absoluta y por `reverse`: en el alta Django pasa un `Cupon()` sin
+        # guardar (no `None`), y una URL relativa resuelta desde `/add/` y
+        # desde `/<pk>/change/` no cae en el mismo lugar. Falló en staging.
+        url = reverse("admin:api_cupon_precios")
+        return format_html('<div id="cupon-precios" data-url="{}">{}</div>', url, filas or "—")
 
     def get_urls(self):
         return [

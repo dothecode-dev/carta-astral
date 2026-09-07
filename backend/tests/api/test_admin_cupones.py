@@ -240,3 +240,17 @@ def test_revocar_no_aplica_a_un_uso_con_pago(staff):
 def test_vence_el_se_guarda_como_fecha(staff, stripe_captura):
     staff.post(ALTA, datos_alta())
     assert Cupon.objects.get(codigo="PROMO30").vence_el == dt.date(2026, 9, 12)
+
+
+def test_el_preview_apunta_al_endpoint_tambien_en_el_alta(staff, stripe_captura):
+    """Falló en el staging el 06-09: en el alta, `data-url` era `../../precios/`,
+    que desde `/add/` resuelve a `/panel/precios/`. Django pasa un `Cupon()`
+    sin guardar, no `None`. Absoluta y por `reverse`, para que no dependa de
+    dónde esté parada la página."""
+    import re
+
+    alta = staff.get(ALTA).content.decode()
+    assert re.search(r'id="cupon-precios" data-url="/panel-test/api/cupon/precios/"', alta)
+    c = Cupon.objects.create(codigo="FICHA2", porcentaje=30, productos=["informe_natal"], usos_maximos=1)
+    ficha = staff.get(f"/panel-test/api/cupon/{c.pk}/change/").content.decode()
+    assert re.search(r'id="cupon-precios" data-url="/panel-test/api/cupon/precios/"', ficha)
