@@ -97,6 +97,17 @@ ssh -N -L 8009:localhost:8000 -i ~/.ssh/astraguia_vps root@<ip-del-vps>
 Si el comando se renombra, hay que cambiarlo también ahí: nada en el repo lo
 verifica.
 
+## El webhook de Stripe escucha eventos que se dan de alta a mano
+
+El endpoint del dashboard de Stripe (live y sandbox por separado) tiene que estar
+suscripto a los cuatro eventos que `api/webhooks_stripe.py` despacha:
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`refund.created` y `checkout.session.expired`. Nada en el repo lo verifica: si
+falta uno, Stripe nunca lo manda y el backend no se entera. El síntoma del
+último es una compra sin terminar que la cuenta sigue mostrando como
+«Procesando el pago…» hasta el corte de 24 horas. Si sumás un evento al
+despacho, sumalo también en el dashboard.
+
 ## Superficies críticas
 
 Créditos y ledger, webhooks de pago, autenticación y SSO (Apple/Google), borrado de
