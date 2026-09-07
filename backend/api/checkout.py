@@ -13,6 +13,7 @@ import logging
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from api import analitica, catalogo, compra_service, cupones, mantenimiento, notificaciones, stripe_client
@@ -26,6 +27,10 @@ logger = logging.getLogger(__name__)
 class CheckoutView(APIView):
     authentication_classes = [AccountTokenAuthentication]
     permission_classes = [HasAccount]
+    # Con el cupón del 100 % este POST entrega un producto sin pasar por
+    # Stripe: el techo es lo que lo separa de un bucle.
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "checkout"
 
     def post(self, request):
         if mantenimiento.activo():

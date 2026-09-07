@@ -348,6 +348,13 @@ REST_FRAMEWORK = {
         "pdf": os.environ.get("PDF_RATE", "120/day"),
         # Público y cacheado: el techo es contra el abuso, no contra el uso.
         "sky": os.environ.get("SKY_RATE", "240/hour"),
+        # Público, por IP: es la puerta por la que se enumeraría el diccionario
+        # de códigos de cupón. Quien tipea mal tres veces sigue entrando.
+        "cupon": os.environ.get("CUPON_RATE", "30/hour"),
+        # Por cuenta. Abrir un checkout no cuesta nada acá, pero con el cupón
+        # del 100 % este POST entrega un producto de US$ 29: sin techo, es un
+        # bucle. Generoso: nadie compra sesenta veces en un día.
+        "checkout": os.environ.get("CHECKOUT_RATE", "60/day"),
     },
 }
 
