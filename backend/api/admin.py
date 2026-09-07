@@ -314,7 +314,7 @@ class CuponAdmin(admin.ModelAdmin):
                     "otro (puede llevar el mismo código)."
                 ),
             }),
-            ("Precio final por producto", {"fields": ("precios_resultantes",)}),
+            (None, {"fields": ("precios_resultantes",)}),
             ("Stripe", {
                 "fields": ("stripe_coupon_id", "stripe_promotion_code_id", "created_at"),
                 "classes": ("collapse",),
