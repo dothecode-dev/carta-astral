@@ -73,10 +73,7 @@ describe("a qué se asigna cada cosa", () => {
     render(<Derechos derechos={ambos} dict={dict} locale="es" hayCartas />);
 
     const nuevas = screen.getAllByRole("link", { name: dict.auth.usarEnNueva });
-    expect(nuevas.map((a) => a.getAttribute("href"))).toEqual([
-      "/es/nueva?usar=lectura_breve",
-      "/es/nueva?usar=informe_natal",
-    ]);
+    expect(nuevas.map((a) => a.getAttribute("href"))).toEqual(["/es/nueva", "/es/nueva"]);
   });
 
   it("con cartas, también en una de las que ya tiene", () => {

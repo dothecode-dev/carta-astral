@@ -429,18 +429,6 @@ body > .frame {
   color: var(--ink-soft);
 }
 
-/* Lo que la carta nueva va a gastar: visible, al lado del botón que lo gasta. */
-.formUsar {
-  margin: 0;
-  font-size: 0.9375rem;
-  color: var(--accent);
-}
-
-.formUsar a {
-  margin-left: 0.25rem;
-  color: var(--ink-soft);
-}
-
 .derechosNota + .derechosNota {
   margin-top: 0.25rem;
 }
@@ -2745,12 +2733,6 @@ body > .frame {
   font-size: 0.9375rem;
 }
 
-/* La salida del bloque: dónde se usa lo que ya está pago. Ancho propio para
-   que no se estire a la fila entera de la tarjeta. */
-.derechosUsar {
-  align-self: flex-start;
-  margin-top: 0.25rem;
-}
 
 .derechosMas {
   font-size: 0.875rem;

@@ -35,14 +35,12 @@ function renderActions({
   timeKnown = true,
   freeCredits = 3,
   paidCredits = 1,
-  arrancar = null,
 }: {
   interpretations?: Record<string, Tier[]>;
   enCurso?: Record<string, Tier[]>;
   timeKnown?: boolean;
   freeCredits?: number;
   paidCredits?: number;
-  arrancar?: Tier | null;
 } = {}) {
   return render(
     <ChartActions
@@ -53,7 +51,6 @@ function renderActions({
       enCurso={enCurso}
       derechos={[derecho("lectura_breve", freeCredits), derecho("informe_natal", paidCredits)]}
       dict={dict}
-      arrancar={arrancar}
     />,
   );
 }
@@ -942,45 +939,10 @@ describe("ChartActions — la breve ya escrita en otro idioma", () => {
   });
 });
 
-
-// «Usar en una carta nueva» desde la cuenta: la carta llega con `?usar=`, la
-// página lo resuelve en el servidor a un tier, y acá se pide una sola vez, como
-// si se hubiera apretado el botón.
-describe("arrancar al llegar", () => {
-  it("con el tier resuelto, pide la generación una sola vez y borra el rastro de la URL", async () => {
-    const replaceState = vi.spyOn(window.history, "replaceState");
-    const fetchMock = vi.fn().mockResolvedValueOnce(reply(202)).mockResolvedValue(estado(false, 0, 8));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { rerender } = renderActions({ arrancar: "largo" });
-    await correr();
-    rerender(
-      <ChartActions
-        locale="es" chartId={CHART} timeKnown interpretations={{}} enCurso={{}}
-        derechos={[derecho("lectura_breve", 3), derecho("informe_natal", 1)]} dict={dict} arrancar="largo"
-      />,
-    );
-    await correr();
-
-    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
-    expect(posts).toHaveLength(1);
-    expect(JSON.parse(posts[0][1].body).tier).toBe("largo");
-    expect(replaceState).toHaveBeenCalledWith(null, "", `/es/carta/${CHART}`);
-    expect(track).toHaveBeenCalledWith("interpretacion_pedida", { tier: "largo" });
-  });
-
-  it("sin derecho no pide nada, y menos abre un pago", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderActions({ arrancar: "largo", paidCredits: 0 });
-    await correr();
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeEnabled();
-  });
-
-  it("sin `arrancar`, todo sigue igual: ningún pedido al montar", async () => {
+// Calcular una carta no gasta nada: lo que se lee se elige acá, apretando. La
+// carta nunca pide una lectura sola al montarse.
+describe("al llegar a la carta", () => {
+  it("ningún pedido al montar: la lectura se pide con el botón", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -988,5 +950,6 @@ describe("arrancar al llegar", () => {
     await correr();
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeEnabled();
   });
 });

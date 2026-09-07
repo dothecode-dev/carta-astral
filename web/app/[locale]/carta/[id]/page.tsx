@@ -15,17 +15,14 @@ import type { Derecho } from "@/lib/derechos";
 import { INTL_LOCALE, type Locale, getDict, isLocale } from "@/lib/i18n";
 import { buildPdfPayload } from "@/lib/pdfPayload";
 import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
-import { normalizarUsar, tierParaArrancar } from "@/lib/usar";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function ChartPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { locale, id } = await params;
   if (!isLocale(locale)) notFound();
@@ -92,14 +89,6 @@ export default async function ChartPage({
     ? locale
     : ((chart.interpretation_langs.filter(isLocale)[0] as Locale | undefined) ?? null);
 
-  // «Usar en una carta nueva» desde la cuenta: la carta llega con `?usar=` y
-  // se decide ACÁ, con lo que la página ya trae, si hay algo que arrancar. Un
-  // `usar` sin derecho no arranca nada: la carta se muestra con sus botones.
-  const arrancar = tierParaArrancar(
-    normalizarUsar((await searchParams).usar),
-    account.derechos, chart.interpretations, chart.en_curso, locale,
-  );
-
   // Se arma una vez y se ubica según haya lectura o no (ver abajo). El mismo
   // elemento en los dos lugares: duplicarlo sería duplicarle el estado.
   const acciones = (
@@ -111,7 +100,6 @@ export default async function ChartPage({
       derechos={account.derechos}
       timeKnown={chart.birth.time_known}
       dict={dict}
-      arrancar={arrancar}
     />
   );
 

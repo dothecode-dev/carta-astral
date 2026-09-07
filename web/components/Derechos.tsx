@@ -8,7 +8,7 @@ import { cantidad, type Derecho } from "@/lib/derechos";
  *
  * El backend no habla de créditos: habla de derechos sobre productos
  * concretos. Acá cada producto disponible es una línea con cuántas quedan y
- * dos salidas: usarlo en una carta nueva —calcularla y que arranque solo— o en
+ * dos salidas: usarlo en una carta nueva —calcularla y elegirlo ahí— o en
  * una de las que ya existen. Antes había una fila por unidad que sólo hacía
  * scroll a «Tus cartas», y el caso real no tenía camino: «tengo un informe
  * pago y quiero dárselo a Carlos, que todavía no tiene carta, sin gastar una
@@ -80,7 +80,7 @@ export function Derechos({
             <span className="usoAcciones">
               {/* Primero la nueva: es el camino que no existía, y el que no
                   depende de nada. */}
-              <Link className="usoAccion" href={`/${locale}/nueva?usar=${linea.codigo}`}>
+              <Link className="usoAccion" href={`/${locale}/nueva`}>
                 {dict.auth.usarEnNueva}
               </Link>
               {hayCartas && (
