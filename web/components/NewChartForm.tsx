@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -59,17 +57,30 @@ export function NewChartForm({
   dict,
   signedIn = false,
   usar = null,
+  disponibles = null,
 }: {
   locale: Locale;
   dict: Dict;
   signedIn?: boolean;
-  /** Qué se va a usar en la carta apenas se calcule («Usar en una carta
-   *  nueva» desde la cuenta). Ya validado por la página contra la lista
-   *  cerrada; acá sólo viaja hasta la carta. */
+  /** Qué se venía a usar en la carta (`?usar=`, «Usar en una carta nueva»
+   *  desde la cuenta). Ya validado por la página contra la lista cerrada. Sólo
+   *  cuenta si hay algo disponible: tecleado a mano sin derecho, se ignora. */
   usar?: Usar | null;
+  /** Cuántas lecturas breves y cuántos informes tiene la cuenta, si la página
+   *  lo sabe. Con algo disponible, el formulario ofrece elegir qué hacer con
+   *  la carta antes de calcularla. */
+  disponibles?: { lectura_breve: number; informe_natal: number } | null;
 }) {
   const router = useRouter();
   const t = dict.newChart;
+
+  // Qué hacer con la carta al calcularla. La opción elegida es el aviso: un
+  // informe pago no se gasta sin que la pantalla lo diga. Sin nada disponible
+  // no se ofrece nada, y el `?usar=` de la URL sólo preselecciona lo que hay.
+  const ofrece = Boolean(disponibles && (disponibles.lectura_breve > 0 || disponibles.informe_natal > 0));
+  const [usarElegido, setUsarElegido] = useState<Usar | null>(
+    disponibles && usar && disponibles[usar] > 0 ? usar : null,
+  );
 
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
@@ -184,7 +195,7 @@ export function NewChartForm({
 
     // Directo a la carta recién calculada, que es lo que se vino a ver.
     const chart: { id?: string } = await res.json();
-    router.replace(destinoDe(locale, chart.id, usar));
+    router.replace(destinoDe(locale, chart.id, ofrece ? usarElegido : null));
     router.refresh();
   }
 
@@ -298,14 +309,44 @@ export function NewChartForm({
         </p>
       )}
 
-      {/* Lo que la carta va a gastar apenas se calcule. El `?usar=` puede
-          llegar de afuera —un link—, y un informe pago no se gasta sin que la
-          pantalla lo diga. «No usarlo» vuelve al formulario limpio. */}
-      {usar && (
-        <p className="formUsar" role="status">
-          {usar === "informe_natal" ? t.usaraInforme : t.usaraBreve}{" "}
-          <Link href={`/${locale}/nueva`}>{t.noUsar}</Link>
-        </p>
+      {/* Calcular la carta no genera ninguna lectura: con sesión y algo
+          disponible, se elige acá qué hacer con ella. Por defecto, nada: se
+          decide en la carta, que es donde siempre se pudo. */}
+      {ofrece && disponibles && (
+        <fieldset className="formUsar">
+          <legend className="fieldLabel">{t.alCalcularla}</legend>
+          <label className="formUsarOpcion">
+            <input
+              type="radio"
+              name="usar"
+              checked={usarElegido === null}
+              onChange={() => setUsarElegido(null)}
+            />
+            <span>{t.decidoEnLaCarta}</span>
+          </label>
+          {disponibles.informe_natal > 0 && (
+            <label className="formUsarOpcion">
+              <input
+                type="radio"
+                name="usar"
+                checked={usarElegido === "informe_natal"}
+                onChange={() => setUsarElegido("informe_natal")}
+              />
+              <span>{t.usarInforme.replace("{n}", String(disponibles.informe_natal))}</span>
+            </label>
+          )}
+          {disponibles.lectura_breve > 0 && (
+            <label className="formUsarOpcion">
+              <input
+                type="radio"
+                name="usar"
+                checked={usarElegido === "lectura_breve"}
+                onChange={() => setUsarElegido("lectura_breve")}
+              />
+              <span>{t.leerBreve.replace("{n}", String(disponibles.lectura_breve))}</span>
+            </label>
+          )}
+        </fieldset>
       )}
 
       <button type="submit" className="btn btnPrimary" disabled={sending}>

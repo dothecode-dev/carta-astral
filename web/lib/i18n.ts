@@ -534,10 +534,12 @@ export type Dict = {
     langNames: { es: string; en: string; pt: string };
   };
   newChart: {
-    /** Con `?usar=`: qué va a gastar la carta que se calcule, y cómo no. */
-    usaraInforme: string;
-    usaraBreve: string;
-    noUsar: string;
+    /** Qué hacer con la carta al calcularla, cuando hay algo disponible.
+     *  `usarInforme` y `leerBreve` llevan "{n}". */
+    alCalcularla: string;
+    decidoEnLaCarta: string;
+    usarInforme: string;
+    leerBreve: string;
     navNew: string;
     title: string;
     lede: string;
@@ -796,9 +798,10 @@ const es: Dict = {
     noPlaces: "No encontramos ese lugar. Probá con la ciudad más cercana.",
     changePlace: "Cambiar",
     submit: "Calcular mi carta",
-    usaraInforme: "Esta carta va a usar tu informe completo.",
-    usaraBreve: "Esta carta va a usar una de tus lecturas breves gratis.",
-    noUsar: "No usarlo",
+    alCalcularla: "Al calcularla",
+    decidoEnLaCarta: "Decido en la carta",
+    usarInforme: "Usar mi informe completo · tenés {n}",
+    leerBreve: "Leer la lectura breve gratis · tenés {n}",
     submitting: "Calculando…",
     needPlace: "Elegí el lugar de nacimiento.",
     needDate: "Falta la fecha de nacimiento.",
@@ -1140,9 +1143,10 @@ const en: Dict = {
     noPlaces: "We couldn't find that place. Try the nearest city.",
     changePlace: "Change",
     submit: "Compute my chart",
-    usaraInforme: "This chart will use your full report.",
-    usaraBreve: "This chart will use one of your free short readings.",
-    noUsar: "Don't use it",
+    alCalcularla: "When it's calculated",
+    decidoEnLaCarta: "I'll decide on the chart",
+    usarInforme: "Use my full report · you have {n}",
+    leerBreve: "Read the free short reading · you have {n}",
     submitting: "Computing…",
     needPlace: "Choose the place of birth.",
     needDate: "The date of birth is missing.",
@@ -1484,9 +1488,10 @@ const pt: Dict = {
     noPlaces: "Não encontramos esse lugar. Tente a cidade mais próxima.",
     changePlace: "Trocar",
     submit: "Calcular meu mapa",
-    usaraInforme: "Este mapa vai usar seu relatório completo.",
-    usaraBreve: "Este mapa vai usar uma das suas leituras breves grátis.",
-    noUsar: "Não usar",
+    alCalcularla: "Ao calcular",
+    decidoEnLaCarta: "Decido no mapa",
+    usarInforme: "Usar meu relatório completo · você tem {n}",
+    leerBreve: "Ler a leitura breve grátis · você tem {n}",
     submitting: "Calculando…",
     needPlace: "Escolha o local de nascimento.",
     needDate: "Falta a data de nascimento.",
