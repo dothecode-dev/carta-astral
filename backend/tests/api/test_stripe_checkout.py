@@ -52,6 +52,22 @@ def test_devuelve_la_url_y_guarda_a_quien_compra(account_client, stripe_responde
     guardado = PasarelaCheckout.objects.get(checkout_id="cs_test_nueva")
     assert guardado.account_id == account_client.account.pk
     assert guardado.codigo_producto == "informe_natal"
+    # La misma URL queda en la fila: es lo que deja retomar un pago a medias.
+    assert guardado.url == "https://checkout.stripe.com/c/pay/cs_test_nueva"
+
+
+def test_la_sesion_vence_a_la_hora(account_client, stripe_responde):
+    """Sin `expires_at` Stripe deja la sesión abierta 24 h, y durante todo ese
+    tiempo la cuenta tendría que decir algo de un pago que nadie hizo. Una
+    hora alcanza para pagar y es lo que dura «retomar el pago»."""
+    import time
+
+    antes = time.time()
+    account_client.post(URL, {"producto": "informe_natal"})
+
+    vence = stripe_responde[0]["expires_at"]
+    assert isinstance(vence, int)
+    assert antes + 59 * 60 <= vence <= time.time() + 61 * 60
 
 
 def test_el_cliente_no_elige_el_precio(account_client, stripe_responde):

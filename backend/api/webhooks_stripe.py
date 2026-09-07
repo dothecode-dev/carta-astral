@@ -48,6 +48,11 @@ EVENTOS_PAGO = ("checkout.session.completed", "checkout.session.async_payment_su
 # el detalle sin una llamada extra a la API.
 EVENTOS_REEMBOLSO = ("refund.created",)
 
+# La sesión venció sin pagarse (`VENCIMIENTO_SESION` en `stripe_client`). No
+# mueve plata: sólo marca la fila para que la cuenta deje de mostrar un pago
+# que nadie hizo.
+EVENTOS_VENCIMIENTO = ("checkout.session.expired",)
+
 
 class StripeWebhookView(APIView):
     # La firma es la autenticación: `AllowAny` no apaga nada más (ver el
@@ -71,13 +76,15 @@ class StripeWebhookView(APIView):
 
         tipo = evento.get("type", "")
         objeto = (evento.get("data") or {}).get("object") or {}
-        if tipo not in EVENTOS_PAGO + EVENTOS_REEMBOLSO:
+        if tipo not in EVENTOS_PAGO + EVENTOS_REEMBOLSO + EVENTOS_VENCIMIENTO:
             logger.info("evento de stripe ignorado: %s", tipo)
             return Response(status=status.HTTP_200_OK)
 
         try:
             if tipo in EVENTOS_PAGO:
                 _acreditar(objeto.get("id", ""))
+            elif tipo in EVENTOS_VENCIMIENTO:
+                _vencer(objeto.get("id", ""))
             else:
                 _reembolsar(objeto)
         except Exception:
@@ -87,6 +94,22 @@ class StripeWebhookView(APIView):
             logger.exception("entrega de stripe %s fallida: se pide reintento", tipo)
             return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(status=status.HTTP_200_OK)
+
+
+def _vencer(session_id: str) -> None:
+    """La sesión venció sin pagarse: la fila deja de ser un pago en curso.
+
+    Un solo `update` condicional, y por eso idempotente y sin carrera con el
+    pago: si la fila ya está acreditada no se toca (la plata manda), y si ya
+    está vencida el segundo evento no cambia la fecha. No consulta a Stripe:
+    el evento alcanza y no hay monto que validar. Sin fila es definitivo —200—,
+    porque reintentar no la va a hacer aparecer.
+    """
+    marcadas = PasarelaCheckout.objects.filter(
+        checkout_id=session_id, acreditado_at__isnull=True, vencido_at__isnull=True,
+    ).update(vencido_at=timezone.now())
+    if not marcadas:
+        logger.info("sesión %s vencida sin fila abierta que marcar", session_id)
 
 
 def _resolver_cuenta_y_fila(sesion: dict):

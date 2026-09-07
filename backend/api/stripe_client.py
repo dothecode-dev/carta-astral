@@ -5,10 +5,12 @@ por estas funciones. Así el día que Stripe cambie una firma de método, se toc
 un archivo.
 """
 
+import datetime as dt
 import logging
 
 import stripe
 from django.conf import settings
+from django.utils import timezone
 
 from api.catalogo import producto
 
@@ -20,6 +22,14 @@ logger = logging.getLogger(__name__)
 # URL a la que Stripe devuelve a la persona después de pagar.
 LOCALES = ("es", "en", "pt")
 LOCALE_POR_DEFECTO = "es"
+
+# Cuánto vive una sesión de pago. Sin decirlo, Stripe la deja abierta 24 h, y
+# durante todo ese tiempo la cuenta tendría que decir algo de un pago que
+# nadie hizo. Una hora alcanza de sobra para pagar, y es lo que dura el link
+# «retomar el pago» de la cuenta. Stripe admite entre 30 minutos y 24 horas.
+# Al vencer manda `checkout.session.expired`; el endpoint del dashboard tiene
+# que estar suscripto a ese evento (nada en el repo lo verifica).
+VENCIMIENTO_SESION = dt.timedelta(hours=1)
 
 
 class FirmaInvalida(Exception):
@@ -203,6 +213,7 @@ def crear_checkout(
             # preguntar en qué quedó la compra.
             locale=idioma,
             success_url=settings.STRIPE_SUCCESS_URL.replace("{locale}", idioma),
+            expires_at=int((timezone.now() + VENCIMIENTO_SESION).timestamp()),
             metadata=metadata,
         )
     except stripe.InvalidRequestError as exc:

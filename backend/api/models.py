@@ -386,6 +386,16 @@ class PasarelaCheckout(models.Model):
     # Cuánto devolvió Stripe de esta compra, sumando reembolsos. Es lo que
     # deja que la pantalla de cuenta diga «reembolsada» sin sumar movimientos.
     reembolsado_centavos = models.PositiveIntegerField(default=0)
+    # La URL de la sesión de Stripe. Mientras la sesión sigue abierta es lo
+    # que deja retomar un pago a medias desde la cuenta; después no sirve.
+    # Vacía en las filas anteriores a este campo. Las URLs de Checkout pasan
+    # largo los 255 caracteres.
+    url = models.CharField(max_length=2000, blank=True, default="")
+    # Cuándo Stripe avisó que la sesión venció sin pagarse
+    # (`checkout.session.expired`). Una fila vencida no es una compra ni un
+    # pago en curso, y deja de listarse. Nunca convive con `acreditado_at`:
+    # una sesión pagada no vence, y si el evento llegara igual la plata manda.
+    vencido_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

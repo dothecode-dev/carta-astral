@@ -8,10 +8,15 @@ Devuelve qué, cuándo, cuánto se pagó y con qué cupón, y cuánto volvió si
 hubo reembolso. El `checkout_id` y el `payment_intent` son para el soporte
 —sirven para buscar la operación en Stripe—, no para el navegador.
 
-Un checkout abierto y nunca pagado deja de listarse a las 24 horas: es lo que
-dura la sesión en Stripe, y después de eso no es un pago «procesándose», es
-alguien que no compró. Sin este corte, un checkout abandonado decía
-«Procesando el pago…» para siempre (visto en staging el 06-09-2026).
+Un checkout abierto y nunca pagado no es una compra ni un pago «procesándose»:
+es alguien que no terminó de pagar. Mientras la sesión de Stripe siga abierta
+(`VENCIMIENTO_SESION`, una hora) se lista con su `url`, para retomar el pago
+desde la cuenta. Cuando Stripe avisa que venció (`checkout.session.expired`)
+deja de listarse. Entre la hora y las 24 h sin ese aviso se lista sin `url`
+—el webhook del pago puede venir tarde, y esconderlo haría pensar que se
+perdió la plata—, y a las 24 h se corta igual: es la red por si el evento de
+vencimiento nunca llega (visto en staging el 06-09-2026, cuando un checkout
+abandonado decía «Procesando el pago…» para siempre).
 """
 import datetime as dt
 
@@ -24,7 +29,10 @@ from api.auth import AccountTokenAuthentication
 from api.catalogo import producto
 from api.models import PasarelaCheckout
 from api.permissions import HasAccount
+from api.stripe_client import VENCIMIENTO_SESION
 
+# La red: un checkout sin acreditar ni vencer deja de listarse a las 24 h
+# aunque el evento de vencimiento no haya llegado.
 VIDA_DE_UN_CHECKOUT = dt.timedelta(hours=24)
 
 
@@ -35,8 +43,10 @@ class ComprasView(APIView):
     def get(self, request):
         # Filtrado por la cuenta que pregunta, igual que las cartas: las de
         # otro no existen.
+        ahora = timezone.now()
         compras = PasarelaCheckout.objects.filter(account=request.user).filter(
-            Q(acreditado_at__isnull=False) | Q(created_at__gte=timezone.now() - VIDA_DE_UN_CHECKOUT),
+            Q(acreditado_at__isnull=False)
+            | Q(vencido_at__isnull=True, created_at__gte=ahora - VIDA_DE_UN_CHECKOUT),
         ).select_related("cupon")
         return Response({
             "compras": [
@@ -47,11 +57,23 @@ class ComprasView(APIView):
                     "monto_centavos": _pagado(c),
                     "cupon": c.cupon.codigo if c.cupon is not None else None,
                     "reembolsado_centavos": c.reembolsado_centavos,
+                    # Sólo mientras se puede retomar: la pantalla no decide nada.
+                    "url": c.url if _retomable(c, ahora) else None,
                 }
                 # `Meta.ordering` ya las trae de la más nueva a la más vieja.
                 for c in compras
             ],
         })
+
+
+def _retomable(c, ahora) -> bool:
+    """Sin pagar, sin vencer, y con la sesión de Stripe todavía abierta."""
+    return (
+        c.acreditado_at is None
+        and c.vencido_at is None
+        and bool(c.url)
+        and c.created_at >= ahora - VENCIMIENTO_SESION
+    )
 
 
 def _pagado(c) -> int:

@@ -118,7 +118,7 @@ class CheckoutView(APIView):
             _, descuento = cupones.precio_final(catalogo.producto(codigo).precio_centavos, cupon.porcentaje)
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
-            chart=carta, locale=idioma, cupon=cupon, descuento_centavos=descuento,
+            chart=carta, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
         )
         return Response({"url": url})
 

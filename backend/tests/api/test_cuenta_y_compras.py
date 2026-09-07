@@ -79,7 +79,8 @@ def test_no_expone_el_payment_intent_ni_el_id_de_stripe(account_client):
     compra = account_client.get("/api/compras/").json()["compras"][0]
 
     assert set(compra) == {
-        "codigo_producto", "acreditada", "created_at", "monto_centavos", "cupon", "reembolsado_centavos",
+        "codigo_producto", "acreditada", "created_at", "monto_centavos", "cupon",
+        "reembolsado_centavos", "url",
     }
 
 
@@ -145,3 +146,57 @@ def test_un_checkout_abandonado_deja_de_verse_como_pendiente(account_client):
 
     assert [c["acreditada"] for c in compras] == [False]
     assert len(compras) == 1
+
+
+# Un pago sin terminar se puede retomar mientras la sesión de Stripe siga
+# abierta (una hora desde que se abrió). La `url` sólo viaja en ese caso: el
+# navegador no decide nada, muestra el link si viene.
+STRIPE_URL = "https://checkout.stripe.com/c/pay/cs_abierto"
+
+
+def _abierto(cuenta, checkout_id="cs_abierto", **campos):
+    return PasarelaCheckout.objects.create(
+        checkout_id=checkout_id, account=cuenta, codigo_producto="informe_natal",
+        url=STRIPE_URL, **campos,
+    )
+
+
+def test_un_pago_sin_terminar_reciente_trae_la_url_para_retomarlo(account_client):
+    _abierto(account_client.account)
+
+    compra = account_client.get("/api/compras/").json()["compras"][0]
+
+    assert compra["acreditada"] is False
+    assert compra["url"] == STRIPE_URL
+
+
+def test_pasada_la_hora_se_lista_pero_ya_no_se_puede_retomar(account_client):
+    """La sesión ya venció en Stripe aunque el evento no haya llegado: el link
+    abriría una página muerta. Se sigue listando por si el webhook del pago
+    viene tarde."""
+    import datetime as dt
+
+    fila = _abierto(account_client.account)
+    PasarelaCheckout.objects.filter(pk=fila.pk).update(created_at=timezone.now() - dt.timedelta(hours=2))
+
+    compras = account_client.get("/api/compras/").json()["compras"]
+
+    assert len(compras) == 1
+    assert compras[0]["url"] is None
+
+
+def test_una_sesion_vencida_no_se_lista_aunque_sea_reciente(account_client):
+    """Stripe avisó que venció sin pagarse: no es una compra ni un pago en
+    curso, es alguien que no compró."""
+    _abierto(account_client.account, vencido_at=timezone.now())
+
+    assert account_client.get("/api/compras/").json()["compras"] == []
+
+
+def test_una_compra_acreditada_nunca_trae_la_url(account_client):
+    _abierto(account_client.account, acreditado_at=timezone.now())
+
+    compra = account_client.get("/api/compras/").json()["compras"][0]
+
+    assert compra["acreditada"] is True
+    assert compra["url"] is None
