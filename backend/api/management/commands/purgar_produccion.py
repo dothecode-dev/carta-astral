@@ -6,6 +6,7 @@ from api.models import (
     BirthData,
     Chart,
     CreditTransaction,
+    CuponUso,
     Derecho,
     Device,
     Interpretation,
@@ -56,7 +57,11 @@ from api.models import (
 # omitan un modelo con datos de sesión (token_hash) que el comando SÍ borra
 # — "esto es lo que se borraría" tiene que decir la verdad completa, no sólo
 # la parte que se borra por `.delete()` explícito.
+# CuponUso es dato de usuario (quién usó qué cupón) y su FK a Account es
+# SET_NULL: sin nombrarlo sobrevive a la purga. Cupon NO va: es configuración
+# y espejo de un objeto en Stripe, borrarlo acá no lo borra allá.
 MODELOS_A_BORRAR = (
+    ("CuponUso", CuponUso),
     ("InterpretationSection", InterpretationSection),
     ("Movimiento", Movimiento),
     ("Derecho", Derecho),

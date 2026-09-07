@@ -1,5 +1,8 @@
+import datetime as dt
 import uuid
+from zoneinfo import ZoneInfo
 
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 
 from interpret.prompts import TIER_CORTO, TIER_LARGO
@@ -372,6 +375,14 @@ class PasarelaCheckout(models.Model):
     # compra. No es único a propósito: mientras el webhook no acredite queda
     # vacío en todas las filas abiertas, y un índice único las haría chocar.
     payment_intent = models.CharField(max_length=100, blank=True, default="")
+    # El cupón con el que se abrió y el descuento que se esperaba, congelados
+    # al abrir. El webhook valida contra ESTO, no contra lo que diga Stripe:
+    # así `monto == precio - descuento` sigue comparando dos fuentes
+    # independientes. Sin cupón el descuento es 0, no NULL, por lo mismo.
+    cupon = models.ForeignKey(
+        "Cupon", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts",
+    )
+    descuento_centavos = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -379,3 +390,128 @@ class PasarelaCheckout(models.Model):
 
     def __str__(self):
         return f"{self.checkout_id} ({self.codigo_producto})"
+
+
+ZONA_CUPONES = ZoneInfo("America/Argentina/Buenos_Aires")
+
+
+class Cupon(models.Model):
+    """Un porcentaje de descuento sobre uno o más productos del catálogo.
+
+    Para 1..99 % el tope de usos y el vencimiento los aplica Stripe: al crear
+    el cupón se crea allá un Coupon y un Promotion Code, y los ids quedan acá.
+    Como Stripe no deja editar porcentaje, tope ni vencimiento, tampoco se
+    editan acá después de creado: se desactiva y se crea otro. El del 100 %
+    no pasa por Stripe y sus ids quedan vacíos.
+
+    Los cupones no se borran (`CuponUso.cupon` es PROTECT): se desactivan, y
+    la constancia de quién usó cuál sobrevive.
+    """
+
+    codigo = models.CharField(
+        max_length=40, unique=True,
+        validators=[RegexValidator(r"^[A-Z0-9-]{3,40}$", "Sólo A-Z, 0-9 y guión, de 3 a 40")],
+    )
+    descripcion = models.CharField(max_length=200, blank=True, help_text="Para qué es. Uso interno.")
+    porcentaje = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+    )
+    productos = models.JSONField(default=list, help_text="Códigos del catálogo que abarca.")
+    usos_maximos = models.PositiveIntegerField()
+    activo = models.BooleanField(default=True)
+    vence_el = models.DateField(
+        null=True, blank=True, help_text="Vence a las 23:59:59 de ese día, hora de Buenos Aires.",
+    )
+    stripe_coupon_id = models.CharField(max_length=100, blank=True, default="")
+    stripe_promotion_code_id = models.CharField(max_length=100, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(porcentaje__gte=1, porcentaje__lte=100),
+                name="cupon_porcentaje_1_a_100",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.codigo} ({self.porcentaje}%)"
+
+    @staticmethod
+    def normalizar(codigo: str) -> str:
+        return (codigo or "").strip().upper()
+
+    def clean_fields(self, exclude=None):
+        # Antes de validar: `promo30` y ` PROMO30 ` son el mismo cupón, y el
+        # validador del campo no tiene por qué saberlo.
+        self.codigo = self.normalizar(self.codigo)
+        super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        from api.catalogo import CATALOGO
+
+        if not isinstance(self.productos, list) or not self.productos:
+            raise ValidationError({"productos": "Elegí al menos un producto."})
+        if len(set(self.productos)) != len(self.productos):
+            raise ValidationError({"productos": "Hay un producto repetido."})
+        for codigo in self.productos:
+            prod = CATALOGO.get(codigo)
+            if prod is None:
+                raise ValidationError({"productos": f"{codigo} no está en el catálogo."})
+            if prod.precio_centavos <= 0:
+                raise ValidationError({"productos": f"{codigo} es gratis: no admite descuento."})
+
+    def save(self, *args, **kwargs):
+        self.codigo = self.normalizar(self.codigo)
+        super().save(*args, **kwargs)
+
+    @property
+    def vence_at(self) -> dt.datetime | None:
+        """El instante de vencimiento en UTC, o None si no vence."""
+        if self.vence_el is None:
+            return None
+        fin_del_dia = dt.datetime.combine(self.vence_el, dt.time(23, 59, 59), tzinfo=ZONA_CUPONES)
+        return fin_del_dia.astimezone(dt.timezone.utc)
+
+    def vencido(self, ahora: dt.datetime) -> bool:
+        vence = self.vence_at
+        return vence is not None and ahora > vence
+
+    def usos_confirmados(self) -> int:
+        """Cuántas veces se usó. Un uso revocado o reembolsado sigue contando:
+        devolver el lugar abriría el ciclo comprar / reembolsar / repetir."""
+        return self.usos.count()
+
+
+class CuponUso(models.Model):
+    """La constancia: quién usó qué cupón, para qué producto y cuánto pagó.
+
+    `account` es SET_NULL: borrar la cuenta conserva el uso (degrada de «quién»
+    a «cuántos», como `Movimiento`) y no devuelve el lugar. `external_id` es el
+    mismo del `Movimiento` de la compra —`stripe:session:<id>`— y es único, así
+    que el reintento de un webhook no cuenta dos veces.
+    """
+
+    cupon = models.ForeignKey("Cupon", on_delete=models.PROTECT, related_name="usos")
+    account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="usos_cupon",
+    )
+    codigo_producto = models.CharField(max_length=40)
+    descuento_centavos = models.PositiveIntegerField()
+    monto_pagado_centavos = models.PositiveIntegerField()
+    checkout = models.ForeignKey(
+        "PasarelaCheckout", on_delete=models.SET_NULL, null=True, blank=True, related_name="usos_cupon",
+    )
+    external_id = models.CharField(max_length=255, unique=True)
+    # Sólo para regalos del 100 %: cuándo se revocó desde el admin (RF18).
+    revocado_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.cupon_id} → acc={self.account_id} ({self.codigo_producto})"

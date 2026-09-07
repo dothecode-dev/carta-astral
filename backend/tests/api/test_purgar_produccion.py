@@ -160,3 +160,22 @@ def test_no_toca_el_cms(make_account):
     assert Account.objects.count() == 0  # la purga sí corrió
     assert Page.objects.count() == paginas_antes
     assert GeoName.objects.count() == geonames_antes
+
+
+@pytest.mark.django_db
+def test_la_purga_borra_los_usos_de_cupon_y_no_los_cupones(make_account, capsys):
+    """`CuponUso` es dato de usuario (quién usó qué); `Cupon` es configuración
+    y además espejo de un objeto en Stripe: borrarlo acá no lo borra allá."""
+    from api.models import Cupon, CuponUso
+
+    cuenta = make_account()
+    c = Cupon.objects.create(codigo="PURGA", porcentaje=10, productos=["informe_natal"], usos_maximos=1)
+    CuponUso.objects.create(cupon=c, account=cuenta, codigo_producto="informe_natal",
+                            descuento_centavos=290, monto_pagado_centavos=2610,
+                            external_id="stripe:session:cs_purga")
+
+    call_command("purgar_produccion", "--si-estoy-seguro")
+
+    assert "CuponUso: 1" in capsys.readouterr().out
+    assert CuponUso.objects.count() == 0
+    assert Cupon.objects.count() == 1
