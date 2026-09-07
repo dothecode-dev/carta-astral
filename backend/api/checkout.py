@@ -15,7 +15,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api import catalogo, mantenimiento, stripe_client
+from api import analitica, catalogo, compra_service, cupones, mantenimiento, notificaciones, stripe_client
 from api.auth import AccountTokenAuthentication
 from api.permissions import HasAccount
 from api.models import Chart, PasarelaCheckout
@@ -60,9 +60,23 @@ class CheckoutView(APIView):
             pedido if pedido in stripe_client.LOCALES else stripe_client.LOCALE_POR_DEFECTO
         )
 
+        cupon = None
+        codigo_cupon = request.data.get("cupon")
+        if codigo_cupon:
+            try:
+                cupon = cupones.validar(codigo_cupon, codigo, account=request.user)
+            except cupones.CuponInvalido as exc:
+                logger.info("cupón %r rechazado para acc=%s: %s", codigo_cupon, request.user.pk, exc.motivo)
+                return Response(
+                    {"error": "el cupón no sirve", "motivo": cupones.motivo_publico(exc.motivo)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if cupon.porcentaje >= 100:
+                return self._canjear_gratis(request, cupon, codigo, carta, idioma)
+
         try:
             checkout_id, url = stripe_client.crear_checkout(
-                request.user, codigo, chart=carta, locale=idioma,
+                request.user, codigo, chart=carta, locale=idioma, cupon=cupon,
             )
         except (KeyError, ValueError) as exc:
             # Producto que no está en el catálogo, o gratis. Es un pedido mal
@@ -77,6 +91,14 @@ class CheckoutView(APIView):
                 {"error": "el cobro no está disponible"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        except stripe_client.CuponRechazado:
+            # Ya lo logueó `crear_checkout` con el código. Para quien compra es
+            # «se agotó»: la alternativa —abrirle el pago a precio de lista—
+            # sería cobrarle de más a alguien que creía tener descuento.
+            return Response(
+                {"error": "el cupón no sirve", "motivo": "agotado"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except stripe_client.StripeError:
             logger.exception("stripe no pudo abrir el checkout de %r", codigo)
             return Response(
@@ -84,12 +106,50 @@ class CheckoutView(APIView):
             )
 
         # Después del éxito y no antes: una fila huérfana dejaría que el webhook
-        # de otra orden resolviera contra ella.
+        # de otra orden resolviera contra ella. El descuento queda congelado
+        # acá: es contra ESTO que el webhook valida lo que Stripe cobró.
+        descuento = 0
+        if cupon is not None:
+            _, descuento = cupones.precio_final(catalogo.producto(codigo).precio_centavos, cupon.porcentaje)
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
-            chart=carta, locale=idioma,
+            chart=carta, locale=idioma, cupon=cupon, descuento_centavos=descuento,
         )
         return Response({"url": url})
+
+    def _canjear_gratis(self, request, cupon, codigo, carta, idioma):
+        """El cupón del 100 % no pasa por Stripe: se resuelve acá, en la
+        misma request, y la página de retorno lo encuentra ya acreditado.
+
+        Es un POST que entrega un producto de US$ 29, así que lleva los
+        frenos que un pago no necesita: una cuenta con deuda recibiría nada
+        —`otorgar` cancela deuda antes de dar saldo— y una marcada por
+        reembolsos repetidos es justo la que no debería recibir regalos.
+        """
+        cuenta = request.user
+        if cuenta.deuda > 0 or cuenta.flagged:
+            logger.warning("cupón %s: acc=%s con deuda o marcada, no se canjea", cupon.codigo, cuenta.pk)
+            return Response(
+                {"error": "esta cuenta no puede usar cupones", "motivo": "cuenta_no_habilitada"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            fila = cupones.canjear_gratis(cuenta, cupon, codigo, carta, idioma)
+        except cupones.CuponInvalido as exc:
+            # Perdió la carrera bajo el lock: otro se llevó el último lugar.
+            return Response(
+                {"error": "el cupón no sirve", "motivo": cupones.motivo_publico(exc.motivo)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Todo lo que hace `_acreditar` en el webhook después de la
+        # transacción, y en el mismo orden. Fuera del átomo: hacen red.
+        notificaciones.notificar(cuenta, "compra_acreditada", {"producto": codigo}, lang=idioma)
+        analitica.evento(
+            cuenta, "compra_completada",
+            {"producto": codigo, "monto_centavos": 0, "locale": idioma, "cupon": cupon.codigo},
+        )
+        compra_service.arrancar_informe(cuenta, fila)
+        return Response({"url": f"/{idioma}/compra?checkout_id={fila.checkout_id}"})
 
 
 class CheckoutEstadoView(APIView):

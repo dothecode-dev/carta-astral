@@ -118,12 +118,16 @@ def _aplicar_otorgamiento(acc, account, prod, codigo_otorgado: str, otorgado: in
 
 def aplicar_compra(
     account, codigo_producto, monto_centavos, external_id,
-    chart=None, chart_id=None, descuento_centavos=0,
+    chart=None, chart_id=None, descuento_centavos=0, origen="compra",
 ) -> bool:
     """Traduce un pago a derechos, con lo que el producto declara en el catálogo.
 
     Quien llama no sabe cuántas unidades da cada producto: eso lo dice el
     catálogo, y así agregar un pack es una línea allá y ninguna acá.
+
+    `origen` es `compra` salvo para el regalo de un cupón del 100 %, que se
+    registra como `cupon`: en el ledger un regalo tiene que distinguirse de
+    una venta.
     """
     prod = producto(codigo_producto)
     if not (0 <= descuento_centavos <= prod.precio_centavos):
@@ -165,8 +169,8 @@ def aplicar_compra(
         # Movimiento guarda `pack_5_natal` —qué se pagó— mientras el Derecho
         # queda en informe_natal.
         if not otorgar(
-            account, codigo_producto, 1, origen="compra",
-            external_id=external_id, note=f"compra:{codigo_producto}",
+            account, codigo_producto, 1, origen=origen,
+            external_id=external_id, note=f"{origen}:{codigo_producto}",
         ):
             return False
 

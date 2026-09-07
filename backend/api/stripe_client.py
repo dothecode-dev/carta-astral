@@ -38,6 +38,13 @@ class StripeError(Exception):
     """
 
 
+class CuponRechazado(StripeError):
+    """Stripe no aceptó el promotion code al abrir la sesión: agotado, vencido
+    o apagado allá. Medido el 06-09-2026 en sandbox: `InvalidRequestError`
+    con `code="coupon_expired"` y `param="discounts[0][promotion_code][coupon]"`.
+    Se distingue por el `param`, que es lo que dice QUÉ rechazó."""
+
+
 def verificar_firma(cuerpo: bytes, cabecera: str, secreto: str) -> dict:
     """Devuelve el evento sólo si la firma y el timestamp son válidos.
 
@@ -144,13 +151,17 @@ def _validar_success_url(url: str) -> None:
 
 
 def crear_checkout(
-    account, codigo_producto: str, chart=None, locale: str = LOCALE_POR_DEFECTO,
+    account, codigo_producto: str, chart=None, locale: str = LOCALE_POR_DEFECTO, cupon=None,
 ) -> tuple[str, str]:
     """Abre una sesión de pago y devuelve `(session_id, url)`.
 
     `KeyError` si el producto no está en el catálogo, `ValueError` si es gratis
     y `StripeNoConfigurado` si falta la clave o el precio: los tres son errores
     de configuración nuestra, no de quien compra.
+
+    Con `cupon`, la sesión lleva su Promotion Code en `discounts` y Stripe
+    aplica el descuento y cuenta el uso al pagar. NUNCA `allow_promotion_codes`:
+    esa cajita deja entrar un descuento que nuestra base no conoce.
 
     La `metadata` viaja como respaldo. La relación que manda es
     `PasarelaCheckout`, porque además de la cuenta guarda la carta y el idioma,
@@ -170,11 +181,16 @@ def crear_checkout(
     if chart is not None:
         metadata["chart_id"] = str(chart.pk)
 
+    extra: dict = {}
+    if cupon is not None:
+        extra["discounts"] = [{"promotion_code": cupon.stripe_promotion_code_id}]
+
     stripe.api_key = settings.STRIPE_SECRET_KEY
     try:
         sesion = stripe.checkout.Session.create(
             mode="payment",
             line_items=[{"price": price_id, "quantity": 1}],
+            **extra,
             # `managed_payments` EXPLÍCITO en cada sesión. No es obligatorio
             # —viene activado por defecto en la cuenta—, pero ese default es un
             # switch del dashboard con un "Turn off" al lado: si alguien lo
@@ -189,6 +205,18 @@ def crear_checkout(
             success_url=settings.STRIPE_SUCCESS_URL.replace("{locale}", idioma),
             metadata=metadata,
         )
+    except stripe.InvalidRequestError as exc:
+        if cupon is not None and str(exc.param or "").startswith("discounts"):
+            # No es una falla nuestra: el cupón se agotó (o venció, o se apagó)
+            # entre que se validó acá y se abrió allá. Es la divergencia entre
+            # el contador local y el de Stripe, y tiene que verse.
+            logger.warning(
+                "stripe rechazó el cupón %s al abrir el checkout de %s: %s",
+                cupon.codigo, codigo_producto, exc.code,
+            )
+            raise CuponRechazado(exc.code or "coupon") from exc
+        logger.exception("stripe no pudo abrir el checkout de %s", codigo_producto)
+        raise StripeError(type(exc).__name__) from exc
     except stripe.StripeError as exc:
         # El mensaje puede traer el motivo, pero también detalle de la cuenta:
         # se loguea el producto y el tipo de error, no la respuesta cruda.
