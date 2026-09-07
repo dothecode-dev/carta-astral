@@ -2768,6 +2768,20 @@ body > .frame {
   font-variant-numeric: tabular-nums;
 }
 
+/* Retomar un pago a medias: el mismo link discreto que las salidas de
+   «Listo para usar». */
+.compraRetomar {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.compraRetomar:hover,
+.compraRetomar:focus-visible {
+  color: var(--ink);
+}
+
 /* Con qué cupón se pagó: una marca chica, en el acento, como en /precios. */
 .compraCupon {
   padding: 0.1rem 0.5rem;

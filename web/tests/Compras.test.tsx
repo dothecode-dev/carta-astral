@@ -13,7 +13,7 @@ describe("Compras", () => {
         compras={[
           {
             codigo_producto: "pack_5_natal", acreditada: true, created_at: "2026-09-03T12:00:00Z",
-            monto_centavos: 12500, cupon: null, reembolsado_centavos: 0,
+            monto_centavos: 12500, cupon: null, reembolsado_centavos: 0, url: null,
           },
         ]}
         locale="es"
@@ -34,7 +34,7 @@ describe("Compras", () => {
         compras={[
           {
             codigo_producto: "informe_natal", acreditada: false, created_at: "2026-09-03T12:00:00Z",
-            monto_centavos: 2900, cupon: null, reembolsado_centavos: 0,
+            monto_centavos: 2900, cupon: null, reembolsado_centavos: 0, url: null,
           },
         ]}
         locale="es"
@@ -43,6 +43,31 @@ describe("Compras", () => {
     );
 
     expect(screen.getByText(dict.auth.compraPendiente)).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("un pago sin terminar ofrece retomarlo en la misma sesión de Stripe", () => {
+    // El backend manda la `url` sólo mientras la sesión sigue abierta: acá no
+    // se decide nada, se muestra el link si vino.
+    render(
+      <Compras
+        compras={[
+          {
+            codigo_producto: "informe_natal", acreditada: false, created_at: "2026-09-07T12:00:00Z",
+            monto_centavos: 2900, cupon: null, reembolsado_centavos: 0,
+            url: "https://checkout.stripe.com/c/pay/cs_test_abierto",
+          },
+        ]}
+        locale="es"
+        dict={dict}
+      />,
+    );
+
+    expect(screen.getByText(dict.auth.compraSinTerminar)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: dict.auth.compraRetomar })).toHaveAttribute(
+      "href", "https://checkout.stripe.com/c/pay/cs_test_abierto",
+    );
+    expect(screen.queryByText(dict.auth.compraPendiente)).toBeNull();
   });
 
   it("sin compras ofrece la tienda en vez de dejar el hueco vacío", () => {
@@ -56,7 +81,9 @@ describe("Compras", () => {
 });
 
 describe("Compras: cuánto, con qué cupón, y si volvió la plata", () => {
-  const base = { codigo_producto: "informe_natal", acreditada: true, created_at: "2026-09-07T01:50:00Z" };
+  const base = {
+    codigo_producto: "informe_natal", acreditada: true, created_at: "2026-09-07T01:50:00Z", url: null,
+  };
 
   it("dice lo que se pagó y el cupón con el que se pagó", () => {
     render(

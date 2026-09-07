@@ -7,10 +7,12 @@ import { INTL_LOCALE, type Dict, type Locale } from "@/lib/i18n";
  * Lo que la cuenta compró: qué, cuánto se pagó (y con qué cupón), cuándo, y
  * si volvió la plata.
  *
- * Muestra también lo que todavía no acreditó: si alguien pagó y el webhook aún
- * no llegó —hay medios de pago que no son instantáneos—, esconder la compra
- * haría pensar que se perdió la plata. Lo que no se muestra es un checkout
- * abandonado: el backend lo deja de listar cuando la sesión de Stripe venció.
+ * Muestra también lo que todavía no acreditó. Si viene con `url`, la sesión
+ * de Stripe sigue abierta: es un pago sin terminar y se ofrece retomarlo ahí
+ * mismo. Sin `url`, es un pago cuyo webhook aún no llegó —hay medios de pago
+ * que no son instantáneos— y esconderlo haría pensar que se perdió la plata.
+ * Lo que no se muestra es un checkout vencido: el backend lo deja de listar
+ * cuando Stripe avisa que la sesión venció.
  */
 export type Compra = {
   codigo_producto: string;
@@ -19,6 +21,8 @@ export type Compra = {
   monto_centavos: number;
   cupon: string | null;
   reembolsado_centavos: number;
+  /** La sesión de Stripe, sólo mientras se puede retomar el pago. */
+  url: string | null;
 };
 
 export function Compras({
@@ -67,7 +71,13 @@ export function Compras({
               </span>
             )}
             <span className="compraFecha">{fecha.format(new Date(compra.created_at))}</span>
-            {!compra.acreditada && (
+            {!compra.acreditada && compra.url && (
+              <>
+                <span className="compraPendiente">{dict.auth.compraSinTerminar}</span>
+                <a className="compraRetomar" href={compra.url}>{dict.auth.compraRetomar}</a>
+              </>
+            )}
+            {!compra.acreditada && !compra.url && (
               <span className="compraPendiente">{dict.auth.compraPendiente}</span>
             )}
             {reembolsada && <span className="compraEstado">{dict.auth.compraReembolsada}</span>}

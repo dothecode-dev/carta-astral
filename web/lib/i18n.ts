@@ -346,8 +346,12 @@ export type Dict = {
     comprasTitle: string;
     /** Cuando todavía no compró nada. */
     comprasEmpty: string;
-    /** Una compra pagada cuyo webhook todavía no acreditó. */
+    /** Sin acreditar y sin sesión abierta: pagó y el webhook aún no llegó. */
     compraPendiente: string;
+    /** Sin acreditar con la sesión de Stripe abierta: se puede retomar. */
+    compraSinTerminar: string;
+    /** El link a la misma sesión de Stripe. */
+    compraRetomar: string;
     /** Con qué cupón se pagó. Lleva "{codigo}". */
     compraCupon: string;
     /** Stripe devolvió todo lo pagado. */
@@ -894,6 +898,8 @@ const es: Dict = {
     comprasTitle: "Tus compras",
     comprasEmpty: "Todavía no compraste nada.",
     compraPendiente: "Procesando el pago…",
+    compraSinTerminar: "Pago sin terminar",
+    compraRetomar: "Retomar el pago",
     compraCupon: "cupón {codigo}",
     compraReembolsada: "Reembolsada",
     compraReembolsoParcial: "Reembolso de {monto}",
@@ -1235,6 +1241,8 @@ const en: Dict = {
     comprasTitle: "Your purchases",
     comprasEmpty: "You haven't bought anything yet.",
     compraPendiente: "Processing payment…",
+    compraSinTerminar: "Payment not finished",
+    compraRetomar: "Resume payment",
     compraCupon: "coupon {codigo}",
     compraReembolsada: "Refunded",
     compraReembolsoParcial: "{monto} refunded",
@@ -1576,6 +1584,8 @@ const pt: Dict = {
     comprasTitle: "Suas compras",
     comprasEmpty: "Você ainda não comprou nada.",
     compraPendiente: "Processando o pagamento…",
+    compraSinTerminar: "Pagamento não concluído",
+    compraRetomar: "Retomar o pagamento",
     compraCupon: "cupom {codigo}",
     compraReembolsada: "Reembolsada",
     compraReembolsoParcial: "Reembolso de {monto}",
