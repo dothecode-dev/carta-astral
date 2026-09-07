@@ -18,6 +18,8 @@ from api.models import (
     BirthData,
     Chart,
     CreditTransaction,
+    Cupon,
+    CuponUso,
     Derecho,
     Interpretation,
     Movimiento,
@@ -55,10 +57,14 @@ def admin_montado(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "modelo", [Account, Chart, Interpretation, CreditTransaction, Derecho, Movimiento],
+    "modelo", [Account, Chart, Interpretation, CreditTransaction, Derecho, Movimiento, CuponUso],
 )
 def test_ningun_modelo_se_puede_crear_editar_ni_borrar(modelo):
     """Las mutaciones van por management command, no por el panel.
+
+    La única excepción es `Cupon` (ver el test siguiente): un cupón no mueve
+    saldo, define una regla de precio, y se crea desde acá porque el admin es
+    el único lugar donde se ve el precio final antes de publicarlo.
 
     Se usan las instancias REGISTRADAS (no una construida a mano) para que el
     test valide lo que el admin realmente expone.
@@ -242,6 +248,18 @@ def test_los_modelos_de_geonames_no_se_registran():
 
 
 @pytest.mark.django_db
+def test_el_cupon_se_crea_y_edita_pero_no_se_borra():
+    """La contracara de la regla de arriba, escrita como test y no como prosa.
+    Borrar no: se desactiva, y la constancia de quién lo usó sobrevive."""
+    from django.contrib import admin as dj_admin
+
+    registrado = dj_admin.site._registry[Cupon]
+
+    assert registrado.has_add_permission(None) is True
+    assert registrado.has_change_permission(None) is True
+    assert registrado.has_delete_permission(None) is False
+
+
 def test_los_modelos_que_si_importan_estan_registrados():
     from django.contrib import admin as dj_admin
 
