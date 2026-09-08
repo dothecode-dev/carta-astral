@@ -387,6 +387,11 @@ APPLE_TEAM_ID = os.environ.get("APPLE_TEAM_ID", "")  # Apple Developer → Membe
 APPLE_KEY_ID = os.environ.get("APPLE_KEY_ID", "")  # Key ID de la key "Sign in with Apple"
 APPLE_PRIVATE_KEY = os.environ.get("APPLE_PRIVATE_KEY", "")  # contenido PEM del .p8
 
+# --- Puerta de acceso por mail (código de 6 dígitos) ---
+CODIGO_TTL_MINUTOS = int(os.environ.get("CODIGO_TTL_MINUTOS", "10"))
+CODIGO_INTENTOS_MAX = int(os.environ.get("CODIGO_INTENTOS_MAX", "5"))
+CODIGO_PEDIDOS_HORA = int(os.environ.get("CODIGO_PEDIDOS_HORA", "5"))
+
 # --- IAP / RevenueCat ---
 # Header Authorization que RevenueCat manda en cada webhook (Dashboard → Webhooks).
 REVENUECAT_WEBHOOK_AUTH = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")

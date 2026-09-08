@@ -215,7 +215,7 @@ class Device(models.Model):
 
 
 class ProviderIdentity(models.Model):
-    PROVIDERS = (("apple", "apple"), ("google", "google"))
+    PROVIDERS = (("apple", "apple"), ("google", "google"), ("email", "email"))
     provider = models.CharField(max_length=10, choices=PROVIDERS)
     sub = models.CharField(max_length=255)
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="identities")
@@ -227,6 +227,49 @@ class ProviderIdentity(models.Model):
 
     class Meta:
         unique_together = ("provider", "sub")
+
+
+class CodigoAcceso(models.Model):
+    """El código de 6 dígitos que abre la puerta de mail.
+
+    Vive en tabla y no en el caché de la base a propósito: el caché se desaloja
+    y ahí se pierde el login a mitad de camino, y el contador de intentos
+    necesita el bloqueo de fila que da Postgres.
+
+    El código NUNCA se guarda en claro: sólo su sha256. Igual que `Session`.
+    """
+
+    email = models.EmailField()
+    codigo_hash = models.CharField(max_length=64)
+    # A dónde volver al entrar. Viaja acá además de en la URL porque en iOS la
+    # persona sale a Mail y vuelve, a veces por una pestaña nueva, y ahí el
+    # `next` de la URL ya no existe (RF16).
+    destino = models.CharField(max_length=200, blank=True, default="")
+    intentos = models.PositiveSmallIntegerField(default=0)
+    usado_en = models.DateTimeField(null=True, blank=True)
+    expira_en = models.DateTimeField()
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["email", "creado_en"])]
+        constraints = [
+            # Un solo código vigente por dirección: es lo que permite que un
+            # pedido nuevo REENVÍE el mismo en vez de regenerarlo (RF6).
+            #
+            # OJO acá: el rango de la constraint es "usado_en IS NULL", no
+            # "vigente". Postgres no acepta now() en la condición de un índice
+            # porque no es inmutable, así que la constraint no puede excluir
+            # los códigos YA EXPIRADOS y sin usar — esos también bloquean. La
+            # fila de un código vencido sigue ahí hasta que alguien la
+            # descarte: eso es trabajo de `pedir()` (Task 5), que antes de
+            # crear un código nuevo tiene que marcar como usado (o borrar) el
+            # que quedó vencido sin usar. Este modelo no lo resuelve.
+            models.UniqueConstraint(
+                fields=["email"],
+                condition=models.Q(usado_en__isnull=True),
+                name="un_codigo_vigente_o_expirado_sin_usar_por_direccion",
+            ),
+        ]
 
 
 class Session(models.Model):
