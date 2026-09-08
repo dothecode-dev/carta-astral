@@ -71,12 +71,16 @@ export function GoogleSignIn({
           ? `NEXT_PUBLIC_GOOGLE_CLIENT_ID mal formado (${raw.length} caracteres): se espera un único client id terminado en .apps.googleusercontent.com, sin comas ni espacios.`
           : "NEXT_PUBLIC_GOOGLE_CLIENT_ID no está definido: el acceso con Google queda deshabilitado.",
       );
+      // El estado ya arrancó en "blocked" (ver useState arriba): un login que
+      // no puede pasar es el evento que importa, sin importar la causa.
+      track("login_no_disponible", { motivo: "blocked" });
       return;
     }
 
     async function onCredential(response: Credential) {
       if (!response.credential) {
         setStatus("failed");
+        track("login_no_disponible", { motivo: "failed" });
         return;
       }
       const res = await fetch("/api/session", {
@@ -86,6 +90,7 @@ export function GoogleSignIn({
       });
       if (!res.ok) {
         setStatus("failed");
+        track("login_no_disponible", { motivo: "failed" });
         return;
       }
       // El id interno, nunca el email: es lo que ata los eventos de esta
@@ -134,7 +139,10 @@ export function GoogleSignIn({
     script.onload = render;
     // Un bloqueador de rastreadores puede impedir que cargue: mejor decirlo que
     // dejar un botón que no aparece nunca.
-    script.onerror = () => setStatus("blocked");
+    script.onerror = () => {
+      setStatus("blocked");
+      track("login_no_disponible", { motivo: "blocked" });
+    };
     document.head.appendChild(script);
   }, [clientId, raw, locale, router, next]);
 

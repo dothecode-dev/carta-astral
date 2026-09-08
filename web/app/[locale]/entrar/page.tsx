@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { EntrarVisto } from "@/components/EntrarVisto";
 import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { Nav } from "@/components/Nav";
 import { normalizarCupon } from "@/lib/cupon";
@@ -74,6 +75,10 @@ export default async function SignInPage({
       <Nav locale={locale} dict={dict} path="/entrar" />
 
       <main className="docFrame authFrame">
+        {/* Sólo el destino ya validado por `destinoSeguro`, sin los extras de
+            compra/cupón que se le pegan abajo: nada de eso viaja al evento. */}
+        <EntrarVisto next={destino} />
+
         <section className="authCard">
           <h1 className="display authTitle">{dict.auth.title}</h1>
           <p className="authLede">{dict.auth.lede}</p>

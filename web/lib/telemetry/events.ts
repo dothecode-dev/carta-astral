@@ -94,6 +94,21 @@ export type EventoProps = {
   /** Cuántos aceptan el banner. Sin esto no se sabe cuánto sesga el resto:
    *  si acepta el 40%, todos los números de arriba son el 40% de la verdad. */
   consentimiento: { decision: "si" | "no" };
+  /** Alguien llegó a /entrar, haya terminado el login o no. Se dispara al
+   *  MONTAR la pantalla, no al loguearse —eso ya lo cubre `login`—: es el
+   *  denominador que faltaba para saber cuánta gente se da vuelta antes de
+   *  intentarlo. El 08-09-2026 tres de seis visitas rebotaron en segundos y
+   *  no quedó ningún rastro de qué vieron.
+   *
+   *  `next` es la ruta de destino que traía —la misma que ya validó
+   *  `destinoSeguro`—, nunca datos personales. Se omite si no había destino. */
+  entrar_visto: { next?: string };
+  /** El acceso se cerró sin login: `blocked` es que ni siquiera se pudo
+   *  intentar (falta el client id, viene mal formado, o un bloqueador de
+   *  rastreadores no dejó cargar el script de Google); `failed` es que se
+   *  intentó y el canje contra /api/session no sirvió. Sin esto, un botón
+   *  que nunca aparece y un login que sale mal se ven igual que silencio. */
+  login_no_disponible: { motivo: "blocked" | "failed" };
 };
 
 export type EventoNombre = keyof EventoProps;

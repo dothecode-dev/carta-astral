@@ -3,10 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { getDict } from "@/lib/i18n";
+import { track as trackReal } from "@/lib/telemetry";
 
 // Lo que se prueba acá es el trato con el id_token que devuelve Google: se
 // manda a /api/session y nada más. Si el canje falla, la persona tiene que
 // enterarse en vez de quedar mirando un botón que no hace nada.
+//
+// También se prueba que cada camino sin login deje rastro: sin esto, un botón
+// que no aparece nunca y un login que sale mal se ven igual que un silencio.
+vi.mock("@/lib/telemetry", () => ({ track: vi.fn(), identificar: vi.fn() }));
+const track = vi.mocked(trackReal);
 
 const replace = vi.fn();
 const refresh = vi.fn();
@@ -43,6 +49,7 @@ beforeEach(() => {
   onCredential = null;
   replace.mockClear();
   refresh.mockClear();
+  track.mockClear();
   vi.stubEnv("NEXT_PUBLIC_GOOGLE_CLIENT_ID", "un-client-id.apps.googleusercontent.com");
 });
 
@@ -57,6 +64,7 @@ describe("GoogleSignIn", () => {
     render(<GoogleSignIn locale="es" labels={labels} />);
 
     expect(screen.getByText(labels.blocked)).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith("login_no_disponible", { motivo: "blocked" });
   });
 
   it("canjea el id_token contra /api/session y entra a la cuenta", async () => {
@@ -74,6 +82,7 @@ describe("GoogleSignIn", () => {
       id_token: "id-token-de-google",
     });
     expect(replace).toHaveBeenCalledWith("/es/cuenta");
+    expect(track).not.toHaveBeenCalledWith("login_no_disponible", expect.anything());
   });
 
   it("avisa si el backend rechaza la identidad", async () => {
@@ -85,6 +94,7 @@ describe("GoogleSignIn", () => {
 
     expect(screen.getByText(labels.failed)).toBeInTheDocument();
     expect(replace).not.toHaveBeenCalled();
+    expect(track).toHaveBeenCalledWith("login_no_disponible", { motivo: "failed" });
   });
 
   it("no llama al servidor si Google no devolvió credencial", async () => {
@@ -97,6 +107,7 @@ describe("GoogleSignIn", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.getByText(labels.failed)).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith("login_no_disponible", { motivo: "failed" });
   });
 
   it("avisa cuando un bloqueador impide cargar el script de Google", async () => {
@@ -109,6 +120,7 @@ describe("GoogleSignIn", () => {
     await act(async () => script!.onerror!(new Event("error")));
 
     expect(screen.getByText(labels.blocked)).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith("login_no_disponible", { motivo: "blocked" });
   });
 
   it("le da al botón de Google un contenedor propio para recortarlo", () => {
