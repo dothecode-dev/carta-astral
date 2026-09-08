@@ -10,6 +10,7 @@ import { cantidad } from "@/lib/derechos";
 import { Nav } from "@/components/Nav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
+import { Identificar } from "@/components/Identificar";
 import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
 import { Footer } from "@/components/Footer";
 import type { Derecho } from "@/lib/derechos";
@@ -68,6 +69,7 @@ export default async function AccountPage({
 
   return (
     <>
+      <Identificar accountId={account.account_id} />
       <Nav locale={locale} dict={dict} path="/cuenta" signedIn showExample={charts.length === 0} />
 
       {/* Las secciones eran cuatro `<p class="eyebrow">` idénticos y la página no

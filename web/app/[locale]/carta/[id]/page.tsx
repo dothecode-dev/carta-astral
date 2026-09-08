@@ -7,6 +7,7 @@ import { ChartShare } from "@/components/ChartShare";
 import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartBody } from "@/components/ChartBody";
 import { ChartTables } from "@/components/ChartTables";
+import { Identificar } from "@/components/Identificar";
 import { Nav } from "@/components/Nav";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
@@ -45,9 +46,9 @@ export default async function ChartPage({
 
   // Derechos de la cuenta: lectura_breve paga la breve, informe_natal paga
   // el completo. Los botones de abajo los necesitan para saber qué ofrecer.
-  let account: { derechos: Derecho[] };
+  let account: { derechos: Derecho[]; account_id: number };
   try {
-    account = await callApi<{ derechos: Derecho[] }>(`/api/account/`);
+    account = await callApi<{ derechos: Derecho[]; account_id: number }>(`/api/account/`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) redirect(RUTA_SESION_EXPIRADA(locale));
     throw error;
@@ -113,6 +114,7 @@ export default async function ChartPage({
     <>
       {/* El path va con el id: si fuera "/cuenta", cambiar de idioma sacaría de
           la carta y llevaría a la lista. */}
+      <Identificar accountId={account.account_id} />
       <Nav locale={locale} dict={dict} path={`/carta/${id}`} signedIn showExample={false} />
 
       <main className="docFrame chartFrame">
