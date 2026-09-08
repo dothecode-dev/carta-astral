@@ -97,6 +97,28 @@ describe("GoogleSignIn", () => {
     expect(track).toHaveBeenCalledWith("login_no_disponible", { motivo: "failed" });
   });
 
+  it("avisa si el fetch a /api/session ni siquiera vuelve (red caída, bloqueador)", async () => {
+    // Sin este catch la persona se queda mirando el "loading" para siempre y
+    // el evento tampoco sale: exactamente el silencio que esta fase vino a
+    // cerrar, en el mismo archivo.
+    vi.stubGlobal("google", fakeGoogle());
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    render(<GoogleSignIn locale="es" labels={labels} />);
+    await act(async () => onCredential!({ credential: "id-token-de-google" }));
+
+    expect(screen.getByText(labels.failed)).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+    expect(track).toHaveBeenCalledWith("login_no_disponible", { motivo: "failed" });
+    expect(consoleError).toHaveBeenCalled();
+    // El log explica el fallo de red, nunca el id_token de la persona.
+    for (const [, ...args] of consoleError.mock.calls) {
+      expect(args.join(" ")).not.toContain("id-token-de-google");
+    }
+    consoleError.mockRestore();
+  });
+
   it("no llama al servidor si Google no devolvió credencial", async () => {
     vi.stubGlobal("google", fakeGoogle());
     const fetchMock = vi.fn();

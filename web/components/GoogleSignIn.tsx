@@ -83,11 +83,27 @@ export function GoogleSignIn({
         track("login_no_disponible", { motivo: "failed" });
         return;
       }
-      const res = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "google", id_token: response.credential }),
-      });
+      // Envuelto: una red caída, un DNS que no resuelve o una extensión que
+      // corta el pedido hacen que `fetch` rechace antes de devolver una
+      // respuesta. Sin este catch la excepción quedaba sin capturar, `status`
+      // nunca salía de "loading" y la persona se quedaba mirando el spinner
+      // para siempre — exactamente el silencio que esta medición vino a
+      // cerrar, en esta misma pantalla.
+      let res: Response;
+      try {
+        res = await fetch("/api/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: "google", id_token: response.credential }),
+        });
+      } catch (error) {
+        // Sólo el motivo de red que dio `fetch`, nunca `response.credential`
+        // ni nada de la persona.
+        console.error("No se pudo llegar a /api/session:", error);
+        setStatus("failed");
+        track("login_no_disponible", { motivo: "failed" });
+        return;
+      }
       if (!res.ok) {
         setStatus("failed");
         track("login_no_disponible", { motivo: "failed" });
