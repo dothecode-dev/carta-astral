@@ -152,6 +152,22 @@ def interpretacion_completa(db, chart, account):
 
 
 @pytest.fixture
+def django_cache_cleared():
+    """Vacía el caché antes y después del test.
+
+    Para tests que quieren probar que algo NO depende del caché (por ejemplo
+    un techo que se cuenta contra la tabla): si el caché quedó con estado de
+    un test anterior, un bug que sí dependiera del caché podría pasar de
+    casualidad.
+    """
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture
 def db_cache(settings, db):
     """Corre un test contra `DatabaseCache`, el backend real de producción.
 
