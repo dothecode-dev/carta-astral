@@ -18,6 +18,11 @@ table { width: 100%; border-collapse: collapse; margin-top: 6px; }
 td { padding: 5px 4px; font-size: 12px; border-bottom: 0.5px solid var(--orbit); }
 .glyph { color: var(--sol); font-size: 14px; width: 64px; white-space: nowrap; }
 .data { font-family: 'Space Mono', monospace; font-size: 11px; text-align: right; }
+/* La posición lleva el nombre del signo, así que su largo varía ("Piscis" contra
+   "Capricórnio"): alineada a la derecha como el resto, los grados de cada fila
+   quedaban a distinta altura. Ancho fijo y a la izquierda, que es como se leen
+   en la web y como se lee una efeméride. */
+.pos { text-align: left; width: 176px; }
 .rx { color: var(--danger); }
 .section { margin-top: 18px; page-break-after: avoid; }
 /* La matriz de aspectos: la misma lectura que en el sitio. Dieciocho columnas

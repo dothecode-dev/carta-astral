@@ -46,7 +46,7 @@ export function CartaPreview({
         <p className="fieldNote">{t.previewNote}</p>
       </div>
 
-      <ChartTables chart={carta} dict={dict} />
+      <ChartTables chart={carta} dict={dict} locale={locale} />
 
       {carta.data.aspects.length > 0 && (
         <AspectMatrix

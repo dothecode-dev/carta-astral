@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { BODIES, formatDegree, positions, signOf } from "@/lib/ephemeris";
+import { BODIES, formatDegree, positionLabel, positions, signAbbr, signName, signOf } from "@/lib/ephemeris";
 
 // La rueda del cielo de la home la calcula el navegador, con los elementos
 // orbitales de Schlyter, porque pedirle cada posición al backend sería absurdo
@@ -76,5 +76,47 @@ describe("signOf", () => {
     expect(signOf(29.99)).toBe("♈");
     expect(signOf(30)).toBe("♉");
     expect(signOf(359.9)).toBe("♓");
+  });
+});
+
+// El glifo solo no le dice nada a quien no sabe leerlos, y es la celda que
+// sostiene la carta. `positionLabel` es la única forma de armar esa celda: la
+// usan la tabla, las casas, la página de ejemplo y el payload del PDF, así que
+// el sitio y el documento descargado no pueden separarse.
+describe("signName", () => {
+  it("nombra el signo en el idioma que se pida", () => {
+    expect(signName(0, "es")).toBe("Aries");
+    expect(signName(357, "es")).toBe("Piscis");
+    expect(signName(357, "en")).toBe("Pisces");
+    expect(signName(357, "pt")).toBe("Peixes");
+  });
+});
+
+describe("signAbbr", () => {
+  it("da tres letras distintas para los doce signos, en los tres idiomas", () => {
+    // `signAbbr` corta el nombre con slice(3). Si dos signos de un idioma
+    // cayeran en las mismas tres letras, el riel de la home mostraría el signo
+    // equivocado sin avisar.
+    for (const locale of ["es", "en", "pt"] as const) {
+      const abrevs = Array.from({ length: 12 }, (_, i) => signAbbr(i * 30, locale));
+      expect(new Set(abrevs).size).toBe(12);
+      expect(abrevs.every((a) => a.length === 3)).toBe(true);
+    }
+    expect(signAbbr(270, "es")).toBe("Cap");
+    expect(signAbbr(270, "en")).toBe("Cap");
+    expect(signAbbr(300, "es")).toBe("Acu");
+  });
+});
+
+describe("positionLabel", () => {
+  it("pone el grado, el glifo y el nombre del signo", () => {
+    expect(positionLabel(357, "es")).toBe("27°00′ ♓ Piscis");
+    expect(positionLabel(357, "en")).toBe("27°00′ ♓ Pisces");
+    expect(positionLabel(357, "pt")).toBe("27°00′ ♓ Peixes");
+  });
+
+  it("cuenta los grados dentro del signo, como formatDegree", () => {
+    expect(positionLabel(0, "es")).toBe("00°00′ ♈ Aries");
+    expect(positionLabel(359.99, "es")).toBe("29°59′ ♓ Piscis");
   });
 });

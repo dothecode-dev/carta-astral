@@ -144,7 +144,7 @@ export default async function ChartPage({
             que se pierde. */}
         {!reading && acciones}
 
-        <ChartTables chart={chart} dict={dict} />
+        <ChartTables chart={chart} dict={dict} locale={locale} />
 
         {chart.data.aspects.length > 0 && (
           <AspectMatrix

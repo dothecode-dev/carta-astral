@@ -110,7 +110,7 @@ function chartCon(data: Partial<ApiChart["data"]>): ApiChart {
 
 describe("ChartTables", () => {
   it("no muestra tablas vacías", () => {
-    const { container } = render(<ChartTables chart={chartCon({})} dict={dict} />);
+    const { container } = render(<ChartTables chart={chartCon({})} dict={dict} locale="es" />);
     expect(container.querySelectorAll("details")).toHaveLength(0);
   });
 
@@ -124,14 +124,15 @@ describe("ChartTables", () => {
           ],
         })}
         dict={dict}
+        locale="es"
       />,
     );
 
     const bloque = screen.getByText(dict.chart.houses).closest("details")!;
     expect(bloque.open).toBe(false);
     expect(within(bloque).getByText("I")).toBeInTheDocument();
-    expect(within(bloque).getByText(/15°30′ ♈/)).toBeInTheDocument();
-    expect(within(bloque).getByText(/15°00′ ♉/)).toBeInTheDocument();
+    expect(within(bloque).getByText("15°30′ ♈ Aries")).toBeInTheDocument();
+    expect(within(bloque).getByText("15°00′ ♉ Tauro")).toBeInTheDocument();
   });
 
 });

@@ -55,7 +55,7 @@ payload = {
         "reading": "Tu lectura", "made_with": "Hecho con ASTRA",
     },
     "positions": [
-        {"glyph": "☉", "name": "Sol", "position": "♓ Piscis 21°36′",
+        {"glyph": "☉", "name": "Sol", "position": "21°36′ ♓ Piscis",
          "house": "XII", "retrograde": False},
     ],
     "aspects": [{"glyph": "☉ △ ♃", "name": "Trígono", "detail": "orbe 7.2°"}],

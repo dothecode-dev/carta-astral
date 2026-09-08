@@ -1,5 +1,5 @@
-import { signOf } from "@/lib/ephemeris";
-import { type Dict } from "@/lib/i18n";
+import { positionLabel } from "@/lib/ephemeris";
+import { type Dict, type Locale } from "@/lib/i18n";
 import type { CartaDibujable } from "@/lib/chart";
 
 // Las casas, plegadas. Arranca cerrada porque la carta ya entra con la rueda y
@@ -16,14 +16,15 @@ const HOUSE_ORDER = [
   "Ninth_House", "Tenth_House", "Eleventh_House", "Twelfth_House",
 ];
 
-function degreeLabel(lon: number): string {
-  const inSign = lon % 30;
-  const deg = Math.floor(inSign);
-  const min = Math.floor((inSign - deg) * 60);
-  return `${String(deg).padStart(2, "0")}°${String(min).padStart(2, "0")}′`;
-}
-
-export function ChartTables({ chart, dict }: { chart: CartaDibujable; dict: Dict }) {
+export function ChartTables({
+  chart,
+  dict,
+  locale,
+}: {
+  chart: CartaDibujable;
+  dict: Dict;
+  locale: Locale;
+}) {
   const { houses } = chart.data;
 
   return (
@@ -40,7 +41,7 @@ export function ChartTables({ chart, dict }: { chart: CartaDibujable; dict: Dict
                   <tr key={name}>
                     <td className="cellGlyph">{ROMAN[i]}</td>
                     <td>
-                      {degreeLabel(casa.abs_pos)} {signOf(casa.abs_pos)}
+                      {positionLabel(casa.abs_pos, locale)}
                     </td>
                   </tr>
                 );

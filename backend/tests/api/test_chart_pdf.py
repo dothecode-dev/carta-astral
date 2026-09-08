@@ -85,9 +85,9 @@ def _payload(**over):
             "made_with": "Hecho con ASTRA",
         },
         "positions": [
-            {"glyph": "☉", "name": "Sol", "position": "♓ Piscis 21°36′",
+            {"glyph": "☉", "name": "Sol", "position": "21°36′ ♓ Piscis",
              "house": "XII", "retrograde": False},
-            {"glyph": "♃", "name": "Júpiter", "position": "♏ Escorpio 14°26′",
+            {"glyph": "♃", "name": "Júpiter", "position": "14°26′ ♏ Escorpio",
              "house": "VIII", "retrograde": True},
         ],
         "aspects": [

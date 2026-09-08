@@ -8,25 +8,17 @@ import { NatalWheel } from "@/components/NatalWheel";
 import { SAMPLE_BIRTH, SAMPLE_CHART } from "@/content/sample-chart";
 import { SAMPLE_READING } from "@/content/sample-reading";
 import { DEFAULT_LOCALE, LOCALES, PLANET_NAME_BY_KEY, getDict, isLocale , PLANET_GLYPHS } from "@/lib/i18n";
+import { positionLabel } from "@/lib/ephemeris";
 import { SITE_URL } from "@/lib/config";
 import { Footer } from "@/components/Footer";
 import { haySesion } from "@/lib/session";
 
-const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 const HOUSE_INDEX: Record<string, number> = {
   First_House: 1, Second_House: 2, Third_House: 3, Fourth_House: 4,
   Fifth_House: 5, Sixth_House: 6, Seventh_House: 7, Eighth_House: 8,
   Ninth_House: 9, Tenth_House: 10, Eleventh_House: 11, Twelfth_House: 12,
 };
-
-/** Grados y minutos dentro del signo, como se leen en una carta. */
-function degreeLabel(lon: number): string {
-  const inSign = lon % 30;
-  const deg = Math.floor(inSign);
-  const min = Math.floor((inSign - deg) * 60);
-  return `${String(deg).padStart(2, "0")}°${String(min).padStart(2, "0")}′`;
-}
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -116,7 +108,7 @@ export default async function SampleChartPage({
                         <td className="cellGlyph">{sigla}</td>
                         <td className="cellBody">{dict.chart.axisNames[sigla]}</td>
                         <td>
-                          {degreeLabel(lon)} {SIGNS[Math.floor(lon / 30)]}
+                          {positionLabel(lon, locale)}
                         </td>
                         <td className="cellRight" />
                         <td className="cellRetro" />
@@ -128,7 +120,7 @@ export default async function SampleChartPage({
                       <td className="cellGlyph">{PLANET_GLYPHS[planet.name]}</td>
                       <td className="cellBody">{names[planet.name] ?? planet.name}</td>
                       <td>
-                        {degreeLabel(planet.lon)} {SIGNS[Math.floor(planet.lon / 30)]}
+                        {positionLabel(planet.lon, locale)}
                       </td>
                       <td className="cellRight">{ROMAN[HOUSE_INDEX[planet.house] - 1]}</td>
                       <td className="cellRetro">{planet.retro ? "℞" : ""}</td>

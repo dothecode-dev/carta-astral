@@ -78,6 +78,22 @@ export const PLANET_NAMES: Record<Locale, string[]> = {
   pt: ["Sol", "Lua", "Mercúrio", "Vênus", "Marte", "Júpiter", "Saturno", "Urano", "Netuno", "Plutão"],
 };
 
+/**
+ * Nombres de los signos, en el orden del zodíaco: el índice es `lon / 30`.
+ *
+ * El glifo no alcanza. La tabla de la carta mostraba sólo `27°00′ ♓`, y quien
+ * no sabe leer glifos —que es la mayoría de quien llega— no podía decir en qué
+ * signo tiene el Sol en la pantalla por la que paga.
+ */
+export const SIGN_NAMES: Record<Locale, string[]> = {
+  es: ["Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo",
+       "Libra", "Escorpio", "Sagitario", "Capricornio", "Acuario", "Piscis"],
+  en: ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+       "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"],
+  pt: ["Áries", "Touro", "Gêmeos", "Câncer", "Leão", "Virgem",
+       "Libra", "Escorpião", "Sagitário", "Capricórnio", "Aquário", "Peixes"],
+};
+
 /** El backend nombra los cuerpos en inglés; la tabla los muestra traducidos. */
 /** El motor nombra los aspectos en inglés; la tabla los muestra traducidos. */
 export const ASPECT_NAMES: Record<Locale, Record<string, string>> = {
@@ -146,6 +162,17 @@ export const PLANET_GLYPHS: Record<string, string> = {
 export const ASPECT_GLYPHS: Record<string, string> = {
   conjunction: "☌", opposition: "☍", trine: "△", square: "□", sextile: "✶",
 };
+
+/**
+ * Los glifos de los doce signos, en el orden del zodíaco. Mismo índice que
+ * `SIGN_NAMES`.
+ *
+ * Estaba copiado en cinco archivos —la rueda de la home, la rueda natal, el
+ * payload del PDF, la tabla de ejemplo y `ephemeris.ts`—, que es exactamente la
+ * forma en que `PLANET_GLYPHS` se desincronizó. Vive acá, con el resto de la
+ * notación, y de acá lo lee todo el mundo.
+ */
+export const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 
 /**
  * Los cuerpos que la carta lista pero la rueda no dibuja.

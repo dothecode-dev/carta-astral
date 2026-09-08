@@ -6,6 +6,7 @@ import {
   LOCALES,
   PLANET_NAMES,
   PLANET_NAME_BY_KEY,
+  SIGN_NAMES,
   getDict,
   isLocale,
   negociarIdioma,
@@ -54,6 +55,17 @@ describe("diccionarios", () => {
     it(`${locale} nombra los diez planetas de la rueda`, () => {
       expect(PLANET_NAMES[locale]).toHaveLength(10);
       expect(PLANET_NAMES[locale].every((n) => n.trim())).toBe(true);
+    });
+
+    it(`${locale} nombra los doce signos, sin repetir ninguno`, () => {
+      // El test de paridad de arriba recorre `getDict()` y no llega hasta acá:
+      // `SIGN_NAMES` es un export suelto. Sin esto, un idioma al que le falte
+      // un signo muestra `undefined` en la celda de posición de la carta.
+      // El `Set` es contra el copy-paste de un idioma sobre otro, que deja doce
+      // entradas y ninguna vacía pero con un nombre repetido.
+      expect(SIGN_NAMES[locale]).toHaveLength(12);
+      expect(SIGN_NAMES[locale].every((n) => n.trim())).toBe(true);
+      expect(new Set(SIGN_NAMES[locale]).size).toBe(12);
     });
 
     it(`${locale} nombra todos los aspectos que dibuja la carta`, () => {

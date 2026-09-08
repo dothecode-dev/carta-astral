@@ -2,7 +2,7 @@ import { buildWheel } from "astra-wheel";
 
 import type { SampleChart } from "@/content/sample-chart";
 import { toWheelInput } from "@/lib/chart";
-import { PLANET_GLYPHS } from "@/lib/i18n";
+import { PLANET_GLYPHS, SIGNS } from "@/lib/i18n";
 
 // Lo que el navegador le manda al backend para que dibuje la rueda del PDF.
 //
@@ -14,7 +14,6 @@ import { PLANET_GLYPHS } from "@/lib/i18n";
 // `buildWheel`. Si el backend la recalculara, la rueda del PDF podría dejar de
 // coincidir con la de la web sin que nadie se entere.
 
-const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 const ANGLE_LABEL: Record<string, string> = { Ascendant: "ASC", Medium_Coeli: "MC" };
 

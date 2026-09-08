@@ -3,10 +3,9 @@
 import { useEffect, useRef } from "react";
 
 import { BODIES, positions, type Positions } from "@/lib/ephemeris";
+import { SIGNS } from "@/lib/i18n";
 
 const RAD = Math.PI / 180;
-
-const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 
 // Aspectos mayores con orbe corto: la rueda tiene que leerse, no ser una madeja.
 // La conjunción no se dibuja porque son dos puntos casi encimados.

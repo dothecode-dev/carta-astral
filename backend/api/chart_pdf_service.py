@@ -324,7 +324,7 @@ def build_document_html(chart: Chart, data: dict) -> str:
     filas_posiciones = "".join(
         f'<tr><td class="glyph">{_esc(pos["glyph"])}</td>'
         f'<td>{_esc(pos["name"])}{"<span class=\"rx\"> ℞</span>" if pos["retrograde"] else ""}</td>'
-        f'<td class="data">{_esc(pos["position"])}</td>'
+        f'<td class="data pos">{_esc(pos["position"])}</td>'
         f'<td class="data">{_esc(pos["house"])}</td></tr>'
         for pos in data["positions"]
     )

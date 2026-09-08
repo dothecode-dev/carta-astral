@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { BODIES, formatDegree, positions, signOf, type Positions } from "@/lib/ephemeris";
+import { BODIES, formatDegree, positions, signAbbr, signOf, type Positions } from "@/lib/ephemeris";
 import { INTL_LOCALE, PLANET_NAMES, type Locale } from "@/lib/i18n";
 
 type Row = { glyph: string; name: string; degree: string; sign: string };
@@ -46,7 +46,7 @@ export function EphemerisRail({
             glyph: body.glyph,
             name: PLANET_NAMES[locale][i],
             degree: formatDegree(lon),
-            sign: signOf(lon),
+            sign: `${signOf(lon)} ${signAbbr(lon, locale)}`,
           };
         }),
       );

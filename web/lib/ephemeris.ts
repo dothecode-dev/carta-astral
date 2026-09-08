@@ -6,6 +6,8 @@
 // (backend/core/ephemeris.py), y cuando exista el endpoint público esta rueda
 // va a leer de ahí.
 
+import { SIGN_NAMES, SIGNS, type Locale } from "@/lib/i18n";
+
 const RAD = Math.PI / 180;
 
 const rev = (x: number) => x - Math.floor(x / 360) * 360;
@@ -114,8 +116,6 @@ export const BODIES: { key: BodyKey; glyph: string }[] = [
   { key: "neptune", glyph: "♆" },
 ];
 
-export const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
-
 /** Grados y minutos dentro del signo, con cero a la izquierda. */
 export function formatDegree(lon: number): string {
   const inSign = lon % 30;
@@ -126,4 +126,33 @@ export function formatDegree(lon: number): string {
 
 export function signOf(lon: number): string {
   return SIGNS[Math.floor(lon / 30)];
+}
+
+/** El nombre del signo en el que cae una longitud, traducido. */
+export function signName(lon: number, locale: Locale): string {
+  return SIGN_NAMES[locale][Math.floor(lon / 30)];
+}
+
+/**
+ * El signo en tres letras: `Cap`, `Sag`, `Esc`.
+ *
+ * Es para el riel de la home, que es una columna de 203px: ahí "Capricornio"
+ * no entra y la fila envuelve en dos líneas, descuadrando la lista (medido:
+ * 24,7px de alto contra 43,6px). La abreviatura de tres letras es notación
+ * corriente en efemérides y sale única en los tres idiomas.
+ */
+export function signAbbr(lon: number, locale: Locale): string {
+  return signName(lon, locale).slice(0, 3);
+}
+
+/**
+ * La celda de posición de la carta: `27°00′ ♓ Piscis`.
+ *
+ * Es la única forma de armar esa celda. La usan la tabla, el desplegable de
+ * casas, la página de ejemplo y el payload del PDF: si cada una la concatenara
+ * por su cuenta —como venía pasando—, el sitio y el documento que se descarga
+ * terminan mostrando cosas distintas.
+ */
+export function positionLabel(lon: number, locale: Locale): string {
+  return `${formatDegree(lon)} ${signOf(lon)} ${signName(lon, locale)}`;
 }

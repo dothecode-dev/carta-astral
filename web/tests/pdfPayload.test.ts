@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { SAMPLE_CHART } from "@/content/sample-chart";
 import type { ApiChart } from "@/lib/chart";
+import { signName } from "@/lib/ephemeris";
 import { getDict } from "@/lib/i18n";
 import { buildPdfPayload } from "@/lib/pdfPayload";
 import { toPdfWheel } from "@/lib/wheelPayload";
@@ -112,6 +113,22 @@ describe("buildPdfPayload", () => {
     expect(es.aspects.some((a) => a.name === "Trígono")).toBe(true);
     expect(en.aspects.some((a) => a.name === "Trine")).toBe(true);
     expect(en.labels.made_with).toBe(getDict("en").share.madeWith);
+  });
+
+  it("nombra el signo en la posición, igual que la tabla de la web", () => {
+    // El backend recibe `position` como string opaco y lo imprime tal cual
+    // (api/pdf_payload.py), así que este string ES la columna del PDF. Si acá
+    // se pierde el nombre del signo, el documento descargado queda distinto de
+    // la pantalla y nada más lo avisa.
+    const es = buildPdfPayload(apiChart(), "es", getDict("es"));
+    const en = buildPdfPayload(apiChart(), "en", getDict("en"));
+    const sol = (p: ReturnType<typeof buildPdfPayload>) =>
+      p.positions.find((x) => x.glyph === "☉")!.position;
+
+    expect(sol(es)).toMatch(/^\d{2}°\d{2}′ .+ [A-ZÁ-Ú]/u);
+    expect(sol(es)).toContain(signName(SAMPLE_CHART.planets.find((x) => x.name === "Sun")!.lon, "es"));
+    expect(sol(en)).toContain(signName(SAMPLE_CHART.planets.find((x) => x.name === "Sun")!.lon, "en"));
+    expect(es.positions[0].position).toContain(signName(SAMPLE_CHART.angles.Ascendant, "es"));
   });
 
   it("pone los ejes antes que los cuerpos, como la tabla de la web", () => {

@@ -1,6 +1,6 @@
 import { NatalWheel } from "@/components/NatalWheel";
 import { type CartaDibujable, toWheel } from "@/lib/chart";
-import { signOf } from "@/lib/ephemeris";
+import { positionLabel } from "@/lib/ephemeris";
 import { type Dict, type Locale, PLANET_GLYPHS, PLANET_NAME_BY_KEY } from "@/lib/i18n";
 
 // La rueda y la tabla de posiciones, que son lo que hace que una carta se vea
@@ -18,13 +18,6 @@ const HOUSE_INDEX: Record<string, number> = {
   Fifth_House: 5, Sixth_House: 6, Seventh_House: 7, Eighth_House: 8,
   Ninth_House: 9, Tenth_House: 10, Eleventh_House: 11, Twelfth_House: 12,
 };
-
-function degreeLabel(lon: number): string {
-  const inSign = lon % 30;
-  const deg = Math.floor(inSign);
-  const min = Math.floor((inSign - deg) * 60);
-  return `${String(deg).padStart(2, "0")}°${String(min).padStart(2, "0")}′`;
-}
 
 export function ChartBody({
   chart,
@@ -76,7 +69,7 @@ export function ChartBody({
                       {dict.chart.axisNames[a.name === "Ascendant" ? "AC" : "MC"]}
                     </td>
                     <td>
-                      {degreeLabel(a.abs_pos)} {signOf(a.abs_pos)}
+                      {positionLabel(a.abs_pos, locale)}
                     </td>
                     <td className="cellRight" />
                     <td className="cellRetro" />
@@ -87,7 +80,7 @@ export function ChartBody({
                   <td className="cellGlyph">{PLANET_GLYPHS[p.name] ?? "·"}</td>
                   <td className="cellBody">{names[p.name] ?? p.name.replace(/_/g, " ")}</td>
                   <td>
-                    {degreeLabel(p.abs_pos)} {signOf(p.abs_pos)}
+                    {positionLabel(p.abs_pos, locale)}
                   </td>
                   <td className="cellRight">
                     {p.house ? ROMAN[HOUSE_INDEX[p.house] - 1] : "—"}

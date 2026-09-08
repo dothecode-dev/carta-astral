@@ -2,7 +2,7 @@ import { buildMatrix } from "astra-wheel";
 
 import type { ApiChart } from "@/lib/chart";
 import { toWheel } from "@/lib/chart";
-import { formatDegree, signOf } from "@/lib/ephemeris";
+import { positionLabel } from "@/lib/ephemeris";
 import {
   ASPECT_GLYPHS,
   ASPECT_NAMES,
@@ -140,7 +140,7 @@ export function buildPdfPayload(chart: ApiChart, locale: Locale, dict: Dict): Pd
       return {
         glyph: clave,
         name: dict.chart.axisNames[clave],
-        position: `${formatDegree(a.abs_pos)} ${signOf(a.abs_pos)}`,
+        position: positionLabel(a.abs_pos, locale),
         house: "",
         retrograde: false,
       };
@@ -149,7 +149,7 @@ export function buildPdfPayload(chart: ApiChart, locale: Locale, dict: Dict): Pd
   const cuerpos = chart.data.placements.map((p) => ({
     glyph: PLANET_GLYPHS[p.name] ?? "·",
     name: names[p.name] ?? p.name.replace(/_/g, " "),
-    position: `${formatDegree(p.abs_pos)} ${signOf(p.abs_pos)}`,
+    position: positionLabel(p.abs_pos, locale),
     house: p.house ? ROMAN[HOUSE_INDEX[p.house] - 1] : "—",
     retrograde: p.retrograde,
   }));
