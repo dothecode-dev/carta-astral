@@ -86,9 +86,43 @@ def test_el_techo_por_direccion_se_cuenta_en_la_tabla(django_cache_cleared):
         codigos_acceso.pedir("juan@gmail.com")
 
 
+@override_settings(CODIGO_PEDIDOS_HORA=5)
+def test_el_reenvio_consume_el_mismo_techo_que_un_pedido_nuevo(django_cache_cleared):
+    """Ruling 8: un reenvío no crea fila, pero manda un mail igual. Contar
+    FILAS creadas (como hacía la versión anterior) dejaba pedir códigos en
+    loop contra una dirección ajena sin tocar el techo — la tabla de riesgos
+    de la spec lo lista como Importante. Acá el código sigue vigente en las
+    cinco llamadas (nunca vence ni se usa), así que las 4 últimas son
+    reenvíos sobre la misma fila."""
+    for _ in range(5):
+        codigos_acceso.pedir("juan@gmail.com")
+    assert CodigoAcceso.objects.filter(email="juan@gmail.com").count() == 1
+    with pytest.raises(codigos_acceso.DemasiadosPedidos):
+        codigos_acceso.pedir("juan@gmail.com")
+
+
 def test_el_destino_viaja_en_la_fila():
     """En iOS la persona sale a Mail y vuelve, a veces por una pestaña nueva:
     ahí el `next` de la URL ya no existe."""
     _, claro, _ = codigos_acceso.pedir("juan@gmail.com", destino="/es/carta/abc")
     fila = codigos_acceso.canjear("juan@gmail.com", claro)
     assert fila.destino == "/es/carta/abc"
+
+
+def test_el_reenvio_actualiza_el_destino_si_viene_uno_nuevo():
+    """Ruling 10: RF16 existe porque la persona vuelve a la página equivocada
+    después de entrar. Que un reenvío mande al destino viejo es el mismo bug
+    que el requisito vino a cerrar."""
+    codigos_acceso.pedir("juan@gmail.com", destino="/es/carta/vieja")
+    fila, claro, reenvio = codigos_acceso.pedir("juan@gmail.com", destino="/es/carta/nueva")
+    assert reenvio is True
+    assert fila.destino == "/es/carta/nueva"
+    canjeada = codigos_acceso.canjear("juan@gmail.com", claro)
+    assert canjeada.destino == "/es/carta/nueva"
+
+
+def test_el_reenvio_conserva_el_destino_si_no_viene_uno_nuevo():
+    codigos_acceso.pedir("juan@gmail.com", destino="/es/carta/vieja")
+    fila, _, reenvio = codigos_acceso.pedir("juan@gmail.com")
+    assert reenvio is True
+    assert fila.destino == "/es/carta/vieja"

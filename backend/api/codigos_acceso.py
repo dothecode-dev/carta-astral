@@ -10,7 +10,9 @@ import logging
 import secrets
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from api.identity import hash_token
@@ -38,6 +40,30 @@ def _nuevo_codigo() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
+def _reenviar(fila: CodigoAcceso, destino: str) -> str:
+    """Re-hashea un código nuevo sobre una fila existente y la cuenta como un
+    envío más. El claro no se guardó nunca, así que no se puede releer: se
+    manda uno nuevo y se conserva el contador de intentos y el vencimiento
+    original — el pedido repetido no le regala a nadie cinco intentos nuevos
+    ni diez minutos más.
+
+    El `destino` sólo se pisa cuando el pedido nuevo trae uno (Ruling 10): un
+    reenvío sin `destino` explícito conserva a dónde tenía que volver la
+    persona, uno CON `destino` lo actualiza — si no, RF16 vuelve a mandarla a
+    la página vieja después de entrar, que es el mismo bug que RF16 vino a
+    cerrar.
+    """
+    claro = _nuevo_codigo()
+    fila.codigo_hash = hash_token(claro)
+    fila.envios += 1
+    update_fields = ["codigo_hash", "envios"]
+    if destino:
+        fila.destino = destino
+        update_fields.append("destino")
+    fila.save(update_fields=update_fields)
+    return claro
+
+
 def pedir(email: str, destino: str = "") -> tuple[CodigoAcceso, str, bool]:
     """Devuelve (fila, código EN CLARO, si fue reenvío).
 
@@ -48,9 +74,17 @@ def pedir(email: str, destino: str = "") -> tuple[CodigoAcceso, str, bool]:
     email = normalizar(email)
     ahora = timezone.now()
     hace_una_hora = ahora - timezone.timedelta(hours=1)
-    if CodigoAcceso.objects.filter(
+    # El techo cuenta ENVÍOS (mails salidos), no filas: un reenvío no crea
+    # fila nueva, así que contar filas dejaba pedir en loop contra una
+    # dirección ajena sin tocar el techo mientras el código vigente no
+    # venciera (hasta CODIGO_TTL_MINUTOS). La carrera acá es benigna a
+    # propósito: no hay fila que lockear en este camino y dos pedidos
+    # simultáneos podrían dejar pasar un envío de más — un mail extra no hace
+    # daño y serializar esto no vale el costo.
+    enviados = CodigoAcceso.objects.filter(
         email=email, creado_en__gte=hace_una_hora,
-    ).count() >= settings.CODIGO_PEDIDOS_HORA:
+    ).aggregate(total=Coalesce(Sum("envios"), 0))["total"]
+    if enviados >= settings.CODIGO_PEDIDOS_HORA:
         raise DemasiadosPedidos
 
     with transaction.atomic():
@@ -69,23 +103,42 @@ def pedir(email: str, destino: str = "") -> tuple[CodigoAcceso, str, bool]:
             fila = None
 
         if fila is not None:
-            # El claro no se guardó nunca, así que no se puede releer: se
-            # manda uno nuevo y se re-hashea la MISMA fila, que conserva el
-            # contador de intentos y el vencimiento original — el pedido
-            # repetido no le regala a nadie cinco intentos nuevos ni diez
-            # minutos más.
-            claro = _nuevo_codigo()
-            fila.codigo_hash = hash_token(claro)
-            fila.save(update_fields=["codigo_hash"])
+            claro = _reenviar(fila, destino)
             return fila, claro, True
 
-        claro = _nuevo_codigo()
-        fila = CodigoAcceso.objects.create(
-            email=email,
-            codigo_hash=hash_token(claro),
-            destino=destino,
-            expira_en=ahora + timezone.timedelta(minutes=settings.CODIGO_TTL_MINUTOS),
-        )
+        try:
+            # Savepoint anidado: sin fila previa, `select_for_update()` de
+            # arriba no bloqueó nada —no hay fila que lockear— así que dos
+            # pedidos casi a la vez (doble clic, dos pestañas) para la misma
+            # dirección sin código vigente entran los dos acá. Postgres deja
+            # pasar uno y el otro choca con la UniqueConstraint parcial: en
+            # Postgres ese IntegrityError invalida la transacción entera, y
+            # sin este savepoint no se podría seguir operando en el bloque
+            # exterior para degradarlo a reenvío.
+            with transaction.atomic():
+                claro = _nuevo_codigo()
+                fila = CodigoAcceso.objects.create(
+                    email=email,
+                    codigo_hash=hash_token(claro),
+                    destino=destino,
+                    expira_en=ahora + timezone.timedelta(minutes=settings.CODIGO_TTL_MINUTOS),
+                )
+        except IntegrityError:
+            # Se perdió la carrera del create(): la fila que ganó ya existe,
+            # así que esto es exactamente lo mismo que si este pedido hubiera
+            # llegado 5ms más tarde — se degrada a reenvío sobre la fila
+            # ganadora. Log estructurado sin email ni código en claro. Si la
+            # relectura no encuentra nada (¿la borraron entre medio?), no se
+            # silencia: propaga, que es el mismo 500 de antes y no uno peor.
+            logger.warning("pedido de código chocó con uno concurrente, degradado a reenvío")
+            fila = CodigoAcceso.objects.select_for_update().filter(
+                email=email, usado_en__isnull=True,
+            ).first()
+            if fila is None:
+                raise
+            claro = _reenviar(fila, destino)
+            return fila, claro, True
+
     return fila, claro, False
 
 

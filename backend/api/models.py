@@ -246,6 +246,12 @@ class CodigoAcceso(models.Model):
     # `next` de la URL ya no existe (RF16).
     destino = models.CharField(max_length=200, blank=True, default="")
     intentos = models.PositiveSmallIntegerField(default=0)
+    # Cuántos mails salieron por esta fila: 1 al crearla, +1 por cada reenvío.
+    # El techo de RF9 («5 pedidos/hora») cuenta la SUMA de este campo sobre las
+    # filas de la dirección en la última hora, no `count()` de filas — un
+    # reenvío no crea fila nueva, así que contar filas dejaba pedir en loop
+    # contra una dirección ajena sin tocar el techo (Ruling 8, T5 fix round 1).
+    envios = models.PositiveSmallIntegerField(default=1)
     usado_en = models.DateTimeField(null=True, blank=True)
     expira_en = models.DateTimeField()
     creado_en = models.DateTimeField(auto_now_add=True)
