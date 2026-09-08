@@ -136,13 +136,25 @@ export default async function ChartPage({
 
         <ChartBody chart={chart} dict={dict} locale={locale} />
 
-        {/* Sin lectura todavía, acá: es lo único que hay para hacer en esta
-            página, y más abajo quedaba enterrado bajo las tablas y la matriz de
-            aspectos —que en un teléfono son decenas de filas—. Con lectura ya
-            escrita se muestra al final (ver abajo): ahí el momento de decidir
-            es cuando terminó de leer la breve y está mirando el índice de lo
-            que se pierde. */}
-        {!reading && acciones}
+        {/* Los botones van acá SIEMPRE, tenga lectura o no: es lo único que
+            hay para hacer en esta página.
+
+            Hasta el 08-09-2026 se movían al final cuando ya había una lectura
+            escrita, con la idea de que el momento de decidir era al terminar
+            de leer la breve, mirando el índice de lo que se perdía. La primera
+            persona que compró contó que le costó encontrar el botón para pedir
+            el informe largo desde una carta que ya tenía su lectura, y los
+            eventos lo confirman: treinta y dos segundos entre abrir la carta y
+            apretar, con vueltas previas por /precios y /cuenta. Abajo había que
+            pasar las tablas, la matriz de aspectos y la lectura entera, que en
+            un teléfono son cientos de filas.
+
+            Un segundo bloque al pie duplicaría `acciones_carta_vistas`: la
+            deduplicación de ese evento vive en un `useRef` por instancia
+            (ChartActions), así que dos instancias miden dos veces y rompen el
+            denominador del embudo. Si alguna vez se quiere el botón repetido
+            abajo, primero hay que sacar esa medición del componente. */}
+        {acciones}
 
         <ChartTables chart={chart} dict={dict} locale={locale} />
 
@@ -170,8 +182,6 @@ export default async function ChartPage({
         )}
 
         <ResumenCompleto secciones={secciones} dict={dict} />
-
-        {reading && acciones}
 
         {/* Al final de todo: llevarse la carta es lo que se hace DESPUÉS de
             leerla. En el medio partía la página en dos —tablas, botones,
