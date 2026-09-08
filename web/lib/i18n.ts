@@ -1,6 +1,8 @@
 // Diccionarios de la web. Sin librería: son tres idiomas y un puñado de claves,
 // y next-intl traería un middleware y un provider para resolver un objeto.
 
+import { LECTURAS_DE_REGALO } from "./regalo";
+
 export const LOCALES = ["es", "en", "pt"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "es";
@@ -899,10 +901,10 @@ const es: Dict = {
   },
   auth: {
     navEnter: "Entrar",
-    title: "Entrá a tu cuenta.",
-    lede: "Tus cartas y tus lecturas quedan guardadas en tu cuenta.",
+    title: "Tu lectura te está esperando.",
+    lede: `Entrá y usala: tenés ${LECTURAS_DE_REGALO} lecturas breves de regalo, sin tarjeta.`,
     loading: "Cargando…",
-    blocked: "No pudimos cargar el acceso de Google. Suele pasar con bloqueadores de rastreadores: desactivalo para este sitio y recargá.",
+    blocked: "No pudimos cargar el acceso de Google — suele pasar con los bloqueadores de rastreadores. Entrá con tu mail acá abajo.",
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
     legal: "Al entrar aceptás los términos y la política de privacidad.",
     listoTitle: "Listo para usar",
@@ -1242,10 +1244,10 @@ const en: Dict = {
   },
   auth: {
     navEnter: "Sign in",
-    title: "Sign in to your account.",
-    lede: "Your charts and your readings stay saved in your account.",
+    title: "Your reading is waiting.",
+    lede: `Sign in and use it: you have ${LECTURAS_DE_REGALO} short readings on the house, no card needed.`,
     loading: "Loading…",
-    blocked: "We couldn't load Google sign-in. This usually comes from a tracker blocker: allow this site and reload.",
+    blocked: "We couldn't load Google sign-in — usually a tracker blocker. Use your email below instead.",
     failed: "We couldn't sign you in. Try again.",
     legal: "By signing in you accept the terms and the privacy policy.",
     listoTitle: "Ready to use",
@@ -1585,10 +1587,10 @@ const pt: Dict = {
   },
   auth: {
     navEnter: "Entrar",
-    title: "Entre na sua conta.",
-    lede: "Seus mapas e suas leituras ficam salvos na sua conta.",
+    title: "Sua leitura está esperando.",
+    lede: `Entre e use: você tem ${LECTURAS_DE_REGALO} leituras breves de presente, sem cartão.`,
     loading: "Carregando…",
-    blocked: "Não conseguimos carregar o acesso do Google. Costuma ser um bloqueador de rastreadores: libere este site e recarregue.",
+    blocked: "Não conseguimos carregar o acesso do Google — costuma ser um bloqueador de rastreadores. Entre com seu e-mail abaixo.",
     failed: "Não conseguimos entrar. Tente de novo.",
     legal: "Ao entrar você aceita os termos e a política de privacidade.",
     listoTitle: "Pronto para usar",
