@@ -392,6 +392,27 @@ CODIGO_TTL_MINUTOS = int(os.environ.get("CODIGO_TTL_MINUTOS", "10"))
 CODIGO_INTENTOS_MAX = int(os.environ.get("CODIGO_INTENTOS_MAX", "5"))
 CODIGO_PEDIDOS_HORA = int(os.environ.get("CODIGO_PEDIDOS_HORA", "5"))
 
+# Clave del HMAC de `api.identity.sub_hash` para el tombstone de la identidad
+# "email": ahí el `sub` ES la dirección, y un sha256 pelado lo revierte
+# cualquiera con una lista de mails (a diferencia de apple/google, donde el
+# `sub` ya es un id opaco). Mismo patrón que SECRET_KEY: fallback fijo SOLO
+# con DEBUG=1 (desarrollo y tests; nunca hay direcciones reales que proteger
+# ahí), vacío en producción. A propósito NO es fail-fast al arrancar: la
+# exige recién `sub_hash()` cuando se usa (ver ese módulo), para no tirar
+# abajo TODO el backend —login de Google, informes pagos, el cron de
+# reanudación— por una variable que sólo hace falta para la puerta de mail.
+# Lo que sí se hace acá, mismo patrón que `_mapa_json`, es avisar por stderr
+# (el log del contenedor) si falta en producción, para que el hueco se note
+# antes de que alguien intente entrar por mail y no recién en el primer canje.
+TOMBSTONE_HMAC_KEY = os.environ.get("TOMBSTONE_HMAC_KEY") or ("desarrollo-sin-clave" if DEBUG else "")
+if not TOMBSTONE_HMAC_KEY and not DEBUG:
+    print(
+        "[settings] TOMBSTONE_HMAC_KEY no está seteada: el tombstone de la "
+        "puerta de mail va a fallar ruidosamente en el primer intento de uso.",
+        file=sys.stderr,
+    )
+
+
 # --- IAP / RevenueCat ---
 # Header Authorization que RevenueCat manda en cada webhook (Dashboard → Webhooks).
 REVENUECAT_WEBHOOK_AUTH = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")
