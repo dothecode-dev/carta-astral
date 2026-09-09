@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LOCALES, NOTES_SLUG, isNotesSection } from "@/lib/i18n";
@@ -239,5 +242,43 @@ describe("fetchNote", () => {
 
     const [url] = fetchMock.mock.calls[0];
     expect(url).toContain("slug=a%20b%26c");
+  });
+});
+
+/** Las dos listas de notas —la home y el listado de la sección— muestran la
+ *  fecha en una columna de ancho fijo (`.noteMeta`), y las dos tienen que usar
+ *  el mismo formato: es la misma nota, y hasta el 09-09-2026 se veía de dos
+ *  maneras según desde dónde se llegara. El largo además no entra: "4 de
+ *  septiembre de 2026" necesita ~14,5rem contra los 12,5rem de la columna, y
+ *  se partía en dos líneas.
+ *
+ *  La página de la nota es el caso contrario y por eso se chequea aparte: ahí
+ *  la fecha va en prosa, no en una celda, y el mes completo corresponde. */
+describe("el formato de fecha de cada pantalla", () => {
+  const leer = (ruta: string) => readFileSync(join(process.cwd(), ...ruta.split("/")), "utf8");
+
+  const LISTAS = ["app/[locale]/page.tsx", "app/[locale]/[section]/page.tsx"];
+
+  it("las dos listas piden el mes corto", () => {
+    for (const ruta of LISTAS) {
+      expect(leer(ruta), ruta).toMatch(/formatNoteDate\([^)]*"short"\)/);
+    }
+  });
+
+  it("ninguna lista se quedó con el largo", () => {
+    // Sin esto, agregar el "short" en una y olvidarlo en la otra pasa el test
+    // de arriba: bastaría con que UNA de las dos lo tuviera si se mira suelto.
+    for (const ruta of LISTAS) {
+      const llamadas = leer(ruta).match(/formatNoteDate\([^)]*\)/g) ?? [];
+      expect(llamadas.length, ruta).toBeGreaterThan(0);
+      expect(llamadas.every((l) => l.includes('"short"')), `${ruta}: ${llamadas}`).toBe(true);
+    }
+  });
+
+  it("la página de la nota conserva el mes completo", () => {
+    const llamadas = leer("app/[locale]/[section]/[slug]/page.tsx").match(/formatNoteDate\([^)]*\)/g) ?? [];
+
+    expect(llamadas.length).toBeGreaterThan(0);
+    expect(llamadas.every((l) => !l.includes('"short"'))).toBe(true);
   });
 });

@@ -90,7 +90,15 @@ export default async function NotesPage({
             {notes.map((note) => (
               <Link className="note" href={`/${locale}/${section}/${note.slug}`} key={note.slug}>
                 <span className="noteMeta">
-                  <time dateTime={note.fecha}>{formatNoteDate(locale, note.fecha)}</time>
+                  {/* El corto, igual que la home: es la misma nota y se veía
+                      con dos formatos según desde dónde se llegara. Además el
+                      largo —"4 de septiembre de 2026"— no entra en la columna
+                      fija de `.noteMeta` y se partía en dos líneas. En la
+                      página de la nota sí va el largo: ahí la fecha es prosa,
+                      no una celda. */}
+                  <time dateTime={note.fecha}>
+                    {formatNoteDate(locale, note.fecha, "short")}
+                  </time>
                 </span>
                 <span className="noteText">
                   <h2 className="noteTitle">{note.title}</h2>
