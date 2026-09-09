@@ -151,3 +151,30 @@ def test_una_cuenta_sin_mail_no_intenta_mandar(db, resend):
     notificaciones.notificar(sin_mail, "compra_acreditada", {"producto": "informe_natal"}, "es")
 
     assert resend == []
+
+
+# --- El código de acceso ----------------------------------------------------
+#
+# Todavía no hay `Account` cuando se manda el código —se crea recién al
+# canjear—, así que estas dos funciones son la variante de `textos_codigo` /
+# `enviar_codigo` que reciben la dirección directo en vez de una cuenta.
+
+
+def test_el_codigo_va_tambien_en_el_asunto():
+    """Para que se lea desde la notificación del teléfono sin abrir el mail:
+    11 de 14 visitantes están en un iPhone."""
+    asunto, _ = notificaciones.textos_codigo("es", "123456")
+    assert "123456" in asunto
+
+
+def test_existe_en_los_tres_idiomas():
+    for lang in ("es", "en", "pt"):
+        asunto, html = notificaciones.textos_codigo(lang, "123456")
+        assert asunto and "123456" in html
+
+
+def test_no_se_loguea_ni_el_codigo_ni_la_direccion(caplog):
+    notificaciones.enviar_codigo("juan@gmail.com", "123456", "es")
+    registro = "\n".join(r.getMessage() for r in caplog.records)
+    assert "123456" not in registro
+    assert "juan@gmail.com" not in registro

@@ -84,6 +84,28 @@ _TEXTOS = {
 
 _LANG_DEFAULT = "es"
 
+# El código de acceso todavía no tiene `Account` —se crea recién al
+# canjear—, así que su texto vive aparte de `_TEXTOS`: el placeholder es
+# `{codigo}`, no `{url}`, y no pasa por la validación de `EVENTOS` porque no
+# se manda con `notificar`.
+_TEXTOS_CODIGO = {
+    "es": (
+        "Tu código de acceso es {codigo}",
+        "<p>Usá este código para entrar a tu cuenta: <strong>{codigo}</strong></p>"
+        "<p>Vence en 10 minutos. Si no lo pediste vos, ignorá este mail.</p>",
+    ),
+    "en": (
+        "Your access code is {codigo}",
+        "<p>Use this code to sign in to your account: <strong>{codigo}</strong></p>"
+        "<p>It expires in 10 minutes. If you didn't request it, ignore this email.</p>",
+    ),
+    "pt": (
+        "Seu código de acesso é {codigo}",
+        "<p>Use este código para entrar na sua conta: <strong>{codigo}</strong></p>"
+        "<p>Ele expira em 10 minutos. Se você não pediu, ignore este e-mail.</p>",
+    ),
+}
+
 
 def notificar(account, evento: str, contexto: dict, lang: str) -> None:
     if evento not in EVENTOS:
@@ -92,6 +114,44 @@ def notificar(account, evento: str, contexto: dict, lang: str) -> None:
         _enviar(account, evento, contexto, lang)
     except Exception:
         logger.exception("fallo el aviso %s a la cuenta %s", evento, account.pk)
+
+
+def textos_codigo(lang: str, codigo: str) -> tuple[str, str]:
+    """Asunto y cuerpo del mail del código de acceso, en el idioma pedido (o
+    español si no hay traducción). El código va en el asunto a propósito: se
+    lee desde la notificación del teléfono sin abrir el mail."""
+    if lang not in _TEXTOS_CODIGO:
+        lang = _LANG_DEFAULT
+    asunto, html = _TEXTOS_CODIGO[lang]
+    return asunto.format(codigo=codigo), html.format(codigo=codigo)
+
+
+def enviar_codigo(email: str, codigo: str, lang: str) -> None:
+    """Hermana de `notificar`: cuando se manda el código de acceso todavía no
+    hay `Account` a la que atarlo —se crea recién al canjear—, así que recibe
+    la dirección directo. Mismo criterio que `notificar`: un fallo del
+    proveedor no propaga, sólo queda en el log (nunca el código, nunca la
+    dirección)."""
+    try:
+        _enviar_codigo(email, codigo, lang)
+    except Exception:
+        logger.exception("fallo el aviso %s", "codigo_acceso")
+
+
+def _enviar_codigo(email, codigo, lang):
+    logger.info("aviso al usuario", extra={"evento": "codigo_acceso", "lang": lang})
+    if not settings.RESEND_API_KEY:
+        return
+    if not email:
+        logger.info("aviso sin destinatario", extra={"evento": "codigo_acceso"})
+        return
+
+    asunto, html = textos_codigo(lang, codigo)
+    respuesta = _post_resend(email, asunto, html)
+    logger.info(
+        "aviso enviado",
+        extra={"evento": "codigo_acceso", "resend_id": respuesta.json().get("id")},
+    )
 
 
 def _enviar(account, evento, contexto, lang):
@@ -113,19 +173,26 @@ def _enviar(account, evento, contexto, lang):
     asunto, html = _TEXTOS[evento][lang]
     url = f"{settings.WEB_BASE_URL.rstrip('/')}/{lang}/cuenta"
 
+    respuesta = _post_resend(account.email, asunto, html.format(url=url))
+    logger.info(
+        "aviso enviado",
+        extra={"evento": evento, "account": account.pk, "resend_id": respuesta.json().get("id")},
+    )
+
+
+def _post_resend(direccion: str, asunto: str, html: str):
+    """El POST a Resend, compartido por `_enviar` (con cuenta) y
+    `_enviar_codigo` (con una dirección suelta)."""
     respuesta = httpx.post(
         _API,
         headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
         json={
             "from": settings.MAIL_FROM,
-            "to": [account.email],
+            "to": [direccion],
             "subject": asunto,
-            "html": html.format(url=url),
+            "html": html,
         },
         timeout=_TIMEOUT,
     )
     respuesta.raise_for_status()
-    logger.info(
-        "aviso enviado",
-        extra={"evento": evento, "account": account.pk, "resend_id": respuesta.json().get("id")},
-    )
+    return respuesta
