@@ -118,8 +118,10 @@ export function GoogleSignIn({
       try {
         const sesion: { account_id?: number } = await res.json();
         if (typeof sesion.account_id === "number") identificar(sesion.account_id);
-      } catch {
+      } catch (error) {
         // Ver arriba: sin id no hay a quién atribuir, y se sigue de largo.
+        // Sólo el motivo del error, nunca `sesion` ni el id_token.
+        console.error("No se pudo leer la respuesta de /api/session:", error);
       }
       track("login", { provider: "google" });
       // Sin `next` el destino es la cuenta, que es donde está todo. Con `next`,

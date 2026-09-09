@@ -165,6 +165,7 @@ describe("EntrarPorMail — el paso del código", () => {
     render(<EntrarPorMail locale="es" labels={labels} />);
     await pedirCodigo("juan@gmail.com");
 
+    expect(screen.getByText(/tardar/i)).toBeInTheDocument();
     expect(screen.getByText(/spam/i)).toBeInTheDocument();
   });
 
@@ -213,6 +214,36 @@ describe("EntrarPorMail — el paso del código", () => {
     fireEvent.click(screen.getByRole("button", { name: labels.cambiarMail }));
 
     expect(screen.getByLabelText(labels.mailLabel)).toHaveValue("juan@gmail.com");
+  });
+
+  it("«Usar otro mail» no revive el paso 1 mientras el canje sigue en vuelo", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(reply(202));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EntrarPorMail locale="es" labels={labels} />);
+    await pedirCodigo("juan@gmail.com");
+
+    // El canje que sigue colgado hasta que esta prueba lo resuelva a mano.
+    let resolverCanje: (value: unknown) => void = () => {};
+    const canjeEnVuelo = new Promise((resolve) => {
+      resolverCanje = resolve;
+    });
+    fetchMock.mockReturnValueOnce(canjeEnVuelo);
+
+    fireEvent.change(screen.getByLabelText(labels.codigoLabel), { target: { value: "123456" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: labels.codigoButton }));
+    });
+
+    // Con el canje todavía en vuelo (enviando === true), "Usar otro mail"
+    // tiene que estar deshabilitado igual que el submit y el reenviar.
+    expect(screen.getByRole("button", { name: labels.cambiarMail })).toBeDisabled();
+
+    // Se resuelve para no dejar una promesa colgada entre pruebas.
+    await act(async () => {
+      resolverCanje(reply(200, { account_id: 1 }));
+      await canjeEnVuelo;
+    });
   });
 
   it("un código equivocado (401) deja el paso 2 usable, con mensaje", async () => {

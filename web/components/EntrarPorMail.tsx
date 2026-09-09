@@ -191,8 +191,10 @@ export function EntrarPorMail({
     try {
       sesion = await res.json();
       if (typeof sesion.account_id === "number") identificar(sesion.account_id);
-    } catch {
-      // Ver arriba.
+    } catch (error) {
+      // Ver arriba: sin id no hay a quién atribuir, y se sigue de largo.
+      // Sólo el motivo del error, nunca `sesion`, el mail ni el código.
+      console.error("No se pudo leer la respuesta de /api/session:", error);
     }
 
     track("codigo_canjeado", {});
@@ -279,7 +281,7 @@ export function EntrarPorMail({
         >
           {labels.reenviar}
         </button>
-        <button type="button" className="linkButton" onClick={volverAPedir}>
+        <button type="button" className="linkButton" onClick={volverAPedir} disabled={enviando}>
           {labels.cambiarMail}
         </button>
       </div>
