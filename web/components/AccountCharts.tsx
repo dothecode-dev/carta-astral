@@ -30,14 +30,37 @@ function sunSign(chart: ChartSummary): string {
   return sun ? signOf(sun.abs_pos) : "☉";
 }
 
-function birthLine(chart: ChartSummary, locale: Locale): string {
-  const [y, m, d] = chart.birth.date.split("-").map(Number);
-  const fecha = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
-    // "medium" da "17 may 2007"; armarlo por partes daba "17 de may de 2007".
+/** La fecha de nacimiento, en el orden de cada idioma pero sin sus muletillas.
+ *
+ *  `dateStyle: "medium"` da "31 may 1977" en español y "May 31, 1977" en
+ *  inglés, que es lo que se quiere; en portugués da **"31 de mai. de 1977"**,
+ *  seis caracteres más. Esta línea vive en una columna de ancho fijo —así
+ *  alinean todas las filas— y medido en producción el 09-09-2026 la versión
+ *  portuguesa necesita 248px contra los 136px que la columna tenía: se partía
+ *  en dos, con el separador "·" colgando al final de la primera línea.
+ *
+ *  Reservar 15rem para una fecha era desproporcionado, así que se corrige el
+ *  formato en vez del ancho: se conservan día, mes y año en el orden que
+ *  manda el idioma, y se descartan los literales que traen letras —los "de"
+ *  del portugués— reemplazándolos por el espacio que separaba. La coma del
+ *  inglés y los espacios sobreviven, porque no son letras. Los tres idiomas
+ *  quedan bajo 191px. */
+function fechaCorta(date: string, locale: Locale): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
     dateStyle: "medium",
     // Fecha de nacimiento, no un instante: sin zona horaria no se corre un día.
     timeZone: "UTC",
-  }).format(new Date(Date.UTC(y, m - 1, d)));
+  })
+    .formatToParts(new Date(Date.UTC(y, m - 1, d)))
+    .map((parte) => (parte.type === "literal" && /\p{L}/u.test(parte.value) ? " " : parte.value))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function birthLine(chart: ChartSummary, locale: Locale): string {
+  const fecha = fechaCorta(chart.birth.date, locale);
   return chart.birth.time ? `${fecha} · ${chart.birth.time}` : fecha;
 }
 

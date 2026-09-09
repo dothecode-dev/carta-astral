@@ -183,3 +183,48 @@ describe("dónde se puede usar un informe comprado", () => {
     expect(screen.queryByText(dict.auth.informeDisponible)).toBeNull();
   });
 });
+
+// La fecha vive en una columna de ancho fijo —así alinean todas las filas— y
+// `dateStyle: "medium"` no da lo mismo en los tres idiomas: en portugués mete
+// dos "de" que estiran la línea seis caracteres y la partían en dos, con el
+// "·" colgando al final de la primera. El arreglo es el formato, no el ancho.
+describe("la fecha de nacimiento en los tres idiomas", () => {
+  const soloFecha = (locale: "es" | "en" | "pt") => {
+    const { container } = render(
+      <AccountCharts
+        charts={[carta({ birth: { name: "Ceci", date: "1977-05-31", time: "09:45", place_label: "Buenos Aires, AR" } })]}
+        locale={locale}
+        dict={getDict(locale)}
+      />,
+    );
+    const meta = container.querySelector(".noteMeta");
+    return meta?.textContent ?? "";
+  };
+
+  it("en portugués no arrastra los «de» que estiraban la línea", () => {
+    const linea = soloFecha("pt");
+
+    // El bug: "31 de mai. de 1977 · 09:45".
+    expect(linea).not.toMatch(/\bde\b/);
+    expect(linea).toContain("1977");
+    expect(linea).toContain("09:45");
+  });
+
+  it("no se come los espacios al sacarlos", () => {
+    // Descartar el literal " de " entero dejaba "31mai.1977", todo pegado: el
+    // literal se reemplaza por el espacio que separaba, no se borra.
+    expect(soloFecha("pt")).toMatch(/31\s+\S+\s+1977/);
+  });
+
+  it("respeta el orden de cada idioma, que no es el mismo", () => {
+    // En inglés el mes va primero, y su coma sobrevive porque no es una letra.
+    expect(soloFecha("en")).toMatch(/May 31, 1977/);
+    expect(soloFecha("es")).toMatch(/31 may 1977/);
+  });
+
+  it("sigue mostrando la hora separada por el punto medio", () => {
+    for (const loc of ["es", "en", "pt"] as const) {
+      expect(soloFecha(loc)).toContain("· 09:45");
+    }
+  });
+});

@@ -61,7 +61,7 @@
     --ink: #1b0c1e;
     --ink-soft: #55455f;
     --ink-label: #3f3547;
-    --accent: #635708;
+    --accent: #5f4408;
     --hairline: rgba(27, 12, 30, 0.16);
     --hairline-strong: rgba(27, 12, 30, 0.34);
     --dotted: #9a8718;
@@ -105,7 +105,7 @@
   --ink: #1b0c1e;
   --ink-soft: #55455f;
   --ink-label: #3f3547;
-  --accent: #635708;
+  --accent: #5f4408;
   --hairline: rgba(27, 12, 30, 0.16);
   --hairline-strong: rgba(27, 12, 30, 0.34);
   --dotted: #9a8718;
@@ -636,9 +636,23 @@ a {
   color: var(--ink-soft);
 }
 
+/* El glifo del signo. Hasta el 09-09-2026 esta clase no tenía una sola regla:
+   el `<span>` heredaba `body` —Outfit, que no trae los signos del zodíaco— y
+   macOS resolvía el carácter con su fuente de emoji, así que salía un cuadrito
+   de color en vez de un glifo. Era una cuarta letra ajena en una pantalla que
+   usa tres. En Space Mono el fallback llega antes a una fuente de símbolos
+   monocroma, que es como ya se ven estos mismos glifos en el riel de la home y
+   en la rueda: esto no inventa un estilo, lo alinea con el resto del sitio. */
+.noteSign {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--ink-label);
+}
+
 .chartLangs {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   letter-spacing: 0.14em;
   color: var(--accent);
   margin-top: 0.2rem;
@@ -1487,8 +1501,13 @@ a {
 
 .note {
   display: grid;
-  /* Dos columnas: la fecha en ancho fijo —así todas alinean— y el texto. */
-  grid-template-columns: 8.5rem minmax(0, 1fr);
+  /* Dos columnas: la fecha en ancho fijo —así todas alinean— y el texto.
+     8.5rem eran 136px y la fecha medía 136px justos: se partía en dos líneas
+     con el "·" colgando (medido en producción el 09-09-2026, y peor en
+     portugués). No se arregla con `max-content`: cada `.note` es su propia
+     grilla, así que cada fila se dimensionaría sola y dejarían de alinear
+     entre sí, que es para lo que la columna es fija. */
+  grid-template-columns: 12.5rem minmax(0, 1fr);
   gap: 1.5rem;
   align-items: baseline;
   padding: 1.4rem 0;
@@ -1519,7 +1538,9 @@ a {
 .noteMeta {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
+  /* 0.75rem es el PISO de `tipografia.test.ts`, no el objetivo, y esta línea
+     hay que leerla para saber de quién es la carta cuando hay varias. */
+  font-size: 0.8125rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-label);

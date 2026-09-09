@@ -45,3 +45,35 @@ describe("piso de tamaño del texto", () => {
     expect(tamaños().length).toBeGreaterThan(30);
   });
 });
+
+/** Los caracteres del zodíaco y de los aspectos (U+2600–U+26FF) no están en
+ *  Outfit ni en Fraunces. Cuando un elemento que los muestra queda en esas
+ *  familias, el navegador resuelve el glifo por su cuenta y en macOS/iOS llega
+ *  a la fuente de emoji: sale un cuadrito de color en medio del texto, que es
+ *  una letra ajena al sistema del sitio.
+ *
+ *  Pasó con `.noteSign` —el signo solar de cada carta en `/cuenta`—, que hasta
+ *  el 09-09-2026 no tenía NINGUNA regla y heredaba `body`. En Space Mono el
+ *  fallback llega antes a una fuente de símbolos monocroma, que es como ya se
+ *  ven los mismos glifos en el riel de la home y en la matriz de aspectos. */
+describe("los glifos astrológicos no caen en la fuente de emoji", () => {
+  const cuerpoDe = (clase: string) => {
+    const m = css.match(new RegExp(`\\.${clase}\\s*\\{([^}]*)\\}`));
+    return m?.[1] ?? "";
+  };
+
+  it(".noteSign declara la familia mono, no hereda body", () => {
+    expect(cuerpoDe("noteSign")).toMatch(/font-family:\s*var\(--font-mono\)/);
+  });
+
+  it("no queda ninguna clase de glifo sin familia NI contenedor mono", () => {
+    // `.matrixMark` y `.ephemGlyph` no declaran familia y está bien: heredan de
+    // un contenedor que sí la tiene (`.matrixCell`, `.ephemRow`), verificado en
+    // producción con `getComputedStyle`. Lo que no puede pasar es que ni la
+    // clase ni su contenedor la declaren, que es lo que le pasaba a
+    // `.noteSign`: ahí no hay de dónde heredar más que del `body`.
+    expect(cuerpoDe("matrixCell") + cuerpoDe("ephemRow")).toMatch(
+      /font-family:\s*var\(--font-mono\)/,
+    );
+  });
+});
