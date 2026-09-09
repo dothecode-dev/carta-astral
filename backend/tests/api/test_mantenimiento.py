@@ -48,10 +48,10 @@ def test_el_estado_lo_puede_consultar_cualquiera(client):
     resp = client.get("/api/estado/")
 
     assert resp.status_code == 200
-    assert resp.json() == {"mantenimiento": False, "generando": 0, "config_faltante": []}
+    assert resp.json() == {"mantenimiento": False, "generando": 0, "config_faltante": False}
 
 
-# --- El faltante de configuración se ve sin leer logs -----------------------
+# --- El faltante de configuración se ve sin leer logs, pero sin enumerar qué -
 #
 # El Ruling 7 cambió el fail-fast de arranque (RF8) por un log en stderr, para
 # no tumbar todo el backend por una variable de una sola superficie (el login
@@ -59,20 +59,27 @@ def test_el_estado_lo_puede_consultar_cualquiera(client):
 # `make deploy` no mira no es un control compensatorio real: acá se suma la
 # misma señal al endpoint que YA consulta `make deploy` en cada despliegue y
 # que la web ya sondea, sin agregar plumbing nuevo ni bloquear nada.
+#
+# `GET /api/estado/` es público. Un booleano no dice nada de nadie, pero la
+# lista de nombres sí le dice a cualquiera qué parte del sistema está mal
+# configurada — y este repo es cuidadoso justo con eso (los dos admin están en
+# rutas no adivinables). El detalle con los nombres sigue existiendo, sólo que
+# no en la respuesta pública: en el log de arranque (`config_faltante()` de
+# `api/identity.py`, que sigue devolviendo la lista para eso).
 
 
 def test_el_estado_avisa_si_falta_tombstone_hmac_key(client, settings):
     settings.TOMBSTONE_HMAC_KEY = ""
     resp = client.get("/api/estado/")
 
-    assert resp.json()["config_faltante"] == ["TOMBSTONE_HMAC_KEY"]
+    assert resp.json()["config_faltante"] is True
 
 
 def test_el_estado_no_avisa_nada_con_la_configuracion_completa(client, settings):
     settings.TOMBSTONE_HMAC_KEY = "clave-de-produccion"
     resp = client.get("/api/estado/")
 
-    assert resp.json()["config_faltante"] == []
+    assert resp.json()["config_faltante"] is False
 
 
 def test_el_estado_cuenta_lo_que_un_deploy_cortaria(client, make_chart, make_account):

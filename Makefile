@@ -246,9 +246,9 @@ deploy: ## Despliega a producción sin cortar ningún informe a medias
 	$(MAKE) --no-print-directory mantenimiento-on >/dev/null; \
 	echo "→ chequeo de configuración"; \
 	cfg=$$(curl -s --max-time 10 https://api.astraguia.com/api/estado/ \
-		| sed -n 's/.*"config_faltante":[[:space:]]*\[\(.*\)\].*/\1/p'); \
-	if [ -n "$$cfg" ]; then \
-		echo "   ⚠ falta configuración en producción: $$cfg"; \
+		| sed -n 's/.*"config_faltante":[[:space:]]*\(true\|false\).*/\1/p'); \
+	if [ "$$cfg" = "true" ]; then \
+		echo "   ⚠ falta configuración crítica, mirala en el log del contenedor"; \
 		echo "   el proceso arranca igual (Ruling 7) pero esa superficie está caída."; \
 	fi; \
 	echo "→ esperando a que no quede ningún informe escribiéndose"; \

@@ -67,18 +67,24 @@ def generando() -> int:
 
 class EstadoView(APIView):
     """`GET /api/estado/` — si el sitio acepta trabajo, cuánto queda en vuelo,
-    y qué configuración crítica falta.
+    y si falta configuración crítica.
 
     Público y sin sesión a propósito: lo consulta `make deploy` desde afuera
     para saber cuándo puede pushear, y la web en cada request para decidir si
-    muestra el cartel. `config_faltante` no dice nada de nadie —sólo nombres
-    de variables, nunca valores— así que no hay qué proteger.
+    muestra el cartel. Por eso `config_faltante` viaja acá como un booleano y
+    no como la lista de nombres que `api.identity.config_faltante()` devuelve:
+    un booleano no dice nada de nadie, pero la lista sí le dice a cualquiera
+    —sin autenticarse— qué parte del sistema está mal configurada, y este
+    repo es cuidadoso justo con eso (los dos admin están en rutas no
+    adivinables, por variables que sólo existen en el servidor, para no
+    anunciarse). El detalle con los nombres no se pierde: sigue en el log de
+    arranque, que es de dónde salía antes de que este endpoint existiera.
 
-    `config_faltante` es el control compensatorio del Ruling 7: sin
-    `TOMBSTONE_HMAC_KEY` el backend arranca igual (no se volvió a poner el
-    fail-fast de RF8, a propósito), pero el único aviso que quedaba era un
-    log en stderr que nadie mira y que `make deploy` no consulta. Acá se ve
-    en el mismo endpoint que ya se sondea todo el tiempo.
+    Es el control compensatorio del Ruling 7: sin `TOMBSTONE_HMAC_KEY` el
+    backend arranca igual (no se volvió a poner el fail-fast de RF8, a
+    propósito), pero el único aviso que quedaba era un log en stderr que nadie
+    mira y que `make deploy` no consulta. Acá se ve en el mismo endpoint que
+    ya se sondea todo el tiempo.
     """
 
     authentication_classes: list = []
@@ -88,5 +94,5 @@ class EstadoView(APIView):
         return Response({
             "mantenimiento": activo(),
             "generando": generando(),
-            "config_faltante": config_faltante(),
+            "config_faltante": bool(config_faltante()),
         })
