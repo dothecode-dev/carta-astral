@@ -169,6 +169,16 @@ def test_web_base_url_apunta_al_dev_server_de_next_en_desarrollo(monkeypatch):
     assert s.WEB_BASE_URL == "http://localhost:3000"
 
 
+def test_num_proxies_vacio_no_revienta_el_arranque(monkeypatch):
+    """Hallazgo 3 de la re-revisión de `puertas-de-acceso`: la trampa del
+    `ARG` ausente que el CLAUDE.md ya documenta (deja la variable en `""`,
+    no ausente) — `int("")` revienta el `import` de settings, así que un
+    despliegue con `NUM_PROXIES` seteada pero vacía no arranca."""
+    s = _cargar_settings(monkeypatch, **PROD_MINIMO, NUM_PROXIES="")
+
+    assert s.REST_FRAMEWORK["NUM_PROXIES"] == 1
+
+
 def test_media_root_en_produccion_es_el_volumen_persistente(monkeypatch):
     s = _cargar_settings(monkeypatch, **PROD_MINIMO, MEDIA_ROOT=None)
 

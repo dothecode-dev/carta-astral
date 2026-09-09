@@ -351,7 +351,11 @@ REST_FRAMEWORK = {
     # compose.staging.yaml). Si el día de mañana se agrega otro proxy —un CDN
     # adelante, por ejemplo— hay que subir este número tanto como proxies se
     # sumen, igual que advierte el docstring de `ip_del_cliente`.
-    "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", "1")),
+    # `or "1"` y no sólo el default de `.get()`: la variable puede existir y
+    # venir VACÍA (Hallazgo 3, re-revisión de `puertas-de-acceso`) — la
+    # misma trampa del `ARG` ausente que documenta el CLAUDE.md, y con
+    # `int("")` el import de settings revienta antes de levantar nada.
+    "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", "1") or "1"),
     "DEFAULT_THROTTLE_RATES": {
         "interpretation": os.environ.get("INTERPRETATION_RATE", "20/day"),
         "install": os.environ.get("INSTALL_RATE", "30/day"),
