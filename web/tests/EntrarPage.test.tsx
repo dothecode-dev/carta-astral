@@ -33,9 +33,15 @@ vi.mock("@/components/GoogleSignIn", () => ({
     <div data-testid="puerta-google">{next ?? ""}</div>
   ),
 }));
+// El mock rinde las etiquetas además del destino: son 14 claves que la página
+// mapea a mano desde el diccionario, todas de tipo `string`, así que un cruce
+// —`codigoLabel: dict.auth.mailLabel`— compila igual y no lo ve nadie. Sin
+// esto, la única defensa contra ese typo era leerlo.
 vi.mock("@/components/EntrarPorMail", () => ({
-  EntrarPorMail: ({ next }: { next?: string | null }) => (
-    <div data-testid="puerta-mail">{next ?? ""}</div>
+  EntrarPorMail: ({ next, labels }: { next?: string | null; labels: Record<string, string> }) => (
+    <div data-testid="puerta-mail" data-labels={JSON.stringify(labels)}>
+      {next ?? ""}
+    </div>
   ),
 }));
 
@@ -87,6 +93,27 @@ describe("/entrar monta las dos puertas, Google primero", () => {
     expect(screen.getByTestId("puerta-google")).toHaveTextContent("");
     expect(screen.getByTestId("puerta-mail")).toHaveTextContent("");
   });
+  it("cada etiqueta de la puerta de mail sale de su propia clave del diccionario", async () => {
+    // Un cruce entre claves no rompe nada visible en el test de orden ni lo
+    // atrapa TypeScript: las 14 son `string`. Acá se compara contra el
+    // diccionario, que es la única fuente.
+    const { getDict } = await import("@/lib/i18n");
+    const dict = getDict("es");
+    await pagina();
+    const labels = JSON.parse(
+      screen.getByTestId("puerta-mail").getAttribute("data-labels") ?? "{}",
+    ) as Record<string, string>;
+
+    expect(labels.mailLabel).toBe(dict.auth.mailLabel);
+    expect(labels.codigoLabel).toBe(dict.auth.codigoLabel);
+    expect(labels.mailButton).toBe(dict.auth.mailButton);
+    expect(labels.codigoButton).toBe(dict.auth.codigoButton);
+    expect(labels.codigoHelp).toBe(dict.auth.codigoHelp);
+    expect(labels.reenviar).toBe(dict.auth.reenviar);
+    // Y que estén las catorce, no trece: una clave que falte deja al componente
+    // renderizando `undefined` en su lugar.
+    expect(Object.keys(labels)).toHaveLength(14);
+  });
 });
 
 describe("/entrar con una sesión viva", () => {
@@ -108,4 +135,5 @@ describe("/entrar con una sesión viva", () => {
       SignInPage({ ...params, searchParams: Promise.resolve({}) }),
     ).rejects.toThrow("redirect: /es/cuenta");
   });
+
 });

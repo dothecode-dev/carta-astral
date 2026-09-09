@@ -353,6 +353,15 @@ export type Dict = {
     noDisponible: string;
     /** El `fetch` que ni siquiera volvió — sin red, sin DNS, un bloqueador. */
     errorRed: string;
+    /** La palabra entre las dos puertas. Una línea sola no dice «o esta otra
+     *  forma»: dice «sección siguiente», y quien mira tres segundos ve un paso
+     *  más, no una alternativa. */
+    oBien: string;
+    /** Títulos de cada puerta, sólo para lectores de pantalla. Sin ellos, quien
+     *  navega por encabezados se topa con el botón de Google y después con un
+     *  campo de mail, sin nada que diga que son dos caminos al mismo lugar. */
+    puertaGoogle: string;
+    puertaMail: string;
     /**
      * Título de lo que la cuenta puede usar ahora mismo.
      *
@@ -953,6 +962,9 @@ const es: Dict = {
     demasiadosIntentos: "Demasiados intentos. Esperá un momento y probá de nuevo.",
     noDisponible: "El acceso por mail no está disponible ahora. Probá con Google o más tarde.",
     errorRed: "No pudimos conectarnos. Revisá tu conexión y probá de nuevo.",
+    oBien: "o",
+    puertaGoogle: "Entrar con Google",
+    puertaMail: "Entrar con tu mail",
     listoTitle: "Listo para usar",
     usarEnNueva: "Usar en una carta nueva",
     usarEnMisCartas: "Usar en una de mis cartas",
@@ -1310,6 +1322,9 @@ const en: Dict = {
     demasiadosIntentos: "Too many attempts. Wait a moment and try again.",
     noDisponible: "Email sign-in isn't available right now. Try Google or come back later.",
     errorRed: "We couldn't connect. Check your connection and try again.",
+    oBien: "or",
+    puertaGoogle: "Sign in with Google",
+    puertaMail: "Sign in with your email",
     listoTitle: "Ready to use",
     usarEnNueva: "Use on a new chart",
     usarEnMisCartas: "Use on one of my charts",
@@ -1667,6 +1682,9 @@ const pt: Dict = {
     demasiadosIntentos: "Muitas tentativas. Espere um momento e tente de novo.",
     noDisponible: "O acesso por e-mail não está disponível agora. Tente com Google ou mais tarde.",
     errorRed: "Não conseguimos conectar. Verifique sua conexão e tente de novo.",
+    oBien: "ou",
+    puertaGoogle: "Entrar com o Google",
+    puertaMail: "Entrar com seu e-mail",
     listoTitle: "Pronto para usar",
     usarEnNueva: "Usar em um mapa novo",
     usarEnMisCartas: "Usar em um dos meus mapas",

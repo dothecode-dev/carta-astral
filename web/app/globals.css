@@ -336,6 +336,19 @@ a {
   padding: clamp(1.75rem, 5vw, 2.75rem);
 }
 
+/* Presente en el árbol de accesibilidad, invisible en la pantalla. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .authTitle {
   font-size: var(--step-3);
 }
@@ -345,10 +358,40 @@ a {
   color: var(--ink-soft);
 }
 
-/* Entre las dos puertas de /entrar (Google y mail). Apple se inserta ACÁ, con
-   su propio divisor, en la Tarea 14 — no se reescribe este bloque para eso. */
-.authDivider {
+/* Las puertas comparten una sola medida: el ancho de la tarjeta.
+   Con tres anchos distintos —el botón de Google en 280, el campo de mail en
+   199 y el botón de enviar en 184, dentro de una columna de 348— Google se
+   leía como el camino y el mail como un formulario colgado abajo. Es lo
+   contrario de lo que esta pantalla vino a arreglar: dos salidas visibles,
+   del mismo peso. */
+.authCard > .signin,
+.authCard > .authDivider,
+.authCard > .form {
   align-self: stretch;
+}
+
+.authCard .form .btn {
+  width: 100%;
+}
+
+/* Entre las dos puertas de /entrar (Google y mail). Apple se inserta ACÁ, con
+   su propio divisor, en la Tarea 14 — no se reescribe este bloque para eso.
+
+   Lleva la palabra «o» y no es decoración: una línea sola entre dos bloques
+   se lee como «sección siguiente», no como «o esta otra forma». */
+.authDivider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--ink-label);
+}
+
+.authDivider::before,
+.authDivider::after {
+  content: "";
+  flex: 1;
   border-top: 1px solid var(--hairline);
 }
 
@@ -372,8 +415,11 @@ a {
    el iframe se dibuja 20px más ancho y ese sobrante es justamente lo que el
    recorte saca. */
 .signinButton {
-  width: 280px;
-  max-width: 100%;
+  /* El ancho lo fija el propio componente en el estilo inline, con la medida
+     real de la columna: es el mismo número que se le pide a `renderButton`, y
+     tienen que coincidir o el recorte de acá arriba deja de calzar. */
+  width: 100%;
+  max-width: 400px;
   min-height: 44px;
   border-radius: 22px;
   overflow: hidden;

@@ -86,7 +86,13 @@ export default async function SignInPage({
 
           {/* Google primero: es la única puerta con resultado conocido hoy
               (Ruling 5). Apple entra ACÁ ENTRE MEDIO en la Tarea 14, con su
-              propio divisor — este bloque no se reescribe para eso, se inserta. */}
+              propio divisor — este bloque no se reescribe para eso, se inserta.
+
+              Cada puerta lleva su título oculto: en la pantalla se distinguen
+              solas —un botón de Google y un campo de mail—, pero quien navega
+              por encabezados encontraba un botón y después un campo sin nada
+              que dijera que son dos caminos al mismo lugar. */}
+          <h2 className="srOnly">{dict.auth.puertaGoogle}</h2>
           <GoogleSignIn
             locale={locale}
             next={volverA}
@@ -97,8 +103,9 @@ export default async function SignInPage({
             }}
           />
 
-          <div className="authDivider" aria-hidden="true" />
+          <div className="authDivider">{dict.auth.oBien}</div>
 
+          <h2 className="srOnly">{dict.auth.puertaMail}</h2>
           <EntrarPorMail
             locale={locale}
             next={volverA}

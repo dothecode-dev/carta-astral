@@ -135,20 +135,38 @@ export function GoogleSignIn({
       const google = window.google;
       if (!google || !holder.current || !clientId) return;
       google.accounts.id.initialize({ client_id: clientId, callback: onCredential });
+      // El ancho es el de la columna, no un número fijo: en /entrar este botón
+      // está al lado del formulario de mail y los dos tienen que pesar lo
+      // mismo, o la pantalla empuja hacia una de las dos puertas. Google lo
+      // acepta entre 200 y 400 (`renderButton` ignora lo que se salga), y el
+      // mismo número va al `width` del contenedor porque el recorte de
+      // `.signinButton` depende de que coincidan.
+      const ancho = Math.min(400, Math.max(200, Math.round(holder.current.clientWidth)));
+      holder.current.style.width = `${ancho}px`;
       google.accounts.id.renderButton(holder.current, {
         theme: "outline",
         size: "large",
         shape: "pill",
         text: "continue_with",
         locale,
-        width: 280,
+        width: ancho,
       });
       setStatus("ready");
     }
 
+    // Al rotar el teléfono la columna cambia de ancho y el iframe ya dibujado se
+    // queda con la medida vieja: o sobra borde o el recorte se come el botón.
+    // Con 79% de móvil, rotar la pantalla no es un caso de laboratorio.
+    const alRedimensionar = new ResizeObserver(() => {
+      // Sólo si el botón ya está dibujado: si todavía no cargó el script, de
+      // eso se encarga `render()` cuando llegue.
+      if (window.google && holder.current?.firstChild) render();
+    });
+    if (holder.current) alRedimensionar.observe(holder.current.parentElement ?? holder.current);
+
     if (window.google) {
       render();
-      return;
+      return () => alRedimensionar.disconnect();
     }
 
     const script = document.createElement("script");
@@ -162,6 +180,8 @@ export function GoogleSignIn({
       track("login_no_disponible", { motivo: "blocked" });
     };
     document.head.appendChild(script);
+
+    return () => alRedimensionar.disconnect();
   }, [clientId, raw, locale, router, next]);
 
   return (
