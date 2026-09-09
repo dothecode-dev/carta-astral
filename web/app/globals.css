@@ -345,6 +345,13 @@ a {
   color: var(--ink-soft);
 }
 
+/* Entre las dos puertas de /entrar (Google y mail). Apple se inserta ACÁ, con
+   su propio divisor, en la Tarea 14 — no se reescribe este bloque para eso. */
+.authDivider {
+  align-self: stretch;
+  border-top: 1px solid var(--hairline);
+}
+
 .signin {
   display: flex;
   flex-direction: column;

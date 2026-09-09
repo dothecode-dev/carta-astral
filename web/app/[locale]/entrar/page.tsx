@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { EntrarPorMail } from "@/components/EntrarPorMail";
 import { EntrarVisto } from "@/components/EntrarVisto";
 import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { Nav } from "@/components/Nav";
@@ -83,6 +84,9 @@ export default async function SignInPage({
           <h1 className="display authTitle">{dict.auth.title}</h1>
           <p className="authLede">{dict.auth.lede}</p>
 
+          {/* Google primero: es la única puerta con resultado conocido hoy
+              (Ruling 5). Apple entra ACÁ ENTRE MEDIO en la Tarea 14, con su
+              propio divisor — este bloque no se reescribe para eso, se inserta. */}
           <GoogleSignIn
             locale={locale}
             next={volverA}
@@ -90,6 +94,29 @@ export default async function SignInPage({
               loading: dict.auth.loading,
               blocked: dict.auth.blocked,
               failed: dict.auth.failed,
+            }}
+          />
+
+          <div className="authDivider" aria-hidden="true" />
+
+          <EntrarPorMail
+            locale={locale}
+            next={volverA}
+            labels={{
+              mailLabel: dict.auth.mailLabel,
+              mailPlaceholder: dict.auth.mailPlaceholder,
+              mailButton: dict.auth.mailButton,
+              codigoLabel: dict.auth.codigoLabel,
+              codigoPlaceholder: dict.auth.codigoPlaceholder,
+              codigoHelp: dict.auth.codigoHelp,
+              codigoButton: dict.auth.codigoButton,
+              enviando: dict.auth.enviando,
+              reenviar: dict.auth.reenviar,
+              cambiarMail: dict.auth.cambiarMail,
+              codigoInvalido: dict.auth.codigoInvalido,
+              demasiadosIntentos: dict.auth.demasiadosIntentos,
+              noDisponible: dict.auth.noDisponible,
+              errorRed: dict.auth.errorRed,
             }}
           />
 
