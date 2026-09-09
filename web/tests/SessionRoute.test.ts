@@ -172,6 +172,25 @@ describe("POST /api/session con provider email (canje del código)", () => {
 
       expect(cuerpo).not.toHaveProperty("destino");
     });
+
+    it("nunca expone un path que no está en la lista cerrada de destinoSeguro", async () => {
+      // El destino nace en /entrar, donde ya pasó por destinoSeguro contra la
+      // lista cerrada (precios, nueva, cuenta, carta/<uuid>). Si lo que vuelve
+      // en el canje no está ahí, el backend cambió o alguien lo manipuló — en
+      // los dos casos se descarta, no se acepta por "parecer" un path interno.
+      const { POST } = await import("@/app/api/session/route");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          json({ token: "t", derechos: [], account_id: 1, destino: "/es/otra-cosa" }),
+        ),
+      );
+
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const cuerpo = await res.json();
+
+      expect(cuerpo).not.toHaveProperty("destino");
+    });
   });
 });
 

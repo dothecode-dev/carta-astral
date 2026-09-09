@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { destinoInternoSeguro } from "@/lib/destino";
 import { ApiError, callApi, clearSessionToken, getSessionToken, setSessionToken } from "@/lib/session";
 import type { Derecho } from "@/lib/derechos";
 
@@ -30,25 +31,6 @@ type LoginResponse = {
 
 function isProvider(value: unknown): value is Provider {
   return typeof value === "string" && value in PROVIDERS;
-}
-
-// Mismo criterio que `_destino_seguro` en el backend (`api/codigos_acceso.py`):
-// sólo un path interno vale como destino post-login. El backend ya lo valida
-// al guardarlo, pero acá vuelve en la respuesta del canje y este servidor se
-// lo pasa tal cual al navegador, que lo va a usar para navegar (tarea 11). Si
-// ese endpoint cambiara mañana, o si algo más lo llamara sin pasar por esa
-// validación, un valor absoluto terminaría siendo un open redirect
-// post-login — por eso se revalida acá antes de exponerlo, en vez de confiar
-// en que el backend ya lo hizo.
-const CARACTERES_PELIGROSOS = /[\\]|\p{Cc}|\p{Cf}|\p{Zl}|\p{Zp}/u;
-
-function destinoInternoSeguro(destino: unknown): string {
-  if (typeof destino !== "string" || !destino) return "";
-  if (destino.length > 200) return "";
-  if (!destino.startsWith("/")) return "";
-  if (destino.startsWith("//") || destino.startsWith("/\\")) return "";
-  if (CARACTERES_PELIGROSOS.test(destino)) return "";
-  return destino;
 }
 
 type Body = {

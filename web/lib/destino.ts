@@ -1,4 +1,4 @@
-import type { Locale } from "./i18n";
+import { isLocale, type Locale } from "./i18n";
 
 /**
  * A dónde volver después de entrar.
@@ -34,4 +34,32 @@ export function destinoSeguro(next: unknown, locale: Locale): string | null {
   if (carta && UUID.test(carta[1])) return next;
 
   return null;
+}
+
+/**
+ * Revalida un destino que ya pasó una vez por acá.
+ *
+ * Lo usa el canje del código de acceso por mail (`/api/session`, RF16): el
+ * destino nace en `/entrar`, donde `destinoSeguro` ya lo validó contra `next`,
+ * y vuelve en la respuesta del canje porque en iOS la persona sale a Mail y
+ * vuelve por otra pestaña, donde ese `next` original ya no existe. En el
+ * camino feliz siempre está en la lista cerrada de `RUTAS` — si lo que vuelve
+ * NO está, es porque el backend cambió o alguien lo manipuló, y en los dos
+ * casos toca descartarlo: aceptar cualquier path con forma de interno sería
+ * aceptar más de lo que la propia puerta de entrada acepta, un agujero y no
+ * una tolerancia.
+ *
+ * El locale no lo tiene quien llama —no hay locale en el pedido de canje—,
+ * así que se lo extrae del propio destino: `destinoSeguro` ya exige que
+ * empiece con `/<locale>/`, así que el primer segmento tiene que ser uno de
+ * los locales soportados o el destino no es válido de entrada.
+ *
+ * Devuelve string vacía en vez de `null`: quien llama a esto la usa para
+ * decidir si agrega la clave `destino` a un JSON, no para bifurcar un flujo.
+ */
+export function destinoInternoSeguro(destino: unknown): string {
+  if (typeof destino !== "string" || !destino) return "";
+  const locale = destino.split("/")[1];
+  if (!isLocale(locale)) return "";
+  return destinoSeguro(destino, locale) ?? "";
 }
