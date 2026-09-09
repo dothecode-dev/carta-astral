@@ -21,6 +21,18 @@ def init_sentry(dsn: str, entorno: str, release: str | None) -> None:
     `send_default_pii` queda apagado a propósito. Una carta natal lleva nombre,
     fecha, hora y lugar de nacimiento de una persona; mandarle eso a un tercero
     porque venía en el request es justo lo que no puede pasar.
+
+    **`send_default_pii=False` no alcanza para eso, y creer que sí dejó el
+    agujero abierto hasta el 09-09-2026.** Esa opción gobierna cookies y datos
+    del usuario; el cuerpo del pedido lo gobierna `max_request_body_size`, que
+    por defecto viene en `"medium"` — o sea, se manda. Y la integración de
+    Django cuelga el procesador del request entero, así que basta un
+    `logger.error` en cualquier vista para que el cuerpo salga adjunto: no hace
+    falta una excepción. Medido: un pedido a `/api/webhooks/resend/` con un
+    correo y un código en el cuerpo producía un evento que los llevaba a los
+    dos. Por dónde dolía de verdad: `POST /api/auth/email` recibe
+    `{email, codigo}`, y ese código de seis dígitos es una credencial de un solo
+    uso que abre la cuenta.
     """
     if not dsn:
         return
@@ -29,6 +41,9 @@ def init_sentry(dsn: str, entorno: str, release: str | None) -> None:
         environment=entorno,
         release=release,
         send_default_pii=False,
+        # El cuerpo del pedido no viaja nunca. Ver el docstring: es una opción
+        # aparte de `send_default_pii`, y sin ella el cuerpo se manda igual.
+        max_request_body_size="never",
         # Sin performance tracing: lo que hace falta es enterarse de las
         # excepciones. Prender el muestreo cuesta cuota y no responde ninguna
         # pregunta que hoy tengamos.

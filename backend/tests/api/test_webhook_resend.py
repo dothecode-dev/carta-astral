@@ -59,7 +59,7 @@ def test_un_rebote_con_firma_valida_devuelve_2xx_y_queda_logueado(client, caplog
     logueados = [rec for rec in caplog.records if getattr(rec, "resend_id", None) == EMAIL_ID]
     assert logueados
     assert logueados[0].levelno == logging.ERROR
-    assert getattr(logueados[0], "evento", None) == "email.bounced"
+    assert getattr(logueados[0], "tipo_evento", None) == "email.bounced"
 
 
 def test_una_queja_con_firma_valida_devuelve_2xx_y_queda_logueada(client, caplog):
@@ -71,7 +71,7 @@ def test_una_queja_con_firma_valida_devuelve_2xx_y_queda_logueada(client, caplog
     assert 200 <= r.status_code < 300
     logueados = [rec for rec in caplog.records if getattr(rec, "resend_id", None) == EMAIL_ID]
     assert logueados
-    assert getattr(logueados[0], "evento", None) == "email.complained"
+    assert getattr(logueados[0], "tipo_evento", None) == "email.complained"
 
 
 def test_sin_firma_se_rechaza(client):

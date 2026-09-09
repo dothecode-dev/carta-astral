@@ -93,7 +93,10 @@ def _registrar(tipo: str, evento: dict) -> None:
     justamente dejar de estar en silencio.
     """
     resend_id = (evento.get("data") or {}).get("email_id")
+    # `tipo_evento` y no `evento`: en este archivo `evento` es el payload
+    # entero, y leer `"evento": "email.bounced"` en un log agregado invita a
+    # pensar que ahí va el diccionario completo — que es justo lo que no va.
     logger.error(
         "%s de resend", tipo,
-        extra={"evento": tipo, "resend_id": resend_id},
+        extra={"tipo_evento": tipo, "resend_id": resend_id},
     )
