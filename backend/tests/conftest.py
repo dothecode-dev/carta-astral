@@ -1,5 +1,47 @@
+import httpx
 import pytest
 from rest_framework.test import APIClient
+
+
+class RespuestaFalsa:
+    """Doble de la respuesta de `httpx.post` a Resend: éxito con un id o
+    error con `status_code >= 400`. Compartido entre `test_notificaciones.py`
+    y `test_codigo_endpoints.py` — estaba duplicado en los dos."""
+
+    def __init__(self, status_code=200, payload=None):
+        self.status_code = status_code
+        self._payload = payload or {"id": "re_1"}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                f"{self.status_code}", request=None, response=None,  # type: ignore[arg-type]
+            )
+
+    def json(self):
+        return self._payload
+
+
+@pytest.fixture
+def resend(monkeypatch, settings):
+    """Resend configurado, con el POST capturado en vez de salir a la red.
+
+    Necesario en cualquier test que ejercite el camino feliz de un envío: la
+    fixture `_sin_resend_por_defecto` de acá abajo fuerza `RESEND_API_KEY =
+    ""` para toda la suite (Ruling 14), así que sin este fixture el envío
+    falla solo."""
+    from api import notificaciones
+
+    settings.RESEND_API_KEY = "re_test_key"
+    settings.MAIL_FROM = "ASTRA <hola@send.astraguia.com>"
+    enviados = []
+
+    def post(url, **kwargs):
+        enviados.append({"url": url, **kwargs})
+        return RespuestaFalsa()
+
+    monkeypatch.setattr(notificaciones.httpx, "post", post)
+    return enviados
 
 
 @pytest.fixture(autouse=True)

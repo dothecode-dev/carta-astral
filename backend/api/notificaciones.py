@@ -161,9 +161,17 @@ def enviar_codigo(email: str, codigo: str, lang: str) -> None:
         logger.exception("fallo el envio %s", "codigo_acceso")
         raise EnvioFallido("fallo el envio a Resend") from exc
 
+    # El mail YA SALIÓ (2xx): lo que sigue es sólo cosmético para el log, y
+    # un id que no se puede leer (body vacío o no-JSON) no puede convertir un
+    # envío exitoso en un `EnvioFallido` — eso le gastaría el cupo de la hora
+    # a alguien que ya tiene el código en la bandeja.
+    try:
+        resend_id = respuesta.json().get("id")
+    except Exception:
+        resend_id = None
     logger.info(
         "aviso enviado",
-        extra={"evento": "codigo_acceso", "resend_id": respuesta.json().get("id")},
+        extra={"evento": "codigo_acceso", "resend_id": resend_id},
     )
 
 

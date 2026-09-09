@@ -160,3 +160,19 @@ def test_un_destino_demasiado_largo_se_descarta():
 def test_un_destino_con_caracteres_de_control_se_descarta():
     fila, _, _ = codigos_acceso.pedir("juan@gmail.com", destino="/es/carta\n/abc")
     assert fila.destino == ""
+
+
+@pytest.mark.parametrize("destino", [
+    "/es/carta/abc\x85",  # NEL, rango C1 (\x80-\x9f)
+    "/es/carta/abc\x9f",  # límite superior del rango C1
+    "/es/carta /abc",  # LINE SEPARATOR
+    "/es/carta /abc",  # PARAGRAPH SEPARATOR
+])
+def test_un_destino_con_caracteres_de_control_unicode_tambien_se_descarta(destino):
+    """El filtro original sólo cubría ASCII (\\x00-\\x1f y \\x7f): no hay forma
+    conocida de explotar esto porque `destino` siempre tiene que empezar con
+    "/" simple, lo que ya descarta esquemas y URLs absolutas, pero es defensa
+    en profundidad barata sobre un valor que viene del cliente y termina en
+    una navegación."""
+    fila, _, _ = codigos_acceso.pedir("juan@gmail.com", destino=destino)
+    assert fila.destino == ""

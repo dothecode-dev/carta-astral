@@ -7,8 +7,8 @@ dirección podría pedir códigos en loop y matar el que estás tipeando.
 """
 import hmac
 import logging
-import re
 import secrets
+import unicodedata
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -37,7 +37,18 @@ def normalizar(email: str) -> str:
     return email.strip().lower()
 
 
-_CARACTERES_DE_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+# Categorías Unicode que no tienen nada que hacer en un path: Cc (control,
+# \x00-\x1f, \x7f-\x9f...), Cf (formato invisible: RTL override y afines,
+# clásicos para disfrazar un path) y Zl/Zp (separadores de línea/párrafo,
+# U+2028/U+2029 — no son \s en todos lados pero sí caracteres de control a
+# efectos de esto). Categoría en vez de un rango ASCII a mano: el rango
+# original (`[\x00-\x1f\x7f]`) dejaba pasar todo el bloque C1
+# (\x80-\x9f) y estos separadores.
+_CATEGORIAS_PELIGROSAS = {"Cc", "Cf", "Zl", "Zp"}
+
+
+def _tiene_caracteres_peligrosos(destino: str) -> bool:
+    return any(unicodedata.category(c) in _CATEGORIAS_PELIGROSAS for c in destino)
 
 
 def _destino_seguro(destino: str) -> str:
@@ -49,10 +60,10 @@ def _destino_seguro(destino: str) -> str:
     login por mail en un open redirect post-autenticación.
 
     Se acepta sólo un path interno —empieza con "/", no con "//" ni con
-    "/\\", sin backslashes ni caracteres de control, hasta 200 caracteres—.
-    Cualquier otra cosa se guarda vacía, sin rechazar el pedido: el login
-    tiene que seguir funcionando, sólo se pierde el atajo de volver adonde
-    estaba.
+    "/\\", sin backslashes ni caracteres de control (ASCII o Unicode), hasta
+    200 caracteres—. Cualquier otra cosa se guarda vacía, sin rechazar el
+    pedido: el login tiene que seguir funcionando, sólo se pierde el atajo de
+    volver adonde estaba.
     """
     if not destino:
         return ""
@@ -64,7 +75,7 @@ def _destino_seguro(destino: str) -> str:
         return ""
     if "\\" in destino:
         return ""
-    if _CARACTERES_DE_CONTROL.search(destino):
+    if _tiene_caracteres_peligrosos(destino):
         return ""
     return destino
 

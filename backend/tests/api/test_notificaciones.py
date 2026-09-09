@@ -16,41 +16,15 @@ import pytest
 
 from api import notificaciones
 from api.models import Account
+from tests.conftest import RespuestaFalsa
+
+# El fixture `resend` vive en `tests/conftest.py` — compartido con
+# `test_codigo_endpoints.py`, que antes lo duplicaba.
 
 
 @pytest.fixture
 def cuenta(db):
     return Account.objects.create(email="alguien@example.com")
-
-
-class RespuestaFalsa:
-    def __init__(self, status_code=200, payload=None):
-        self.status_code = status_code
-        self._payload = payload or {"id": "re_1"}
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise httpx.HTTPStatusError(
-                f"{self.status_code}", request=None, response=None,  # type: ignore[arg-type]
-            )
-
-    def json(self):
-        return self._payload
-
-
-@pytest.fixture
-def resend(monkeypatch, settings):
-    """Resend configurado, con el POST capturado en vez de salir a la red."""
-    settings.RESEND_API_KEY = "re_test_key"
-    settings.MAIL_FROM = "ASTRA <hola@send.astraguia.com>"
-    enviados = []
-
-    def post(url, **kwargs):
-        enviados.append({"url": url, **kwargs})
-        return RespuestaFalsa()
-
-    monkeypatch.setattr(notificaciones.httpx, "post", post)
-    return enviados
 
 
 def test_evento_desconocido_es_un_error_de_programacion(cuenta):
@@ -262,6 +236,34 @@ def test_enviar_codigo_camino_feliz_no_levanta_nada(resend):
     cuerpo = resend[0]["json"]
     assert cuerpo["to"] == ["juan@gmail.com"]
     assert "123456" in cuerpo["html"]
+
+
+def test_enviar_codigo_2xx_con_body_no_json_no_levanta_nada(monkeypatch, settings):
+    """Hallazgo de revisión sobre T7: el `.json().get("id")` del log de éxito
+    quedaba FUERA del `try/except` que envuelve el POST. Si Resend contesta
+    2xx con un body vacío o no-JSON, ese `.json()` explota con algo que no es
+    `EnvioFallido`, nadie lo atrapa, y el endpoint devuelve un 500 pelado —
+    pese a que el mail YA SALIÓ (fue 2xx). Acá lo único que puede fallar es
+    leer el id para el log; eso no puede convertir un envío exitoso en un
+    error para quien está esperando el código."""
+    settings.RESEND_API_KEY = "re_test_key"
+    settings.MAIL_FROM = "ASTRA <hola@send.astraguia.com>"
+
+    class RespuestaSinJsonLegible:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            raise ValueError("body vacío o no-JSON")
+
+    monkeypatch.setattr(
+        notificaciones.httpx, "post", lambda url, **kw: RespuestaSinJsonLegible(),
+    )
+
+    # No debe levantar EnvioFallido ni ninguna otra excepción: el mail salió.
+    notificaciones.enviar_codigo("juan@gmail.com", "123456", "es")
 
 
 def test_notificar_de_los_otros_eventos_sigue_tragandose_la_falla(cuenta, monkeypatch, settings, caplog):

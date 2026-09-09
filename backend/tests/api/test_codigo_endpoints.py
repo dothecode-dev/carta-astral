@@ -6,51 +6,17 @@ que las otras dos puertas (Apple/Google), sin autenticación previa y con el
 mismo trato ante un fallo de configuración: 503, nunca un 500 pelado.
 """
 
-import httpx
 import pytest
 
 from api import codigos_acceso, notificaciones
 from api.models import Account, CodigoAcceso
+from tests.conftest import RespuestaFalsa
 
 pytestmark = pytest.mark.django_db
 
-
-class _RespuestaFalsa:
-    """Mismo doble que usa `test_notificaciones.py`: no hay fixture
-    `mailoutbox_stub` en este repo — se stubea el POST a Resend a mano."""
-
-    def __init__(self, status_code=200, payload=None):
-        self.status_code = status_code
-        self._payload = payload or {"id": "re_1"}
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise httpx.HTTPStatusError(
-                f"{self.status_code}", request=None, response=None,  # type: ignore[arg-type]
-            )
-
-    def json(self):
-        return self._payload
-
-
-@pytest.fixture
-def resend(monkeypatch, settings):
-    """Resend configurado, con el POST capturado en vez de salir a la red.
-
-    Necesario porque `tests/conftest.py` fuerza `RESEND_API_KEY = ""` para
-    toda la suite (Ruling 14): sin esto, `enviar_codigo` levanta
-    `EnvioFallido` y el camino feliz nunca se ejercita.
-    """
-    settings.RESEND_API_KEY = "re_test_key"
-    settings.MAIL_FROM = "ASTRA <hola@send.astraguia.com>"
-    enviados = []
-
-    def post(url, **kwargs):
-        enviados.append({"url": url, **kwargs})
-        return _RespuestaFalsa()
-
-    monkeypatch.setattr(notificaciones.httpx, "post", post)
-    return enviados
+# No hay fixture `mailoutbox_stub` en este repo (el brief lo mencionaba, pero
+# no existe): el fixture `resend` que stubea el POST a Resend vive en
+# `tests/conftest.py`, compartido con `test_notificaciones.py`.
 
 
 # --- El pedido no delata si la cuenta existe (RF1) --------------------------
@@ -204,7 +170,7 @@ def test_el_cupo_devuelto_no_impide_pedir_de_nuevo_con_resend_arriba(client, set
 
     def post(url, **kwargs):
         enviados.append({"url": url, **kwargs})
-        return _RespuestaFalsa()
+        return RespuestaFalsa()
 
     monkeypatch.setattr(notificaciones.httpx, "post", post)
 
