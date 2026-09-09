@@ -5,48 +5,99 @@ import type { Derecho } from "@/lib/derechos";
 
 // Punto único de entrada y salida de la sesión.
 //
-// El navegador manda el id_token que le dio Apple o Google; este servidor lo
-// canjea contra el backend y guarda el token resultante en una cookie httpOnly.
-// El token de sesión nunca vuelve al navegador en el cuerpo de la respuesta.
+// El navegador manda lo que haga falta para probar identidad —el id_token que
+// le dio Apple o Google, o el email+código de la puerta de mail—; este
+// servidor lo canjea contra el backend y guarda el token resultante en una
+// cookie httpOnly. El token de sesión nunca vuelve al navegador en el cuerpo
+// de la respuesta.
 
 export const dynamic = "force-dynamic";
 
-const PROVIDERS = { google: "/api/auth/google", apple: "/api/auth/apple" } as const;
+const PROVIDERS = {
+  google: "/api/auth/google",
+  apple: "/api/auth/apple",
+  email: "/api/auth/email",
+} as const;
 type Provider = keyof typeof PROVIDERS;
 
 type LoginResponse = {
   token: string;
   derechos: Derecho[];
   account_id: number;
+  /** Sólo el canje por mail lo manda (RF16): a dónde volver después de entrar. */
+  destino?: string;
 };
 
 function isProvider(value: unknown): value is Provider {
   return typeof value === "string" && value in PROVIDERS;
 }
 
+// Mismo criterio que `_destino_seguro` en el backend (`api/codigos_acceso.py`):
+// sólo un path interno vale como destino post-login. El backend ya lo valida
+// al guardarlo, pero acá vuelve en la respuesta del canje y este servidor se
+// lo pasa tal cual al navegador, que lo va a usar para navegar (tarea 11). Si
+// ese endpoint cambiara mañana, o si algo más lo llamara sin pasar por esa
+// validación, un valor absoluto terminaría siendo un open redirect
+// post-login — por eso se revalida acá antes de exponerlo, en vez de confiar
+// en que el backend ya lo hizo.
+const CARACTERES_PELIGROSOS = /[\\]|\p{Cc}|\p{Cf}|\p{Zl}|\p{Zp}/u;
+
+function destinoInternoSeguro(destino: unknown): string {
+  if (typeof destino !== "string" || !destino) return "";
+  if (destino.length > 200) return "";
+  if (!destino.startsWith("/")) return "";
+  if (destino.startsWith("//") || destino.startsWith("/\\")) return "";
+  if (CARACTERES_PELIGROSOS.test(destino)) return "";
+  return destino;
+}
+
+type Body = {
+  provider?: unknown;
+  id_token?: unknown;
+  nonce?: unknown;
+  email?: unknown;
+  codigo?: unknown;
+};
+
 export async function POST(request: Request) {
-  let body: { provider?: unknown; id_token?: unknown; nonce?: unknown };
+  let body: Body;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "cuerpo inválido" }, { status: 400 });
   }
 
-  if (!isProvider(body.provider) || typeof body.id_token !== "string" || !body.id_token) {
+  if (!isProvider(body.provider)) {
     return NextResponse.json({ error: "faltan datos del proveedor" }, { status: 400 });
+  }
+
+  let apiBody: Record<string, unknown>;
+  if (body.provider === "email") {
+    // El camino de mail no tiene id_token: manda email + el código de 6
+    // dígitos que llegó por mail.
+    if (typeof body.email !== "string" || !body.email || typeof body.codigo !== "string" || !body.codigo) {
+      return NextResponse.json({ error: "faltan datos del proveedor" }, { status: 400 });
+    }
+    apiBody = { email: body.email, codigo: body.codigo };
+  } else {
+    if (typeof body.id_token !== "string" || !body.id_token) {
+      return NextResponse.json({ error: "faltan datos del proveedor" }, { status: 400 });
+    }
+    apiBody = {
+      id_token: body.id_token,
+      ...(typeof body.nonce === "string" ? { nonce: body.nonce } : {}),
+    };
   }
 
   try {
     const data = await callApi<LoginResponse>(PROVIDERS[body.provider], {
       auth: false,
       method: "POST",
-      body: JSON.stringify({
-        id_token: body.id_token,
-        ...(typeof body.nonce === "string" ? { nonce: body.nonce } : {}),
-      }),
+      body: JSON.stringify(apiBody),
     });
 
     await setSessionToken(data.token);
+    const destino = destinoInternoSeguro(data.destino);
 
     // Sin el token: la pantalla necesita los derechos, y la analítica el id
     // interno de la cuenta —nunca el email— para poder unir el embudo de una
@@ -54,6 +105,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       derechos: data.derechos,
       account_id: data.account_id,
+      ...(destino ? { destino } : {}),
     });
   } catch (error) {
     if (error instanceof ApiError) {
