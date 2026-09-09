@@ -1,5 +1,4 @@
 import pytest
-from django.db import IntegrityError
 from django.utils import timezone
 
 from api.models import Account, CodigoAcceso, ProviderIdentity
@@ -15,19 +14,22 @@ def test_el_mail_es_un_proveedor_de_identidad_valido():
     identidad.full_clean()  # falla si "email" no está en PROVIDERS
 
 
-def test_una_direccion_no_puede_tener_dos_codigos_vigentes():
-    """Lo sostiene una UniqueConstraint parcial sobre (email) donde usado_en es
-    NULL — no "vigente": Postgres no acepta now() en la condición de un índice,
-    así que un código YA EXPIRADO y sin usar también bloquea la fila única (ver
-    el comentario de la constraint en el modelo). En SQLite la semántica es
-    otra: este test vale en Postgres, que es contra lo que corre el CI."""
+def test_una_direccion_puede_tener_varios_codigos_vigentes():
+    """Hallazgo I1 de la revisión final: la UniqueConstraint parcial que
+    bloqueaba un segundo código vigente por dirección se sacó a propósito —
+    era lo que hacía que pedir un código nuevo invalidara el que la persona
+    estaba tipeando. Ahora conviven varias filas vigentes para la misma
+    dirección sin pisarse; no hace falta Postgres para esto, no queda ninguna
+    constraint que lo impida en ningún motor."""
     ahora = timezone.now()
     CodigoAcceso.objects.create(
         email="juan@gmail.com", codigo_hash="a" * 64,
         expira_en=ahora + timezone.timedelta(minutes=10),
     )
-    with pytest.raises(IntegrityError):
-        CodigoAcceso.objects.create(
-            email="juan@gmail.com", codigo_hash="b" * 64,
-            expira_en=ahora + timezone.timedelta(minutes=10),
-        )
+    CodigoAcceso.objects.create(
+        email="juan@gmail.com", codigo_hash="b" * 64,
+        expira_en=ahora + timezone.timedelta(minutes=10),
+    )
+    assert CodigoAcceso.objects.filter(
+        email="juan@gmail.com", usado_en__isnull=True,
+    ).count() == 2

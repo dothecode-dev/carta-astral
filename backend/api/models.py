@@ -258,24 +258,20 @@ class CodigoAcceso(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["email", "creado_en"])]
-        constraints = [
-            # Un solo código vigente por dirección: es lo que permite que un
-            # pedido nuevo REENVÍE el mismo en vez de regenerarlo (RF6).
-            #
-            # OJO acá: el rango de la constraint es "usado_en IS NULL", no
-            # "vigente". Postgres no acepta now() en la condición de un índice
-            # porque no es inmutable, así que la constraint no puede excluir
-            # los códigos YA EXPIRADOS y sin usar — esos también bloquean. La
-            # fila de un código vencido sigue ahí hasta que alguien la
-            # descarte: eso es trabajo de `pedir()` (Task 5), que antes de
-            # crear un código nuevo tiene que marcar como usado (o borrar) el
-            # que quedó vencido sin usar. Este modelo no lo resuelve.
-            models.UniqueConstraint(
-                fields=["email"],
-                condition=models.Q(usado_en__isnull=True),
-                name="un_codigo_vigente_o_expirado_sin_usar_por_direccion",
-            ),
-        ]
+        # Hallazgo I1 de la revisión final: hasta acá había una
+        # UniqueConstraint parcial sobre (email) con usado_en IS NULL — un
+        # solo código vigente por dirección. Eso es lo que hacía que pedir un
+        # código nuevo mientras había uno vigente tuviera que REENVIAR la
+        # misma fila (re-hasheándola) en vez de crear una nueva: si no, el
+        # segundo `create()` chocaba con la constraint. Y ese reenvío
+        # invalidaba el código que la persona estaba tipeando, exactamente lo
+        # que RF6 pedía evitar.
+        #
+        # La constraint se saca a propósito: ahora pueden convivir varios
+        # códigos vigentes por dirección, cada `pedir()` crea una fila nueva y
+        # ninguna se toca. El techo de intentos (RF9) pasa a sostenerse en
+        # `canjear()` sumando `intentos` de todas las filas vigentes de la
+        # dirección, no en esta constraint.
 
 
 class Session(models.Model):

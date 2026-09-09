@@ -18,26 +18,84 @@ def test_el_codigo_no_se_guarda_en_claro():
     assert not CodigoAcceso.objects.filter(codigo_hash=claro).exists()
 
 
-def test_pedir_de_nuevo_reenvia_la_misma_fila():
-    """Regenerarlo abría una denegación de acceso: quien supiera tu dirección
-    podía pedir códigos en loop y matar el que estabas tipeando.
+def test_pedir_de_nuevo_no_invalida_el_primero():
+    """Hallazgo I1 de la revisión final: regenerar la fila existente invalidaba
+    el código que la persona estaba tipeando. Ahora pedir de nuevo genera un
+    código NUEVO en una fila NUEVA y el primero sigue vigente — los dos sirven
+    hasta que vencen (RF6 corregido)."""
+    fila_1, claro_1, reenvio_1 = codigos_acceso.pedir("juan@gmail.com")
+    fila_2, claro_2, reenvio_2 = codigos_acceso.pedir("juan@gmail.com")
 
-    El código en claro no se guarda nunca, así que un reenvío no puede releer
-    el primero: lo que se afirma es que la FILA es la misma (Ruling 4), no que
-    el string coincida — eso es imposible por diseño."""
-    fila_1, _, reenvio_1 = codigos_acceso.pedir("juan@gmail.com")
-    fila_2, _, reenvio_2 = codigos_acceso.pedir("juan@gmail.com")
-    assert fila_1.pk == fila_2.pk
-    assert fila_1.intentos == fila_2.intentos
+    assert fila_1.pk != fila_2.pk
+    assert claro_1 != claro_2
     assert (reenvio_1, reenvio_2) == (False, True)
-    assert CodigoAcceso.objects.filter(email="juan@gmail.com").count() == 1
+    assert CodigoAcceso.objects.filter(email="juan@gmail.com").count() == 2
+
+    # El primero sigue sirviendo.
+    canjeada = codigos_acceso.canjear("juan@gmail.com", claro_1)
+    assert canjeada.pk == fila_1.pk
+
+
+def test_el_segundo_codigo_tambien_sirve():
+    _, claro_1, _ = codigos_acceso.pedir("juan@gmail.com")
+    _, claro_2, _ = codigos_acceso.pedir("juan@gmail.com")
+    assert claro_1 != claro_2
+
+    canjeada = codigos_acceso.canjear("juan@gmail.com", claro_2)
+    assert canjeada.usado_en is not None
+
+
+def test_canjear_con_uno_quema_los_dos():
+    _, claro_1, _ = codigos_acceso.pedir("juan@gmail.com")
+    _, claro_2, _ = codigos_acceso.pedir("juan@gmail.com")
+
+    codigos_acceso.canjear("juan@gmail.com", claro_1)
+
+    # El otro código vigente, que nunca se tipeó, ya no entra: si no, un mail
+    # viejo sigue sirviendo después de que la persona ya entró.
+    with pytest.raises(codigos_acceso.CodigoInvalido):
+        codigos_acceso.canjear("juan@gmail.com", claro_2)
+
+
+def test_cinco_intentos_repartidos_entre_dos_codigos_vigentes_queman_los_dos():
+    """El techo de intentos es por DIRECCIÓN, no por fila: con dos códigos
+    vigentes un atacante no puede tener 5 intentos por cada uno."""
+    _, claro_1, _ = codigos_acceso.pedir("juan@gmail.com")
+    _, claro_2, _ = codigos_acceso.pedir("juan@gmail.com")
+
+    # 3 fallos contra el primero, 2 contra el segundo: 5 en total.
+    for _ in range(3):
+        with pytest.raises(codigos_acceso.CodigoInvalido):
+            codigos_acceso.canjear("juan@gmail.com", "000000")
+    for _ in range(2):
+        with pytest.raises(codigos_acceso.CodigoInvalido):
+            codigos_acceso.canjear("juan@gmail.com", "111111")
+
+    # Los dos códigos correctos, ninguno tipeado todavía, fallan igual.
+    with pytest.raises(codigos_acceso.CodigoInvalido):
+        codigos_acceso.canjear("juan@gmail.com", claro_1)
+    with pytest.raises(codigos_acceso.CodigoInvalido):
+        codigos_acceso.canjear("juan@gmail.com", claro_2)
+
+
+def test_un_codigo_vencido_no_sirve_aunque_haya_otro_vigente():
+    fila_1, claro_1, _ = codigos_acceso.pedir("juan@gmail.com")
+    _, claro_2, _ = codigos_acceso.pedir("juan@gmail.com")
+    fila_1.expira_en = timezone.now() - timezone.timedelta(seconds=1)
+    fila_1.save(update_fields=["expira_en"])
+
+    with pytest.raises(codigos_acceso.CodigoInvalido):
+        codigos_acceso.canjear("juan@gmail.com", claro_1)
+
+    canjeada = codigos_acceso.canjear("juan@gmail.com", claro_2)
+    assert canjeada.usado_en is not None
 
 
 def test_un_codigo_vencido_sin_usar_no_bloquea_el_pedido_nuevo():
-    """Ruling 3: la constraint parcial sólo mira `usado_en IS NULL`, así que un
-    código vencido y sin usar sigue ocupando la fila única. `pedir()` tiene que
-    descartarlo antes de crear uno nuevo, o el segundo pedido revienta con
-    IntegrityError."""
+    """Ya no hay una fila única por dirección que un código vencido pudiera
+    bloquear (Hallazgo I1: la constraint se sacó), pero el caso sigue siendo
+    válido: pedir de nuevo después de que el anterior venció tiene que seguir
+    devolviendo un código nuevo y utilizable."""
     fila, _, _ = codigos_acceso.pedir("juan@gmail.com")
     fila.expira_en = timezone.now() - timezone.timedelta(seconds=1)
     fila.save(update_fields=["expira_en"])
@@ -88,15 +146,14 @@ def test_el_techo_por_direccion_se_cuenta_en_la_tabla(django_cache_cleared):
 
 @override_settings(CODIGO_PEDIDOS_HORA=5)
 def test_el_reenvio_consume_el_mismo_techo_que_un_pedido_nuevo(django_cache_cleared):
-    """Ruling 8: un reenvío no crea fila, pero manda un mail igual. Contar
-    FILAS creadas (como hacía la versión anterior) dejaba pedir códigos en
-    loop contra una dirección ajena sin tocar el techo — la tabla de riesgos
-    de la spec lo lista como Importante. Acá el código sigue vigente en las
-    cinco llamadas (nunca vence ni se usa), así que las 4 últimas son
-    reenvíos sobre la misma fila."""
+    """Ruling 8: el techo cuenta ENVÍOS, no filas. Ahora cada pedido —sea el
+    primero o un reenvío— crea su propia fila con `envios=1`, así que el
+    techo de 5 pedidos/hora sigue sosteniéndose sobre la suma, sólo que ahora
+    la suma coincide con la cantidad de filas: las cinco llamadas quedan
+    vigentes (nunca vencen ni se usan) y la sexta se frena."""
     for _ in range(5):
         codigos_acceso.pedir("juan@gmail.com")
-    assert CodigoAcceso.objects.filter(email="juan@gmail.com").count() == 1
+    assert CodigoAcceso.objects.filter(email="juan@gmail.com").count() == 5
     with pytest.raises(codigos_acceso.DemasiadosPedidos):
         codigos_acceso.pedir("juan@gmail.com")
 
