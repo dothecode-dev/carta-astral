@@ -1,19 +1,38 @@
 /* Sistema visual de ASTRA en la web.
    NOCHE son los mismos tokens que la app (carta-astral-app/src/theme/tokens.ts);
-   DÍA es su inversión, con el dorado bajado para tener contraste sobre claro. */
+   DÍA es su inversión, con el dorado bajado para tener contraste sobre claro.
+
+   Los dos ambientes se calibran con el MISMO piso de contraste, y lo chequea
+   `tests/contraste.test.ts`, no la prosa: hasta el 09-09-2026 el secundario de
+   día tenía 5,23:1 contra el fondo y el de noche 7,41:1, o sea que el mismo
+   token gris pesaba un 40% menos de un lado que del otro. En día, con el texto
+   oscuro sobre fondo claro, eso se lee como texto lavado — y es lo que pasaba
+   con todo lo que no fuera un título en negrita.
+
+   Hay DOS tonos secundarios porque hay dos trabajos tipográficos distintos, y
+   tratarlos con un solo token era el error de fondo:
+     --ink-soft   párrafos y bajadas en Outfit, de 15px para arriba.
+     --ink-label  etiquetas y datos en Space Mono, de 10 a 13px, casi siempre
+                  en mayúscula y con tracking. Ese trazo fino, separado y chico
+                  aparenta menos peso del que mide, así que necesita más
+                  contraste que un párrafo para leerse igual de bien. */
 
 :root {
   --ground: #150715;
   --surface: #231226;
   --ink: #f9f7f7;
-  --ink-soft: #a79baf;
+  --ink-soft: #ada2b4;
+  --ink-label: #c6bcca;
   --accent: #d5c046;
   --hairline: rgba(178, 173, 138, 0.28);
   --hairline-strong: rgba(178, 173, 138, 0.55);
   --dotted: #dccb54;
-  /* El rojo de la app (carta-astral-app/src/theme/tokens.ts). Hasta ahora la
-     web no tenía ninguna acción destructiva y no hacía falta. */
-  --danger: #cd1561;
+  /* Aclarado respecto del rojo de la app (carta-astral-app/src/theme/tokens.ts,
+     #cd1561): ese valor da 3,27:1 sobre `--surface` y no llega al piso de un
+     texto, y acá el rojo es texto —errores de formulario, el estado de un
+     cupón, el aviso de borrar la cuenta—, no un fondo. En la app el mismo tono
+     se usa sobre otro fondo y con otros cuerpos. */
+  --danger: #ed4f90;
   --danger-soft: rgba(205, 21, 97, 0.14);
 
   /* Todo el contenido de la columna comparte borde: un solo ancho, el de la
@@ -34,8 +53,9 @@
     --ground: #efeaf1;
     --surface: #f7f4f8;
     --ink: #1b0c1e;
-    --ink-soft: #6a5c72;
-    --accent: #7a6b12;
+    --ink-soft: #55455f;
+    --ink-label: #3f3547;
+    --accent: #635708;
     --hairline: rgba(27, 12, 30, 0.16);
     --hairline-strong: rgba(27, 12, 30, 0.34);
     --dotted: #9a8718;
@@ -44,16 +64,32 @@
   }
 }
 
+/* El suavizado va sólo en el ambiente oscuro. `antialiased` apaga el
+   renderizado subpíxel de macOS/iOS y afina el trazo: al texto claro sobre
+   fondo oscuro, que tiende a engordar, le sienta bien; al texto oscuro sobre
+   fondo claro le come el poco cuerpo que tiene. Aplicado a los dos por igual,
+   como estaba, el día pagaba la mejora de la noche. */
+:root:not([data-theme="light"]) body {
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) body {
+    -webkit-font-smoothing: auto;
+  }
+}
+
 :root[data-theme="dark"] {
   --ground: #150715;
   --surface: #231226;
   --ink: #f9f7f7;
-  --ink-soft: #a79baf;
+  --ink-soft: #ada2b4;
+  --ink-label: #c6bcca;
   --accent: #d5c046;
   --hairline: rgba(178, 173, 138, 0.28);
   --hairline-strong: rgba(178, 173, 138, 0.55);
   --dotted: #dccb54;
-  --danger: #cd1561;
+  --danger: #ed4f90;
   --danger-soft: rgba(205, 21, 97, 0.14);
 }
 
@@ -61,8 +97,9 @@
   --ground: #efeaf1;
   --surface: #f7f4f8;
   --ink: #1b0c1e;
-  --ink-soft: #6a5c72;
-  --accent: #7a6b12;
+  --ink-soft: #55455f;
+  --ink-label: #3f3547;
+  --accent: #635708;
   --hairline: rgba(27, 12, 30, 0.16);
   --hairline-strong: rgba(27, 12, 30, 0.34);
   --dotted: #9a8718;
@@ -85,7 +122,6 @@ body {
   font-family: var(--font-body), system-ui, sans-serif;
   font-size: var(--step-0);
   line-height: 1.65;
-  -webkit-font-smoothing: antialiased;
   /* El pie al fondo aunque la página sea corta: con poco contenido —notas sin
      publicar, un error de catálogo— quedaba flotando a media pantalla, con su
      hilo cruzando la nada. `dvh` y no `vh` por la barra del navegador móvil,
@@ -103,6 +139,16 @@ body > .frame {
   flex: 1;
 }
 
+/* Un enlace suelto dentro de un texto toma el color de ese texto y se
+   distingue por el subrayado, que ya trae. Sin esto lo pintaba el navegador
+   con su azul —y con su violeta de «ya visitado», 3,2:1 sobre el fondo de
+   día—: el «Ver un ejemplo» de /precios era el ejemplo a la vista. Los
+   enlaces que tienen clase propia (`.foot a`, `.navLinks a`, `.noteBody a`…)
+   ganan por especificidad y no se tocan. */
+a {
+  color: inherit;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
@@ -112,10 +158,13 @@ body > .frame {
 /* --- Piezas tipográficas ------------------------------------------------ */
 .eyebrow {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
-  letter-spacing: 0.22em;
+  /* 11px con 0.22em de tracking era una fila de letras sueltas y finas: en día
+     había que acercarse a la pantalla para leer «TU CUENTA». Space Mono viene
+     en un solo peso, así que la densidad se gana con cuerpo y tracking. */
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
   margin: 0;
 }
 
@@ -241,7 +290,7 @@ body > .frame {
   font-size: 0.625rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
   background: none;
   border: none;
   border-radius: 999px;
@@ -623,7 +672,7 @@ body > .frame {
   font-size: 0.6875rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
   text-decoration: none;
   align-self: flex-start;
 }
@@ -648,7 +697,7 @@ body > .frame {
   font-size: 0.6875rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
   cursor: pointer;
   list-style: none;
   display: flex;
@@ -757,7 +806,6 @@ body > .frame {
   font-size: 1.0625rem;
   max-width: 62ch;
   line-height: 1.6;
-  opacity: 0.8;
 }
 
 .chartActions {
@@ -963,7 +1011,7 @@ body > .frame {
   font-size: 0.6875rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
 }
 
 .input {
@@ -975,6 +1023,15 @@ body > .frame {
   border-radius: 6px;
   padding: 0.7rem 0.85rem;
   width: 100%;
+}
+
+/* El texto de ayuda del campo. Sin esto lo pinta el navegador con su gris por
+   defecto —#757575 en Chrome, 4,22:1 sobre el fondo del campo—, que además
+   cambia de un navegador a otro: era el único texto del sitio cuyo color no
+   elegía ASTRA. */
+.input::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
 }
 
 .input:focus-visible {
@@ -1066,7 +1123,7 @@ body > .frame {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 0.625rem;
   letter-spacing: 0.1em;
-  color: var(--ink-soft);
+  color: var(--ink-label);
 }
 
 .placeChosen {
@@ -1158,7 +1215,7 @@ body > .frame {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.75rem;
-  color: var(--ink-soft);
+  color: var(--ink-label);
 }
 
 .ephemGlyph {
@@ -1222,7 +1279,10 @@ body > .frame {
   font-size: var(--step-1);
   color: var(--ink-soft);
   margin: 0;
-  font-weight: 300;
+  /* Era 300. Outfit en su peso más fino, en gris y sobre fondo claro, es la
+     combinación exacta que se lee peor: el trazo se afina justo donde el fondo
+     ya no ayuda. 400 es el mismo texto, legible en los dos ambientes. */
+  font-weight: 400;
 }
 
 .heroLede strong {
@@ -1403,7 +1463,7 @@ body > .frame {
   font-size: 0.6875rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
 }
 
 .noteText {
@@ -1661,7 +1721,7 @@ body > .frame {
   font-size: 0.6875rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
   margin: 0 0 2.5rem;
   padding-bottom: 1.25rem;
   border-bottom: 1px solid var(--hairline);
@@ -1743,7 +1803,7 @@ body > .frame {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.8125rem;
-  color: var(--ink-soft);
+  color: var(--ink-label);
 }
 
 .birth b {
@@ -1835,7 +1895,7 @@ body > .frame {
   font-size: 0.625rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
 }
 
 .legend span {
@@ -2016,7 +2076,7 @@ body > .frame {
   font-size: 0.6875rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
 }
 
 /* El mismo marco que `.navInner`, a propósito: el pie y la cabecera son el
@@ -2285,7 +2345,7 @@ body > .frame {
   font-size: 0.6875rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink-label);
 }
 
 /* Las fichas de las dos primeras filas abrirían fuera de la pantalla. */
@@ -2304,13 +2364,16 @@ body > .frame {
   color: var(--accent);
 }
 
-.matrixHard {
+/* Los tres tonos de la matriz separan clases de aspecto, no importancia, así
+   que los tres tienen que leerse. Este era `--ink-soft` al 60%: 2,42:1 contra
+   el fondo de día, la mitad del piso de un texto. La distinción ahora la hace
+   el color, no una opacidad que lo borra. */
+.matrixOther {
   color: var(--ink-soft);
 }
 
-.matrixOther {
-  color: var(--ink-soft);
-  opacity: 0.6;
+.matrixHard {
+  color: var(--ink-label);
 }
 
 @media (min-width: 900px) {
