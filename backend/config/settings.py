@@ -222,6 +222,11 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 # cargarlo desviaría todo el correo ENTRANTE. Sin ese MX se envía igual; sólo
 # se pierde la recepción por Resend, que no usamos.
 MAIL_FROM = os.environ.get("MAIL_FROM", "ASTRA <info@astraguia.com>")
+# El endpoint de rebotes (`api/webhooks_resend.py`): sin esto se rechaza toda
+# entrega (fail-closed). Se da de alta A MANO en el dashboard de Resend
+# (Webhooks → agregar endpoint, eventos `email.bounced` y `email.complained`)
+# y llega con el formato `whsec_<base64>`; nada en el repo lo verifica.
+RESEND_WEBHOOK_SECRET = os.environ.get("RESEND_WEBHOOK_SECRET", "")
 
 # --- Medición de negocio (PostHog) ---
 # Sólo lo que el navegador no puede medir: que la plata haya entrado. Sin la

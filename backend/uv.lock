@@ -234,7 +234,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
     { name = "sentry-sdk", specifier = ">=2.20" },
-    { name = "standardwebhooks", specifier = ">=1.0" },
+    { name = "standardwebhooks", specifier = ">=1.1.0" },
     { name = "stripe", specifier = ">=15.6.1" },
     { name = "timezonefinder", specifier = ">=8.2.4" },
     { name = "unidecode", specifier = ">=1.3" },

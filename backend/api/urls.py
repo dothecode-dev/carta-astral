@@ -3,6 +3,7 @@ from api.mantenimiento import EstadoView
 from api.catalogo_api import CatalogoView
 from api.cupones_api import CuponPublicoView
 from api.compras_api import ComprasView
+from api.webhooks_resend import ResendWebhookView
 from api.webhooks_stripe import StripeWebhookView
 from django.urls import path
 
@@ -35,6 +36,7 @@ urlpatterns = [
     path("catalogo/", CatalogoView.as_view()),
     path("cupones/<str:codigo>/", CuponPublicoView.as_view()),
     path("webhooks/stripe/", StripeWebhookView.as_view()),
+    path("webhooks/resend/", ResendWebhookView.as_view()),
     path("charts/", ChartCollectionView.as_view()),
     path("charts/preview/", ChartPreviewView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),

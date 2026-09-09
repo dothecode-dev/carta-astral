@@ -108,6 +108,15 @@ falta uno, Stripe nunca lo manda y el backend no se entera. El síntoma del
 «Procesando el pago…» hasta el corte de 24 horas. Si sumás un evento al
 despacho, sumalo también en el dashboard.
 
+## El webhook de Resend escucha eventos que se dan de alta a mano
+
+Mismo trato que el de Stripe: el endpoint del dashboard de Resend (Webhooks →
+agregar endpoint) tiene que estar suscripto a los dos eventos que
+`backend/api/webhooks_resend.py` despacha, `email.bounced` y
+`email.complained`. Nada en el repo lo verifica: si falta uno, Resend nunca lo
+manda y un código de acceso que rebota vuelve a no dejar rastro. Si sumás un
+evento al despacho, sumalo también en el dashboard.
+
 ## Superficies críticas
 
 Créditos y ledger, webhooks de pago, autenticación y SSO (Apple/Google), borrado de
