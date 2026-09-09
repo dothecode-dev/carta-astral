@@ -42,6 +42,14 @@ type Body = {
 };
 
 export async function POST(request: Request) {
+  // El scope "auth" del backend (`AUTH_RATE`) es un techo por IP: sin
+  // reenviar esto, `callApi` no manda nada propio y las tres puertas —Google,
+  // Apple y mail— comparten un solo balde para el sitio entero, la IP del
+  // contenedor de la web. Mismo patrón que `app/rueda/[...path]/route.ts` usa
+  // para PostHog. El backend decide qué hacer con el valor (ver NUM_PROXIES
+  // en `backend/config/settings.py`); acá sólo se reenvía tal cual llegó.
+  const ip = request.headers.get("x-forwarded-for");
+
   let body: Body;
   try {
     body = await request.json();
@@ -75,6 +83,7 @@ export async function POST(request: Request) {
     const data = await callApi<LoginResponse>(PROVIDERS[body.provider], {
       auth: false,
       method: "POST",
+      headers: ip ? { "x-forwarded-for": ip } : undefined,
       body: JSON.stringify(apiBody),
     });
 

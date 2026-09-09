@@ -337,6 +337,21 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_AUTHENTICATION_CLASSES": ["api.auth.AccountTokenAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["api.permissions.HasAccount"],
+    # Sin esto, ScopedRateThrottle.get_ident() (con NUM_PROXIES=None, el default
+    # de DRF) usa el header X-Forwarded-For ENTERO como identidad, tal cual lo
+    # escribió el cliente: alcanza con mandar un valor nuevo en cada pedido para
+    # esquivar cualquier techo. Con NUM_PROXIES=1 toma la última entrada de la
+    # lista `cliente, proxy1, ...` — la única que no puede falsificar quien
+    # manda el pedido — exactamente el mismo criterio y la misma razón que
+    # `config.axes_ip.ip_del_cliente` ya usa para el login del admin: hay
+    # exactamente un proxy delante (Traefik/Coolify) en todo pedido que llega
+    # al backend, sea directo (api.astraguia.com) o reenviado por la web (que
+    # copia tal cual el X-Forwarded-For que a ella le puso Traefik: el salto
+    # interno web→backend no pasa por ningún proxy propio, ver
+    # compose.staging.yaml). Si el día de mañana se agrega otro proxy —un CDN
+    # adelante, por ejemplo— hay que subir este número tanto como proxies se
+    # sumen, igual que advierte el docstring de `ip_del_cliente`.
+    "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", "1")),
     "DEFAULT_THROTTLE_RATES": {
         "interpretation": os.environ.get("INTERPRETATION_RATE", "20/day"),
         "install": os.environ.get("INSTALL_RATE", "30/day"),

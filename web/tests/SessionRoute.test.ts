@@ -24,12 +24,16 @@ vi.mock("next/headers", () => ({
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-function pedidoCanje(cuerpo: unknown): Request {
-  return new Request("http://x/api/session", { method: "POST", body: JSON.stringify(cuerpo) });
+function pedidoCanje(cuerpo: unknown, headers?: Record<string, string>): Request {
+  return new Request("http://x/api/session", { method: "POST", body: JSON.stringify(cuerpo), headers });
 }
 
-function pedidoCodigo(cuerpo: unknown): Request {
-  return new Request("http://x/api/session/codigo", { method: "POST", body: JSON.stringify(cuerpo) });
+function pedidoCodigo(cuerpo: unknown, headers?: Record<string, string>): Request {
+  return new Request("http://x/api/session/codigo", {
+    method: "POST",
+    body: JSON.stringify(cuerpo),
+    headers,
+  });
 }
 
 beforeEach(() => {
@@ -127,6 +131,37 @@ describe("POST /api/session con provider email (canje del código)", () => {
     expect(res.status).toBe(503);
   });
 
+  it("reenvía la IP del visitante al backend (C1): sin esto, el scope auth cuenta por la IP de la web", async () => {
+    const { POST } = await import("@/app/api/session/route");
+    const fetchMock = vi.fn().mockResolvedValue(
+      json({ token: "t", derechos: [], account_id: 1, destino: "" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await POST(
+      pedidoCanje(
+        { provider: "email", email: "juan@gmail.com", codigo: "123456" },
+        { "x-forwarded-for": "203.0.113.7" },
+      ),
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("203.0.113.7");
+  });
+
+  it("sin cabecera de origen en el pedido, no manda x-forwarded-for inventado", async () => {
+    const { POST } = await import("@/app/api/session/route");
+    const fetchMock = vi.fn().mockResolvedValue(
+      json({ token: "t", derechos: [], account_id: 1, destino: "" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBeUndefined();
+  });
+
   describe("el destino que vuelve del backend se revalida en la web", () => {
     it("expone un path interno válido", async () => {
       const { POST } = await import("@/app/api/session/route");
@@ -207,6 +242,17 @@ describe("POST /api/session con provider google/apple (sin regresión)", () => {
     expect(url).toContain("/api/auth/google");
   });
 
+  it("google también reenvía la IP del visitante (mismo scope auth)", async () => {
+    const { POST } = await import("@/app/api/session/route");
+    const fetchMock = vi.fn().mockResolvedValue(json({ token: "t", derechos: [], account_id: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await POST(pedidoCanje({ provider: "google", id_token: "id-token" }, { "x-forwarded-for": "198.51.100.9" }));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("198.51.100.9");
+  });
+
   it("rechaza google sin id_token", async () => {
     const { POST } = await import("@/app/api/session/route");
     const fetchMock = vi.fn();
@@ -255,6 +301,19 @@ describe("POST /api/session/codigo (pedir el código por mail)", () => {
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it("reenvía la IP del visitante al backend (C1)", async () => {
+    const { POST } = await import("@/app/api/session/codigo/route");
+    const fetchMock = vi.fn().mockResolvedValue(json({}, 202));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await POST(
+      pedidoCodigo({ email: "juan@gmail.com", lang: "es" }, { "x-forwarded-for": "203.0.113.7" }),
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("203.0.113.7");
   });
 
   it("propaga el 429 del backend como 429", async () => {
