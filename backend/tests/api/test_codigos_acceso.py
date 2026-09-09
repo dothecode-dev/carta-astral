@@ -126,3 +126,37 @@ def test_el_reenvio_conserva_el_destino_si_no_viene_uno_nuevo():
     fila, _, reenvio = codigos_acceso.pedir("juan@gmail.com")
     assert reenvio is True
     assert fila.destino == "/es/carta/vieja"
+
+
+# --- Ruling 16: `destino` sólo vale como path interno -----------------------
+#
+# `destino` lo manda quien llama sin pasar por ninguna autenticación, y la web
+# lo usa para redirigir después de loguear: sin validar, es un open redirect
+# post-autenticación. Se descarta en silencio —el login sigue andando— en vez
+# de rechazar el pedido.
+
+
+@pytest.mark.parametrize("destino", [
+    "https://malo.example",
+    "//malo.example",
+    "/\\malo",
+])
+def test_un_destino_que_no_es_un_path_interno_se_descarta_sin_rechazar_el_pedido(destino):
+    fila, claro, _ = codigos_acceso.pedir("juan@gmail.com", destino=destino)
+    assert fila.destino == ""
+    assert len(claro) == 6 and claro.isdigit()
+
+
+def test_un_path_interno_valido_se_guarda_tal_cual():
+    fila, _, _ = codigos_acceso.pedir("juan@gmail.com", destino="/es/carta/abc")
+    assert fila.destino == "/es/carta/abc"
+
+
+def test_un_destino_demasiado_largo_se_descarta():
+    fila, _, _ = codigos_acceso.pedir("juan@gmail.com", destino="/" + "a" * 200)
+    assert fila.destino == ""
+
+
+def test_un_destino_con_caracteres_de_control_se_descarta():
+    fila, _, _ = codigos_acceso.pedir("juan@gmail.com", destino="/es/carta\n/abc")
+    assert fila.destino == ""

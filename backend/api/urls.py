@@ -6,7 +6,7 @@ from api.compras_api import ComprasView
 from api.webhooks_stripe import StripeWebhookView
 from django.urls import path
 
-from api.sessions import LogoutView
+from api.sessions import CanjearCodigoView, LogoutView, PedirCodigoView
 from api.views import (
     AccountView,
     AppleAuthView,
@@ -48,6 +48,8 @@ urlpatterns = [
     path("estado/", EstadoView.as_view()),
     path("auth/apple", AppleAuthView.as_view()),
     path("auth/google", GoogleAuthView.as_view()),
+    path("auth/email/codigo", PedirCodigoView.as_view()),
+    path("auth/email", CanjearCodigoView.as_view()),
     path("auth/logout", LogoutView.as_view()),
     path("webhooks/revenuecat", RevenueCatWebhookView.as_view()),
 ]

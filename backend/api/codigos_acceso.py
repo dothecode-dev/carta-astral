@@ -7,6 +7,7 @@ dirección podría pedir códigos en loop y matar el que estás tipeando.
 """
 import hmac
 import logging
+import re
 import secrets
 
 from django.conf import settings
@@ -34,6 +35,38 @@ def normalizar(email: str) -> str:
     # Minúsculas y trim, nada más. Sacar los puntos de Gmail está mal para
     # cualquier otro proveedor y es un pozo sin fondo.
     return email.strip().lower()
+
+
+_CARACTERES_DE_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _destino_seguro(destino: str) -> str:
+    """Sólo un path interno vale como destino post-login (Ruling 16).
+
+    `destino` lo manda quien llama a `pedir()` sin pasar por ninguna
+    autenticación, y la web lo va a usar para redirigir después de loguear:
+    sin esta validación, `destino=https://phishing.example` convierte el
+    login por mail en un open redirect post-autenticación.
+
+    Se acepta sólo un path interno —empieza con "/", no con "//" ni con
+    "/\\", sin backslashes ni caracteres de control, hasta 200 caracteres—.
+    Cualquier otra cosa se guarda vacía, sin rechazar el pedido: el login
+    tiene que seguir funcionando, sólo se pierde el atajo de volver adonde
+    estaba.
+    """
+    if not destino:
+        return ""
+    if len(destino) > 200:
+        return ""
+    if not destino.startswith("/"):
+        return ""
+    if destino.startswith("//") or destino.startswith("/\\"):
+        return ""
+    if "\\" in destino:
+        return ""
+    if _CARACTERES_DE_CONTROL.search(destino):
+        return ""
+    return destino
 
 
 def _nuevo_codigo() -> str:
@@ -72,6 +105,7 @@ def pedir(email: str, destino: str = "") -> tuple[CodigoAcceso, str, bool]:
     loop y matar el que la persona estaba tipeando—.
     """
     email = normalizar(email)
+    destino = _destino_seguro(destino)
     ahora = timezone.now()
     hace_una_hora = ahora - timezone.timedelta(hours=1)
     # El techo cuenta ENVÍOS (mails salidos), no filas: un reenvío no crea
