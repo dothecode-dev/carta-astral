@@ -632,7 +632,7 @@ a {
 }
 
 .chartPlace {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--ink-soft);
 }
 
@@ -645,17 +645,42 @@ a {
    en la rueda: esto no inventa un estilo, lo alinea con el resto del sitio. */
 .noteSign {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 1.125rem;
+  font-size: 1.5rem;
   line-height: 1;
   color: var(--ink-label);
+  /* Cierra la fila sin competir con el nombre, que es lo que se lee. */
+  opacity: 0.75;
 }
 
 .chartLangs {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   letter-spacing: 0.14em;
   color: var(--accent);
   margin-top: 0.2rem;
+}
+
+/* --- Sólo la lista de cartas ----------------------------------------------
+   `.note`, `.noteMeta` y `.noteTitle` las comparten el listado de notas y la
+   home. Lo de acá abajo es propio de las cartas: una fila más densa —fecha,
+   hora, nombre, lugar, idiomas y el signo— que pide más cuerpo, y una tercera
+   columna para el glifo, que en una nota no existe. */
+.chartNotes .note {
+  /* La tercera columna es el signo. `start` y no `baseline` porque son tres
+     elementos de cuerpos muy distintos: con baseline el glifo, que es el más
+     grande, arrastraba la línea de los otros dos. */
+  grid-template-columns: 13.25rem minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+/* 14px, y por eso la columna sube a 13.25rem: la fecha más larga de los tres
+   idiomas mide 205px a este cuerpo (medido con canvas sobre la fuente real). */
+.chartNotes .noteMeta {
+  font-size: 0.875rem;
+}
+
+.chartNotes .noteTitle {
+  font-size: 1.625rem;
 }
 
 .emptyCharts {
@@ -1502,11 +1527,12 @@ a {
 .note {
   display: grid;
   /* Dos columnas: la fecha en ancho fijo —así todas alinean— y el texto.
-     8.5rem eran 136px y la fecha medía 136px justos: se partía en dos líneas
-     con el "·" colgando (medido en producción el 09-09-2026, y peor en
-     portugués). No se arregla con `max-content`: cada `.note` es su propia
-     grilla, así que cada fila se dimensionaría sola y dejarían de alinear
-     entre sí, que es para lo que la columna es fija. */
+     8.5rem eran 136px y no alcanzaban para ninguna de las dos listas que usan
+     esta clase: la fecha de una carta medía 136px justos y se partía con el
+     "·" colgando, y en `/notas` se partían las cuatro. No se arregla con
+     `max-content`: cada `.note` es su propia grilla, así que cada fila se
+     dimensionaría sola y dejarían de alinear entre sí, que es justamente para
+     lo que la columna es fija. */
   grid-template-columns: 12.5rem minmax(0, 1fr);
   gap: 1.5rem;
   align-items: baseline;
@@ -2251,7 +2277,12 @@ a {
     display: none;
   }
 
-  .note {
+  /* Los dos selectores, no uno: `.chartNotes .note` (0,2,0) le gana a `.note`
+     (0,1,0) aunque esta regla viva en una media query —las media queries no
+     suman especificidad—, así que sin la segunda línea la lista de cartas se
+     quedaría con sus tres columnas de escritorio en un teléfono. */
+  .note,
+  .chartNotes .note {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 

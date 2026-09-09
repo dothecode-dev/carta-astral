@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -226,5 +229,57 @@ describe("la fecha de nacimiento en los tres idiomas", () => {
     for (const loc of ["es", "en", "pt"] as const) {
       expect(soloFecha(loc)).toContain("· 09:45");
     }
+  });
+});
+
+/** La lista de cartas comparte `.note`, `.noteMeta` y `.noteTitle` con el
+ *  listado de notas y con la home, así que sus estilos propios se acotan con
+ *  `.chartNotes`. Eso tiene un filo: `.chartNotes .note` (0,2,0) le gana a
+ *  `.note` (0,1,0) aunque la segunda viva dentro de una media query, porque
+ *  las media queries no suman especificidad. Si la regla del breakpoint no
+ *  nombra los dos selectores, la lista se queda con las tres columnas de
+ *  escritorio en un teléfono —el 79% del tráfico— y nada lo avisa. */
+describe("la lista de cartas en un teléfono", () => {
+  const css = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
+
+  /** El cuerpo de un `@media`, balanceando llaves.
+   *
+   *  La primera versión de esto usaba `/@media \(…\)\{([\s\S]*?)\n\}/` y
+   *  el test pasaba con la regla ya rota: el no-greedy cortaba en la llave
+   *  equivocada. Y el `toContain(".chartNotes .note")` tampoco servía, porque
+   *  `.chartNotes .noteMeta` lo contiene como prefijo. Dos formas de pasar sin
+   *  probar nada, en el mismo test. */
+  function bloqueMedia(condicion: string): string {
+    const inicio = css.indexOf(`@media ${condicion}`);
+    if (inicio < 0) return "";
+    const abre = css.indexOf("{", inicio);
+    let nivel = 0;
+    for (let i = abre; i < css.length; i++) {
+      if (css[i] === "{") nivel++;
+      else if (css[i] === "}" && --nivel === 0) return css.slice(abre + 1, i);
+    }
+    return "";
+  }
+
+  it("el breakpoint alcanza también a `.chartNotes .note`", () => {
+    const media = bloqueMedia("(max-width: 900px)");
+
+    // El delimitador importa: sin él, `.chartNotes .noteMeta` daría por buena
+    // una regla que no existe.
+    expect(media).toMatch(/\.chartNotes \.note\s*[,{]/);
+    expect(media).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) auto/);
+  });
+
+  it("el parser encuentra el bloque, y no pasa por vacío", () => {
+    // Si el archivo se reordena y `bloqueMedia` deja de ver la media query,
+    // el test de arriba fallaría por el motivo equivocado; éste lo distingue.
+    expect(bloqueMedia("(max-width: 900px)").length).toBeGreaterThan(200);
+    expect(bloqueMedia("(max-width: 1px)")).toBe("");
+  });
+
+  it("el contenedor lleva la clase que esos estilos necesitan", () => {
+    const { container } = render(<AccountCharts charts={[carta()]} locale="es" dict={dict} />);
+
+    expect(container.querySelector(".notes.chartNotes")).not.toBeNull();
   });
 });

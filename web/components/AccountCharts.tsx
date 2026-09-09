@@ -96,7 +96,10 @@ export function AccountCharts({
   }
 
   return (
-    <div className="notes">
+    // `chartNotes` acota los estilos propios de esta lista: `.note`, `.noteMeta`
+    // y `.noteTitle` las comparten el listado de notas y la home, que no tienen
+    // signo del zodíaco ni la misma densidad de datos por fila.
+    <div className="notes chartNotes">
       {charts.map((chart) => (
         <Link className="note" href={`/${locale}/carta/${chart.id}`} key={chart.id}>
           <span className="noteMeta">{birthLine(chart, locale)}</span>
