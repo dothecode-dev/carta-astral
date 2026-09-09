@@ -16,7 +16,7 @@ from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from api.identity import hash_token
+from api.identity import hash_token, normalizar
 from api.models import CodigoAcceso
 
 logger = logging.getLogger(__name__)
@@ -29,12 +29,6 @@ class CodigoInvalido(Exception):
 
 class DemasiadosPedidos(Exception):
     pass
-
-
-def normalizar(email: str) -> str:
-    # Minúsculas y trim, nada más. Sacar los puntos de Gmail está mal para
-    # cualquier otro proveedor y es un pozo sin fondo.
-    return email.strip().lower()
 
 
 # Categorías Unicode que no tienen nada que hacer en un path: Cc (control,

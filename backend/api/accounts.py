@@ -1,9 +1,18 @@
 """Find-or-create de Account a partir de una identidad SSO verificada.
 
 Reglas (RF10): (1) si ya existe ProviderIdentity(provider, sub) -> esa cuenta;
-(2) si el email viene verificado y matchea exactamente una cuenta verificada ->
-linkear el sub a esa cuenta; (3) si no, crear cuenta nueva descontando el
-free-tier ya consumido segun el tombstone del sub.
+(2) si el email viene verificado y matchea (sin distinguir mayúsculas: C3,
+revisión de `puertas-de-acceso`) una o más cuentas verificadas -> linkear el
+sub a la más antigua de ellas; (3) si no matchea ninguna, crear cuenta nueva
+descontando el free-tier ya consumido segun el tombstone del sub.
+
+El match es case-insensitive porque el email no llega normalizado desde el
+mismo lugar en las tres puertas: `codigos_acceso.py` lo normaliza al guardar
+el `CodigoAcceso`, pero un `id_token` de Google o Apple trae el casing que el
+proveedor le dio al alta (gmail.com normaliza a minúsculas; un dominio
+Workspace no). Sin esto, la misma persona podía terminar con una cuenta por
+cada casing con el que un proveedor mandó su dirección — cada una con su
+propio regalo de bienvenida y sus propias compras.
 """
 
 import logging
@@ -12,7 +21,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 
 from api.canje import otorgar
-from api.identity import sub_hash
+from api.identity import normalizar, sub_hash
 from api.models import Account, ProviderIdentity, SubTombstone
 from api.sso import VerifiedIdentity
 
@@ -46,9 +55,30 @@ def resolve_account(vid: VerifiedIdentity) -> Account:
         return existing.account
 
     if vid.email and vid.email_verified:
-        matches = Account.objects.filter(email=vid.email, email_verified=True)
-        if matches.count() == 1:
-            account = matches.first()
+        normalizado = normalizar(vid.email)
+        # `iexact` y no `email=normalizado`: matchea también las cuentas que ya
+        # están guardadas con casing mixto (C3, revisión de `puertas-de-acceso`)
+        # sin depender de una migración que las toque a todas una por una.
+        matches = list(
+            Account.objects.filter(email__iexact=normalizado, email_verified=True)
+            .order_by("pk")
+        )
+        if matches:
+            if len(matches) > 1:
+                # No debería pasar: una dirección verificada, en teoría, es una
+                # sola cuenta. Si pasa, es que ya existían duplicadas de antes
+                # de este fix (C3) o de una carrera. Se linkea a la más
+                # antigua en vez de sumar una cuenta más, y se deja rastro para
+                # que alguien las revise a mano — mezclar los datos de las dos
+                # (cartas, derechos, compras) no es una decisión que este
+                # código pueda tomar solo. Nunca la dirección completa en el
+                # log, sólo los pks.
+                logger.warning(
+                    "email verificado con %d cuentas duplicadas (pks=%s); "
+                    "se linkea %s a la más antigua",
+                    len(matches), [a.pk for a in matches], vid.provider,
+                )
+            account = matches[0]
             try:
                 ProviderIdentity.objects.create(
                     provider=vid.provider, sub=vid.sub, account=account,
@@ -76,7 +106,12 @@ def _create_account(vid: VerifiedIdentity) -> Account:
         # (capturar adentro y consultar ahi rompe con TransactionManagementError).
         with transaction.atomic():
             account = Account.objects.create(
-                email=vid.email or "", email_verified=vid.email_verified,
+                # Normalizada para que el matcheo por `email` (arriba) siga
+                # encontrándola sin depender de `iexact` en el futuro, y para
+                # que dos cuentas nuevas con la misma dirección en casing
+                # distinto no puedan crearse en paralelo sin que se note.
+                email=normalizar(vid.email) if vid.email else "",
+                email_verified=vid.email_verified,
             )
             ProviderIdentity.objects.create(
                 provider=vid.provider, sub=vid.sub, account=account,

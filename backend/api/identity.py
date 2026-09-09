@@ -16,6 +16,19 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def normalizar(email: str) -> str:
+    """Minúsculas y trim, nada más. Sacar los puntos de Gmail está mal para
+    cualquier otro proveedor y es un pozo sin fondo.
+
+    Vive acá y no en `codigos_acceso.py` (donde nació) porque `accounts.py`
+    (C3, revisión de `puertas-de-acceso`) también la necesita: sin normalizar
+    en un único lugar para las tres puertas de entrada (mail, Google, Apple),
+    la misma dirección en otro casing termina en cuentas distintas cuando el
+    proveedor SSO no la manda en minúsculas (gmail.com sí; un dominio
+    Workspace no)."""
+    return email.strip().lower()
+
+
 def config_faltante() -> list[str]:
     """Nombres de las variables de configuración de identidad que faltan.
 
