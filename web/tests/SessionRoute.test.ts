@@ -208,6 +208,69 @@ describe("POST /api/session con provider email (canje del código)", () => {
       expect(cuerpo).not.toHaveProperty("destino");
     });
 
+    it("conserva ?comprar= y ?cupon= (I2/RF16): quien venía a comprar no cae en una cuenta vacía", async () => {
+      // Simula la vuelta por pestaña nueva (iOS Mail): el `next` original no
+      // está, así que lo único que trae de vuelta el pedido de qué comprar es
+      // este `destino` que guardó el backend.
+      const { POST } = await import("@/app/api/session/route");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          json({
+            token: "t",
+            derechos: [],
+            account_id: 1,
+            destino: "/es/precios?comprar=informe_natal&cupon=VERANO10",
+          }),
+        ),
+      );
+
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const cuerpo = await res.json();
+
+      expect(cuerpo.destino).toBe("/es/precios?comprar=informe_natal&cupon=VERANO10");
+    });
+
+    it("un `comprar` con forma inválida pegado al destino sigue rechazando todo el destino", async () => {
+      const { POST } = await import("@/app/api/session/route");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          json({
+            token: "t",
+            derechos: [],
+            account_id: 1,
+            destino: "/es/precios?comprar=<script>",
+          }),
+        ),
+      );
+
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const cuerpo = await res.json();
+
+      expect(cuerpo).not.toHaveProperty("destino");
+    });
+
+    it("un `next` con query fuera de la lista cerrada sigue rechazando todo el destino", async () => {
+      const { POST } = await import("@/app/api/session/route");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          json({
+            token: "t",
+            derechos: [],
+            account_id: 1,
+            destino: "/es/otra-cosa?comprar=informe_natal",
+          }),
+        ),
+      );
+
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const cuerpo = await res.json();
+
+      expect(cuerpo).not.toHaveProperty("destino");
+    });
+
     it("nunca expone un path que no está en la lista cerrada de destinoSeguro", async () => {
       // El destino nace en /entrar, donde ya pasó por destinoSeguro contra la
       // lista cerrada (precios, nueva, cuenta, carta/<uuid>). Si lo que vuelve

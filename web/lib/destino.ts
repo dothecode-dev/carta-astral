@@ -1,3 +1,4 @@
+import { normalizarCupon } from "./cupon";
 import { isLocale, type Locale } from "./i18n";
 
 /**
@@ -17,6 +18,17 @@ import { isLocale, type Locale } from "./i18n";
 const RUTAS = ["precios", "nueva", "cuenta"] as const;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Forma de un código de producto en la URL: la misma regla que `/entrar`
+ *  exige en su query `comprar` (Ruling 19 no la afloja, la reusa). Vive acá
+ *  porque `destinoInternoSeguro` la necesita para revalidar el extra que
+ *  vuelve pegado al destino — un solo lugar define el criterio, para que
+ *  `/entrar` y el canje por mail nunca puedan divergir sobre qué es válido. */
+const PRODUCTO = /^[a-z0-9_]{1,40}$/;
+
+export function productoValido(comprar: unknown): comprar is string {
+  return typeof comprar === "string" && PRODUCTO.test(comprar);
+}
 
 export function destinoSeguro(next: unknown, locale: Locale): string | null {
   if (typeof next !== "string" || next === "") return null;
@@ -40,14 +52,24 @@ export function destinoSeguro(next: unknown, locale: Locale): string | null {
  * Revalida un destino que ya pasó una vez por acá.
  *
  * Lo usa el canje del código de acceso por mail (`/api/session`, RF16): el
- * destino nace en `/entrar`, donde `destinoSeguro` ya lo validó contra `next`,
- * y vuelve en la respuesta del canje porque en iOS la persona sale a Mail y
- * vuelve por otra pestaña, donde ese `next` original ya no existe. En el
- * camino feliz siempre está en la lista cerrada de `RUTAS` — si lo que vuelve
- * NO está, es porque el backend cambió o alguien lo manipuló, y en los dos
- * casos toca descartarlo: aceptar cualquier path con forma de interno sería
- * aceptar más de lo que la propia puerta de entrada acepta, un agujero y no
- * una tolerancia.
+ * destino nace en `/entrar`, donde `destinoSeguro` ya lo validó contra `next`
+ * y `?comprar=`/`?cupon=` se validaron aparte (RF16 — quien apretó "Comprar"
+ * antes de loguearse), y vuelve en la respuesta del canje porque en iOS la
+ * persona sale a Mail y vuelve por otra pestaña, donde ni ese `next` ni esos
+ * extras siguen en la URL. En el camino feliz el path siempre está en la
+ * lista cerrada de `RUTAS` — si lo que vuelve NO está, es porque el backend
+ * cambió o alguien lo manipuló, y en los dos casos toca descartarlo: aceptar
+ * cualquier path con forma de interno sería aceptar más de lo que la propia
+ * puerta de entrada acepta, un agujero y no una tolerancia.
+ *
+ * El `?` ya no descarta todo el destino (antes lo hacía, vía `destinoSeguro`
+ * sobre la cadena completa): se separa el path de la query, el path se valida
+ * exactamente igual que siempre, y sólo dos claves de la query sobreviven —
+ * `comprar` y `cupon`, cada una con la misma forma que ya exige `/entrar`
+ * (`productoValido`, `normalizarCupon`) — porque son las que arma esa misma
+ * pantalla al mandar hacia acá. Cualquier otra clave, o una de estas dos con
+ * forma inválida, tira todo el destino: no hay manera de saber si lo que
+ * sobra es inocuo, y la respuesta ante la duda es la misma que antes, "".
  *
  * El locale no lo tiene quien llama —no hay locale en el pedido de canje—,
  * así que se lo extrae del propio destino: `destinoSeguro` ya exige que
@@ -59,7 +81,49 @@ export function destinoSeguro(next: unknown, locale: Locale): string | null {
  */
 export function destinoInternoSeguro(destino: unknown): string {
   if (typeof destino !== "string" || !destino) return "";
-  const locale = destino.split("/")[1];
+  // Un `#` no tiene nada que hacer acá en ningún lado de la cadena — mismo
+  // motivo que en `destinoSeguro`.
+  if (destino.includes("#")) return "";
+
+  // `indexOf`, no `split("?")`: sólo el primer `?` abre la query. Un segundo
+  // `?` es un carácter literal de esa misma query (así lo trata una URL de
+  // verdad), y `split` lo hubiera cortado aparte y descartado en silencio.
+  const separador = destino.indexOf("?");
+  const ruta = separador === -1 ? destino : destino.slice(0, separador);
+  const query = separador === -1 ? "" : destino.slice(separador + 1);
+  const locale = ruta.split("/")[1];
   if (!isLocale(locale)) return "";
-  return destinoSeguro(destino, locale) ?? "";
+
+  const path = destinoSeguro(ruta, locale);
+  if (!path) return "";
+  if (!query) return path;
+
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(query);
+  } catch {
+    return "";
+  }
+
+  const claves = new Set(params.keys());
+  claves.delete("comprar");
+  claves.delete("cupon");
+  if (claves.size > 0) return "";
+
+  const extras: string[] = [];
+
+  const comprar = params.get("comprar");
+  if (comprar !== null) {
+    if (!productoValido(comprar)) return "";
+    extras.push(`comprar=${encodeURIComponent(comprar)}`);
+  }
+
+  const cupon = params.get("cupon");
+  if (cupon !== null) {
+    const cuponNormal = normalizarCupon(cupon);
+    if (!cuponNormal) return "";
+    extras.push(`cupon=${encodeURIComponent(cuponNormal)}`);
+  }
+
+  return extras.length ? `${path}?${extras.join("&")}` : path;
 }

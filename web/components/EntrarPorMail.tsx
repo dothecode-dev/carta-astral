@@ -96,10 +96,18 @@ export function EntrarPorMail({
   }
 
   /** Pide (o reenvía) el código para `correo`. Común a los dos casos: el
-   *  backend no distingue un pedido de un reenvío, es la misma ruta. */
-  async function pedirCodigo(correo: string) {
+   *  backend no distingue un pedido de un reenvío, es la misma ruta —
+   *  `reenvio` es sólo para la telemetría (I4), nunca viaja al backend.
+   *
+   *  Arma la espera de 60s ANTES del fetch y para los dos desenlaces, no sólo
+   *  el éxito (m6): si no, un 429 o un 503 dejaban `puedeReenviar` en lo que
+   *  ya estaba —true, si el click vino del propio botón de reenviar— y el
+   *  botón quedaba habilitado para martillarlo, cada clic gastando un pedido
+   *  más contra el balde de C1. */
+  async function pedirCodigo(correo: string, reenvio: boolean) {
     setEnviando(true);
     setError(null);
+    armarEsperaDeReenvio();
 
     let res: Response;
     try {
@@ -128,22 +136,21 @@ export function EntrarPorMail({
     }
 
     setPaso("codigo");
-    armarEsperaDeReenvio();
-    track("codigo_pedido", {});
+    track("codigo_pedido", { reenvio });
   }
 
   async function onPedirSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const correo = email.trim();
     if (!correo || enviando) return;
-    await pedirCodigo(correo);
+    await pedirCodigo(correo, false);
   }
 
   async function onReenviar() {
     if (!puedeReenviar || enviando) return;
     // El mismo mail que se usó al pedir (RF6): no hay campo para cambiarlo
     // en este paso.
-    await pedirCodigo(email.trim());
+    await pedirCodigo(email.trim(), true);
   }
 
   async function onCodigoSubmit(e: FormEvent<HTMLFormElement>) {

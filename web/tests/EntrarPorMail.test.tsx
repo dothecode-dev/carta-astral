@@ -93,7 +93,7 @@ describe("EntrarPorMail — pedir el código", () => {
       lang: "es",
       destino: "/es/precios",
     });
-    expect(track).toHaveBeenCalledWith("codigo_pedido", {});
+    expect(track).toHaveBeenCalledWith("codigo_pedido", { reenvio: false });
     // Pasó al paso 2: ya se ve el campo del código.
     expect(screen.getByLabelText(labels.codigoLabel)).toBeInTheDocument();
   });
@@ -202,7 +202,53 @@ describe("EntrarPorMail — el paso del código", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).email).toBe("juan@gmail.com");
-    expect(track).toHaveBeenCalledWith("codigo_pedido", {});
+    expect(track).toHaveBeenCalledWith("codigo_pedido", { reenvio: true });
+  });
+
+  it("un 429 al reenviar no deja el botón habilitado para martillarlo (m6)", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValueOnce(reply(202));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EntrarPorMail locale="es" labels={labels} />);
+    await pedirCodigo("juan@gmail.com");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(screen.getByRole("button", { name: labels.reenviar })).toBeEnabled();
+
+    fetchMock.mockResolvedValueOnce(reply(429, { error: "demasiados pedidos" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: labels.reenviar }));
+    });
+
+    // Antes de este arreglo, un pedido que fallaba dejaba `puedeReenviar`
+    // en lo que ya estaba (true) y el botón quedaba listo para otro clic
+    // inmediato: cada uno, un pedido más contra el balde de C1.
+    expect(screen.getByRole("button", { name: labels.reenviar })).toBeDisabled();
+  });
+
+  it("un 503 al reenviar tampoco deja el botón habilitado, y se vuelve a habilitar a los 60s", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValueOnce(reply(202));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EntrarPorMail locale="es" labels={labels} />);
+    await pedirCodigo("juan@gmail.com");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    fetchMock.mockResolvedValueOnce(reply(503, { error: "login no disponible" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: labels.reenviar }));
+    });
+    expect(screen.getByRole("button", { name: labels.reenviar })).toBeDisabled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(screen.getByRole("button", { name: labels.reenviar })).toBeEnabled();
   });
 
   it("cambiar de mail vuelve al paso 1 sin perder lo escrito", async () => {
@@ -350,6 +396,26 @@ describe("EntrarPorMail — el canje exitoso", () => {
     await canjearCodigo("123456");
 
     expect(replace).toHaveBeenCalledWith("/es/nueva");
+  });
+
+  it("sin next, el destino de respaldo conserva ?comprar= y ?cupon= (I2/RF16)", async () => {
+    // El caso que rompía: quien apretó "Comprar" salió a Mail y volvió por una
+    // pestaña nueva, así que acá no hay `next` — todo lo que trae de vuelta es
+    // el `destino` que el canje devuelve, ya revalidado con extras y todo por
+    // `destinoInternoSeguro` (lib/destino.ts).
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValueOnce(
+        reply(200, { account_id: 1, destino: "/es/precios?comprar=informe_natal&cupon=VERANO10" }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EntrarPorMail locale="es" labels={labels} />);
+    await pedirCodigo("juan@gmail.com");
+    await canjearCodigo("123456");
+
+    expect(replace).toHaveBeenCalledWith("/es/precios?comprar=informe_natal&cupon=VERANO10");
   });
 
   it("sin next y sin destino, va a la cuenta", async () => {

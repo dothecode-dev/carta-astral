@@ -102,4 +102,47 @@ describe("destinoInternoSeguro", () => {
     expect(destinoInternoSeguro("")).toBe("");
     expect(destinoInternoSeguro(["/es/precios"])).toBe("");
   });
+
+  // I2: quien apretó "Comprar" antes de loguearse arma `volverA` con
+  // `?comprar=` y `?cupon=` pegados al destino (`/entrar/page.tsx`). Si vuelve
+  // por una pestaña nueva —el caso que RF16 existe para cubrir—, este es el
+  // único lugar por el que ese destino puede sobrevivir con sus extras.
+  describe("con comprar y cupon pegados a la query (RF16)", () => {
+    it("conserva un ?comprar= válido, en la lista cerrada", () => {
+      expect(destinoInternoSeguro("/es/precios?comprar=informe_natal")).toBe(
+        "/es/precios?comprar=informe_natal",
+      );
+    });
+
+    it("conserva ?comprar= y ?cupon= juntos", () => {
+      expect(destinoInternoSeguro("/es/precios?comprar=informe_natal&cupon=VERANO10")).toBe(
+        "/es/precios?comprar=informe_natal&cupon=VERANO10",
+      );
+    });
+
+    it("normaliza el cupón con la misma regla que /entrar (mayúsculas)", () => {
+      expect(destinoInternoSeguro("/es/precios?cupon=verano10")).toBe("/es/precios?cupon=VERANO10");
+    });
+
+    it("rechaza el destino entero si `comprar` no tiene forma válida", () => {
+      expect(destinoInternoSeguro("/es/precios?comprar=<script>")).toBe("");
+      expect(destinoInternoSeguro("/es/precios?comprar=" + "a".repeat(41))).toBe("");
+    });
+
+    it("rechaza el destino entero si `cupon` no tiene forma válida", () => {
+      expect(destinoInternoSeguro("/es/precios?cupon=x")).toBe("");
+    });
+
+    it("rechaza el destino entero si aparece cualquier otra clave", () => {
+      expect(destinoInternoSeguro("/es/precios?comprar=informe_natal&next=/otra")).toBe("");
+    });
+
+    it("rechaza un path que no está en la lista cerrada, aunque los extras sean válidos", () => {
+      expect(destinoInternoSeguro("/es/otra-cosa?comprar=informe_natal")).toBe("");
+    });
+
+    it("un ? sin nada después no rompe: se trata como sin extras", () => {
+      expect(destinoInternoSeguro("/es/precios?")).toBe("/es/precios");
+    });
+  });
 });

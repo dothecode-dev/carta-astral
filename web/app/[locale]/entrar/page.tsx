@@ -7,7 +7,7 @@ import { EntrarVisto } from "@/components/EntrarVisto";
 import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { Nav } from "@/components/Nav";
 import { normalizarCupon } from "@/lib/cupon";
-import { destinoSeguro } from "@/lib/destino";
+import { destinoSeguro, productoValido } from "@/lib/destino";
 import { LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { sessionIsLive } from "@/lib/session";
 import { Footer } from "@/components/Footer";
@@ -35,9 +35,11 @@ export async function generateMetadata({
  *  No se valida contra el catálogo acá —esta pantalla no lo tiene y pedirlo
  *  sólo para esto sería una llamada de red por login—: la forma alcanza para
  *  que no se pueda colar nada en la URL de destino, y /precios ignora un código
- *  que no exista. */
+ *  que no exista. `productoValido` vive en `lib/destino.ts`, que revalida este
+ *  mismo campo cuando vuelve pegado al destino tras el canje por mail (RF16):
+ *  un solo criterio, nunca dos copias que puedan divergir. */
 function productoPedido(comprar: unknown): string | null {
-  return typeof comprar === "string" && /^[a-z0-9_]{1,40}$/.test(comprar) ? comprar : null;
+  return productoValido(comprar) ? comprar : null;
 }
 
 export default async function SignInPage({

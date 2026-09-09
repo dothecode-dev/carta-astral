@@ -111,8 +111,14 @@ export type EventoProps = {
   login_no_disponible: { motivo: "blocked" | "failed" };
   /** Pidió el código de 6 dígitos por mail (RF15). Es el denominador de esta
    *  puerta, igual que `entrar_visto` lo es de la pantalla entera: sin esto
-   *  no se sabe cuánta gente arranca el camino de mail antes de canjear. */
-  codigo_pedido: Record<string, never>;
+   *  no se sabe cuánta gente arranca el camino de mail antes de canjear.
+   *
+   *  `reenvio` separa el primer pedido de cada reenvío: `pedirCodigo()` es la
+   *  misma función para las dos ramas (`onPedirSubmit` y `onReenviar`), y sin
+   *  este campo un reenvío infla el denominador de "pedir → canjear" con
+   *  justo la gente que más problemas tuvo — el número queda mejor de lo que
+   *  es y no hay forma de separarlo después, porque el evento ya salió así. */
+  codigo_pedido: { reenvio: boolean };
   /** Canjeó el código y entró. Específico de esta puerta —a diferencia de
    *  `login`, que es el evento del embudo compartido con Google/Apple— para
    *  poder medir la conversión de PEDIR a CANJEAR sin mezclarla con las
