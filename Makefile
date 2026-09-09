@@ -244,6 +244,13 @@ deploy: ## Despliega a producción sin cortar ningún informe a medias
 	trap '$(MAKE) --no-print-directory mantenimiento-off >/dev/null 2>&1 || true' EXIT INT TERM; \
 	echo "→ cartel de mantenimiento"; \
 	$(MAKE) --no-print-directory mantenimiento-on >/dev/null; \
+	echo "→ chequeo de configuración"; \
+	cfg=$$(curl -s --max-time 10 https://api.astraguia.com/api/estado/ \
+		| sed -n 's/.*"config_faltante":[[:space:]]*\[\(.*\)\].*/\1/p'); \
+	if [ -n "$$cfg" ]; then \
+		echo "   ⚠ falta configuración en producción: $$cfg"; \
+		echo "   el proceso arranca igual (Ruling 7) pero esa superficie está caída."; \
+	fi; \
 	echo "→ esperando a que no quede ningún informe escribiéndose"; \
 	i=0; \
 	while :; do \

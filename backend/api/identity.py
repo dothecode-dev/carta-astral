@@ -16,6 +16,35 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def config_faltante() -> list[str]:
+    """Nombres de las variables de configuración de identidad que faltan.
+
+    Control compensatorio del Ruling 7: el fail-fast de arranque (RF8) se
+    cambió por un log en stderr para no tumbar todo el backend —informes
+    pagos incluidos— por una variable de una sola superficie (el login por
+    mail). Pero un log que nadie lee y que `make deploy` no mira no avisa de
+    nada: esto es lo que `EstadoView` (`api/mantenimiento.py`) expone en
+    `GET /api/estado/`, que la web ya sondea y que `make deploy` ya consulta
+    en cada despliegue. Sin filtrar valores, sólo qué falta.
+    """
+    faltantes = []
+    if not tombstone_hmac_configurada():
+        faltantes.append("TOMBSTONE_HMAC_KEY")
+    return faltantes
+
+
+def tombstone_hmac_configurada() -> bool:
+    """Si `TOMBSTONE_HMAC_KEY` está seteada, sin levantar `ImproperlyConfigured`.
+
+    Existe para que quien va a llamar a `sub_hash("email", ...)` pueda
+    preguntar ANTES de hacerlo (C2, revisión de `puertas-de-acceso`): sin
+    esto, la única forma de enterarse era capturar la excepción después de
+    haber tocado algo que ya no se podía deshacer —el código de acceso
+    marcado como usado en `CanjearCodigoView`, por ejemplo—.
+    """
+    return bool(settings.TOMBSTONE_HMAC_KEY)
+
+
 def sub_hash(provider: str, sub: str) -> str:
     """SHA256 hex del SSO subject (provider:sub), para el tombstone del free-tier.
 
@@ -28,8 +57,7 @@ def sub_hash(provider: str, sub: str) -> str:
     material = f"{provider}:{sub}".encode()
     if provider != "email":
         return hashlib.sha256(material).hexdigest()
-    clave = settings.TOMBSTONE_HMAC_KEY
-    if not clave:
+    if not tombstone_hmac_configurada():
         # `settings.TOMBSTONE_HMAC_KEY` ya trae un valor fijo de desarrollo
         # cuando DEBUG está prendido (ver config/settings.py): si llegó vacía
         # acá es porque de verdad no hay clave configurada, en producción.
@@ -37,4 +65,5 @@ def sub_hash(provider: str, sub: str) -> str:
             "TOMBSTONE_HMAC_KEY es obligatoria: sin ella el tombstone de mail "
             "no protege el regalo de bienvenida."
         )
+    clave = settings.TOMBSTONE_HMAC_KEY
     return hmac.new(clave.encode(), material, hashlib.sha256).hexdigest()

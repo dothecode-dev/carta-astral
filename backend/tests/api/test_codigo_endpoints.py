@@ -121,19 +121,48 @@ def test_el_canje_usa_el_mail_normalizado_de_la_fila_no_el_del_request(client):
     assert Account.objects.get().email == "juan@gmail.com"
 
 
-# --- Ruling 7: sin TOMBSTONE_HMAC_KEY, 503 y no un 500 pelado ---------------
+# --- Ruling 7 / C2: sin TOMBSTONE_HMAC_KEY, 503 y el código NO se quema -----
+#
+# Antes del fix (revisión de `puertas-de-acceso`, C2): la vista marcaba
+# `usado_en` en `canjear()` y recién DESPUÉS intentaba resolver la cuenta, así
+# que un 503 por falta de configuración dejaba el código consumido en un
+# login que nunca ocurrió. Medido en staging por el revisor: la fila quedaba
+# con `usado_en` seteado y `cuentas=0`. Sin `TOMBSTONE_HMAC_KEY` en
+# producción eso pasaba en el 100% de los intentos —la puerta de mail quedaba
+# muerta— y la persona se comía el 429 de la hora pidiendo códigos nuevos que
+# tampoco iban a servir.
 
 
-def test_sin_tombstone_hmac_key_el_primer_canje_da_503(client, settings):
+def test_sin_tombstone_hmac_key_el_canje_da_503_y_no_quema_el_codigo(client, settings):
     settings.TOMBSTONE_HMAC_KEY = ""
-    _, claro, _ = codigos_acceso.pedir("juan@gmail.com")
+    fila, claro, _ = codigos_acceso.pedir("juan@gmail.com")
     r = client.post("/api/auth/email",
                     {"email": "juan@gmail.com", "codigo": claro},
                     content_type="application/json")
     assert r.status_code == 503
     assert r.json() == {"error": "login no disponible"}
-    # El código ya se quemó (se comparó bien); no queda una cuenta a medio crear.
     assert not Account.objects.filter(email="juan@gmail.com").exists()
+    # La fila no se tocó: ni se marcó usada ni se gastó un intento, así que el
+    # mismo código sirve una vez que la configuración se arregle.
+    fila.refresh_from_db()
+    assert fila.usado_en is None
+    assert fila.intentos == 0
+
+
+def test_el_mismo_codigo_sirve_una_vez_arreglada_la_configuracion(client, settings):
+    settings.TOMBSTONE_HMAC_KEY = ""
+    _, claro, _ = codigos_acceso.pedir("juan@gmail.com")
+    fallido = client.post("/api/auth/email",
+                          {"email": "juan@gmail.com", "codigo": claro},
+                          content_type="application/json")
+    assert fallido.status_code == 503
+
+    settings.TOMBSTONE_HMAC_KEY = "clave-de-produccion"
+    r = client.post("/api/auth/email",
+                    {"email": "juan@gmail.com", "codigo": claro},
+                    content_type="application/json")
+    assert r.status_code == 200
+    assert Account.objects.filter(email="juan@gmail.com").exists()
 
 
 # --- Ruling 13: si el mail no sale, se devuelve el cupo y 503 ---------------

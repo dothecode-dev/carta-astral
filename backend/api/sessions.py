@@ -20,7 +20,7 @@ from api import codigos_acceso, notificaciones
 from api.accounts import resolve_account
 from api.auth import create_session
 from api.canje import derechos_de
-from api.identity import hash_token
+from api.identity import hash_token, tombstone_hmac_configurada
 from api.models import CodigoAcceso, Session
 from api.sso import VerifiedIdentity
 
@@ -105,6 +105,20 @@ class CanjearCodigoView(APIView):
                 {"error": "email y codigo requeridos"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        if not tombstone_hmac_configurada():
+            # Chequeo ANTES de tocar la fila del código (C2, revisión de
+            # `puertas-de-acceso`): `canjear()` marca `usado_en` dentro de su
+            # propio `select_for_update()` —a propósito, es lo que sostiene
+            # la concurrencia de dos pestañas canjeando a la vez— así que un
+            # 503 posterior a esa llamada ya había quemado el código en un
+            # login que no llegó a ocurrir. Medido en staging: la fila
+            # quedaba usada y sin cuenta creada, y sin la clave cargada eso
+            # pasaba en el 100% de los intentos. Acá no se tocó nada todavía,
+            # así que el mismo código sirve una vez que la configuración se
+            # arregle.
+            logger.error("login por mail no disponible: falta TOMBSTONE_HMAC_KEY")
+            return Response({"error": "login no disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
         try:
             fila = codigos_acceso.canjear(email, codigo)
         except codigos_acceso.CodigoInvalido:
@@ -120,9 +134,11 @@ class CanjearCodigoView(APIView):
         try:
             account = resolve_account(vid)
         except ImproperlyConfigured as exc:
-            # Sin TOMBSTONE_HMAC_KEY, `sub_hash()` no puede proteger el
-            # tombstone del free-tier en el primer login de esta dirección
-            # (Ruling 7). Mismo tratamiento que `SSONotConfigured`.
+            # Defensa en profundidad: el precheck de arriba ya debería evitar
+            # llegar acá (TOCTOU aparte, es la misma clave). El código, en
+            # este punto, ya se consumió — ver la nota de C2 en el reporte
+            # sobre por qué el caso general de "cualquier fallo de
+            # resolve_account()" no se cierra acá.
             logger.error("login por mail no disponible: %s", exc)
             return Response({"error": "login no disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 

@@ -48,7 +48,31 @@ def test_el_estado_lo_puede_consultar_cualquiera(client):
     resp = client.get("/api/estado/")
 
     assert resp.status_code == 200
-    assert resp.json() == {"mantenimiento": False, "generando": 0}
+    assert resp.json() == {"mantenimiento": False, "generando": 0, "config_faltante": []}
+
+
+# --- El faltante de configuración se ve sin leer logs -----------------------
+#
+# El Ruling 7 cambió el fail-fast de arranque (RF8) por un log en stderr, para
+# no tumbar todo el backend por una variable de una sola superficie (el login
+# por mail). Ese criterio se mantiene. Pero un log que nadie lee y que
+# `make deploy` no mira no es un control compensatorio real: acá se suma la
+# misma señal al endpoint que YA consulta `make deploy` en cada despliegue y
+# que la web ya sondea, sin agregar plumbing nuevo ni bloquear nada.
+
+
+def test_el_estado_avisa_si_falta_tombstone_hmac_key(client, settings):
+    settings.TOMBSTONE_HMAC_KEY = ""
+    resp = client.get("/api/estado/")
+
+    assert resp.json()["config_faltante"] == ["TOMBSTONE_HMAC_KEY"]
+
+
+def test_el_estado_no_avisa_nada_con_la_configuracion_completa(client, settings):
+    settings.TOMBSTONE_HMAC_KEY = "clave-de-produccion"
+    resp = client.get("/api/estado/")
+
+    assert resp.json()["config_faltante"] == []
 
 
 def test_el_estado_cuenta_lo_que_un_deploy_cortaria(client, make_chart, make_account):

@@ -23,6 +23,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api import interpretation_service
+from api.identity import config_faltante
 from api.models import Interpretation
 from interpret.prompts import PROMPT_VERSION
 
@@ -65,16 +66,27 @@ def generando() -> int:
 
 
 class EstadoView(APIView):
-    """`GET /api/estado/` — si el sitio acepta trabajo, y cuánto queda en vuelo.
+    """`GET /api/estado/` — si el sitio acepta trabajo, cuánto queda en vuelo,
+    y qué configuración crítica falta.
 
     Público y sin sesión a propósito: lo consulta `make deploy` desde afuera
     para saber cuándo puede pushear, y la web en cada request para decidir si
-    muestra el cartel. No dice nada de nadie —dos números— así que no hay qué
-    proteger.
+    muestra el cartel. `config_faltante` no dice nada de nadie —sólo nombres
+    de variables, nunca valores— así que no hay qué proteger.
+
+    `config_faltante` es el control compensatorio del Ruling 7: sin
+    `TOMBSTONE_HMAC_KEY` el backend arranca igual (no se volvió a poner el
+    fail-fast de RF8, a propósito), pero el único aviso que quedaba era un
+    log en stderr que nadie mira y que `make deploy` no consulta. Acá se ve
+    en el mismo endpoint que ya se sondea todo el tiempo.
     """
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return Response({"mantenimiento": activo(), "generando": generando()})
+        return Response({
+            "mantenimiento": activo(),
+            "generando": generando(),
+            "config_faltante": config_faltante(),
+        })
