@@ -117,6 +117,34 @@ agregar endpoint) tiene que estar suscripto a los dos eventos que
 manda y un código de acceso que rebota vuelve a no dejar rastro. Si sumás un
 evento al despacho, sumalo también en el dashboard.
 
+## Si `API_URL` de la web apunta al dominio público, el throttle por IP se rompe en silencio
+
+`NUM_PROXIES=1` (`backend/config/settings.py`) le dice a DRF que hay
+exactamente un proxy delante del backend y que tome la ÚLTIMA IP de
+`X-Forwarded-For` como la del cliente real — la única que nadie puede
+falsificar, porque es la que agrega ESE proxy. Eso vale mientras haya
+exactamente un salto entre el cliente y el backend.
+
+Medido en producción (re-revisión de `puertas-de-acceso`, Hallazgo 6): si
+`API_URL` de la web apunta al dominio público (`https://api.astraguia.com`),
+el pedido web→backend vuelve a pasar por Traefik — la web le pega a su
+propio dominio público en vez de hablarle al backend por la red interna de
+Docker — y Traefik le APPENDEA la IP del contenedor de la web al final de
+`X-Forwarded-For`. Con `NUM_PROXIES=1` el backend toma esa IP del
+contenedor, no la del visitante, así que el throttle `auth` (login por mail,
+Google, Apple) deja de ser por IP del cliente y pasa a ser **un balde
+global para todo el sitio**: cualquiera agota el cupo de todos los demás.
+No hay error, no hay log — el throttle sigue "funcionando", sólo que contra
+la identidad equivocada.
+
+El arreglo es que la web le hable al backend por la red interna de Docker
+(`http://<uuid-de-la-app-backend-en-Coolify>:8000`, no cambia entre deploys),
+con ese hostname sumado a `ALLOWED_HOSTS`, no por `api.astraguia.com`. Nada
+en el repo verifica esto — ni un test ni un chequeo de arranque— porque
+depende de una variable de entorno de OTRO servicio (la web, en Coolify), no
+del backend: si tocás `API_URL` o agregás un proxy nuevo delante (un CDN, por
+ejemplo), hay que revisar este acoplamiento a mano.
+
 ## Superficies críticas
 
 Créditos y ledger, webhooks de pago, autenticación y SSO (Apple/Google), borrado de
