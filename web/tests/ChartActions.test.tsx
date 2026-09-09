@@ -953,3 +953,111 @@ describe("al llegar a la carta", () => {
     expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho })).toBeEnabled();
   });
 });
+
+// El bloque puede estar en el DOM y no haberse visto nunca. Hasta el
+// 08-09-2026 iba al final de la carta —después de la lectura entera, las
+// tablas y la matriz de aspectos—, así que quien abría la carta contaba como
+// "se le ofreció" sin scrollear hasta ahí. `acciones_carta_vistas` sigue
+// midiendo eso (el denominador); estos tests cubren el numerador.
+describe("la oferta vista de verdad", () => {
+  /** Un `IntersectionObserver` de mentira: jsdom no lo trae, y además hace
+   *  falta decidir CUÁNDO entra en pantalla, que es lo que se está probando. */
+  function observadorFalso() {
+    const observados: Element[] = [];
+    let avisar: IntersectionObserverCallback | null = null;
+    const desconexiones = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(cb: IntersectionObserverCallback) {
+          avisar = cb;
+        }
+        observe(el: Element) {
+          observados.push(el);
+        }
+        disconnect() {
+          desconexiones();
+        }
+        unobserve() {}
+        takeRecords() {
+          return [];
+        }
+      },
+    );
+    return {
+      observados,
+      desconexiones,
+      entraEnPantalla(isIntersecting = true) {
+        act(() => {
+          avisar?.(
+            observados.map((target) => ({ target, isIntersecting }) as IntersectionObserverEntry),
+            {} as IntersectionObserver,
+          );
+        });
+      },
+    };
+  }
+
+  const enPantalla = () =>
+    track.mock.calls.filter(([e]) => e === "acciones_carta_en_pantalla");
+
+  it("renderizado pero sin scrollear hasta ahí: ofrecido, no visto", () => {
+    // El caso del 08-09 con el botón al pie. Es toda la razón de ser del
+    // evento: sin él, esta pantalla y la de abajo son el mismo dato.
+    observadorFalso();
+    renderActions({ freeCredits: 3, paidCredits: 0 });
+
+    expect(track).toHaveBeenCalledWith("acciones_carta_vistas", {
+      breve: "disponible",
+      completo: "comprar",
+    });
+    expect(enPantalla()).toHaveLength(0);
+  });
+
+  it("cuando entra en pantalla se cuenta, con la oferta que se vio", () => {
+    const obs = observadorFalso();
+    renderActions({ freeCredits: 3, paidCredits: 0 });
+    obs.entraEnPantalla();
+
+    expect(track).toHaveBeenCalledWith("acciones_carta_en_pantalla", {
+      breve: "disponible",
+      completo: "comprar",
+    });
+  });
+
+  it("entrar, salir y volver a entrar es la misma pantalla, no tres", () => {
+    // Scrollear arriba y abajo es lo normal en un teléfono. Contarlo cada vez
+    // haría que una persona indecisa pese más que tres decididas.
+    const obs = observadorFalso();
+    renderActions({ freeCredits: 3, paidCredits: 0 });
+    obs.entraEnPantalla();
+    obs.entraEnPantalla(false);
+    obs.entraEnPantalla();
+
+    expect(enPantalla()).toHaveLength(1);
+  });
+
+  it("sin soporte del navegador no se inventa el dato", () => {
+    // Emitir igual como fallback devolvería el falso positivo que este evento
+    // existe para eliminar: mejor un dato que falta a uno que miente.
+    vi.stubGlobal("IntersectionObserver", undefined);
+    renderActions({ freeCredits: 3, paidCredits: 0 });
+
+    expect(track).toHaveBeenCalledWith("acciones_carta_vistas", expect.anything());
+    expect(enPantalla()).toHaveLength(0);
+  });
+
+  it("con todo leído no hay bloque, así que no hay nada que ver", () => {
+    // `acciones_carta_vistas` sí se emite (dice que no quedaba nada para
+    // ofrecer), pero no existe el div: nada que observar.
+    const obs = observadorFalso();
+    renderActions({ interpretations: { es: ["corto", "largo"] } });
+
+    expect(track).toHaveBeenCalledWith("acciones_carta_vistas", {
+      breve: "no_se_ofrece",
+      completo: "no_se_ofrece",
+    });
+    expect(obs.observados).toHaveLength(0);
+    expect(enPantalla()).toHaveLength(0);
+  });
+});

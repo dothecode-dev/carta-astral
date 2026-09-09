@@ -77,6 +77,28 @@ export type EventoProps = {
     breve: "disponible" | "agotada" | "no_se_ofrece";
     completo: "comprar" | "leer" | "no_se_ofrece";
   };
+  /** El mismo bloque, pero **visto de verdad**: entró en el viewport.
+   *
+   *  Existe porque `acciones_carta_vistas` dispara al montarse en el DOM, que
+   *  no es lo mismo que estar a la vista. Hasta el 08-09-2026 el bloque iba al
+   *  final de la carta —después de la lectura entera, las tablas y la matriz de
+   *  aspectos, cientos de filas en un teléfono—, así que las tres personas que
+   *  pasaron esa mañana contaron como "se les ofreció" sin haber scrolleado
+   *  nunca hasta ahí. El botón ya se subió (`72581bd`), pero sin este evento no
+   *  hay forma de distinguir «no lo vio» de «lo vio y no le interesó», que son
+   *  dos problemas con soluciones opuestas.
+   *
+   *  Los dos eventos juntos son la razón: `vistas` es el denominador (se
+   *  renderizó la oferta) y éste el numerador (entró en pantalla).
+   *
+   *  **No se emite si el navegador no trae `IntersectionObserver`.** Disparar
+   *  igual como fallback devolvería el falso positivo que este evento existe
+   *  para eliminar: mejor un dato que falta y se sabe que falta, que uno que
+   *  significa cosas distintas según el navegador. */
+  acciones_carta_en_pantalla: {
+    breve: "disponible" | "agotada" | "no_se_ofrece";
+    completo: "comprar" | "leer" | "no_se_ofrece";
+  };
   carta_descargada: { formato: "pdf" | "imagen" };
   /** Apretó Comprar y se lo mandó a Stripe. La otra mitad del embudo de pago
    *  —que la plata haya entrado— la emite el backend desde el webhook

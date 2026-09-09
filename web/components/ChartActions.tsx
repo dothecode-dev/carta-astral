@@ -241,6 +241,24 @@ export function ChartActions({
     track("acciones_carta_vistas", { breve, completo });
   }, []);
 
+  /** Lo mismo, pero para el bloque visto de verdad. Su propio contador: una
+   *  oferta puede renderizarse y no llegar nunca a la pantalla, así que los dos
+   *  no avanzan a la par —esa diferencia es justamente el dato—. */
+  const ultimaEnPantalla = useRef<string | null>(null);
+  const medirEnPantalla = useCallback((breve: OfertaBreve, completo: OfertaCompleto) => {
+    const clave = `${breve}:${completo}`;
+    if (ultimaEnPantalla.current === clave) return;
+    ultimaEnPantalla.current = clave;
+    track("acciones_carta_en_pantalla", { breve, completo });
+  }, []);
+
+  /** El nodo del bloque de acciones, en estado y no en un ref, porque el efecto
+   *  de abajo tiene que volver a correr cuando aparece: un `useRef` no dispara
+   *  render y el observador quedaría sin crear. Es `null` mientras no haya nada
+   *  que ofrecer (con el informe ya comprado el bloque no se renderiza), y ahí
+   *  no hay pantalla que medir. */
+  const [nodoAcciones, setNodoAcciones] = useState<HTMLDivElement | null>(null);
+
   /**
    * Si `tier` ya está completo en algún OTRO idioma de esta carta. El
    * backend traduce una lectura ya escrita sin tocar el ledger (no cobra de
@@ -554,6 +572,27 @@ export function ChartActions({
       ? "leer"
       : "comprar";
 
+  /* Va acá y no arriba con los otros hooks porque necesita la oferta ya
+     calculada, y sigue estando antes de todos los `return`: el orden de los
+     hooks no puede depender de una rama. */
+  useEffect(() => {
+    if (!nodoAcciones) return;
+    // Sin soporte no se emite nada. Ver el comentario del evento en
+    // `lib/telemetry/events.ts`: un fallback que dispare igual reintroduce el
+    // falso positivo que este evento existe para eliminar.
+    if (typeof IntersectionObserver === "undefined") return;
+    const observador = new IntersectionObserver((entradas) => {
+      // `threshold` por defecto (0): alcanza con que el bloque asome. Exigir
+      // que se vea entero no serviría —en un teléfono angosto el bloque puede
+      // ser más alto que la ventana y el umbral no se cumpliría nunca—.
+      for (const entrada of entradas) {
+        if (entrada.isIntersecting) medirEnPantalla(ofertaBreve, ofertaCompleto);
+      }
+    });
+    observador.observe(nodoAcciones);
+    return () => observador.disconnect();
+  }, [nodoAcciones, ofertaBreve, ofertaCompleto, medirEnPantalla]);
+
   if (busy || refrescando) {
     return (
       <section className="waiting">
@@ -595,7 +634,7 @@ export function ChartActions({
   if (tieneCompleto) return <MedirOferta breve={ofertaBreve} completo={ofertaCompleto} medir={medirOferta} />;
 
   return (
-    <div className="chartActions">
+    <div className="chartActions" ref={setNodoAcciones}>
       <MedirOferta breve={ofertaBreve} completo={ofertaCompleto} medir={medirOferta} />
       <div className="chartActionsRow">
         {!tieneBreve &&
