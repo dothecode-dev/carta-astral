@@ -8,7 +8,8 @@ mismo trato ante un fallo de configuración: 503, nunca un 500 pelado.
 
 import pytest
 
-from api import codigos_acceso, notificaciones
+from api import codigos_acceso, notificaciones, sessions
+from api.accounts import resolve_account as resolve_account_real
 from api.models import Account, CodigoAcceso
 from tests.conftest import RespuestaFalsa
 
@@ -162,6 +163,45 @@ def test_el_mismo_codigo_sirve_una_vez_arreglada_la_configuracion(client, settin
                     {"email": "juan@gmail.com", "codigo": claro},
                     content_type="application/json")
     assert r.status_code == 200
+    assert Account.objects.filter(email="juan@gmail.com").exists()
+
+
+# --- Hallazgo 2 (C2), alcance general: no sólo TOMBSTONE_HMAC_KEY -----------
+#
+# El precheck de arriba cierra el caso puntual de la clave faltante. Pero
+# CUALQUIER OTRO fallo de `resolve_account()` —acá simulado, con
+# TOMBSTONE_HMAC_KEY configurada— quemaba el código igual: `canjear()` ya
+# había comiteado `usado_en` antes de que la vista intentara resolver la
+# cuenta. El fix mete la resolución de cuenta y la sesión DENTRO del mismo
+# atomic que `canjear()` usa para marcar el código, así que cualquier fallo
+# ahí deshace también el `usado_en`.
+
+
+def test_un_fallo_de_resolve_account_no_relacionado_al_tombstone_no_quema_el_codigo(
+    client, monkeypatch,
+):
+    fila, claro, _ = codigos_acceso.pedir("juan@gmail.com")
+
+    def rompe(_vid):
+        raise RuntimeError("fallo simulado, no es el tombstone")
+
+    monkeypatch.setattr(sessions, "resolve_account", rompe)
+    client.raise_request_exception = False
+    r = client.post("/api/auth/email",
+                    {"email": "juan@gmail.com", "codigo": claro},
+                    content_type="application/json")
+    assert r.status_code == 500
+
+    fila.refresh_from_db()
+    assert fila.usado_en is None
+    assert not Account.objects.filter(email="juan@gmail.com").exists()
+
+    # El mismo código sirve después, con `resolve_account()` andando de nuevo.
+    monkeypatch.setattr(sessions, "resolve_account", resolve_account_real)
+    r2 = client.post("/api/auth/email",
+                     {"email": "juan@gmail.com", "codigo": claro},
+                     content_type="application/json")
+    assert r2.status_code == 200
     assert Account.objects.filter(email="juan@gmail.com").exists()
 
 

@@ -23,6 +23,7 @@ import hmac
 import logging
 import secrets
 import unicodedata
+from typing import Callable
 
 from django.conf import settings
 from django.db import transaction
@@ -145,36 +146,72 @@ def pedir(email: str, destino: str = "") -> tuple[CodigoAcceso, str, bool]:
     return fila, claro, vigente_previo is not None
 
 
-def canjear(email: str, codigo: str) -> CodigoAcceso:
+def canjear(
+    email: str, codigo: str, despues_de_marcar: Callable[[CodigoAcceso], None] | None = None,
+) -> CodigoAcceso:
     """Con varios códigos vigentes por dirección, dos cosas que antes vivían
     en LA fila pasan a vivir en la DIRECCIÓN:
 
-    - El techo de intentos de RF9: sumar `intentos` fila por fila dejaría a
-      un atacante con `CODIGO_INTENTOS_MAX` intentos por CADA código vigente
-      en vez de por dirección. Se suma `intentos` de todas las filas vigentes
-      y se compara esa suma contra el techo. El intento en sí se cobra en UNA
-      sola fila (la más vieja, `vigentes[0]`) y no en todas: cobrarlo en
-      todas multiplicaría el gasto por la cantidad de filas vigentes y un
-      solo intento fallido agotaría el cupo de un saque. Cuál de las filas
-      absorbe el contador no importa para la seguridad —la suma es lo que se
-      compara contra el techo, siempre a nivel dirección—, así que cualquier
-      elección determinística sirve.
+    - El techo de intentos de RF9 (Hallazgo 1 de la re-revisión de
+      `puertas-de-acceso`, corregido): el intento se cobra en UNA sola fila
+      (la más vieja, `vigentes[0]`) y no en todas — cobrarlo en todas
+      multiplicaría el gasto por la cantidad de filas vigentes y un solo
+      intento fallido agotaría el cupo de un saque. Pero esa fila más vieja
+      es justo la primera en salir de "vigentes" al vencer, así que sumar
+      `intentos` sobre las filas VIGENTES (como hacía la versión anterior)
+      reponía el cupo entero con sólo dejar pasar el TTL: medido en
+      producción, 5 fallos contra A (que se quedaba con intentos=5) más A
+      venciendo le devolvían 5 intentos frescos a B, un código de la MISMA
+      dirección que nunca se tipeó.
+
+      El fix suma sobre una VENTANA TEMPORAL en vez de sobre "vigentes":
+      todas las filas de la dirección creadas en la última hora, estén
+      vigentes, vencidas o ya usadas. Una fila que absorbió intentos sigue
+      pesando en la suma después de vencer —hasta que sale de la ventana—,
+      así que dejarla vencer ya no repone nada. La ventana es la misma hora
+      que `CODIGO_PEDIDOS_HORA` ya usa para el techo de pedidos (RF9): no
+      hace falta una segunda constante para lo mismo. `vigentes` (no
+      vencidas, no usadas) sigue siendo el conjunto contra el que se compara
+      el código y el que recibe el incremento — sólo cambia DE DÓNDE sale la
+      suma que se compara contra el techo.
     - "Un canje bueno quema todo lo demás vigente": si sólo se quemara la
       fila que matcheó, un código viejo de un mail anterior seguiría
       sirviendo después de que la persona ya entró.
 
     No hace falta marcar las filas como "quemadas" sólo por llegar al techo
     de intentos (a diferencia del canje bueno, que sí las quema todas): la
-    suma se recalcula en cada llamada sobre las filas vigentes, así que en
-    cuanto el total llega al techo, CUALQUIER intento posterior —para
-    cualquiera de los códigos vigentes de esa dirección— lo va a encontrar ya
-    al tope y va a fallar antes de siquiera comparar el código. Tocar
-    `usado_en` ahí además mezclaría dos motivos distintos bajo el mismo
-    campo: "se usó para entrar" y "se quedó sin intentos", y ninguna otra
-    parte del código necesita distinguirlos.
+    suma se recalcula en cada llamada sobre la ventana, así que en cuanto el
+    total llega al techo, CUALQUIER intento posterior —para cualquiera de los
+    códigos vigentes de esa dirección— lo va a encontrar ya al tope y va a
+    fallar antes de siquiera comparar el código. Tocar `usado_en` ahí además
+    mezclaría dos motivos distintos bajo el mismo campo: "se usó para entrar"
+    y "se quedó sin intentos", y ninguna otra parte del código necesita
+    distinguirlos.
+
+    `despues_de_marcar`, si se pasa, corre DENTRO del mismo `atomic()` que
+    marca las filas como usadas (Hallazgo 2 / C2 de la re-revisión de
+    `puertas-de-acceso`). El precheck de `TOMBSTONE_HMAC_KEY` en
+    `sessions.py` cierra el caso puntual de esa clave faltante, pero el caso
+    GENERAL —cualquier otro fallo al resolver la cuenta después de canjear
+    el código— no se cerraba: antes `canjear()` comiteaba `usado_en` y
+    recién DESPUÉS la vista intentaba `resolve_account()`, así que un fallo
+    ahí (de cualquier tipo) dejaba el código quemado en un login que nunca
+    terminó de ocurrir. Metiendo `resolve_account()` y la creación de la
+    sesión adentro del `atomic()`, si `despues_de_marcar` levanta lo que
+    sea, el rollback deshace también el `usado_en` que se acababa de poner
+    y el mismo código sigue sirviendo. El `select_for_update()` de arriba
+    sigue sosteniendo la concurrencia (T8): el segundo hilo que compite por
+    el mismo código queda bloqueado hasta que el primero termina TODO —no
+    sólo marcar la fila—, y los `except IntegrityError` de `accounts.py`
+    (creación de cuenta / link de sub concurrente) siguen funcionando porque
+    ese `atomic()` interno es un savepoint dentro de éste. No hay ninguna
+    llamada de red en este camino (el revoke de Apple vive en
+    `deletion.py`), así que extender el lock hasta ahí no expone el login a
+    la latencia de un proveedor externo.
     """
     email = normalizar(email)
     ahora = timezone.now()
+    ventana_intentos = ahora - timezone.timedelta(hours=1)
     with transaction.atomic():
         vigentes = list(
             CodigoAcceso.objects.select_for_update()
@@ -184,7 +221,9 @@ def canjear(email: str, codigo: str) -> CodigoAcceso:
         if not vigentes:
             raise CodigoInvalido
 
-        intentos_totales = sum(fila.intentos for fila in vigentes)
+        intentos_totales = CodigoAcceso.objects.filter(
+            email=email, creado_en__gte=ventana_intentos,
+        ).aggregate(total=Coalesce(Sum("intentos"), 0))["total"]
         if intentos_totales >= settings.CODIGO_INTENTOS_MAX:
             raise CodigoInvalido
 
@@ -207,6 +246,8 @@ def canjear(email: str, codigo: str) -> CodigoAcceso:
             for fila in vigentes:
                 fila.usado_en = ahora
             CodigoAcceso.objects.bulk_update(vigentes, ["usado_en"])
+            if despues_de_marcar is not None:
+                despues_de_marcar(coincidencia)
     if coincidencia is None:
         logger.info(
             "código de acceso rechazado", extra={"intentos": intentos_totales + 1},

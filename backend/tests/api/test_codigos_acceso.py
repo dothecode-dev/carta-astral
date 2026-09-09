@@ -78,6 +78,41 @@ def test_cinco_intentos_repartidos_entre_dos_codigos_vigentes_queman_los_dos():
         codigos_acceso.canjear("juan@gmail.com", claro_2)
 
 
+def test_dejar_vencer_la_fila_que_cobro_los_intentos_no_repone_el_techo():
+    """Hallazgo 1 de la re-revisión: el intento se cobra en la fila más
+    VIEJA (`vigentes[0]`) y el techo sumaba sólo sobre filas vigentes — la
+    fila que absorbió los 5 fallos es la primera en salir de esa suma al
+    vencer, así que dejarla vencer reponía el cupo entero contra cualquier
+    otro código vigente de la misma dirección. Medido por el revisor: tras 5
+    fallos A quedaba con intentos=5 y B con 0; al vencer A, B volvía a tener
+    5 intentos frescos. El fix cuenta la suma sobre una VENTANA TEMPORAL
+    (`creado_en` de la última hora), no sobre el conjunto de filas vigentes:
+    una fila vencida sigue pesando en la ventana hasta que sale de ella."""
+    fila_a, claro_a, _ = codigos_acceso.pedir("juan@gmail.com")
+    _, claro_b, _ = codigos_acceso.pedir("juan@gmail.com")
+
+    for _ in range(5):
+        with pytest.raises(codigos_acceso.CodigoInvalido):
+            codigos_acceso.canjear("juan@gmail.com", "000000")
+    fila_a.refresh_from_db()
+    assert fila_a.intentos == 5
+
+    # Al tope: ni siquiera el código correcto de B entra.
+    with pytest.raises(codigos_acceso.CodigoInvalido):
+        codigos_acceso.canjear("juan@gmail.com", claro_b)
+
+    # A (la que absorbió los 5 fallos) vence. B sigue vigente.
+    fila_a.expira_en = timezone.now() - timezone.timedelta(seconds=1)
+    fila_a.save(update_fields=["expira_en"])
+
+    # El cupo NO se repone: B, con el código correcto, sigue rechazado.
+    with pytest.raises(codigos_acceso.CodigoInvalido):
+        codigos_acceso.canjear("juan@gmail.com", claro_b)
+    # Tampoco A, aunque ya venció por otro motivo.
+    with pytest.raises(codigos_acceso.CodigoInvalido):
+        codigos_acceso.canjear("juan@gmail.com", claro_a)
+
+
 def test_un_codigo_vencido_no_sirve_aunque_haya_otro_vigente():
     fila_1, claro_1, _ = codigos_acceso.pedir("juan@gmail.com")
     _, claro_2, _ = codigos_acceso.pedir("juan@gmail.com")
@@ -130,6 +165,49 @@ def test_un_codigo_ya_usado_no_sirve_dos_veces():
     codigos_acceso.canjear("juan@gmail.com", claro)
     with pytest.raises(codigos_acceso.CodigoInvalido):
         codigos_acceso.canjear("juan@gmail.com", claro)
+
+
+# --- Hallazgo 2 (C2) de la re-revisión: `despues_de_marcar` corre DENTRO del
+# atomic que marca `usado_en` ------------------------------------------------
+#
+# El precheck de TOMBSTONE_HMAC_KEY en `sessions.py` cierra sólo ese caso
+# puntual. El caso general —cualquier OTRO fallo al resolver la cuenta—
+# quemaba el código igual, porque antes `canjear()` comiteaba `usado_en`
+# antes de que la vista intentara resolver la cuenta.
+
+
+def test_un_fallo_dentro_de_despues_de_marcar_no_quema_el_codigo():
+    fila, claro, _ = codigos_acceso.pedir("juan@gmail.com")
+
+    def rompe(_fila):
+        raise RuntimeError("fallo simulado resolviendo la cuenta")
+
+    with pytest.raises(RuntimeError):
+        codigos_acceso.canjear("juan@gmail.com", claro, despues_de_marcar=rompe)
+
+    fila.refresh_from_db()
+    assert fila.usado_en is None
+
+    # El mismo código sirve después, sin el fallo.
+    canjeada = codigos_acceso.canjear("juan@gmail.com", claro)
+    assert canjeada.pk == fila.pk
+    assert canjeada.usado_en is not None
+
+
+def test_despues_de_marcar_se_llama_con_la_fila_coincidente():
+    _, claro, _ = codigos_acceso.pedir("juan@gmail.com")
+    recibidas = []
+    codigos_acceso.canjear("juan@gmail.com", claro, despues_de_marcar=recibidas.append)
+    assert len(recibidas) == 1
+    assert recibidas[0].email == "juan@gmail.com"
+
+
+def test_despues_de_marcar_no_corre_si_el_codigo_no_coincide():
+    codigos_acceso.pedir("juan@gmail.com")
+    llamadas = []
+    with pytest.raises(codigos_acceso.CodigoInvalido):
+        codigos_acceso.canjear("juan@gmail.com", "000000", despues_de_marcar=llamadas.append)
+    assert llamadas == []
 
 
 @override_settings(CODIGO_PEDIDOS_HORA=5)

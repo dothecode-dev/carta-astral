@@ -107,45 +107,52 @@ class CanjearCodigoView(APIView):
 
         if not tombstone_hmac_configurada():
             # Chequeo ANTES de tocar la fila del código (C2, revisión de
-            # `puertas-de-acceso`): `canjear()` marca `usado_en` dentro de su
-            # propio `select_for_update()` —a propósito, es lo que sostiene
-            # la concurrencia de dos pestañas canjeando a la vez— así que un
-            # 503 posterior a esa llamada ya había quemado el código en un
-            # login que no llegó a ocurrir. Medido en staging: la fila
-            # quedaba usada y sin cuenta creada, y sin la clave cargada eso
-            # pasaba en el 100% de los intentos. Acá no se tocó nada todavía,
-            # así que el mismo código sirve una vez que la configuración se
-            # arregle.
+            # `puertas-de-acceso`): sin esto, un 503 por falta de
+            # configuración ocurriría después de canjear el código igual.
+            # Es sólo un atajo para el caso MÁS PROBABLE en producción —evita
+            # el roundtrip de `canjear()` cuando ya se sabe que va a fallar—;
+            # el caso general (cualquier OTRO fallo al resolver la cuenta) lo
+            # cierra `despues_de_marcar` más abajo, corriendo dentro del
+            # mismo atomic que `canjear()` usa para marcar la fila.
             logger.error("login por mail no disponible: falta TOMBSTONE_HMAC_KEY")
             return Response({"error": "login no disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+        resultado: dict = {}
+
+        def _resolver_e_iniciar_sesion(fila: CodigoAcceso) -> None:
+            # La identidad se arma con el email de la FILA (ya normalizado
+            # por `codigos_acceso.pedir`/`canjear`), nunca con el string
+            # crudo del request (Ruling 11b): si no, dos casings de la misma
+            # dirección terminan en dos cuentas.
+            vid = VerifiedIdentity(
+                provider="email", sub=fila.email, email=fila.email, email_verified=True,
+            )
+            account = resolve_account(vid)
+            resultado["account"] = account
+            resultado["token"] = create_session(account)
+
         try:
-            fila = codigos_acceso.canjear(email, codigo)
+            # `despues_de_marcar` corre DENTRO del atomic de `canjear()`
+            # (Hallazgo 2 / C2, re-revisión de `puertas-de-acceso`): si
+            # `resolve_account()` o `create_session()` fallan por lo que
+            # sea, el rollback deshace también el `usado_en` que se acababa
+            # de poner, así que el código no se pierde en un login que no
+            # terminó de ocurrir — ver el docstring de `canjear()`.
+            fila = codigos_acceso.canjear(
+                email, codigo, despues_de_marcar=_resolver_e_iniciar_sesion,
+            )
         except codigos_acceso.CodigoInvalido:
             return Response({"error": "código inválido"}, status=status.HTTP_401_UNAUTHORIZED)
-
-        # La identidad se arma con el email de la FILA (ya normalizado por
-        # `codigos_acceso.pedir`/`canjear`), nunca con el string crudo del
-        # request (Ruling 11b): si no, dos casings de la misma dirección
-        # terminan en dos cuentas.
-        vid = VerifiedIdentity(
-            provider="email", sub=fila.email, email=fila.email, email_verified=True,
-        )
-        try:
-            account = resolve_account(vid)
         except ImproperlyConfigured as exc:
-            # Defensa en profundidad: el precheck de arriba ya debería evitar
-            # llegar acá (TOCTOU aparte, es la misma clave). El código, en
-            # este punto, ya se consumió — ver la nota de C2 en el reporte
-            # sobre por qué el caso general de "cualquier fallo de
-            # resolve_account()" no se cierra acá.
+            # Defensa en profundidad ante un TOCTOU con el precheck de
+            # arriba (la clave se cae justo entre medio) — la única causa
+            # HOY de que `resolve_account()` levante esta excepción puntual.
             logger.error("login por mail no disponible: %s", exc)
             return Response({"error": "login no disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        token = create_session(account)
         return Response({
-            "token": token,
-            "derechos": derechos_de(account),
-            "account_id": account.id,
+            "token": resultado["token"],
+            "derechos": derechos_de(resultado["account"]),
+            "account_id": resultado["account"].id,
             "destino": fila.destino,
         })
