@@ -24,6 +24,9 @@ vi.mock("next/headers", () => ({
       store.set(name, { value, options }),
     delete: (name: string) => store.delete(name),
   }),
+  // `callApi`/`callApiRaw` leen la IP del visitante de acá (ver `lib/session.ts`).
+  // Sin cabeceras propias, nada de este archivo depende de su valor.
+  headers: async () => new Headers(),
 }));
 
 const json = (body: unknown, status = 200) =>

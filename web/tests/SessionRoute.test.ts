@@ -12,6 +12,12 @@ import { SESSION_COOKIE } from "@/lib/session";
 type Cookie = { value: string; options?: Record<string, unknown> };
 let store: Map<string, Cookie>;
 
+// `callApi`/`callApiRaw` (en `lib/session.ts`) sacan la IP del visitante del
+// contexto de pedido que arma `next/headers`, no de la `Request` que recibe
+// cada route handler — por eso acá se controla vía este mock, y no pasándola
+// como cabecera al armar el `Request` de cada test.
+let ipVisitante: string | null;
+
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => store.get(name),
@@ -19,25 +25,23 @@ vi.mock("next/headers", () => ({
       store.set(name, { value, options }),
     delete: (name: string) => store.delete(name),
   }),
+  headers: async () => new Headers(ipVisitante ? { "x-forwarded-for": ipVisitante } : {}),
 }));
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-function pedidoCanje(cuerpo: unknown, headers?: Record<string, string>): Request {
-  return new Request("http://x/api/session", { method: "POST", body: JSON.stringify(cuerpo), headers });
+function pedidoCanje(cuerpo: unknown): Request {
+  return new Request("http://x/api/session", { method: "POST", body: JSON.stringify(cuerpo) });
 }
 
-function pedidoCodigo(cuerpo: unknown, headers?: Record<string, string>): Request {
-  return new Request("http://x/api/session/codigo", {
-    method: "POST",
-    body: JSON.stringify(cuerpo),
-    headers,
-  });
+function pedidoCodigo(cuerpo: unknown): Request {
+  return new Request("http://x/api/session/codigo", { method: "POST", body: JSON.stringify(cuerpo) });
 }
 
 beforeEach(() => {
   store = new Map();
+  ipVisitante = null;
 });
 
 afterEach(() => {
@@ -137,13 +141,9 @@ describe("POST /api/session con provider email (canje del código)", () => {
       json({ token: "t", derechos: [], account_id: 1, destino: "" }),
     );
     vi.stubGlobal("fetch", fetchMock);
+    ipVisitante = "203.0.113.7";
 
-    await POST(
-      pedidoCanje(
-        { provider: "email", email: "juan@gmail.com", codigo: "123456" },
-        { "x-forwarded-for": "203.0.113.7" },
-      ),
-    );
+    await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("203.0.113.7");
@@ -310,7 +310,8 @@ describe("POST /api/session con provider google/apple (sin regresión)", () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ token: "t", derechos: [], account_id: 1 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await POST(pedidoCanje({ provider: "google", id_token: "id-token" }, { "x-forwarded-for": "198.51.100.9" }));
+    ipVisitante = "198.51.100.9";
+    await POST(pedidoCanje({ provider: "google", id_token: "id-token" }));
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("198.51.100.9");
@@ -371,9 +372,8 @@ describe("POST /api/session/codigo (pedir el código por mail)", () => {
     const fetchMock = vi.fn().mockResolvedValue(json({}, 202));
     vi.stubGlobal("fetch", fetchMock);
 
-    await POST(
-      pedidoCodigo({ email: "juan@gmail.com", lang: "es" }, { "x-forwarded-for": "203.0.113.7" }),
-    );
+    ipVisitante = "203.0.113.7";
+    await POST(pedidoCodigo({ email: "juan@gmail.com", lang: "es" }));
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("203.0.113.7");

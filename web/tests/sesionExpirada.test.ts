@@ -41,6 +41,9 @@ vi.mock("next/headers", () => ({
       store.set(name, { value, options }),
     delete: (name: string) => store.delete(name),
   }),
+  // `callApi` lee la IP del visitante de acá (ver `lib/session.ts`). Este
+  // archivo no prueba el reenvío, así que alcanza con no romper.
+  headers: async () => new Headers(),
 }));
 
 const { default: SignInPage } = await import("@/app/[locale]/entrar/page");

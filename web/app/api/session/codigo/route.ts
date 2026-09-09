@@ -19,12 +19,6 @@ type Body = {
 };
 
 export async function POST(request: Request) {
-  // Mismo scope "auth" que /api/session (Google/Apple): sin reenviar esto,
-  // todos los pedidos de código —de cualquier persona— caen en el balde de
-  // la IP del contenedor de la web. Ver el comentario gemelo en
-  // `app/api/session/route.ts`.
-  const ip = request.headers.get("x-forwarded-for");
-
   let body: Body;
   try {
     body = await request.json();
@@ -48,7 +42,6 @@ export async function POST(request: Request) {
     await callApi<Record<string, never>>("/api/auth/email/codigo", {
       auth: false,
       method: "POST",
-      headers: ip ? { "x-forwarded-for": ip } : undefined,
       body: JSON.stringify({ email: body.email, lang, destino }),
     });
 

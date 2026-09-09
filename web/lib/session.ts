@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { API_URL } from "./config";
 import type { Locale } from "./i18n";
 
@@ -102,11 +102,13 @@ export async function callApiRaw(
   const token = await getSessionToken();
   if (!token) throw new ApiError(401, "sin sesión");
 
+  const ip = await ipDelVisitante();
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      ...(ip ? { "x-forwarded-for": ip } : {}),
       ...init.headers,
     },
     cache: "no-store",
@@ -117,6 +119,24 @@ export async function callApiRaw(
     throw new ApiError(res.status, `${path} devolvió ${res.status}`, detail.slice(0, 500));
   }
   return res;
+}
+
+/**
+ * La IP de quien está navegando, tal como la vio el proxy que tenemos
+ * delante (Traefik) — nunca la del contenedor de la web.
+ *
+ * Es el único lugar del repo que lee esta cabecera: antes cada ruta la
+ * sacaba de `request.headers` y la reenviaba a mano (C1 sólo lo arregló en
+ * las dos rutas de login), así que la próxima ruta nacía con el bug si nadie
+ * se acordaba de copiarlo. Leerla acá, del contexto de pedido que Next arma
+ * para todo Route Handler y Server Component, la vuelve el default: no hay
+ * nada que una ruta nueva tenga que recordar.
+ *
+ * El backend decide qué hacer con el valor (`NUM_PROXIES=1` en
+ * `backend/config/settings.py`); acá sólo se reenvía tal cual llegó.
+ */
+async function ipDelVisitante(): Promise<string | null> {
+  return (await headers()).get("x-forwarded-for");
 }
 
 export class ApiError extends Error {
@@ -140,17 +160,19 @@ export async function callApi<T>(
   path: string,
   init: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
-  const { auth = true, headers, ...rest } = init;
+  const { auth = true, headers: initHeaders, ...rest } = init;
   const token = auth ? await getSessionToken() : null;
 
   if (auth && !token) throw new ApiError(401, "sin sesión");
 
+  const ip = await ipDelVisitante();
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
+      ...(ip ? { "x-forwarded-for": ip } : {}),
+      ...initHeaders,
     },
     cache: "no-store",
   });

@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, callApi } from "@/lib/session";
+import { ApiError, callApi, callApiRaw } from "@/lib/session";
 import { API_URL } from "@/lib/config";
 
 // El token vive en una cookie httpOnly y sólo lo lee el servidor. Acá se
 // reemplaza el almacén de cookies de Next por uno de mentira.
 let token: string | null = null;
+// La IP del visitante (C1, generalizado): `callApi`/`callApiRaw` la sacan del
+// contexto de pedido que arma `next/headers`, no de nada que pase el caller.
+let ipVisitante: string | null = null;
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) =>
       name === "astra_session" && token ? { value: token } : undefined,
   }),
+  headers: async () => new Headers(ipVisitante ? { "x-forwarded-for": ipVisitante } : {}),
 }));
 
 const json = (body: unknown, status = 200) =>
@@ -21,6 +25,7 @@ const json = (body: unknown, status = 200) =>
 
 beforeEach(() => {
   token = "un-token";
+  ipVisitante = null;
 });
 
 afterEach(() => {
@@ -79,6 +84,44 @@ describe("callApi", () => {
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  // C1 arregló el reenvío sólo en las dos rutas de login, copiado a mano en
+  // cada una. Generalizado acá: como TODA llamada al backend pasa por
+  // `callApi`, cualquier ruta nueva —exista hoy o se agregue mañana— lo hereda
+  // sin que nadie tenga que acordarse de repetir el patrón.
+  it("reenvía la IP del visitante a cualquier ruta, autenticada o no", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    ipVisitante = "203.0.113.7";
+
+    await callApi("/api/geocode/", { auth: false });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("203.0.113.7");
+  });
+
+  it("no manda x-forwarded-for inventado cuando el proxy no lo mandó", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await callApi("/api/account/");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBeUndefined();
+  });
+});
+
+describe("callApiRaw", () => {
+  it("también reenvía la IP del visitante (mismo mecanismo que callApi)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    ipVisitante = "198.51.100.9";
+
+    await callApiRaw("/api/charts/1/pdf/", { method: "POST" });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("198.51.100.9");
   });
 });
 
