@@ -1,6 +1,7 @@
 import logging
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -56,7 +57,19 @@ class AccountView(APIView):
         })
 
     def delete(self, request):
-        delete_account(request.user)
+        try:
+            delete_account(request.user)
+        except ImproperlyConfigured as exc:
+            # `sub_hash("email", ...)` exige TOMBSTONE_HMAC_KEY (I3, revisión
+            # de `puertas-de-acceso`): antes de esta identidad ninguna cuenta
+            # llegaba acá con provider="email", así que este camino no
+            # existía. Es una configuración faltante, no un pedido mal
+            # formado — 503, no el 500 pelado que tenía antes. Mismo
+            # tratamiento que `CanjearCodigoView` en `api/sessions.py`.
+            logger.error("borrado de cuenta no disponible: %s", exc)
+            return Response(
+                {"error": "borrado no disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

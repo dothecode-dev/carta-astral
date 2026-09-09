@@ -144,3 +144,33 @@ def test_el_tombstone_de_una_segunda_vida_suma_lo_de_la_primera(make_chart):
 @pytest.mark.django_db
 def test_unauthenticated_delete_rejected():
     assert APIClient().delete("/api/account/").status_code in (401, 403)
+
+
+# --- I3: borrar con identidad email y sin TOMBSTONE_HMAC_KEY da 503 --------
+#
+# `delete_account` llama a `sub_hash(ident.provider, ident.sub)` por cada
+# identidad de la cuenta. Para `provider="email"` eso levanta
+# `ImproperlyConfigured` si falta la clave, y antes de este fix la vista no
+# la capturaba: 500 pelado en vez de un 503 de "config faltante". Antes de la
+# rama `puertas-de-acceso` ninguna cuenta tenía identidad `email`, así que
+# este camino no existía.
+
+
+@pytest.mark.django_db
+def test_delete_con_identidad_email_y_sin_tombstone_hmac_key_da_503_no_500(settings):
+    from api.accounts import resolve_account
+
+    settings.TOMBSTONE_HMAC_KEY = "clave-temporal-para-crear-la-cuenta"
+    acc = resolve_account(VerifiedIdentity("email", "u@x.com", "u@x.com", True))
+    token = create_session(acc)
+    c = APIClient()
+    c.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    settings.TOMBSTONE_HMAC_KEY = ""
+    resp = c.delete("/api/account/")
+
+    assert resp.status_code == 503
+    # Nada se borró: el fallo de configuración no puede dejar la cuenta a
+    # medio borrar (el `update_or_create` del tombstone corre dentro del
+    # mismo atomic que el resto del borrado).
+    assert Account.objects.filter(pk=acc.pk).exists()
