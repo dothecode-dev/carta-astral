@@ -174,7 +174,83 @@ def test_existe_en_los_tres_idiomas():
 
 
 def test_no_se_loguea_ni_el_codigo_ni_la_direccion(caplog):
-    notificaciones.enviar_codigo("juan@gmail.com", "123456", "es")
+    # Sin key configurada esto ahora levanta `EnvioFallido` (Ruling 13): el
+    # mail ES el mecanismo de acceso, no un aviso accesorio. Lo que este test
+    # sigue fijando es que ni el código ni la dirección aparecen en el log,
+    # levante o no.
+    with pytest.raises(notificaciones.EnvioFallido):
+        notificaciones.enviar_codigo("juan@gmail.com", "123456", "es")
     registro = "\n".join(r.getMessage() for r in caplog.records)
     assert "123456" not in registro
     assert "juan@gmail.com" not in registro
+
+
+# --- Ruling 13: enviar_codigo() señala el fallo, no lo traga ---------------
+#
+# A diferencia de `notificar` —eventos accesorios de algo que ya pasó y que
+# la persona puede ver igual entrando a la cuenta—, acá el mail ES el
+# mecanismo de acceso. Tragarse la falla deja a alguien esperando un código
+# que nunca va a llegar, con el cupo de la hora ya gastado y ninguna señal en
+# ningún lado. Por eso `enviar_codigo` propaga `EnvioFallido` y es tarea del
+# endpoint (Tarea 7) decidir qué hacer con eso.
+
+
+def test_enviar_codigo_sin_key_configurada_levanta_envio_fallido(caplog):
+    with pytest.raises(notificaciones.EnvioFallido):
+        notificaciones.enviar_codigo("juan@gmail.com", "123456", "es")
+
+
+def test_enviar_codigo_resend_caido_levanta_envio_fallido(monkeypatch, settings, caplog):
+    settings.RESEND_API_KEY = "re_test_key"
+    settings.MAIL_FROM = "ASTRA <hola@send.astraguia.com>"
+
+    def post(url, **kwargs):
+        raise httpx.ConnectTimeout("sin red")
+
+    monkeypatch.setattr(notificaciones.httpx, "post", post)
+
+    with pytest.raises(notificaciones.EnvioFallido):
+        notificaciones.enviar_codigo("juan@gmail.com", "123456", "es")
+
+    registro = "\n".join(r.getMessage() for r in caplog.records)
+    assert "123456" not in registro
+    assert "juan@gmail.com" not in registro
+
+
+def test_enviar_codigo_un_400_de_resend_tambien_levanta_envio_fallido(
+    monkeypatch, settings, caplog,
+):
+    settings.RESEND_API_KEY = "re_test_key"
+    settings.MAIL_FROM = "ASTRA <hola@send.astraguia.com>"
+    monkeypatch.setattr(
+        notificaciones.httpx, "post", lambda url, **kw: RespuestaFalsa(422, {"message": "no"}),
+    )
+
+    with pytest.raises(notificaciones.EnvioFallido):
+        notificaciones.enviar_codigo("juan@gmail.com", "123456", "es")
+
+
+def test_enviar_codigo_camino_feliz_no_levanta_nada(resend):
+    notificaciones.enviar_codigo("juan@gmail.com", "123456", "es")
+
+    assert len(resend) == 1
+    cuerpo = resend[0]["json"]
+    assert cuerpo["to"] == ["juan@gmail.com"]
+    assert "123456" in cuerpo["html"]
+
+
+def test_notificar_de_los_otros_eventos_sigue_tragandose_la_falla(cuenta, monkeypatch, settings, caplog):
+    """Ruling 13 es sólo para `enviar_codigo`: los otros eventos son avisos
+    accesorios y siguen sin propagar."""
+    settings.RESEND_API_KEY = "re_test_key"
+    settings.MAIL_FROM = "ASTRA <hola@send.astraguia.com>"
+
+    def post(url, **kwargs):
+        raise httpx.ConnectTimeout("sin red")
+
+    monkeypatch.setattr(notificaciones.httpx, "post", post)
+
+    # No debe levantar nada: notificar/_enviar mantienen su comportamiento.
+    notificaciones.notificar(cuenta, "compra_acreditada", {"producto": "informe_natal"}, "es")
+
+    assert "fallo el aviso" in caplog.text

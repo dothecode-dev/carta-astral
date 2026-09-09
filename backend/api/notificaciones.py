@@ -107,6 +107,17 @@ _TEXTOS_CODIGO = {
 }
 
 
+class EnvioFallido(Exception):
+    """El mail del código de acceso no salió —sin clave configurada o falló
+    el POST a Resend— y quien llama tiene que enterarse: a diferencia de los
+    eventos de `notificar`, que son avisos accesorios de algo que ya pasó y
+    la persona puede ver igual entrando a la cuenta, acá el mail ES el
+    mecanismo de acceso. Tragar esto encierra afuera a alguien que espera un
+    código que nunca va a llegar, con el cupo de la hora ya gastado y sin una
+    sola señal en ningún lado. El mensaje nunca lleva el código ni la
+    dirección."""
+
+
 def notificar(account, evento: str, contexto: dict, lang: str) -> None:
     if evento not in EVENTOS:
         raise ValueError(f"evento desconocido: {evento!r}")
@@ -127,27 +138,26 @@ def textos_codigo(lang: str, codigo: str) -> tuple[str, str]:
 
 
 def enviar_codigo(email: str, codigo: str, lang: str) -> None:
-    """Hermana de `notificar`: cuando se manda el código de acceso todavía no
-    hay `Account` a la que atarlo —se crea recién al canjear—, así que recibe
-    la dirección directo. Mismo criterio que `notificar`: un fallo del
-    proveedor no propaga, sólo queda en el log (nunca el código, nunca la
-    dirección)."""
-    try:
-        _enviar_codigo(email, codigo, lang)
-    except Exception:
-        logger.exception("fallo el aviso %s", "codigo_acceso")
-
-
-def _enviar_codigo(email, codigo, lang):
+    """Hermana de `notificar` en la firma, no en el criterio de fallo
+    (Ruling 13): cuando se manda el código de acceso todavía no hay
+    `Account` a la que atarlo —se crea recién al canjear—, así que recibe la
+    dirección directo. Pero a diferencia de `notificar`, acá el mail ES el
+    mecanismo de acceso, así que un fallo del proveedor —incluida la
+    ausencia de `RESEND_API_KEY`, sin distinguir por entorno— se propaga como
+    `EnvioFallido`. Decidir qué hacer con eso (revertir el envío contabilizado,
+    devolver 503) es tarea de quien llama, no de esta función. Nunca el
+    código ni la dirección van al log ni al mensaje de la excepción."""
     logger.info("aviso al usuario", extra={"evento": "codigo_acceso", "lang": lang})
     if not settings.RESEND_API_KEY:
-        return
-    if not email:
-        logger.info("aviso sin destinatario", extra={"evento": "codigo_acceso"})
-        return
+        raise EnvioFallido("sin RESEND_API_KEY configurada")
 
     asunto, html = textos_codigo(lang, codigo)
-    respuesta = _post_resend(email, asunto, html)
+    try:
+        respuesta = _post_resend(email, asunto, html)
+    except Exception as exc:
+        logger.exception("fallo el envio %s", "codigo_acceso")
+        raise EnvioFallido("fallo el envio a Resend") from exc
+
     logger.info(
         "aviso enviado",
         extra={"evento": "codigo_acceso", "resend_id": respuesta.json().get("id")},
@@ -182,7 +192,7 @@ def _enviar(account, evento, contexto, lang):
 
 def _post_resend(direccion: str, asunto: str, html: str):
     """El POST a Resend, compartido por `_enviar` (con cuenta) y
-    `_enviar_codigo` (con una dirección suelta)."""
+    `enviar_codigo` (con una dirección suelta)."""
     respuesta = httpx.post(
         _API,
         headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
