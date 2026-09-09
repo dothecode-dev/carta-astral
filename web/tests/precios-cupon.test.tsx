@@ -18,6 +18,9 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => undefined, set: () => {}, delete: () => {} }),
+  // `fetchCupon` pasa por `callApi`, que la usa para reenviar la IP del
+  // visitante. Sin esto, el cupón con forma válida rompe el render entero.
+  headers: async () => new Headers(),
 }));
 vi.mock("@/lib/telemetry", () => ({ track: vi.fn() }));
 

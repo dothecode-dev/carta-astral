@@ -11,6 +11,14 @@ import { API_URL } from "./config";
 //
 // Si el backend no responde, `null`: la página muestra un aviso y sigue en pie.
 // Precios en blanco es mejor que precios inventados.
+//
+// EXCEPCIÓN a `rutasApiSinFetchDirecto.test.ts`: no pasa por `callApi`. Mismo
+// motivo que `sky.ts` —`callApi` fuerza `cache: "no-store"`, que la guía de
+// `fetch` (`node_modules/next/dist/docs/01-app/03-api-reference/04-functions/
+// fetch.md`, "Good to know") marca como conflictivo con `next.revalidate`— y
+// acá además no hay ningún techo que proteger: `CatalogoView`
+// (`backend/api/catalogo_api.py`) no declara `throttle_classes`, así que
+// reenviar `x-forwarded-for` no cambiaría nada.
 
 const REVALIDATE_SECONDS = 300;
 const TIMEOUT_MS = 3000;

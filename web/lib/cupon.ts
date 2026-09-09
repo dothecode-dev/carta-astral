@@ -1,6 +1,6 @@
-import { API_URL } from "./config";
-
 import type { ProductoCatalogo } from "./catalogo";
+import { normalizarCupon } from "./cuponForma";
+import { callApi } from "./session";
 
 // Un cupón en la página de precios. El descuento lo calcula el backend —la
 // misma `precio_final` con la que abre el checkout y valida el pago—, así que
@@ -10,19 +10,22 @@ import type { ProductoCatalogo } from "./catalogo";
 // cambian con cada compra, y «quedan 3» congelado cinco minutos es mentir.
 // Si el backend no responde, `null`: precio de lista, nunca un descuento
 // inventado.
+//
+// Por `callApi` (público, `auth: false`), no por `fetch` directo: no hay
+// caché de Next que perder acá (ya era `no-store`), la página de precios ya
+// es dinámica por `searchParams` antes de llegar acá, y el endpoint tiene
+// techo por IP en el backend (`throttle_scope = "cupon"`, 30/hora) — sin
+// reenviar `x-forwarded-for` ese techo cuenta un solo balde para todo el
+// sitio, el de la IP del contenedor de la web, en vez de uno por visitante.
+//
+// `normalizarCupon` no vive acá: es pura y la usa un Client Component
+// (`CuponInput`), que no puede arrastrar `callApi` ni `next/headers` a su
+// bundle. Vive en `cuponForma.ts` y se re-exporta para no romper a quien ya
+// la importaba desde acá (`entrar/page.tsx`, `precios/page.tsx`,
+// `api/session/expirada/route.ts`).
+export { normalizarCupon };
 
 const TIMEOUT_MS = 3000;
-
-/** El alfabeto de Stripe: mayúsculas, dígitos y guión, de 3 a 40. */
-const FORMA = /^[A-Z0-9-]{3,40}$/;
-
-/** El código como lo guarda el backend, o null si no tiene forma de código.
- *  Viene de la URL o de un campo: cualquiera escribe lo que quiera ahí. */
-export function normalizarCupon(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  const codigo = raw.trim().toUpperCase();
-  return FORMA.test(codigo) ? codigo : null;
-}
 
 export type ProductoConCupon = ProductoCatalogo & {
   precio_final_centavos: number;
@@ -36,12 +39,10 @@ export type CuponRespuesta =
 export async function fetchCupon(codigo: string, producto?: string): Promise<CuponRespuesta | null> {
   const query = producto ? `?producto=${encodeURIComponent(producto)}` : "";
   try {
-    const res = await fetch(`${API_URL}/api/cupones/${encodeURIComponent(codigo)}/${query}`, {
-      cache: "no-store",
+    return await callApi<CuponRespuesta>(`/api/cupones/${encodeURIComponent(codigo)}/${query}`, {
+      auth: false,
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!res.ok) return null;
-    return (await res.json()) as CuponRespuesta;
   } catch {
     return null;
   }

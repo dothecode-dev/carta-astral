@@ -87,9 +87,13 @@ describe("callApi", () => {
   });
 
   // C1 arregló el reenvío sólo en las dos rutas de login, copiado a mano en
-  // cada una. Generalizado acá: como TODA llamada al backend pasa por
-  // `callApi`, cualquier ruta nueva —exista hoy o se agregue mañana— lo hereda
-  // sin que nadie tenga que acordarse de repetir el patrón.
+  // cada una. Generalizado acá: casi toda llamada al backend pasa por
+  // `callApi`, así que cualquier ruta nueva —exista hoy o se agregue mañana—
+  // lo hereda sin que nadie tenga que acordarse de repetir el patrón. Las
+  // excepciones son nombradas, no un olvido: `lib/sky.ts`, `lib/catalogo.ts` y
+  // `lib/notes.ts` cachean con `next.revalidate`, que `callApi` no puede
+  // preservar (fuerza `cache: "no-store"`); `rutasApiSinFetchDirecto.test.ts`
+  // las barre y documenta por qué.
   it("reenvía la IP del visitante a cualquier ruta, autenticada o no", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);

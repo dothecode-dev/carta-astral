@@ -10,6 +10,19 @@ import { INTL_LOCALE, isLocale, type Locale } from "./i18n";
 // mostrando "todavía no hay notas" y eso es lo que vería Google en ese momento.
 // Se lanza el error: Next descarta la regeneración y sigue sirviendo la última
 // versión buena que tenga en caché.
+//
+// EXCEPCIÓN a `rutasApiSinFetchDirecto.test.ts`: no pasa por `callApi`, y acá
+// no es sólo el conflicto de caché de `sky.ts`/`catalogo.ts` —comprobado con
+// evidencia, no de memoria—: `askCms` la usa también `app/sitemap.ts`, que hoy
+// no toca ninguna Request-time API y por eso `next build` lo prerenderiza
+// entero como estático (`○ /sitemap.xml`, revalida cada 5m). Se probó
+// agregando un `headers()` (de `next/headers`, lo que usa `callApi` para sacar
+// la IP) adentro de `askCms` y corriendo `next build`: no revienta, pero
+// `/sitemap.xml` pasa de `○ (Static)` a `ƒ (Dynamic)` — el CMS se consulta en
+// cada pedido del sitemap en vez de una vez cada 5 minutos. Es exactamente el
+// tipo de cambio (una página estática pasa a dinámica) que hay que frenar y
+// avisar, no decidir acá. Tampoco hay techo que ganar: `NotasAPIViewSet`
+// (`backend/cms/api.py`) no declara throttle alguno.
 
 const REVALIDATE_SECONDS = 300;
 const TIMEOUT_MS = 5000;

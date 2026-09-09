@@ -9,7 +9,18 @@ import { API_URL } from "./config";
 // Si el backend no responde, la portada no se cae: el cliente calcula con
 // elementos orbitales (lib/ephemeris.ts), que para un dibujo de 400 píxeles es
 // indistinguible.
-
+//
+// EXCEPCIÓN a `rutasApiSinFetchDirecto.test.ts`: no pasa por `callApi`.
+// `callApi` fuerza `cache: "no-store"`, que en la guía de `fetch`
+// (`node_modules/next/dist/docs/01-app/03-api-reference/04-functions/fetch.md`,
+// "Good to know") es una opción que entra en conflicto con `next.revalidate`
+// —Next ignora las dos y tira un warning en desarrollo— así que perdería el
+// único pedido por minuto que sostiene el comentario de arriba a cambio de
+// uno por visita. El endpoint sí tiene techo por IP en el backend
+// (`throttle_scope = "sky"`, 240/hora), pero ese techo ya lo cuida la caché:
+// deduplicada a como mucho un pedido por minuto, nunca se acerca. Reenviar la
+// IP de quien disparó esa revalidación además no tendría sentido: no es su
+// pedido, es el de cualquiera que haya llegado en ese minuto.
 
 const REVALIDATE_SECONDS = 60;
 const TIMEOUT_MS = 3000;

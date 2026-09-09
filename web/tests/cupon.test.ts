@@ -2,6 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchCupon, normalizarCupon } from "@/lib/cupon";
 
+// `fetchCupon` pasa por `callApi` (lib/session.ts), que saca la IP del
+// visitante del contexto de pedido que arma `next/headers`. Sin este mock,
+// `headers()` no tiene nada que leer fuera de un render real de Next.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined }),
+  headers: async () => new Headers(),
+}));
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
-import { normalizarCupon } from "@/lib/cupon";
+import { normalizarCupon } from "@/lib/cuponForma";
 import type { Dict, Locale } from "@/lib/i18n";
 import { track } from "@/lib/telemetry";
 
