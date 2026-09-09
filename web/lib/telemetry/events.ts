@@ -19,7 +19,7 @@ export type EventoProps = {
    *  Cubre además la carta de ejemplo y cada nota del CMS, porque el slug ya
    *  viaja en la ruta: no hacen falta eventos propios para eso. */
   pagina_vista: { locale: string; ruta: string };
-  login: { provider: "google" | "apple" };
+  login: { provider: "google" | "apple" | "email" };
   /** Calculó su rueda. `con_sesion: false` es el visitante frío que entró
    *  por la home o por una nota y llegó a ver algo suyo sin registrarse: es el
    *  primer escalón del embudo que antes empezaba directamente en el login. */
@@ -109,6 +109,26 @@ export type EventoProps = {
    *  intentó y el canje contra /api/session no sirvió. Sin esto, un botón
    *  que nunca aparece y un login que sale mal se ven igual que silencio. */
   login_no_disponible: { motivo: "blocked" | "failed" };
+  /** Pidió el código de 6 dígitos por mail (RF15). Es el denominador de esta
+   *  puerta, igual que `entrar_visto` lo es de la pantalla entera: sin esto
+   *  no se sabe cuánta gente arranca el camino de mail antes de canjear. */
+  codigo_pedido: Record<string, never>;
+  /** Canjeó el código y entró. Específico de esta puerta —a diferencia de
+   *  `login`, que es el evento del embudo compartido con Google/Apple— para
+   *  poder medir la conversión de PEDIR a CANJEAR sin mezclarla con las
+   *  otras dos puertas. Los dos se emiten juntos al canjear bien. */
+  codigo_canjeado: Record<string, never>;
+  /** Un pedido o un canje que no sirvió. `paso` distingue en cuál de los dos
+   *  pasó; `motivo` es el mismo vocabulario de `login_no_disponible` pero
+   *  más fino, porque acá el pedido y el canje son dos rutas separadas con
+   *  fallos distintos: `invalido` es el 401 del canje (código incorrecto o
+   *  vencido, nunca sale del pedido), `demasiados` el 429, `no_disponible`
+   *  el 503/502, y `red` el `fetch` que ni siquiera volvió — el único que no
+   *  deja rastro del lado del servidor. */
+  codigo_fallido: {
+    paso: "pedido" | "canje";
+    motivo: "invalido" | "demasiados" | "no_disponible" | "red";
+  };
 };
 
 export type EventoNombre = keyof EventoProps;

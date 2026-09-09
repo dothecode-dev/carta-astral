@@ -339,6 +339,17 @@ body > .frame {
   text-decoration: none;
 }
 
+/* Fila de acciones del paso 2 de EntrarPorMail (reenviar / cambiar de mail),
+   junto al botón de entrar. Sin esto quedaban apiladas con el mismo gap de
+   1.5rem que separa los campos del formulario, que es demasiado para dos
+   enlaces chicos al lado de un botón. */
+.authMailActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+
 .balance {
   display: flex;
   align-items: baseline;

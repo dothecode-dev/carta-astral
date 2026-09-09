@@ -322,6 +322,38 @@ export type Dict = {
     failed: string;
     legal: string;
     /**
+     * La puerta de acceso por mail (RF15/RF16): código de 6 dígitos, sin
+     * contraseña. `mail*` es el paso 1 (pedir el código), `codigo*` el paso 2
+     * (canjearlo); `enviando` y `errorRed` son comunes a los dos.
+     */
+    mailLabel: string;
+    /** Placeholder del input, nunca el label: el label es lo que lee un
+     *  lector de pantalla y lo que asocia `getByLabelText` en los tests. */
+    mailPlaceholder: string;
+    mailButton: string;
+    codigoLabel: string;
+    codigoPlaceholder: string;
+    /** Tiene que decir que puede tardar y que conviene mirar spam: es la
+     *  espera real de un mail, no de una API — sin este aviso, quien no lo ve
+     *  enseguida asume que el envío falló. */
+    codigoHelp: string;
+    codigoButton: string;
+    /** Estado de "en vuelo" de cualquiera de los dos pasos. */
+    enviando: string;
+    /** El backend manda el MISMO código al reenviar (RF6), nunca uno nuevo:
+     *  el botón sólo repite el pedido, no arranca uno distinto. */
+    reenviar: string;
+    /** Vuelve al paso 1 sin perder el mail que ya se escribió. */
+    cambiarMail: string;
+    /** 401 del canje: código incorrecto o vencido. */
+    codigoInvalido: string;
+    /** 429, en cualquiera de los dos pasos. */
+    demasiadosIntentos: string;
+    /** 503/502: el backend está mal configurado o Resend no respondió. */
+    noDisponible: string;
+    /** El `fetch` que ni siquiera volvió — sin red, sin DNS, un bloqueador. */
+    errorRed: string;
+    /**
      * Título de lo que la cuenta puede usar ahora mismo.
      *
      * El bloque de derechos no tenía ninguno: aparecía suelto bajo el mail, en
@@ -907,6 +939,20 @@ const es: Dict = {
     blocked: "No pudimos cargar el acceso de Google — suele pasar con los bloqueadores de rastreadores. Entrá con tu mail acá abajo.",
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
     legal: "Al entrar aceptás los términos y la política de privacidad.",
+    mailLabel: "Tu mail",
+    mailPlaceholder: "vos@ejemplo.com",
+    mailButton: "Enviarme un código",
+    codigoLabel: "Código de 6 dígitos",
+    codigoPlaceholder: "123456",
+    codigoHelp: "Puede tardar unos minutos. Si no lo ves, revisá spam.",
+    codigoButton: "Entrar",
+    enviando: "Enviando…",
+    reenviar: "Reenviar código",
+    cambiarMail: "Usar otro mail",
+    codigoInvalido: "Ese código no es válido o venció. Pedí uno nuevo o volvé a escribirlo.",
+    demasiadosIntentos: "Demasiados intentos. Esperá un momento y probá de nuevo.",
+    noDisponible: "El acceso por mail no está disponible ahora. Probá con Google o más tarde.",
+    errorRed: "No pudimos conectarnos. Revisá tu conexión y probá de nuevo.",
     listoTitle: "Listo para usar",
     usarEnNueva: "Usar en una carta nueva",
     usarEnMisCartas: "Usar en una de mis cartas",
@@ -1250,6 +1296,20 @@ const en: Dict = {
     blocked: "We couldn't load Google sign-in — usually a tracker blocker. Use your email below instead.",
     failed: "We couldn't sign you in. Try again.",
     legal: "By signing in you accept the terms and the privacy policy.",
+    mailLabel: "Your email",
+    mailPlaceholder: "you@example.com",
+    mailButton: "Send me a code",
+    codigoLabel: "6-digit code",
+    codigoPlaceholder: "123456",
+    codigoHelp: "It can take a few minutes. If you don't see it, check spam.",
+    codigoButton: "Sign in",
+    enviando: "Sending…",
+    reenviar: "Resend code",
+    cambiarMail: "Use another email",
+    codigoInvalido: "That code is wrong or expired. Ask for a new one or try again.",
+    demasiadosIntentos: "Too many attempts. Wait a moment and try again.",
+    noDisponible: "Email sign-in isn't available right now. Try Google or come back later.",
+    errorRed: "We couldn't connect. Check your connection and try again.",
     listoTitle: "Ready to use",
     usarEnNueva: "Use on a new chart",
     usarEnMisCartas: "Use on one of my charts",
@@ -1593,6 +1653,20 @@ const pt: Dict = {
     blocked: "Não conseguimos carregar o acesso do Google — costuma ser um bloqueador de rastreadores. Entre com seu e-mail abaixo.",
     failed: "Não conseguimos entrar. Tente de novo.",
     legal: "Ao entrar você aceita os termos e a política de privacidade.",
+    mailLabel: "Seu e-mail",
+    mailPlaceholder: "voce@exemplo.com",
+    mailButton: "Me enviar um código",
+    codigoLabel: "Código de 6 dígitos",
+    codigoPlaceholder: "123456",
+    codigoHelp: "Pode demorar alguns minutos. Se não chegar, veja o spam.",
+    codigoButton: "Entrar",
+    enviando: "Enviando…",
+    reenviar: "Reenviar código",
+    cambiarMail: "Usar outro e-mail",
+    codigoInvalido: "Esse código está errado ou venceu. Peça um novo ou tente de novo.",
+    demasiadosIntentos: "Muitas tentativas. Espere um momento e tente de novo.",
+    noDisponible: "O acesso por e-mail não está disponível agora. Tente com Google ou mais tarde.",
+    errorRed: "Não conseguimos conectar. Verifique sua conexão e tente de novo.",
     listoTitle: "Pronto para usar",
     usarEnNueva: "Usar em um mapa novo",
     usarEnMisCartas: "Usar em um dos meus mapas",
