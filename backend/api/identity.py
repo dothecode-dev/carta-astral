@@ -30,15 +30,30 @@ def normalizar(email: str) -> str:
 
 
 def config_faltante() -> list[str]:
-    """Nombres de las variables de configuración de identidad que faltan.
+    """Nombres de las variables de configuración que faltan PARA EL LOGIN POR
+    MAIL. Hoy es una sola: `TOMBSTONE_HMAC_KEY`.
 
-    Control compensatorio del Ruling 7: el fail-fast de arranque (RF8) se
-    cambió por un log en stderr para no tumbar todo el backend —informes
-    pagos incluidos— por una variable de una sola superficie (el login por
-    mail). Pero un log que nadie lee y que `make deploy` no mira no avisa de
-    nada: esto es lo que `EstadoView` (`api/mantenimiento.py`) expone en
-    `GET /api/estado/`, que la web ya sondea y que `make deploy` ya consulta
-    en cada despliegue. Sin filtrar valores, sólo qué falta.
+    El nombre sugiere algo más amplio ("identidad") de lo que esta función
+    en realidad mira, y eso era mentira desde el vamos (Hallazgo 4 de la
+    re-revisión de `puertas-de-acceso`): Google y Apple, sin `GOOGLE_AUD` o
+    `APPLE_AUD`/`APPLE_TEAM_ID`/`APPLE_KEY_ID`/`APPLE_PRIVATE_KEY`, se
+    quedan mal configurados igual y `GET /api/estado/` sigue diciendo que
+    está todo bien. No es un descuido silencioso: esas dos puertas YA
+    fallan cerradas por su cuenta, cada una en su propio punto de uso
+    (`api/sso.py::_validate` levanta `SSONotConfigured` si `audiences_for()`
+    da vacío; `api/apple.py::build_client_secret` levanta
+    `AppleNotConfigured`), así que
+    un login mal configurado por Google o Apple ya da 401/503 en el
+    momento, sin necesitar que este endpoint lo anuncie de antemano. Lo que
+    a ESTA función le falta cubrir es sólo el login por mail: sin
+    `TOMBSTONE_HMAC_KEY` el backend arranca igual (no hay fail-fast de RF8,
+    a propósito) y sin este chequeo el único aviso quedaba en un log de
+    arranque que nadie mira.
+
+    Control compensatorio del Ruling 7: esto es lo que `EstadoView`
+    (`api/mantenimiento.py`) expone en `GET /api/estado/`, que la web ya
+    sondea y que `make deploy` ya consulta en cada despliegue. Sin filtrar
+    valores, sólo qué falta.
     """
     faltantes = []
     if not tombstone_hmac_configurada():
