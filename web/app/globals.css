@@ -9,6 +9,12 @@
    oscuro sobre fondo claro, eso se lee como texto lavado — y es lo que pasaba
    con todo lo que no fuera un título en negrita.
 
+   Ningún texto informativo baja de 0.75rem (12px), y lo chequea
+   `tests/tipografia.test.ts`. Había etiquetas, cabeceras de tabla y el pie
+   entero en 10 y 11px: con el tracking que llevan, eso es una fila de letras
+   sueltas que se lee acercándose a la pantalla. 12px es el piso, no el
+   objetivo.
+
    Hay DOS tonos secundarios porque hay dos trabajos tipográficos distintos, y
    tratarlos con un solo token era el error de fondo:
      --ink-soft   párrafos y bajadas en Outfit, de 15px para arriba.
@@ -256,7 +262,7 @@ a {
   display: flex;
   gap: 0.75rem;
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
 }
 
@@ -287,7 +293,7 @@ a {
 
 .switch button {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -579,7 +585,7 @@ a {
 
 .chartLangs {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
   color: var(--accent);
   margin-top: 0.2rem;
@@ -647,7 +653,7 @@ a {
   margin: 0;
   width: 100%;
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--danger);
@@ -669,7 +675,7 @@ a {
 
 .backLink {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -694,7 +700,7 @@ a {
 
 .foldoutHead {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -1008,7 +1014,7 @@ a {
 
 .fieldLabel {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -1121,7 +1127,7 @@ a {
 
 .placeTz {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   letter-spacing: 0.1em;
   color: var(--ink-label);
 }
@@ -1143,7 +1149,7 @@ a {
   padding: 0;
   cursor: pointer;
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent);
@@ -1460,7 +1466,7 @@ a {
 .noteMeta {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -1581,7 +1587,7 @@ a {
 
 .promiseLink {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent);
@@ -1633,7 +1639,7 @@ a {
   font-weight: 400;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   color: var(--ink-soft);
   padding: 0.55rem 0;
   border-bottom: 1px solid var(--hairline);
@@ -1718,7 +1724,7 @@ a {
 .docMeta {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -1851,7 +1857,7 @@ a {
 .chartTable thead th {
   text-align: left;
   font-weight: 400;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-soft);
@@ -1892,7 +1898,7 @@ a {
   flex-wrap: wrap;
   gap: 0.35rem 1.25rem;
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -1962,7 +1968,7 @@ a {
 .passageSource {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent);
@@ -2073,7 +2079,7 @@ a {
   border-top: 1px solid var(--hairline);
   margin-top: clamp(3rem, 7vw, 4.5rem);
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -2342,7 +2348,7 @@ a {
 
 .matrixTipData {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-label);
@@ -2509,7 +2515,7 @@ a {
   border: 1px solid var(--accent);
   border-radius: 999px;
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
@@ -2665,7 +2671,7 @@ a {
   padding: 0 0.5rem;
   background: var(--ground);
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
