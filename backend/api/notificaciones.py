@@ -92,17 +92,17 @@ _TEXTOS_CODIGO = {
     "es": (
         "Tu código de acceso es {codigo}",
         "<p>Usá este código para entrar a tu cuenta: <strong>{codigo}</strong></p>"
-        "<p>Vence en 10 minutos. Si no lo pediste vos, ignorá este mail.</p>",
+        "<p>Vence en {ttl} minutos. Si no lo pediste vos, ignorá este mail.</p>",
     ),
     "en": (
         "Your access code is {codigo}",
         "<p>Use this code to sign in to your account: <strong>{codigo}</strong></p>"
-        "<p>It expires in 10 minutes. If you didn't request it, ignore this email.</p>",
+        "<p>It expires in {ttl} minutes. If you didn't request it, ignore this email.</p>",
     ),
     "pt": (
         "Seu código de acesso é {codigo}",
         "<p>Use este código para entrar na sua conta: <strong>{codigo}</strong></p>"
-        "<p>Ele expira em 10 minutos. Se você não pediu, ignore este e-mail.</p>",
+        "<p>Ele expira em {ttl} minutos. Se você não pediu, ignore este e-mail.</p>",
     ),
 }
 
@@ -130,11 +130,14 @@ def notificar(account, evento: str, contexto: dict, lang: str) -> None:
 def textos_codigo(lang: str, codigo: str) -> tuple[str, str]:
     """Asunto y cuerpo del mail del código de acceso, en el idioma pedido (o
     español si no hay traducción). El código va en el asunto a propósito: se
-    lee desde la notificación del teléfono sin abrir el mail."""
+    lee desde la notificación del teléfono sin abrir el mail. El TTL sale de
+    `settings.CODIGO_TTL_MINUTOS`, no está fijo en el texto: si cambia la
+    config, el mail lo sigue."""
     if lang not in _TEXTOS_CODIGO:
         lang = _LANG_DEFAULT
     asunto, html = _TEXTOS_CODIGO[lang]
-    return asunto.format(codigo=codigo), html.format(codigo=codigo)
+    ttl = settings.CODIGO_TTL_MINUTOS
+    return asunto.format(codigo=codigo), html.format(codigo=codigo, ttl=ttl)
 
 
 def enviar_codigo(email: str, codigo: str, lang: str) -> None:
@@ -190,7 +193,7 @@ def _enviar(account, evento, contexto, lang):
     )
 
 
-def _post_resend(direccion: str, asunto: str, html: str):
+def _post_resend(direccion: str, asunto: str, html: str) -> httpx.Response:
     """El POST a Resend, compartido por `_enviar` (con cuenta) y
     `enviar_codigo` (con una dirección suelta)."""
     respuesta = httpx.post(

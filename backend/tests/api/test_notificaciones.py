@@ -173,6 +173,31 @@ def test_existe_en_los_tres_idiomas():
         assert asunto and "123456" in html
 
 
+def test_un_idioma_que_no_existe_cae_en_espanol_tambien_para_el_codigo():
+    # Mismo criterio que `_enviar`/`notificar` (`test_un_idioma_que_no_existe_
+    # cae_en_espanol` arriba): el fallback existe en el código
+    # (`_LANG_DEFAULT`) pero el camino del código de acceso no lo probaba.
+    asunto, html = notificaciones.textos_codigo("de", "123456")
+    asunto_es, html_es = notificaciones.textos_codigo("es", "123456")
+    assert (asunto, html) == (asunto_es, html_es)
+
+
+def test_enviar_codigo_con_idioma_inexistente_manda_en_espanol(resend):
+    notificaciones.enviar_codigo("juan@gmail.com", "123456", "de")
+
+    asunto_es, _ = notificaciones.textos_codigo("es", "123456")
+    assert resend[0]["json"]["subject"] == asunto_es
+
+
+@pytest.mark.parametrize("lang", ["es", "en", "pt"])
+def test_el_ttl_del_mail_sale_de_settings_no_esta_hardcodeado(settings, lang):
+    # No afirma "10" a mano: si `CODIGO_TTL_MINUTOS` cambia, el mail tiene
+    # que seguirlo. Lo prueba pisando el default (10) por otro valor.
+    settings.CODIGO_TTL_MINUTOS = 7
+    _, html = notificaciones.textos_codigo(lang, "123456")
+    assert str(settings.CODIGO_TTL_MINUTOS) in html
+
+
 def test_no_se_loguea_ni_el_codigo_ni_la_direccion(caplog):
     # Sin key configurada esto ahora levanta `EnvioFallido` (Ruling 13): el
     # mail ES el mecanismo de acceso, no un aviso accesorio. Lo que este test

@@ -3,6 +3,27 @@ from rest_framework.test import APIClient
 
 
 @pytest.fixture(autouse=True)
+def _sin_resend_por_defecto(settings):
+    """Ningún test manda un mail de verdad si no lo pide explícito (Ruling 14).
+
+    `make test-back` sourcea `backend/.env` (Makefile): en la máquina de
+    cualquiera que tenga ahí la clave real de Resend —que es lo normal en
+    desarrollo—, un test que se olvide de fijar `RESEND_API_KEY` no ejercita
+    el camino "sin clave" que cree estar probando, sino que hace un POST de
+    verdad contra la API real hacia lo que sea que haya escrito como
+    destinatario. Justo el test que existe para blindar contra una fuga es
+    el que puede fugar.
+
+    El aislamiento no puede depender de que cada test se acuerde de pisarla
+    (la misma razón por la que `.env.example` se verifica con un test en vez
+    de una convención): se fuerza acá, vacía, para toda la suite. El test que
+    sí necesita una clave la setea explícito con `settings.RESEND_API_KEY =
+    "..."`, como ya hacen los que hoy la usan — corre después de este
+    fixture y la pisa sin problema."""
+    settings.RESEND_API_KEY = ""
+
+
+@pytest.fixture(autouse=True)
 def _static_sin_manifest(settings):
     """Los tests no dependen de haber corrido `collectstatic`.
 
