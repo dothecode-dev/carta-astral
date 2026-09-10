@@ -60,6 +60,8 @@ export function CartaPreview({
           locale={locale}
           titulo={dict.chart.aspects}
           orbeLabel={dict.chart.aspectColumns.orb}
+          glosarioTitulo={dict.chart.aspectGlossary}
+          glosarioCuenta={dict.chart.aspectGlossaryCount}
         />
       )}
 

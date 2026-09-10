@@ -50,6 +50,8 @@ export function AspectMatrix({
   locale,
   titulo,
   orbeLabel,
+  glosarioTitulo,
+  glosarioCuenta,
 }: {
   bodies: string[];
   aspects: { a: string; b: string; type: string; orb: number }[];
@@ -57,6 +59,10 @@ export function AspectMatrix({
   titulo: string;
   /** Cómo se llama al orbe en la ficha: "orbe", "orb". */
   orbeLabel: string;
+  /** Título del glosario: "Qué significa cada aspecto". */
+  glosarioTitulo: string;
+  /** Cuántos hay de ese tipo en esta carta. Lleva `{n}`. */
+  glosarioCuenta: string;
 }) {
   const participantes = new Set(aspects.flatMap((a) => [a.a, a.b]));
   const order = [
@@ -72,6 +78,29 @@ export function AspectMatrix({
 
   /** El nombre largo, para la ficha: en un glifo no se aprende nada. */
   const nombrar = (n: string) => cuerpos[n] ?? AXIS_NAME[locale][n] ?? n.replace(/_/g, " ");
+
+  /**
+   * Los tipos de aspecto que esta carta tiene, con cuántos hay de cada uno.
+   *
+   * La glosa de un aspecto habla del TIPO, no del par: "fluye sin esfuerzo" es
+   * lo que hace un trígono, sea Sol-Júpiter o Luna-Plutón. Dicha una vez por
+   * tipo se lee; repetida en cada uno de los sesenta y dos pares se convierte
+   * en relleno. Y la cuenta es lo único de acá que es de esta carta y de
+   * ninguna otra: contesta de qué está hecha.
+   *
+   * El desempate por ángulo no es cosmético: sin él, dos tipos con la misma
+   * cuenta salen en el orden en que el Map los recorrió y el HTML cambia entre
+   * builds de la misma carta.
+   */
+  const cuentaPorTipo = new Map<string, number>();
+  for (const p of pairs) cuentaPorTipo.set(p.type, (cuentaPorTipo.get(p.type) ?? 0) + 1);
+  const glosario = [...cuentaPorTipo.entries()]
+    .filter(([type]) => significados[type])
+    .map(([type, cuenta]) => ({ type, cuenta }))
+    .sort(
+      (x, y) =>
+        y.cuenta - x.cuenta || (ASPECT_ANGLE[x.type] ?? 999) - (ASPECT_ANGLE[y.type] ?? 999),
+    );
 
   return (
     <section className="aspects">
@@ -128,6 +157,38 @@ export function AspectMatrix({
           </tbody>
         </table>
       </div>
+
+      {/* El glosario. Va acá, entre la matriz y la lista, porque en pantalla
+          angosta —donde la matriz no se dibuja— es lo primero del bloque: qué
+          significan antes del detalle de cuáles hay.
+
+          No está plegado a propósito. La glosa vivía sólo en la ficha de la
+          matriz, y la ficha necesita `:hover`: en un teléfono, donde la matriz
+          además está en `display: none`, las explicaciones no existían. Plegarlo
+          las dejaría a un toque de distancia en vez de a ninguno, para ahorrar
+          siete líneas. */}
+      {glosario.length > 0 ? (
+        <div className="aspectGlossary">
+          <p className="eyebrow">{glosarioTitulo}</p>
+          <dl className="glossaryList">
+            {glosario.map(({ type, cuenta }) => (
+              <div key={type} className="glossaryItem">
+                <dt className="glossaryTerm">
+                  <span className="glossaryGlyph">{ASPECT_GLYPHS[type] ?? "·"}</span>
+                  <span className="glossaryName">{nombres[type] ?? type}</span>
+                  {ASPECT_ANGLE[type] != null ? (
+                    <span className="glossaryAngle">{ASPECT_ANGLE[type]}°</span>
+                  ) : null}
+                  <span className="glossaryCount">
+                    {glosarioCuenta.replace("{n}", String(cuenta))}
+                  </span>
+                </dt>
+                <dd className="glossaryMeaning">{significados[type]}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
 
       {/* La lista con los orbes. Va plegada porque son decenas de filas: una
           carta típica pasa los sesenta aspectos. En pantalla ancha acompaña a

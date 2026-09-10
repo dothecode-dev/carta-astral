@@ -534,6 +534,10 @@ export type Dict = {
     aspects: string;
     axisNames: { AC: string; MC: string };
     aspectColumns: { pair: string; aspect: string; orb: string };
+    /** Título del glosario: qué significa cada tipo de aspecto que la carta tiene. */
+    aspectGlossary: string;
+    /** Cuántos aspectos de ese tipo hay en la carta. Lleva `{n}`. */
+    aspectGlossaryCount: string;
     show: string;
     hide: string;
     waitTitle: string;
@@ -810,6 +814,8 @@ const es: Dict = {
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Medio Cielo" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
+    aspectGlossary: "Qué significa cada aspecto",
+    aspectGlossaryCount: "{n} en tu carta",
     show: "Ver",
     hide: "Ocultar",
     waitTitle: "Leyendo tu cielo",
@@ -1170,6 +1176,8 @@ const en: Dict = {
     aspects: "Aspects",
     axisNames: { AC: "Ascendant", MC: "Midheaven" },
     aspectColumns: { pair: "Between", aspect: "Aspect", orb: "Orb" },
+    aspectGlossary: "What each aspect means",
+    aspectGlossaryCount: "{n} in your chart",
     show: "Show",
     hide: "Hide",
     waitTitle: "Reading your sky",
@@ -1530,6 +1538,8 @@ const pt: Dict = {
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Meio do Céu" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
+    aspectGlossary: "O que significa cada aspecto",
+    aspectGlossaryCount: "{n} no seu mapa",
     show: "Ver",
     hide: "Ocultar",
     waitTitle: "Lendo o seu céu",

@@ -2487,9 +2487,125 @@ a {
   color: var(--ink-label);
 }
 
+/* El glosario de aspectos.
+
+   Existe porque la glosa de cada tipo vivía sólo en la ficha de la matriz, y
+   esa ficha pide `:hover` sobre una matriz que está en `display: none` hasta
+   los 900px: en un teléfono —y en cualquier pantalla táctil— las siete
+   explicaciones no se podían alcanzar. Acá se dicen una vez, sin hover y sin
+   plegar. */
+.aspectGlossary {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* El aire entre entradas tiene que ser mayor que el aire de adentro, o los seis
+   bloques se leen como doce párrafos sueltos. */
+.glossaryList {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+}
+
+/* Glifo a la izquierda en su propia columna, y el `dd` alineado con el nombre:
+   la sangría la da la columna, no un margen del párrafo. */
+.glossaryItem {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  column-gap: 0.5rem;
+  row-gap: 0.25rem;
+  /* Un solo ancho para la entrada entera, no uno por elemento: así la cuenta,
+     que va empujada al final de su fila, cae sobre el mismo borde derecho donde
+     corta la glosa. Con la medida puesta en cada hijo, en pantalla ancha la
+     cuenta se iba al borde del contenedor —casi mil píxeles— y quedaba
+     desconectada del aspecto que cuenta. En `rem` y no en `ch` porque los dos
+     hijos tienen cuerpos distintos y `ch` daría dos anchos. */
+  max-width: 32rem;
+}
+
+.glossaryTerm {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.55rem;
+}
+
+/* El glifo del aspecto es U+2600–U+26FF: sin familia mono el navegador lo
+   resuelve solo y en macOS/iOS termina en la fuente de emoji. Lo chequea
+   `tests/tipografia.test.ts`. */
+.glossaryGlyph {
+  grid-column: 1;
+  grid-row: 1;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--accent);
+  text-align: center;
+}
+
+.glossaryName {
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.glossaryAngle {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* La cuenta es el único dato del glosario que es de ESTA carta. Va en el acento
+   y empujada al final de la fila para que se lea como cifra, no como parte del
+   nombre del aspecto.
+
+   Sin ancho mínimo y con el `flex-wrap` del contenedor: a 390px la fila entera
+   mide unos 200 de los 316 disponibles y entra holgada, así que sólo baja a
+   renglón propio en pantallas donde de verdad no entre. Forzar ese renglón por
+   media query —como estaba— partía en tres niveles un bloque que tiene dos. */
+.glossaryCount {
+  margin-left: auto;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  /* No va en el acento: de la frase sólo cambia el número, así que en dorado
+     las seis entradas repiten «en tu carta» a gritos y la columna se lee como
+     un patrón en vez de como seis cifras. El acento se gasta en el glifo, que
+     es lo que abre cada entrada. */
+  color: var(--ink-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.glossaryMeaning {
+  grid-column: 2;
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
 @media (min-width: 900px) {
   .matrixWrap {
     display: block;
+  }
+
+  /* Con la matriz dibujada hay ancho de sobra y las glosas son cortas: en una
+     sola columna el glosario se estiraba media pantalla hacia abajo dejando la
+     mitad derecha vacía. Dos columnas y no más —`repeat(auto-fit, …)` daría
+     tres en el contenedor ancho de la carta y partiría seis frases cortas en
+     una grilla que ya no se lee de corrido—.
+
+     `align-items: start` porque las glosas miden dos o tres líneas: sin eso
+     cada fila iguala al más alto y el aire queda desparejo entre columnas. */
+  .glossaryList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    column-gap: 2.5rem;
+    row-gap: 1.6rem;
   }
 
   /* Con la matriz arriba, la lista respira un poco mas. */

@@ -20,8 +20,18 @@ function pintar(aspects = ASPECTS, bodies = BODIES) {
       locale="es"
       titulo={dict.chart.aspects}
       orbeLabel={dict.chart.aspectColumns.orb}
+      glosarioTitulo={dict.chart.aspectGlossary}
+      glosarioCuenta={dict.chart.aspectGlossaryCount}
     />,
   );
+}
+
+/** Cuántos aspectos de ese tipo dice el glosario, o null si no lo lista. */
+function cuentaDelGlosario(container: HTMLElement, nombre: string): string | null {
+  const item = [...container.querySelectorAll(".glossaryItem")].find((el) =>
+    el.querySelector(".glossaryName")?.textContent?.includes(nombre),
+  );
+  return item?.querySelector(".glossaryCount")?.textContent ?? null;
 }
 
 describe("AspectMatrix", () => {
@@ -86,5 +96,67 @@ describe("AspectMatrix", () => {
   it("sin aspectos no dibuja ninguna celda ocupada", () => {
     const { container } = pintar([]);
     expect(container.querySelectorAll(".matrixCell .matrixMark")).toHaveLength(0);
+  });
+});
+
+/**
+ * El glosario: qué significa cada tipo de aspecto que la carta tiene.
+ *
+ * Hasta el 09-09-2026 la explicación estaba sólo en la ficha de la matriz, que
+ * abre con `:hover` sobre una matriz que el CSS oculta hasta los 900px. En un
+ * teléfono la carta mostraba sesenta y dos aspectos y ni una línea de qué
+ * significan.
+ */
+describe("glosario de aspectos", () => {
+  it("la explicación está fuera de la matriz, que en pantalla angosta no se dibuja", () => {
+    // Éste es el test del arreglo: si la glosa vuelve a vivir sólo en la ficha
+    // de la matriz, acá se cae. `.matrixWrap` es lo que el CSS apaga por debajo
+    // de 900px, así que lo de adentro no cuenta como alcanzable.
+    const { container } = pintar();
+    const matriz = container.querySelector(".matrixWrap")!;
+    const fuera = [...container.querySelectorAll(".glossaryMeaning")].filter(
+      (el) => !matriz.contains(el),
+    );
+    expect(fuera.map((el) => el.textContent).join(" ")).toContain("Fluye sin esfuerzo");
+  });
+
+  it("lista un tipo de aspecto, no un par: dos trígonos son una entrada", () => {
+    const { container } = pintar([
+      { a: "Sun", b: "Moon", type: "trine", orb: 1 },
+      { a: "Sun", b: "Mars", type: "trine", orb: 2 },
+      { a: "Mars", b: "Saturn", type: "square", orb: 3 },
+    ]);
+    expect(container.querySelectorAll(".glossaryItem")).toHaveLength(2);
+    expect(cuentaDelGlosario(container, "Trígono")).toBe("2 en tu carta");
+    expect(cuentaDelGlosario(container, "Cuadratura")).toBe("1 en tu carta");
+  });
+
+  it("pone primero el tipo que más veces aparece", () => {
+    // De qué está hecha la carta se lee en el orden, sin contar filas.
+    const { container } = pintar([
+      { a: "Sun", b: "Moon", type: "square", orb: 1 },
+      { a: "Sun", b: "Mars", type: "trine", orb: 2 },
+      { a: "Moon", b: "Mars", type: "trine", orb: 3 },
+      { a: "Mars", b: "Saturn", type: "trine", orb: 4 },
+    ]);
+    const nombres = [...container.querySelectorAll(".glossaryName")].map((el) => el.textContent);
+    expect(nombres).toEqual(["Trígono", "Cuadratura"]);
+  });
+
+  it("no nombra un aspecto que la carta no tiene", () => {
+    const { container } = pintar([{ a: "Sun", b: "Moon", type: "trine", orb: 1 }]);
+    expect(cuentaDelGlosario(container, "Oposición")).toBeNull();
+  });
+
+  it("descarta el aspecto cuyo cuerpo no está en la carta, igual que la matriz", () => {
+    // `pairs` ya los filtra; el glosario cuenta sobre eso y no sobre el crudo.
+    const { container } = pintar([{ a: "Sun", b: "Ceres", type: "trine", orb: 1 }]);
+    expect(container.querySelectorAll(".glossaryItem")).toHaveLength(0);
+  });
+
+  it("sin aspectos no hay glosario, ni su título", () => {
+    const { container } = pintar([]);
+    expect(container.querySelector(".aspectGlossary")).toBeNull();
+    expect(screen.queryByText(dict.chart.aspectGlossary)).toBeNull();
   });
 });

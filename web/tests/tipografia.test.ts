@@ -76,4 +76,11 @@ describe("los glifos astrológicos no caen en la fuente de emoji", () => {
       /font-family:\s*var\(--font-mono\)/,
     );
   });
+
+  it(".glossaryGlyph declara la familia mono", () => {
+    // El glifo del aspecto en el glosario (☌ △ ✶ □ ☍) está en el mismo rango que
+    // los signos, y su contenedor es un `dt` con el cuerpo del sitio: no tiene
+    // de dónde heredar mono, así que la declara él.
+    expect(cuerpoDe("glossaryGlyph")).toMatch(/font-family:\s*var\(--font-mono\)/);
+  });
 });
