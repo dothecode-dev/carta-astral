@@ -118,18 +118,27 @@ def actividad_del_sitio(dias: int = 1) -> dict:
     """)
     # La base contra la que se lee el día. Sin ella el modelo marca como raro
     # cualquier día en cero, que a esta escala es lo normal.
+    ventana_previa = (
+        f"timestamp > now() - interval {int(dias) + 7} day "
+        f"and timestamp <= now() - interval {int(dias)} day {filtro_entorno}"
+    )
     previo = _consultar_posthog(f"""
         select event, count() as n, count(distinct distinct_id) as personas
-        from events
-        where timestamp > now() - interval {int(dias) + 7} day
-          and timestamp <= now() - interval {int(dias)} day {filtro_entorno}
+        from events where {ventana_previa}
         group by event order by n desc
+    """)
+    # La actividad viene en racimos —el día que se manda el link—, así que el
+    # promedio engaña: 30 eventos un día y seis días en cero dan "4 por día".
+    # Cuántos días tuvieron algo es lo que dice si un cero es raro.
+    dias_activos = _consultar_posthog(f"""
+        select count(distinct toDate(timestamp)) from events where {ventana_previa}
     """)
     return {
         "eventos": [{"evento": e[0], "veces": e[1], "personas": e[2]} for e in eventos],
         "paginas": [{"ruta": p[0], "veces": p[1]} for p in paginas],
         "previo": {
             "dias": 7,
+            "dias_con_actividad": dias_activos[0][0] if dias_activos else 0,
             "eventos": [
                 {"evento": e[0], "veces": e[1], "personas": e[2]} for e in previo
             ],
@@ -277,8 +286,10 @@ Reglas:
   corto es un buen informe.
 - Señalá lo que CAMBIÓ respecto de lo que venía pasando, no lo que hay. Para
   eso cada fuente trae `previo`: en el sitio, los 7 días anteriores a las
-  últimas 24 h; en Google, la ventana de igual largo justo antes. Un día en
-  cero no es raro si la semana previa también fue casi nada.
+  últimas 24 h, con cuántos de esos días tuvieron algún evento; en Google, la
+  ventana de igual largo justo antes. La actividad del sitio viene en racimos:
+  si en la semana previa hubo días en cero, un día en cero es lo habitual y no
+  una caída. No lo marques ni sugieras revisar el tracking por eso.
 - En Google, `impresiones` y `clics` son el total real. La lista por consulta
   suma menos porque Google oculta las búsquedas poco frecuentes: no es un error.
 - Si un número es raro, decí qué lo explicaría y qué habría que mirar.
@@ -343,7 +354,8 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
         ]),
         "<p>Los 7 días anteriores: "
         f"{sum(e['veces'] for e in (sitio.get('previo') or {}).get('eventos', []))} "
-        "eventos.</p>" if sitio else "",
+        f"eventos, en {(sitio.get('previo') or {}).get('dias_con_actividad', 0)} "
+        "días con actividad.</p>" if sitio else "",
         tabla("Páginas más vistas", [
             f"{p['ruta']}: {p['veces']}" for p in sitio.get("paginas", [])
         ]),

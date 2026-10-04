@@ -251,15 +251,41 @@ def test_el_total_de_impresiones_no_depende_de_las_consultas(settings, monkeypat
     assert resultado["previo"] == {"impresiones": 8, "clics": 1}
 
 
-def test_el_sitio_trae_la_semana_anterior_para_comparar(posthog_responde):
+def test_el_sitio_trae_la_semana_anterior_para_comparar(monkeypatch):
     """Sin una base, el modelo marca como raro cualquier día en cero: a esta
-    escala un día vacío es normal si la semana previa también lo fue."""
+    escala un día vacío es normal si la semana previa también lo fue.
+
+    Los días con actividad van aparte porque la actividad viene en racimos (el
+    día que se manda el link): un promedio de "3 por día" sale de un día de 30
+    y seis de cero, y el 04-10 hizo que el modelo leyera un cero como caída."""
+    consultas = []
+
+    class _Resp:
+        status_code = 200
+
+        def __init__(self, sql):
+            self._sql = sql
+
+        def json(self):
+            if "toDate" in self._sql:
+                return {"results": [[2]]}
+            return {"results": [["pagina_vista", 3, 2]]}
+
+    def post(url, **kwargs):
+        sql = kwargs["json"]["query"]["query"]
+        consultas.append(sql)
+        return _Resp(sql)
+
+    monkeypatch.setattr(informe.httpx, "post", post)
+
     datos = informe.actividad_del_sitio()
 
     assert datos["previo"] == {
         "dias": 7,
+        "dias_con_actividad": 2,
         "eventos": [{"evento": "pagina_vista", "veces": 3, "personas": 2}],
     }
-    sql_previo = posthog_responde[-1]["json"]["query"]["query"]
-    assert "interval 8 day" in sql_previo and "interval 1 day" in sql_previo
-    assert "produccion" in sql_previo
+    previas = [sql for sql in consultas if "interval 8 day" in sql]
+    assert len(previas) == 2
+    for sql in previas:
+        assert "interval 1 day" in sql and "produccion" in sql
