@@ -72,7 +72,7 @@ export const legalEs: LegalContent = {
       {
         kind: "ul",
         items: [
-          "Tus **primeras tres lecturas breves son gratis**. El informe completo de una carta se compra aparte, y también podés comprar packs de tres o cinco informes.",
+          "Tus **primeras tres lecturas breves son gratis**. El informe completo de una carta se compra aparte.",
           "Lo que compras es el derecho a leer un informe: **no vence**, no es transferible y no tiene valor monetario fuera de ASTRA. Leer ese mismo informe en otro idioma no consume otro.",
           "El cobro lo procesa **Stripe**, que actúa como vendedor registrado (*merchant of record*): emite el comprobante, cobra el impuesto que corresponda a tu país y atiende los reclamos de la transacción.",
           "**Reembolsos:** Stripe puede reembolsar una compra dentro de los 60 días y aplica los plazos de arrepentimiento que exija tu país. Si te reembolsan una compra, se descuenta de los informes que tengas disponibles; si ya los usaste, queda como saldo pendiente que se cancela contra tu próxima compra. **Nunca retiramos un informe ya escrito.**",

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChartActions, POLL_MS, POLL_TRIES } from "@/components/ChartActions";
+import { conPrecio } from "@/lib/catalogo";
 import { getDict } from "@/lib/i18n";
 import { track as trackReal } from "@/lib/telemetry";
 
@@ -35,12 +36,14 @@ function renderActions({
   timeKnown = true,
   freeCredits = 3,
   paidCredits = 1,
+  precioInforme = "US$ 5",
 }: {
   interpretations?: Record<string, Tier[]>;
   enCurso?: Record<string, Tier[]>;
   timeKnown?: boolean;
   freeCredits?: number;
   paidCredits?: number;
+  precioInforme?: string | null;
 } = {}) {
   return render(
     <ChartActions
@@ -50,6 +53,7 @@ function renderActions({
       interpretations={interpretations}
       enCurso={enCurso}
       derechos={[derecho("lectura_breve", freeCredits), derecho("informe_natal", paidCredits)]}
+      precioInforme={precioInforme}
       dict={dict}
     />,
   );
@@ -182,7 +186,7 @@ describe("ChartActions", () => {
   it("sin lectura en otro idioma, la nota del completo sigue mostrando el precio", () => {
     renderActions({ interpretations: {}, paidCredits: 0 });
     const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
-    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNota);
+    expect(boton.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, "US$ 5"));
     expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretFreeLang);
   });
 
@@ -441,14 +445,14 @@ describe("ChartActions", () => {
   it("sin hora de nacimiento, la nota del completo dice siete secciones, no ocho", () => {
     renderActions({ timeKnown: false, paidCredits: 0 });
     const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
-    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNotaSinHora);
-    expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretCompletoNota);
+    expect(boton.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNotaSinHora, "US$ 5"));
+    expect(boton.parentElement).not.toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, "US$ 5"));
   });
 
   it("con hora de nacimiento, la nota del completo sigue diciendo ocho secciones", () => {
     renderActions({ timeKnown: true, paidCredits: 0 });
     const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
-    expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNota);
+    expect(boton.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, "US$ 5"));
   });
 
   // El botón ya decía "Leer el informe completo" con un derecho en la cuenta,
@@ -459,7 +463,7 @@ describe("ChartActions", () => {
     renderActions({ paidCredits: 1 });
     const boton = screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho });
     expect(boton.parentElement).toHaveTextContent(dict.chart.interpretCompletoNotaConDerecho);
-    expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretCompletoNota);
+    expect(boton.parentElement).not.toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, "US$ 5"));
   });
 
   it("sin hora y ya comprado, la nota con derecho también dice siete secciones", () => {
@@ -468,7 +472,7 @@ describe("ChartActions", () => {
     expect(boton.parentElement).toHaveTextContent(
       dict.chart.interpretCompletoNotaConDerechoSinHora,
     );
-    expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretCompletoNotaSinHora);
+    expect(boton.parentElement).not.toHaveTextContent(conPrecio(dict.chart.interpretCompletoNotaSinHora, "US$ 5"));
   });
 
   it("con un pack, dice cuántos quedan después de este", () => {
@@ -1059,5 +1063,21 @@ describe("la oferta vista de verdad", () => {
     });
     expect(obs.observados).toHaveLength(0);
     expect(enPantalla()).toHaveLength(0);
+  });
+});
+
+describe("el precio de la nota", () => {
+  it("es el del catálogo", () => {
+    renderActions({ paidCredits: 0, precioInforme: "US$ 5" });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    expect(boton.parentElement).toHaveTextContent("US$ 5");
+    expect(boton.parentElement).not.toHaveTextContent("29");
+  });
+
+  it("si el catálogo no respondió, la nota no muestra el marcador", () => {
+    renderActions({ paidCredits: 0, precioInforme: null });
+    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    expect(boton.parentElement).not.toHaveTextContent("{precio}");
+    expect(boton.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, null));
   });
 });

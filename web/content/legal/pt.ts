@@ -71,7 +71,7 @@ export const legalPt: LegalContent = {
       {
         kind: "ul",
         items: [
-          "Suas **três primeiras leituras breves são gratuitas**. O relatório completo de um mapa é comprado à parte, e você também pode comprar pacotes de três ou cinco relatórios.",
+          "Suas **três primeiras leituras breves são gratuitas**. O relatório completo de um mapa é comprado à parte.",
           "O que você compra é o direito de ler um relatório: **não expira**, não é transferível e não tem valor monetário fora do ASTRA. Ler esse mesmo relatório em outro idioma não consome outro.",
           "O pagamento é processado pela **Stripe**, que atua como vendedora registrada (*merchant of record*): emite o comprovante, cobra o imposto devido no seu país e atende as reclamações da transação.",
           "**Reembolsos:** a Stripe pode reembolsar uma compra em até 60 dias e aplica os prazos de arrependimento exigidos no seu país. Se uma compra for reembolsada, ela é descontada dos relatórios que você tem disponíveis; se você já os usou, fica como saldo pendente que é abatido na próxima compra. **Nunca retiramos um relatório já escrito.**",

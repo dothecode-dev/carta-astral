@@ -11,6 +11,7 @@ import { Identificar } from "@/components/Identificar";
 import { Nav } from "@/components/Nav";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
+import { fetchCatalogo, precioDe } from "@/lib/catalogo";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import type { Derecho } from "@/lib/derechos";
 import { INTL_LOCALE, type Locale, getDict, isLocale } from "@/lib/i18n";
@@ -90,6 +91,10 @@ export default async function ChartPage({
     ? locale
     : ((chart.interpretation_langs.filter(isLocale)[0] as Locale | undefined) ?? null);
 
+  // El precio del informe sale del catálogo del backend, el mismo contra el que
+  // el webhook valida lo que Stripe cobró. Sin respuesta, la nota va sin precio.
+  const precioInforme = precioDe(await fetchCatalogo(), "informe_natal", INTL_LOCALE[locale]);
+
   // Se arma una vez y se ubica según haya lectura o no (ver abajo). El mismo
   // elemento en los dos lugares: duplicarlo sería duplicarle el estado.
   const acciones = (
@@ -100,6 +105,7 @@ export default async function ChartPage({
       enCurso={chart.en_curso}
       derechos={account.derechos}
       timeKnown={chart.birth.time_known}
+      precioInforme={precioInforme}
       dict={dict}
     />
   );

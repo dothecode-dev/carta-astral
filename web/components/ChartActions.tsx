@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { SolarSystem } from "@/components/SolarSystem";
+import { conPrecio } from "@/lib/catalogo";
 import { cantidad, puede, type Derecho } from "@/lib/derechos";
 import type { Dict, Locale } from "@/lib/i18n";
 import { track, type EventoProps } from "@/lib/telemetry";
@@ -171,6 +172,7 @@ export function ChartActions({
   enCurso,
   derechos,
   timeKnown,
+  precioInforme,
   dict,
 }: {
   locale: Locale;
@@ -197,6 +199,12 @@ export function ChartActions({
   derechos: Derecho[];
   /** RF12: si la carta no tiene hora, el informe sale sin la sección de casas. */
   timeKnown: boolean;
+  /**
+   * El precio del informe, formateado, del catálogo del backend (`precioDe`).
+   * `null` si el catálogo no respondió: la nota se muestra sin precio antes
+   * que con uno que quizá ya no es el que se cobra.
+   */
+  precioInforme: string | null;
   dict: Dict;
 }) {
   const tiersAqui = interpretations[locale] ?? [];
@@ -685,7 +693,7 @@ export function ChartActions({
               {enOtroIdioma("largo")
                 ? dict.chart.interpretFreeLang
                 : // Con derecho no se nombra el precio: el botón dice "Leer" y
-                  // decir "US$ 29" abajo hacía parecer que iba a cobrar otra
+                  // decir el precio abajo hacía parecer que iba a cobrar otra
                   // vez a quien ya había pagado —un pack deja cinco—.
                   informesPagos > 0
                     ? timeKnown
@@ -696,9 +704,12 @@ export function ChartActions({
                       // esta rama, el botón prometía "ocho secciones" para
                       // cualquier carta, contradiciendo ese aviso en la misma
                       // pantalla.
-                      timeKnown
-                      ? dict.chart.interpretCompletoNota
-                      : dict.chart.interpretCompletoNotaSinHora}
+                      conPrecio(
+                        timeKnown
+                          ? dict.chart.interpretCompletoNota
+                          : dict.chart.interpretCompletoNotaSinHora,
+                        precioInforme,
+                      )}
             </p>
             {/* Sólo con más de uno: con el último, lo que importa es que ya
                 está pago, y "te queda 1" no agrega nada. */}

@@ -245,8 +245,6 @@ export type Dict = {
   pricing: {
     eyebrow: string;
     title: string;
-    /** El único precio decidido hoy: el informe completo, comprado suelto. */
-    price: string;
     priceNote: string;
     terms: { label: string; value: string; free?: boolean }[];
     note: string;
@@ -293,13 +291,11 @@ export type Dict = {
      *
      * No sale del catálogo público —vale 0 y el backend no la lista—, así que
      * si no se escribe acá no aparece en ningún lado: quien llegaba a esta
-     * página desde afuera creía que el piso para probar ASTRA eran US$ 29.
+     * página desde afuera creía que el piso para probar ASTRA era el informe pago.
      */
     gratisNombre: string;
     gratisPrecio: string;
     gratisDetalle: string;
-    /** Distintivo del pack que conviene mirar primero. */
-    recomendado: string;
     /** A la muestra de lectura: nadie compra 6.000 palabras a ciegas. */
     verEjemplo: string;
     /** El campo del cupón y lo que la página dice del que trae la URL. */
@@ -734,16 +730,14 @@ const es: Dict = {
   pricing: {
     eyebrow: "Precios",
     title: "Tus primeras tres lecturas breves son gratis.\nEl informe completo se compra aparte.",
-    price: "US$ 29",
     priceNote: "el informe completo de una carta: ocho secciones, unas 6.000 palabras",
     terms: [
       { label: "Tus primeras 3 lecturas breves", value: "Gratis", free: true },
-      { label: "Informe completo de una carta", value: "US$ 29" },
+      { label: "Informe completo de una carta", value: "{precio}" },
       { label: "El mismo informe en otro idioma", value: "Sin costo", free: true },
-      { label: "Packs de 3 o 5 informes", value: "Desde US$ 25 cada uno" },
       { label: "Vencimiento", value: "No vencen" },
     ],
-    note: "Precios en dólares. Se paga directo en la web; el importe final puede incluir impuestos según tu país.",
+    note: "Precios en dólares, con el impuesto de tu país ya incluido. Se paga directo en la web.",
     cta: "Ver todos los precios",
   },
   faq: {
@@ -793,8 +787,8 @@ const es: Dict = {
     comoSeEscribe: "Cómo se escribe tu lectura",
     interpretCompletoConDerecho: "Leer el informe completo",
     compraFallo: "No pudimos abrir el pago. Probá de nuevo en un momento.",
-    interpretCompletoNota: "US$ 29 · ocho secciones",
-    interpretCompletoNotaSinHora: "US$ 29 · siete secciones",
+    interpretCompletoNota: "{precio} · ocho secciones",
+    interpretCompletoNotaSinHora: "{precio} · siete secciones",
     interpretCompletoNotaConDerecho: "Ya lo tenés pago · ocho secciones",
     interpretCompletoNotaConDerechoSinHora: "Ya lo tenés pago · siete secciones",
     interpretCompletoSaldo: "Después de este te quedan {n}.",
@@ -910,7 +904,7 @@ const es: Dict = {
   precios: {
     title: "Elegí cómo querés leerte.",
     seoTitle: "Precios: cuánto sale tu carta natal completa",
-    lede: "Comprás una vez y lo usás cuando quieras: los informes de un pack no vencen.",
+    lede: "Comprás una vez y lo usás cuando quieras: el informe no vence.",
     nombre: {
       informe_natal: "Informe completo",
       pack_3_natal: "Tres informes",
@@ -929,7 +923,6 @@ const es: Dict = {
     gratisNombre: "Lectura breve",
     gratisPrecio: "Gratis",
     gratisDetalle: "Tres por cuenta, sin tarjeta. Tu carta en unos párrafos.",
-    recomendado: "El más elegido",
     verEjemplo: "Ver un ejemplo",
     nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
     cuponLabel: "Cupón",
@@ -985,7 +978,7 @@ const es: Dict = {
     derechosInformeUno: "1 informe completo",
     sinDerechos: "Todavía no tenés ninguna lectura ni informe disponible.",
     comprarInforme: "Comprar el informe completo",
-    comprarNota: "También podés llevarte un pack de 3 o 5 y usarlos cuando quieras.",
+    comprarNota: "No vence: lo usás en la carta que quieras, cuando quieras.",
     conectadoComo: "Estás dentro como {email}.",
     conectadoSinMail: "Estás dentro con tu cuenta.",
     comprasTitle: "Tus compras",
@@ -1096,16 +1089,14 @@ const en: Dict = {
   pricing: {
     eyebrow: "Pricing",
     title: "Your first three short readings are free.\nThe full report is a separate purchase.",
-    price: "US$ 29",
     priceNote: "the full report for one chart: eight sections, about 6,000 words",
     terms: [
       { label: "Your first 3 short readings", value: "Free", free: true },
-      { label: "Full report for one chart", value: "US$ 29" },
+      { label: "Full report for one chart", value: "{precio}" },
       { label: "The same report in another language", value: "No charge", free: true },
-      { label: "Packs of 3 or 5 reports", value: "From US$ 25 each" },
       { label: "Expiry", value: "They don't expire" },
     ],
-    note: "Prices in US dollars. You pay directly on the web; the final amount may include tax depending on your country.",
+    note: "Prices in US dollars, with your country's tax already included. You pay directly on the web.",
     cta: "See all pricing",
   },
   faq: {
@@ -1155,8 +1146,8 @@ const en: Dict = {
     comoSeEscribe: "How your reading is written",
     interpretCompletoConDerecho: "Read the full report",
     compraFallo: "We couldn't open the payment. Try again in a moment.",
-    interpretCompletoNota: "US$ 29 · eight sections",
-    interpretCompletoNotaSinHora: "US$ 29 · seven sections",
+    interpretCompletoNota: "{precio} · eight sections",
+    interpretCompletoNotaSinHora: "{precio} · seven sections",
     interpretCompletoNotaConDerecho: "Already paid for · eight sections",
     interpretCompletoNotaConDerechoSinHora: "Already paid for · seven sections",
     interpretCompletoSaldo: "You'll have {n} left after this one.",
@@ -1272,7 +1263,7 @@ const en: Dict = {
   precios: {
     title: "Choose how you want to read yourself.",
     seoTitle: "Pricing: what a full birth chart reading costs",
-    lede: "Buy once, use it whenever: the reports in a pack don't expire.",
+    lede: "Buy once, use it whenever: the report doesn't expire.",
     nombre: {
       informe_natal: "Full report",
       pack_3_natal: "Three reports",
@@ -1291,7 +1282,6 @@ const en: Dict = {
     gratisNombre: "Short reading",
     gratisPrecio: "Free",
     gratisDetalle: "Three per account, no card. Your chart in a few paragraphs.",
-    recomendado: "Most chosen",
     verEjemplo: "See an example",
     nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
     cuponLabel: "Coupon",
@@ -1347,7 +1337,7 @@ const en: Dict = {
     derechosInformeUno: "1 full report",
     sinDerechos: "You don't have any reading or report available yet.",
     comprarInforme: "Buy the full report",
-    comprarNota: "You can also get a pack of 3 or 5 and use them whenever you want.",
+    comprarNota: "It doesn't expire: use it on any chart, whenever you want.",
     conectadoComo: "You're signed in as {email}.",
     conectadoSinMail: "You're signed in.",
     comprasTitle: "Your purchases",
@@ -1458,16 +1448,14 @@ const pt: Dict = {
   pricing: {
     eyebrow: "Preços",
     title: "Suas primeiras três leituras breves são grátis.\nO relatório completo é comprado à parte.",
-    price: "US$ 29",
     priceNote: "o relatório completo de um mapa: oito seções, cerca de 6.000 palavras",
     terms: [
       { label: "Suas primeiras 3 leituras breves", value: "Grátis", free: true },
-      { label: "Relatório completo de um mapa", value: "US$ 29" },
+      { label: "Relatório completo de um mapa", value: "{precio}" },
       { label: "O mesmo relatório em outro idioma", value: "Sem custo", free: true },
-      { label: "Pacotes de 3 ou 5 relatórios", value: "A partir de US$ 25 cada" },
       { label: "Validade", value: "Não expiram" },
     ],
-    note: "Preços em dólares. O pagamento é feito direto pela web; o valor final pode incluir impostos conforme o seu país.",
+    note: "Preços em dólares, com o imposto do seu país já incluído. O pagamento é feito direto pela web.",
     cta: "Ver todos os preços",
   },
   faq: {
@@ -1517,8 +1505,8 @@ const pt: Dict = {
     comoSeEscribe: "Como sua leitura é escrita",
     interpretCompletoConDerecho: "Ler o relatório completo",
     compraFallo: "Não conseguimos abrir o pagamento. Tente de novo em instantes.",
-    interpretCompletoNota: "US$ 29 · oito seções",
-    interpretCompletoNotaSinHora: "US$ 29 · sete seções",
+    interpretCompletoNota: "{precio} · oito seções",
+    interpretCompletoNotaSinHora: "{precio} · sete seções",
     interpretCompletoNotaConDerecho: "Já está pago · oito seções",
     interpretCompletoNotaConDerechoSinHora: "Já está pago · sete seções",
     interpretCompletoSaldo: "Depois deste ainda ficam {n}.",
@@ -1634,7 +1622,7 @@ const pt: Dict = {
   precios: {
     title: "Escolha como quer se ler.",
     seoTitle: "Preços: quanto custa seu mapa natal completo",
-    lede: "Compre uma vez e use quando quiser: os relatórios de um pacote não expiram.",
+    lede: "Compre uma vez e use quando quiser: o relatório não expira.",
     nombre: {
       informe_natal: "Relatório completo",
       pack_3_natal: "Três relatórios",
@@ -1653,7 +1641,6 @@ const pt: Dict = {
     gratisNombre: "Leitura breve",
     gratisPrecio: "Grátis",
     gratisDetalle: "Três por conta, sem cartão. Seu mapa em alguns parágrafos.",
-    recomendado: "O mais escolhido",
     verEjemplo: "Ver um exemplo",
     nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
     cuponLabel: "Cupom",
@@ -1709,7 +1696,7 @@ const pt: Dict = {
     derechosInformeUno: "1 relatório completo",
     sinDerechos: "Você ainda não tem nenhuma leitura nem relatório disponível.",
     comprarInforme: "Comprar o relatório completo",
-    comprarNota: "Você também pode levar um pacote de 3 ou 5 e usá-los quando quiser.",
+    comprarNota: "Não expira: use no mapa que quiser, quando quiser.",
     conectadoComo: "Você entrou como {email}.",
     conectadoSinMail: "Você entrou na sua conta.",
     comprasTitle: "Suas compras",

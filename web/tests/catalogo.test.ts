@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchCatalogo, formatearPrecio, unidades } from "@/lib/catalogo";
+import { conPrecio, fetchCatalogo, formatearPrecio, precioDe, unidades } from "@/lib/catalogo";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -46,5 +46,34 @@ describe("catálogo", () => {
     }));
 
     expect(await fetchCatalogo()).toEqual([PACK]);
+  });
+});
+
+describe("el precio en los textos", () => {
+  const INFORME = {
+    codigo: "informe_natal",
+    precio_centavos: 500,
+    moneda: "usd",
+    otorga: [{ codigo: "informe_natal", cantidad: 1 }],
+  };
+
+  it("lo saca del catálogo, no de un número escrito en el texto", () => {
+    // Antes el precio vivía en nueve textos a mano: al cambiarlo, la web
+    // anunciaba uno y Stripe cobraba otro hasta que alguien se acordara.
+    expect(precioDe([INFORME], "informe_natal", "es-AR")).toMatch(/5/);
+    expect(precioDe([INFORME], "informe_natal", "es-AR")).not.toMatch(/29/);
+  });
+
+  it("sin catálogo, o sin ese producto, no inventa un precio", () => {
+    expect(precioDe(null, "informe_natal", "es-AR")).toBeNull();
+    expect(precioDe([INFORME], "pack_5_natal", "es-AR")).toBeNull();
+  });
+
+  it("completa el marcador del texto", () => {
+    expect(conPrecio("{precio} · ocho secciones", "US$ 5")).toBe("US$ 5 · ocho secciones");
+  });
+
+  it("sin precio, el texto se lee igual y no muestra el marcador", () => {
+    expect(conPrecio("{precio} · ocho secciones", null)).toBe("ocho secciones");
   });
 });

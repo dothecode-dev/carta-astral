@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { EphemerisRail } from "@/components/EphemerisRail";
 import { Nav } from "@/components/Nav";
 import { SkyWheel } from "@/components/SkyWheel";
-import { NOTES_SLUG, getDict, isLocale } from "@/lib/i18n";
+import { conPrecio, fetchCatalogo, precioDe } from "@/lib/catalogo";
+import { INTL_LOCALE, NOTES_SLUG, getDict, isLocale } from "@/lib/i18n";
 import { fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
 import { fetchSky } from "@/lib/sky";
 import { SITE_URL } from "@/lib/config";
@@ -22,6 +23,9 @@ export default async function Home({
   // Del backend, con Swiss Ephemeris. Si no contesta, la rueda se calcula en
   // el navegador y la portada no se entera.
   const sky = await fetchSky();
+  // El precio sale del catálogo del backend, como en /precios: la home no
+  // puede anunciar un número distinto del que cobra Stripe.
+  const precioInforme = precioDe(await fetchCatalogo(), "informe_natal", INTL_LOCALE[locale]);
   const notes = await fetchNotesOrNone(locale, 3);
 
   // El header es el mismo en todo el sitio: sin esto la página se sirve
@@ -169,20 +173,24 @@ export default async function Home({
             </div>
 
             <p className="priceTag">
-              <span className="priceAmount">{dict.pricing.price}</span>
+              {precioInforme && <span className="priceAmount">{precioInforme}</span>}
               <span className="priceLabel">{dict.pricing.priceNote}</span>
             </p>
 
             <table className="termsTable">
               <tbody>
-                {dict.pricing.terms.map((term) => (
-                  <tr key={term.label}>
-                    <th scope="row">{term.label}</th>
-                    <td className={term.free ? "free" : undefined}>
-                      {term.value}
-                    </td>
-                  </tr>
-                ))}
+                {/* Sin catálogo, la fila del precio se cae entera: una fila
+                    sin número es peor que ninguna, y uno inventado peor aún. */}
+                {dict.pricing.terms
+                  .filter((term) => precioInforme || !term.value.includes("{precio}"))
+                  .map((term) => (
+                    <tr key={term.label}>
+                      <th scope="row">{term.label}</th>
+                      <td className={term.free ? "free" : undefined}>
+                        {conPrecio(term.value, precioInforme)}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
 
@@ -191,9 +199,7 @@ export default async function Home({
             </p>
 
             {/* La sección terminaba en la nota, sin un solo enlace: la tabla
-                decía cuánto sale y no había por dónde seguir. Los packs, que
-                son lo de mejor margen, no se nombraban en ningún lado de la
-                home. */}
+                decía cuánto sale y no había por dónde seguir. */}
             <p className="pricingCta">
               <Link className="btn btnGhost" href={`/${locale}/precios`}>
                 {dict.pricing.cta}

@@ -86,6 +86,23 @@ describe("diccionarios", () => {
   }
 });
 
+describe("ningún texto trae un precio escrito a mano", () => {
+  // Hasta el 04-10-2026 «US$ 29» estaba escrito en nueve textos. Al bajar el
+  // precio, cualquiera que quedara sin tocar anunciaba un número y Stripe
+  // cobraba otro. El precio sale del catálogo y entra por `{precio}`.
+  function textos(valor: unknown): string[] {
+    if (typeof valor === "string") return [valor];
+    if (Array.isArray(valor)) return valor.flatMap(textos);
+    if (valor && typeof valor === "object") return Object.values(valor).flatMap(textos);
+    return [];
+  }
+
+  it.each(LOCALES)("%s", (locale) => {
+    const conPrecioFijo = textos(getDict(locale)).filter((t) => /US\$\s?\d/.test(t));
+    expect(conPrecioFijo).toEqual([]);
+  });
+});
+
 describe("pricing", () => {
   // Task 16: la home ya no promete "tres cartas gratis y después lo mismo
   // pago" — son dos productos distintos (lectura breve gratis vs. informe
@@ -113,9 +130,7 @@ describe("pricing", () => {
       const hayFilaGratis = dict.pricing.terms.some((t) =>
         /gratis|free|grátis/i.test(t.value),
       );
-      const hayFilaInformePago = dict.pricing.terms.some(
-        (t) => t.value === dict.pricing.price,
-      );
+      const hayFilaInformePago = dict.pricing.terms.some((t) => t.value === "{precio}");
       expect(hayFilaGratis, `${locale}: falta una fila gratis`).toBe(true);
       expect(hayFilaInformePago, `${locale}: falta el precio del informe`).toBe(true);
     }

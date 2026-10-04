@@ -139,7 +139,7 @@ export default async function PreciosPage({
         {/* Antes de todo lo que se cobra, y fuera de la grilla: no es un producto
             con su tarjeta, es el punto de partida. El catálogo público no la
             trae —vale cero—, así que sin escribirla acá la página decía que
-            para probar ASTRA había que poner US$ 29, que es falso y es lo
+            para probar ASTRA había que pagar el informe, que es falso y es lo
             primero que ve quien llega de una búsqueda. */}
         <section className="preciosGratis">
           <div className="preciosGratisTexto">
@@ -179,16 +179,8 @@ export default async function PreciosPage({
                 producto.precio_centavos, producto.moneda, INTL_LOCALE[locale],
               );
               const final = finales.get(producto.codigo);
-              // El del medio: baja la unidad de US$ 29 a US$ 26,33 sin pedir
-              // US$ 125 de una. Tres tarjetas iguales no ayudan a elegir, y
-              // quien no sabe cuál mirar no elige ninguna.
-              const recomendado = producto.codigo === "pack_3_natal";
               return (
-                <li
-                  key={producto.codigo}
-                  className={`precioCard${recomendado ? " precioCardDestacado" : ""}`}
-                >
-                  {recomendado && <p className="precioDistintivo">{dict.precios.recomendado}</p>}
+                <li key={producto.codigo} className="precioCard">
                   <h2 className="precioNombre">
                     {dict.precios.nombre[producto.codigo] ?? producto.codigo}
                   </h2>

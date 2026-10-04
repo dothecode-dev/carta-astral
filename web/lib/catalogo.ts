@@ -62,3 +62,28 @@ export function formatearPrecio(centavos: number, moneda: string, locale: string
     maximumFractionDigits: 2,
   }).format(centavos / 100);
 }
+
+/**
+ * El precio de un producto, ya formateado, o `null` si el catálogo no
+ * respondió o no lo vende. Es lo que llena el `{precio}` de los textos: el
+ * número no se escribe en ningún diccionario, así un cambio de precio es un
+ * cambio en `catalogo.py` y en Stripe, y nada más.
+ */
+export function precioDe(
+  productos: ProductoCatalogo[] | null,
+  codigo: string,
+  locale: string,
+): string | null {
+  const producto = productos?.find((p) => p.codigo === codigo);
+  return producto ? formatearPrecio(producto.precio_centavos, producto.moneda, locale) : null;
+}
+
+/**
+ * Completa el `{precio}` de un texto. Sin precio, lo saca junto con el
+ * separador que lo sigue: «ocho secciones» se lee bien solo, y un marcador a
+ * la vista o un precio inventado no.
+ */
+export function conPrecio(texto: string, precio: string | null): string {
+  if (precio !== null) return texto.replaceAll("{precio}", precio);
+  return texto.replace(/\{precio\}\s*·\s*/g, "").replaceAll("{precio}", "").trim();
+}
