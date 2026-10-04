@@ -44,7 +44,7 @@ class Producto:
 
 _PRODUCTOS = (
     Producto("lectura_breve", 0, CONSUMIBLE, ("leer_breve",), (("lectura_breve", 1),)),
-    Producto("informe_natal", 2900, CONSUMIBLE, ("leer_informe",), (("informe_natal", 1),)),
+    Producto("informe_natal", 500, CONSUMIBLE, ("leer_informe",), (("informe_natal", 1),)),
     # Retirados el 04-10-2026, cuando el informe pasó de US$ 29 a US$ 5: a ese
     # precio un pack ahorra centavos y sólo complica la elección. Quedan con
     # su precio de entonces porque hay compras y reembolsos que los nombran.

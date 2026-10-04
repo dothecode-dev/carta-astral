@@ -41,6 +41,9 @@ testpaths = ["tests"]
 filterwarnings = [
     "ignore::DeprecationWarning:kerykeion",
 ]
+markers = [
+    "catalogo_real: usa los precios reales del catálogo, sin el precio de prueba",
+]
 
 [tool.ruff]
 line-length = 100

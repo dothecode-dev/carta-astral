@@ -1,8 +1,12 @@
 import pytest
 
 from api.catalogo import (
-    ACCESO, CATALOGO, CONSUMIBLE, Producto, producto, productos_con_capacidad,
+    ACCESO, CATALOGO, CONSUMIBLE, Producto, a_la_venta, producto, productos_con_capacidad,
 )
+
+# Este archivo fija los precios de verdad: corre sin el precio de prueba de
+# `tests/api/conftest.py`.
+pytestmark = pytest.mark.catalogo_real
 
 
 def test_catalogo_tiene_exactamente_los_productos_de_esta_iteracion():
@@ -13,7 +17,7 @@ def test_catalogo_tiene_exactamente_los_productos_de_esta_iteracion():
     "codigo,precio,otorga,capacidades",
     [
         ("lectura_breve", 0, (("lectura_breve", 1),), ("leer_breve",)),
-        ("informe_natal", 2900, (("informe_natal", 1),), ("leer_informe",)),
+        ("informe_natal", 500, (("informe_natal", 1),), ("leer_informe",)),
         ("pack_3_natal", 7900, (("informe_natal", 3),), ("leer_informe",)),
         ("pack_5_natal", 12500, (("informe_natal", 5),), ("leer_informe",)),
     ],
@@ -84,8 +88,11 @@ def test_ningun_pack_sale_mas_caro_que_comprar_de_a_uno():
     valía US$ 149,90 cuando cinco informes sueltos costaban US$ 145,00 — casi
     US$ 5 de castigo por llevar más. Nadie lo elige salvo por error, y quien lo
     nota siente que se lo quisieron pasar.
+
+    Sólo lo que está a la venta: los packs retirados el 04-10-2026 conservan
+    su precio de entonces (US$ 79 y 125) contra un informe que hoy vale 5.
     """
-    for prod in CATALOGO.values():
+    for prod in a_la_venta():
         for codigo, cantidad in prod.otorga:
             if cantidad <= 1 or codigo not in CATALOGO:
                 continue
@@ -99,3 +106,7 @@ def test_ningun_pack_sale_mas_caro_que_comprar_de_a_uno():
                 "el pack sale más caro que comprar de a uno"
             )
 
+
+
+def test_lo_unico_a_la_venta_es_el_informe_natal():
+    assert [p.codigo for p in a_la_venta()] == ["informe_natal"]

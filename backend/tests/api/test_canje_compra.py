@@ -145,13 +145,12 @@ def test_el_reintento_despues_de_un_canje_fallido_entrega_el_informe(
     """
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    monkeypatch.setattr("api.canje.canjear", _canje_que_explota)
-    with pytest.raises(RuntimeError):
+    with monkeypatch.context() as m, pytest.raises(RuntimeError):
+        m.setattr("api.canje.canjear", _canje_que_explota)
         aplicar_compra(
             cuenta, "informe_natal", 2900, external_id="stripe:session:cs_2", chart=carta,
         )
 
-    monkeypatch.undo()
     assert aplicar_compra(
         cuenta, "informe_natal", 2900, external_id="stripe:session:cs_2", chart=carta,
     ) is True
