@@ -38,7 +38,7 @@ export const legalPt: LegalContent = {
       { kind: "h2", text: "Apagar seus dados" },
       {
         kind: "p",
-        text: "Você pode apagar seus mapas ou a conta inteira pela sua conta (Conta → Apagar meus dados). A exclusão é definitiva: remove seus dados pessoais, seus mapas, suas leituras e o que você tiver disponível para ler. Guardamos apenas um **hash irreversível** do identificador do seu provedor de login — ele não permite identificar você nem recuperar seus dados; só evita que uma conta nova receba de novo as três leituras gratuitas de boas-vindas.",
+        text: "Você pode apagar seus mapas ou a conta inteira pela sua conta (Conta → Apagar meus dados). A exclusão é definitiva: remove seus dados pessoais, seus mapas, suas leituras e o que você tiver disponível para ler. Guardamos apenas um **hash irreversível** do identificador do seu provedor de login — ele não permite identificar você nem recuperar seus dados; só evita que uma conta nova receba de novo as leituras gratuitas de boas-vindas.",
       },
       { kind: "h2", text: "Segurança e retenção" },
       {
@@ -71,7 +71,7 @@ export const legalPt: LegalContent = {
       {
         kind: "ul",
         items: [
-          "Suas **três primeiras leituras breves são gratuitas**. O relatório completo de um mapa é comprado à parte.",
+          "Cada conta nova recebe **leituras breves de presente**, na quantidade indicada na página de preços. O relatório completo de um mapa é comprado à parte.",
           "O que você compra é o direito de ler um relatório: **não expira**, não é transferível e não tem valor monetário fora do ASTRA. Ler esse mesmo relatório em outro idioma não consome outro.",
           "O pagamento é processado pela **Stripe**, que atua como vendedora registrada (*merchant of record*): emite o comprovante, cobra o imposto devido no seu país e atende as reclamações da transação.",
           "**Reembolsos:** a Stripe pode reembolsar uma compra em até 60 dias e aplica os prazos de arrependimento exigidos no seu país. Se uma compra for reembolsada, ela é descontada dos relatórios que você tem disponíveis; se você já os usou, fica como saldo pendente que é abatido na próxima compra. **Nunca retiramos um relatório já escrito.**",

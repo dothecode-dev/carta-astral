@@ -38,7 +38,7 @@ export const legalEn: LegalContent = {
       { kind: "h2", text: "Deleting your data" },
       {
         kind: "p",
-        text: "You can delete your charts or your entire account from your account page (Account → Delete my data). Deletion is permanent: it removes your personal data, your charts, your readings and whatever you have available to read. We keep only an **irreversible hash** of your login provider identifier — it cannot identify you or recover your data; it only prevents a new account from receiving the three free welcome readings again.",
+        text: "You can delete your charts or your entire account from your account page (Account → Delete my data). Deletion is permanent: it removes your personal data, your charts, your readings and whatever you have available to read. We keep only an **irreversible hash** of your login provider identifier — it cannot identify you or recover your data; it only prevents a new account from receiving the free welcome readings again.",
       },
       { kind: "h2", text: "Security and retention" },
       {
@@ -71,7 +71,7 @@ export const legalEn: LegalContent = {
       {
         kind: "ul",
         items: [
-          "Your **first three short readings are free**. The full report for a chart is a separate purchase.",
+          "Each new account gets **free short readings**, in the amount shown on the pricing page. The full report for a chart is a separate purchase.",
           "What you buy is the right to read a report: it **never expires**, is not transferable and has no monetary value outside ASTRA. Reading that same report in another language doesn't consume another one.",
           "Payment is processed by **Stripe**, acting as *merchant of record*: it issues the receipt, collects any tax due in your country and handles transaction enquiries.",
           "**Refunds:** Stripe may refund a purchase within 60 days and applies the cooling-off periods your country requires. If a purchase is refunded, it is deducted from the reports you have available; if you already used them, it stays as an outstanding balance settled against your next purchase. **We never take back a report that has already been written.**",

@@ -389,10 +389,18 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 # no los ~US$0,03 de la lectura vieja. Con el cap anterior de 500 el techo de
 # gasto diario en informes regalados pasaba de US$15 a más de US$200.
 INTERPRETATION_DAILY_CAP = int(os.environ.get("INTERPRETATION_DAILY_CAP", "40"))
-# Free-tier: informes gratis por cuenta; después, modo pago (IAP, frente con la app).
-# Tres, no uno: el resumen gratis existe para que alguien se lo muestre a otra
-# persona, y con uno solo el dueño de la cuenta ya lo gastó en su propia carta.
-INSTALL_FREE_CREDITS = int(os.environ.get("INSTALL_FREE_CREDITS", "3"))
+# Lecturas breves de regalo por cuenta nueva.
+#
+# Fueron tres hasta el 04-10-2026, para que alguien pudiera mostrárselo a otra
+# persona sin pagar. Pasó a una al bajar el informe a US$ 5: con tres, la
+# segunda y la tercera carta —la de la pareja, la de la madre— se leían gratis
+# y competían con la venta; con una, la segunda ya pasa por caja.
+#
+# Constante y NO variable de entorno: la web promete este número en sus textos
+# (`web/lib/regalo.ts`) y `tests/test_regalo_coherente.py` exige que coincidan.
+# Con una variable de Coolify encima, ese test seguiría verde con la web
+# mintiendo. Cambiarlo es un deploy, que es lo que pide cambiar los textos.
+INSTALL_FREE_CREDITS = 1
 
 # --- SSO / cuentas ---
 APPLE_AUD = os.environ.get("APPLE_AUD", "")  # bundle id de la app iOS; vacío => auth Apple 503 (fail-closed)

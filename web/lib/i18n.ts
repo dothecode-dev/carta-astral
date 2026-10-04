@@ -1,7 +1,7 @@
 // Diccionarios de la web. Sin librería: son tres idiomas y un puñado de claves,
 // y next-intl traería un middleware y un provider para resolver un objeto.
 
-import { LECTURAS_DE_REGALO } from "./regalo";
+import { segunRegalo } from "./regalo";
 
 export const LOCALES = ["es", "en", "pt"] as const;
 export type Locale = (typeof LOCALES)[number];
@@ -729,10 +729,10 @@ const es: Dict = {
   },
   pricing: {
     eyebrow: "Precios",
-    title: "Tus primeras tres lecturas breves son gratis.\nEl informe completo se compra aparte.",
+    title: `${segunRegalo("Tu primera lectura breve es gratis.", "Tus primeras {n} lecturas breves son gratis.")}\nEl informe completo se compra aparte.`,
     priceNote: "el informe completo de una carta: ocho secciones, unas 6.000 palabras",
     terms: [
-      { label: "Tus primeras 3 lecturas breves", value: "Gratis", free: true },
+      { label: segunRegalo("Tu primera lectura breve", "Tus primeras {n} lecturas breves"), value: "Gratis", free: true },
       { label: "Informe completo de una carta", value: "{precio}" },
       { label: "El mismo informe en otro idioma", value: "Sin costo", free: true },
       { label: "Vencimiento", value: "No vencen" },
@@ -797,7 +797,7 @@ const es: Dict = {
     readAgain: "Ver la lectura",
     capDiario: "Por hoy se agotaron las lecturas breves gratis. Volvé mañana, o leé el informe completo.",
     demasiados: "Demasiados intentos seguidos. Esperá un momento y probá de nuevo.",
-    sinLeerBreve: "Te quedaste sin lecturas breves gratis.",
+    sinLeerBreve: segunRegalo("Ya usaste tu lectura breve gratis.", "Te quedaste sin lecturas breves gratis."),
     sinLeerInforme: "Todavía no compraste el informe completo.",
     sinDerecho: "No tenés esta lectura disponible.",
     failed: "No pudimos generar la lectura. Probá de nuevo en un rato.",
@@ -871,7 +871,7 @@ const es: Dict = {
     needDate: "Falta la fecha de nacimiento.",
     badDate: "Revisá la fecha: tiene que ser posterior a 1800 y no puede estar en el futuro.",
     failed: "No pudimos calcular la carta. Revisá los datos y probá de nuevo.",
-    sinLeerBreve: "Ya usaste tus lecturas breves gratis.",
+    sinLeerBreve: segunRegalo("Ya usaste tu lectura breve gratis.", "Ya usaste tus lecturas breves gratis."),
     previewTitle: "Tu carta natal",
     previewLede: "Es tuya y está completa: las posiciones, las casas y los aspectos del cielo del día en que naciste.",
     previewCta: "Leer qué dice",
@@ -922,7 +922,7 @@ const es: Dict = {
     sinCatalogo: "No pudimos cargar los precios. Volvé a intentar en un momento.",
     gratisNombre: "Lectura breve",
     gratisPrecio: "Gratis",
-    gratisDetalle: "Tres por cuenta, sin tarjeta. Tu carta en unos párrafos.",
+    gratisDetalle: `${segunRegalo("Una por cuenta", "{n} por cuenta")}, sin tarjeta. Tu carta en unos párrafos.`,
     verEjemplo: "Ver un ejemplo",
     nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
     cuponLabel: "Cupón",
@@ -942,7 +942,7 @@ const es: Dict = {
   auth: {
     navEnter: "Entrar",
     title: "Tu lectura te está esperando.",
-    lede: `Entrá y usala: tenés ${LECTURAS_DE_REGALO} lecturas breves de regalo, sin tarjeta.`,
+    lede: `Entrá y usala: tenés ${segunRegalo("una lectura breve", "{n} lecturas breves")} de regalo, sin tarjeta.`,
     loading: "Cargando…",
     blocked: "No pudimos cargar el acceso de Google — suele pasar con los bloqueadores de rastreadores. Entrá con tu mail acá abajo.",
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
@@ -1088,10 +1088,10 @@ const en: Dict = {
   },
   pricing: {
     eyebrow: "Pricing",
-    title: "Your first three short readings are free.\nThe full report is a separate purchase.",
+    title: `${segunRegalo("Your first short reading is free.", "Your first {n} short readings are free.")}\nThe full report is a separate purchase.`,
     priceNote: "the full report for one chart: eight sections, about 6,000 words",
     terms: [
-      { label: "Your first 3 short readings", value: "Free", free: true },
+      { label: segunRegalo("Your first short reading", "Your first {n} short readings"), value: "Free", free: true },
       { label: "Full report for one chart", value: "{precio}" },
       { label: "The same report in another language", value: "No charge", free: true },
       { label: "Expiry", value: "They don't expire" },
@@ -1156,7 +1156,7 @@ const en: Dict = {
     readAgain: "See the reading",
     capDiario: "Today's free short readings are gone. Come back tomorrow, or read the full report.",
     demasiados: "Too many attempts in a row. Wait a moment and try again.",
-    sinLeerBreve: "You're out of free short readings.",
+    sinLeerBreve: segunRegalo("You've used your free short reading.", "You're out of free short readings."),
     sinLeerInforme: "You haven't bought the full report yet.",
     sinDerecho: "You don't have this reading available.",
     failed: "We couldn't generate the reading. Try again in a while.",
@@ -1230,7 +1230,7 @@ const en: Dict = {
     needDate: "The date of birth is missing.",
     badDate: "Check the date: it has to be after 1800 and can't be in the future.",
     failed: "We couldn't compute the chart. Check the details and try again.",
-    sinLeerBreve: "You've used up your free short readings.",
+    sinLeerBreve: segunRegalo("You've used your free short reading.", "You've used up your free short readings."),
     previewTitle: "Your birth chart",
     previewLede: "It's yours and it's complete: the positions, the houses and the aspects of the sky on the day you were born.",
     previewCta: "Read what it says",
@@ -1281,7 +1281,7 @@ const en: Dict = {
     sinCatalogo: "We couldn't load pricing. Please try again in a moment.",
     gratisNombre: "Short reading",
     gratisPrecio: "Free",
-    gratisDetalle: "Three per account, no card. Your chart in a few paragraphs.",
+    gratisDetalle: `${segunRegalo("One per account", "{n} per account")}, no card. Your chart in a few paragraphs.`,
     verEjemplo: "See an example",
     nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
     cuponLabel: "Coupon",
@@ -1301,7 +1301,7 @@ const en: Dict = {
   auth: {
     navEnter: "Sign in",
     title: "Your reading is waiting.",
-    lede: `Sign in and use it: you have ${LECTURAS_DE_REGALO} short readings on the house, no card needed.`,
+    lede: `Sign in and use it: you have ${segunRegalo("a short reading", "{n} short readings")} on the house, no card needed.`,
     loading: "Loading…",
     blocked: "We couldn't load Google sign-in — usually a tracker blocker. Use your email below instead.",
     failed: "We couldn't sign you in. Try again.",
@@ -1447,10 +1447,10 @@ const pt: Dict = {
   },
   pricing: {
     eyebrow: "Preços",
-    title: "Suas primeiras três leituras breves são grátis.\nO relatório completo é comprado à parte.",
+    title: `${segunRegalo("Sua primeira leitura breve é grátis.", "Suas primeiras {n} leituras breves são grátis.")}\nO relatório completo é comprado à parte.`,
     priceNote: "o relatório completo de um mapa: oito seções, cerca de 6.000 palavras",
     terms: [
-      { label: "Suas primeiras 3 leituras breves", value: "Grátis", free: true },
+      { label: segunRegalo("Sua primeira leitura breve", "Suas primeiras {n} leituras breves"), value: "Grátis", free: true },
       { label: "Relatório completo de um mapa", value: "{precio}" },
       { label: "O mesmo relatório em outro idioma", value: "Sem custo", free: true },
       { label: "Validade", value: "Não expiram" },
@@ -1515,7 +1515,7 @@ const pt: Dict = {
     readAgain: "Ver a leitura",
     capDiario: "As leituras breves grátis de hoje acabaram. Volte amanhã, ou leia o relatório completo.",
     demasiados: "Tentativas demais seguidas. Espere um momento e tente de novo.",
-    sinLeerBreve: "Você ficou sem leituras breves grátis.",
+    sinLeerBreve: segunRegalo("Você já usou sua leitura breve grátis.", "Você ficou sem leituras breves grátis."),
     sinLeerInforme: "Você ainda não comprou o relatório completo.",
     sinDerecho: "Você não tem essa leitura disponível.",
     failed: "Não conseguimos gerar a leitura. Tente de novo daqui a pouco.",
@@ -1589,7 +1589,7 @@ const pt: Dict = {
     needDate: "Falta a data de nascimento.",
     badDate: "Revise a data: precisa ser posterior a 1800 e não pode estar no futuro.",
     failed: "Não conseguimos calcular o mapa. Revise os dados e tente de novo.",
-    sinLeerBreve: "Você já usou suas leituras breves grátis.",
+    sinLeerBreve: segunRegalo("Você já usou sua leitura breve grátis.", "Você já usou suas leituras breves grátis."),
     previewTitle: "Seu mapa natal",
     previewLede: "É seu e está completo: as posições, as casas e os aspectos do céu do dia em que você nasceu.",
     previewCta: "Ler o que diz",
@@ -1640,7 +1640,7 @@ const pt: Dict = {
     sinCatalogo: "Não conseguimos carregar os preços. Tente de novo em instantes.",
     gratisNombre: "Leitura breve",
     gratisPrecio: "Grátis",
-    gratisDetalle: "Três por conta, sem cartão. Seu mapa em alguns parágrafos.",
+    gratisDetalle: `${segunRegalo("Uma por conta", "{n} por conta")}, sem cartão. Seu mapa em alguns parágrafos.`,
     verEjemplo: "Ver um exemplo",
     nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
     cuponLabel: "Cupom",
@@ -1660,7 +1660,7 @@ const pt: Dict = {
   auth: {
     navEnter: "Entrar",
     title: "Sua leitura está esperando.",
-    lede: `Entre e use: você tem ${LECTURAS_DE_REGALO} leituras breves de presente, sem cartão.`,
+    lede: `Entre e use: você tem ${segunRegalo("uma leitura breve", "{n} leituras breves")} de presente, sem cartão.`,
     loading: "Carregando…",
     blocked: "Não conseguimos carregar o acesso do Google — costuma ser um bloqueador de rastreadores. Entre com seu e-mail abaixo.",
     failed: "Não conseguimos entrar. Tente de novo.",

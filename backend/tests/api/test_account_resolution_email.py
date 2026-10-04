@@ -1,4 +1,5 @@
 import pytest
+from django.conf import settings
 
 from api.accounts import resolve_account
 from api.codigos_acceso import canjear, pedir
@@ -17,7 +18,7 @@ def identidad_mail(email):
 def test_una_direccion_nueva_nace_con_el_regalo():
     cuenta = resolve_account(identidad_mail("juan@gmail.com"))
     derecho = Derecho.objects.get(account=cuenta, codigo_producto="lectura_breve")
-    assert derecho.cantidad_restante == 3
+    assert derecho.cantidad_restante == settings.INSTALL_FREE_CREDITS
 
 
 def test_dos_canjes_seguidos_no_regalan_el_doble():
