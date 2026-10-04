@@ -122,6 +122,6 @@ class Command(BaseCommand):
 
 def _codigos_vendibles():
     """Los productos del catálogo que se cobran (los gratuitos no van a Stripe)."""
-    from api.catalogo import CATALOGO
+    from api.catalogo import a_la_venta
 
-    return [p for p in CATALOGO.values() if p.precio_centavos > 0]
+    return a_la_venta()

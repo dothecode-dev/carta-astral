@@ -26,6 +26,10 @@ class Producto:
     #: combo sea una línea acá y nada más.
     otorga: tuple[tuple[str, int], ...]
     duracion_dias: int | None = None
+    #: Si se ofrece. Un producto retirado sigue acá porque el historial lo
+    #: nombra —`Movimiento`, `PasarelaCheckout`, un reembolso de una compra
+    #: vieja lo busca en el catálogo—, pero no se puede abrir una compra nueva.
+    vendible: bool = True
 
     def __post_init__(self) -> None:
         if self.naturaleza not in (CONSUMIBLE, ACCESO):
@@ -41,12 +45,17 @@ class Producto:
 _PRODUCTOS = (
     Producto("lectura_breve", 0, CONSUMIBLE, ("leer_breve",), (("lectura_breve", 1),)),
     Producto("informe_natal", 2900, CONSUMIBLE, ("leer_informe",), (("informe_natal", 1),)),
-    # Los packs descuentan de verdad sobre el suelto (US$ 29): US$ 26,33 la
-    # unidad en el de 3 y US$ 25 en el de 5. Hasta el 02-09-2026 el de 5 valía
-    # US$ 149,90 —más caro que cinco sueltas— y era un recargo por comprar de a
-    # muchos; `test_ningun_pack_sale_mas_caro_que_comprar_de_a_uno` lo impide.
-    Producto("pack_3_natal", 7900, CONSUMIBLE, ("leer_informe",), (("informe_natal", 3),)),
-    Producto("pack_5_natal", 12500, CONSUMIBLE, ("leer_informe",), (("informe_natal", 5),)),
+    # Retirados el 04-10-2026, cuando el informe pasó de US$ 29 a US$ 5: a ese
+    # precio un pack ahorra centavos y sólo complica la elección. Quedan con
+    # su precio de entonces porque hay compras y reembolsos que los nombran.
+    Producto(
+        "pack_3_natal", 7900, CONSUMIBLE, ("leer_informe",), (("informe_natal", 3),),
+        vendible=False,
+    ),
+    Producto(
+        "pack_5_natal", 12500, CONSUMIBLE, ("leer_informe",), (("informe_natal", 5),),
+        vendible=False,
+    ),
 )
 
 CATALOGO: dict[str, Producto] = {p.codigo: p for p in _PRODUCTOS}
@@ -57,6 +66,13 @@ def producto(codigo: str) -> Producto:
         return CATALOGO[codigo]
     except KeyError:
         raise KeyError(f"producto desconocido: {codigo}") from None
+
+
+def a_la_venta() -> list[Producto]:
+    """Lo que se cobra hoy: con precio y no retirado. Es la única definición;
+    el catálogo público, los cupones, el admin y la verificación contra Stripe
+    preguntan acá."""
+    return [p for p in CATALOGO.values() if p.precio_centavos > 0 and p.vendible]
 
 
 def productos_con_capacidad(capacidad: str) -> tuple[Producto, ...]:

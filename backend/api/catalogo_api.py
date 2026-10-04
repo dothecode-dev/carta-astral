@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.catalogo import CATALOGO
+from api.catalogo import a_la_venta
 
 
 class CatalogoView(APIView):
@@ -21,7 +21,7 @@ class CatalogoView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        vendibles = [p for p in CATALOGO.values() if p.precio_centavos > 0]
+        vendibles = a_la_venta()
         return Response({
             "productos": [
                 {

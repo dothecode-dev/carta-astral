@@ -24,10 +24,18 @@ def test_se_puede_ver_sin_cuenta(client):
     assert client.get(URL).status_code == 200
 
 
-def test_lista_los_tres_productos_de_pago(client):
+def test_lista_lo_que_esta_a_la_venta(client):
     codigos = [p["codigo"] for p in client.get(URL).json()["productos"]]
 
-    assert codigos == ["informe_natal", "pack_3_natal", "pack_5_natal"]
+    assert codigos == ["informe_natal"]
+
+
+def test_no_lista_los_productos_retirados(client):
+    """Los packs siguen en el catálogo por las compras viejas, pero la página
+    de precios no puede ofrecer algo que el checkout rechaza."""
+    codigos = [p["codigo"] for p in client.get(URL).json()["productos"]]
+
+    assert "pack_3_natal" not in codigos and "pack_5_natal" not in codigos
 
 
 def test_no_lista_lo_que_es_gratis(client):
@@ -46,15 +54,13 @@ def test_el_precio_es_el_del_catalogo(client):
         assert datos["precio_centavos"] == producto(codigo).precio_centavos
 
 
-def test_dice_cuantos_informes_deja_cada_pack(client):
-    """Es la diferencia entre "US$ 125" y "US$ 125 por cinco informes"."""
+def test_dice_cuantos_informes_deja_cada_producto(client):
+    """Es la diferencia entre "US$ 125" y "US$ 125 por cinco informes" el día
+    que vuelva a haber un pack."""
     productos = {p["codigo"]: p for p in client.get(URL).json()["productos"]}
 
     assert productos["informe_natal"]["otorga"] == [
         {"codigo": "informe_natal", "cantidad": 1},
-    ]
-    assert productos["pack_5_natal"]["otorga"] == [
-        {"codigo": "informe_natal", "cantidad": 5},
     ]
 
 

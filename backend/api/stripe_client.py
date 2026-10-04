@@ -180,6 +180,8 @@ def crear_checkout(
     prod = producto(codigo_producto)  # KeyError si no existe: lo dice el catálogo
     if prod.precio_centavos == 0:
         raise ValueError(f"{codigo_producto} es gratis: no se cobra")
+    if not prod.vendible:
+        raise ValueError(f"{codigo_producto} está retirado: no se vende")
     if not settings.STRIPE_SECRET_KEY:
         raise StripeNoConfigurado("STRIPE_SECRET_KEY no configurado")
 

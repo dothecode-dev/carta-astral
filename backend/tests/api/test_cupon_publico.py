@@ -40,7 +40,8 @@ def test_un_cupon_valido_devuelve_los_precios_ya_descontados(client, promo):
 
 def test_solo_lista_los_productos_que_el_cupon_abarca(client, promo):
     codigos = [p["codigo"] for p in client.get("/api/cupones/PROMO30/").json()["productos"]]
-    assert codigos == ["informe_natal", "pack_5_natal"]
+    # PROMO30 abarca también el pack de 5, que está retirado: no se ofrece.
+    assert codigos == ["informe_natal"]
 
 
 def test_no_revela_nada_interno(client, promo):

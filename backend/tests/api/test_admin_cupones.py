@@ -84,7 +84,7 @@ INLINE = {"usos-TOTAL_FORMS": "0", "usos-INITIAL_FORMS": "0"}
 def datos_alta(**extra):
     base = {
         "codigo": "promo30", "descripcion": "post IG", "porcentaje": "30",
-        "productos": ["informe_natal", "pack_5_natal"], "usos_maximos": "100",
+        "productos": ["informe_natal"], "usos_maximos": "100",
         "activo": "on", "vence_el": "2026-09-12",
     }
     base.update(extra)
@@ -96,7 +96,7 @@ def test_el_alta_publica_en_stripe_y_guarda_los_ids(staff, stripe_captura):
 
     assert r.status_code == 302, r.content.decode()[:500]
     c = Cupon.objects.get(codigo="PROMO30")
-    assert c.productos == ["informe_natal", "pack_5_natal"]
+    assert c.productos == ["informe_natal"]
     assert (c.stripe_coupon_id, c.stripe_promotion_code_id) == ("cup_1", "promo_1")
     assert stripe_captura["promo"][0]["code"] == "PROMO30"
 
@@ -281,3 +281,12 @@ def test_la_ficha_esta_planteada_para_leer_el_cupon(staff):
     assert "quien@x.com" in html
     assert "Account object" not in html
     assert "20,30" in html and "8,70" in html
+
+
+def test_un_cupon_nuevo_no_puede_abarcar_un_pack_retirado(staff, stripe_captura):
+    """El checkout rechaza los packs: un cupón para uno sería un código que
+    se promociona y no sirve para nada."""
+    r = staff.post(ALTA, datos_alta(productos=["informe_natal", "pack_5_natal"]))
+
+    assert r.status_code == 200  # el formulario vuelve con el error
+    assert not Cupon.objects.filter(codigo="PROMO30").exists()

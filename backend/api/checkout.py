@@ -47,6 +47,11 @@ class CheckoutView(APIView):
             return Response(
                 {"error": "falta el producto"}, status=status.HTTP_400_BAD_REQUEST
             )
+        if codigo in catalogo.CATALOGO and not catalogo.producto(codigo).vendible:
+            # Antes del cupón: el regalo del 100 % no pasa por Stripe, y un
+            # cupón viejo seguiría entregando un producto retirado.
+            logger.warning("checkout de un producto retirado: %r", codigo)
+            return Response({"error": "producto inválido"}, status=status.HTTP_400_BAD_REQUEST)
 
         # La carta se resuelve contra la cuenta que pide: sin ese filtro se
         # compra un informe y se lo entrega en la carta de otro.

@@ -150,3 +150,14 @@ def test_un_regalo_sigue_valiendo_cero_aunque_el_precio_cambie(
 
     compra = account_client.get("/api/compras/").json()["compras"][0]
     assert compra["monto_centavos"] == 0
+
+
+def test_un_regalo_no_entrega_un_pack_retirado(account_client, avisos):
+    """El cupón del 100 % no pasa por Stripe: si el chequeo de «a la venta»
+    viviera sólo en la sesión de pago, un cupón viejo seguiría regalando packs."""
+    Cupon.objects.create(codigo="VIEJO", porcentaje=100, productos=["pack_5_natal"], usos_maximos=1)
+
+    r = account_client.post(URL, {"producto": "pack_5_natal", "cupon": "VIEJO"})
+
+    assert r.status_code == 400
+    assert not CuponUso.objects.exists()

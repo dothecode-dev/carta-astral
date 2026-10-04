@@ -202,3 +202,12 @@ def test_success_url_con_otro_nombre_de_parametro_no_abre_el_pago(
     )
     assert account_client.post(URL, {"producto": "informe_natal"}).status_code == 503
     assert stripe_responde == []
+
+
+def test_un_pack_retirado_no_se_puede_comprar(account_client, stripe_responde):
+    """Los packs siguen en el catálogo para resolver compras y reembolsos
+    viejos, pero ya no se venden: abrir una sesión nueva con uno es 400."""
+    r = account_client.post(URL, {"producto": "pack_5_natal"})
+
+    assert r.status_code == 400
+    assert stripe_responde == []

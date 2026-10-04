@@ -10,6 +10,7 @@ import logging
 import pytest
 
 from api import stripe_client
+from api.catalogo import producto
 from api.models import Cupon, PasarelaCheckout
 
 pytestmark = pytest.mark.django_db
@@ -64,11 +65,13 @@ def test_el_descuento_viaja_como_promotion_code_y_el_precio_sigue_siendo_el_del_
 
 
 def test_el_descuento_queda_congelado_en_la_fila(account_client, stripe_responde, promo):
-    account_client.post(URL, {"producto": "pack_5_natal", "cupon": "PROMO30"})
+    account_client.post(URL, {"producto": "informe_natal", "cupon": "PROMO30"})
 
     fila = PasarelaCheckout.objects.get(checkout_id="cs_test_cupon")
+    precio = producto("informe_natal").precio_centavos
     assert fila.cupon == promo
-    assert fila.descuento_centavos == 3750  # 30 % de 12500
+    assert fila.precio_centavos == precio
+    assert fila.descuento_centavos == precio * 30 // 100
 
 
 def test_sin_cupon_no_se_manda_discounts_ni_queda_descuento(account_client, stripe_responde):

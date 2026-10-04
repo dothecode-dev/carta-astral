@@ -17,7 +17,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from api import cupones
-from api.catalogo import CATALOGO
+from api.catalogo import a_la_venta
 from api.models import Cupon
 
 
@@ -40,8 +40,8 @@ class CuponPublicoView(APIView):
             return Response({"valido": False, "motivo": cupones.motivo_publico(exc.motivo)})
 
         productos = []
-        for p in sorted(CATALOGO.values(), key=lambda p: p.precio_centavos):
-            if p.codigo not in cupon.productos or p.precio_centavos <= 0:
+        for p in sorted(a_la_venta(), key=lambda p: p.precio_centavos):
+            if p.codigo not in cupon.productos:
                 continue
             final, descuento = cupones.precio_final(p.precio_centavos, cupon.porcentaje)
             productos.append({

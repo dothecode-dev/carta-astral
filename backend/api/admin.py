@@ -32,7 +32,7 @@ from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from api import canje, cupones, stripe_client
-from api.catalogo import CATALOGO, producto
+from api.catalogo import CATALOGO, a_la_venta, producto
 from api.models import (
     Account, Chart, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, Movimiento,
 )
@@ -204,7 +204,7 @@ def _dolares(centavos: int) -> str:
 
 
 def _productos_con_precio():
-    return [p for p in CATALOGO.values() if p.precio_centavos > 0]
+    return a_la_venta()
 
 
 def codigo_propuesto() -> str:

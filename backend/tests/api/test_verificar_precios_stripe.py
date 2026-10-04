@@ -100,7 +100,7 @@ def test_precio_inactivo_falla(stripe_dice):
 
 
 def test_producto_del_catalogo_sin_precio_falla(settings, stripe_dice):
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    settings.STRIPE_PRECIOS = {"price_5": "pack_5_natal"}
     with pytest.raises(CommandError) as e:
         _correr()
     assert "problema" in str(e.value)
@@ -125,3 +125,10 @@ def test_sin_clave_no_corre(settings, stripe_dice):
     settings.STRIPE_SECRET_KEY = ""
     with pytest.raises(CommandError):
         _correr()
+
+
+def test_un_producto_retirado_no_necesita_precio_en_stripe(settings, stripe_dice):
+    """Los packs no se venden: exigirles un precio mapeado haría fallar la
+    verificación el día que se borre su `price_id` de `STRIPE_PRECIOS`."""
+    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    _correr()
