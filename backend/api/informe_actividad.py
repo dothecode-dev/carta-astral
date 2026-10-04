@@ -116,9 +116,24 @@ def actividad_del_sitio(dias: int = 1) -> dict:
           {filtro_entorno}
         group by ruta order by n desc limit 12
     """)
+    # La base contra la que se lee el día. Sin ella el modelo marca como raro
+    # cualquier día en cero, que a esta escala es lo normal.
+    previo = _consultar_posthog(f"""
+        select event, count() as n, count(distinct distinct_id) as personas
+        from events
+        where timestamp > now() - interval {int(dias) + 7} day
+          and timestamp <= now() - interval {int(dias)} day {filtro_entorno}
+        group by event order by n desc
+    """)
     return {
         "eventos": [{"evento": e[0], "veces": e[1], "personas": e[2]} for e in eventos],
         "paginas": [{"ruta": p[0], "veces": p[1]} for p in paginas],
+        "previo": {
+            "dias": 7,
+            "eventos": [
+                {"evento": e[0], "veces": e[1], "personas": e[2]} for e in previo
+            ],
+        },
     }
 
 
@@ -188,7 +203,10 @@ def busquedas(dias: int = 7) -> dict:
     desde = hasta - datetime.timedelta(days=dias - 1)
     token = _token_google()
 
-    def pedir(dimensiones: list[str], limite: int) -> list[dict]:
+    def pedir(
+        dimensiones: list[str], limite: int,
+        desde: datetime.date = desde, hasta: datetime.date = hasta,
+    ) -> list[dict]:
         respuesta = httpx.post(
             # El identificador de la propiedad va percent-encodeado DENTRO de
             # la ruta: `sc-domain:astraguia.com` tiene dos puntos, y sin
@@ -208,12 +226,23 @@ def busquedas(dias: int = 7) -> dict:
         respuesta.raise_for_status()
         return respuesta.json().get("rows", [])
 
+    def totales(desde: datetime.date, hasta: datetime.date) -> dict:
+        # Sin dimensiones, no sumando las consultas: Google omite las búsquedas
+        # que hizo muy poca gente, y con nuestro volumen son casi todas. El
+        # 04-10-2026 la suma por consulta dio 0 con 8 impresiones por página.
+        filas = pedir([], 1, desde, hasta)
+        fila = filas[0] if filas else {}
+        return {"impresiones": fila.get("impressions", 0), "clics": fila.get("clicks", 0)}
+
     consultas = pedir(["query"], 15)
     paginas = pedir(["page"], 10)
+    total = totales(desde, hasta)
     return {
         "ventana": f"{desde.isoformat()} a {hasta.isoformat()}",
-        "impresiones": sum(f.get("impressions", 0) for f in consultas),
-        "clics": sum(f.get("clicks", 0) for f in consultas),
+        **total,
+        # La misma cantidad de días justo antes, para que se lea qué cambió.
+        "previo": totales(desde - datetime.timedelta(days=dias),
+                          desde - datetime.timedelta(days=1)),
         "consultas": [
             {
                 "consulta": f["keys"][0],
@@ -246,7 +275,12 @@ esta escala.
 Reglas:
 - Si no pasó nada digno de mención, decilo en una línea y terminá. Un informe
   corto es un buen informe.
-- Señalá lo que CAMBIÓ respecto de lo que venía pasando, no lo que hay.
+- Señalá lo que CAMBIÓ respecto de lo que venía pasando, no lo que hay. Para
+  eso cada fuente trae `previo`: en el sitio, los 7 días anteriores a las
+  últimas 24 h; en Google, la ventana de igual largo justo antes. Un día en
+  cero no es raro si la semana previa también fue casi nada.
+- En Google, `impresiones` y `clics` son el total real. La lista por consulta
+  suma menos porque Google oculta las búsquedas poco frecuentes: no es un error.
 - Si un número es raro, decí qué lo explicaría y qué habría que mirar.
 - Nada de felicitaciones ni de relleno. Prosa directa, en español rioplatense.
 - Máximo 200 palabras."""
@@ -307,6 +341,9 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
             f"{e['evento']}: {e['veces']} ({e['personas']} personas)"
             for e in sitio.get("eventos", [])
         ]),
+        "<p>Los 7 días anteriores: "
+        f"{sum(e['veces'] for e in (sitio.get('previo') or {}).get('eventos', []))} "
+        "eventos.</p>" if sitio else "",
         tabla("Páginas más vistas", [
             f"{p['ruta']}: {p['veces']}" for p in sitio.get("paginas", [])
         ]),
@@ -314,7 +351,9 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
     if seo:
         partes.append(
             f"<h3>En Google ({seo.get('ventana', '')})</h3>"
-            f"<p>{seo.get('impresiones', 0)} impresiones, {seo.get('clics', 0)} clics. "
+            f"<p>{seo.get('impresiones', 0)} impresiones, {seo.get('clics', 0)} clics "
+            f"(antes: {(seo.get('previo') or {}).get('impresiones', 0)} y "
+            f"{(seo.get('previo') or {}).get('clics', 0)}). "
             f"Google publica con {DIAS_DE_ATRASO_GSC} días de atraso: esto no es lo de ayer.</p>"
         )
         partes.append(tabla("Búsquedas que te muestran", [

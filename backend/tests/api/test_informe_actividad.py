@@ -206,3 +206,60 @@ def test_la_clave_publica_de_posthog_se_detecta_antes_de_pedir(settings):
     with pytest.raises(informe.FuenteCaida) as e:
         informe.actividad_del_sitio()
     assert "phx_" in str(e.value)
+
+
+def _gsc_configurado(settings, monkeypatch):
+    settings.GSC_SITE_URL = "sc-domain:astraguia.com"
+    settings.GSC_CLIENT_ID = "id"
+    settings.GSC_CLIENT_SECRET = "secreto"
+    settings.GSC_REFRESH_TOKEN = "token"
+    monkeypatch.setattr(informe, "_token_google", lambda: "token")
+
+
+def test_el_total_de_impresiones_no_depende_de_las_consultas(settings, monkeypatch):
+    """Google no devuelve las búsquedas que hizo muy poca gente: con nuestro
+    volumen la lista por consulta sale vacía aunque haya impresiones. El 04-10
+    el informe dijo "0 impresiones" con 8 en la lista por página."""
+    _gsc_configurado(settings, monkeypatch)
+
+    def filas(dimensiones):
+        if dimensiones == ["query"]:
+            return []  # todas anonimizadas
+        if dimensiones == ["page"]:
+            return [{"keys": ["https://astraguia.com/es"], "impressions": 5, "clicks": 0},
+                    {"keys": ["https://astraguia.com/en"], "impressions": 3, "clicks": 0}]
+        return [{"impressions": 8, "clicks": 1}]  # sin dimensiones: el total real
+
+    class _Resp:
+        status_code = 200
+
+        def __init__(self, cuerpo):
+            self._cuerpo = cuerpo
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"rows": filas(self._cuerpo.get("dimensions", []))}
+
+    monkeypatch.setattr(informe.httpx, "post", lambda url, **kw: _Resp(kw["json"]))
+
+    resultado = informe.busquedas(dias=7)
+
+    assert resultado["impresiones"] == 8
+    assert resultado["clics"] == 1
+    assert resultado["previo"] == {"impresiones": 8, "clics": 1}
+
+
+def test_el_sitio_trae_la_semana_anterior_para_comparar(posthog_responde):
+    """Sin una base, el modelo marca como raro cualquier día en cero: a esta
+    escala un día vacío es normal si la semana previa también lo fue."""
+    datos = informe.actividad_del_sitio()
+
+    assert datos["previo"] == {
+        "dias": 7,
+        "eventos": [{"evento": "pagina_vista", "veces": 3, "personas": 2}],
+    }
+    sql_previo = posthog_responde[-1]["json"]["query"]["query"]
+    assert "interval 8 day" in sql_previo and "interval 1 day" in sql_previo
+    assert "produccion" in sql_previo
