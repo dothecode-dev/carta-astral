@@ -132,3 +132,11 @@ def test_un_producto_retirado_no_necesita_precio_en_stripe(settings, stripe_dice
     verificación el día que se borre su `price_id` de `STRIPE_PRECIOS`."""
     settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
     _correr()
+
+
+def test_dos_precios_a_la_venta_para_un_producto_falla(settings, stripe_dice):
+    """El checkout no abre con dos: la verificación tiene que decirlo antes."""
+    stripe_dice["price_natal_bis"] = _Precio(MONTOS["informe_natal"])
+    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_natal_bis": "informe_natal"}
+    with pytest.raises(CommandError):
+        _correr()

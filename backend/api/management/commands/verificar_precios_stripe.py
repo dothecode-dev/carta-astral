@@ -110,6 +110,15 @@ class Command(BaseCommand):
 
             self.stdout.write(f"{linea}  ✓")
 
+        codigos = list(settings.STRIPE_PRECIOS.values())
+        for codigo in sorted({c for c in codigos if codigos.count(c) > 1}):
+            # El checkout se niega a abrir con dos: decirlo acá antes de que
+            # lo descubra alguien que quiere pagar.
+            self.stderr.write(
+                f"{codigo}: más de un precio a la venta en STRIPE_PRECIOS; "
+                "el que ya no se vende va en STRIPE_PRECIOS_RETIRADOS",
+            )
+            problemas += 1
         faltan = {p.codigo for p in _codigos_vendibles()} - set(settings.STRIPE_PRECIOS.values())
         for codigo in sorted(faltan):
             self.stderr.write(f"{codigo}: está en el catálogo y no tiene precio en Stripe")

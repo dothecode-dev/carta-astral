@@ -101,8 +101,13 @@ def codigo_de_producto(price_id: str) -> str:
     cuál es sería entregar cualquier cosa. El mapeo vive en `STRIPE_PRECIOS`
     porque los ids son distintos en test y en live —Stripe no los comparte
     entre modos— y el código tiene que ser el mismo en los dos.
+
+    Busca también en `STRIPE_PRECIOS_RETIRADOS`: un precio que ya no se vende
+    puede llegar igual, en una sesión abierta antes de cambiarlo.
     """
-    return settings.STRIPE_PRECIOS[price_id]
+    if price_id in settings.STRIPE_PRECIOS:
+        return settings.STRIPE_PRECIOS[price_id]
+    return settings.STRIPE_PRECIOS_RETIRADOS[price_id]
 
 
 def _price_de(codigo_producto: str) -> str:
@@ -111,12 +116,19 @@ def _price_de(codigo_producto: str) -> str:
     `STRIPE_PRECIOS` mapea al revés (price de Stripe → código nuestro) porque
     así lo consume el webhook, que es quien recibe el id.
     """
-    for price_id, codigo in settings.STRIPE_PRECIOS.items():
-        if codigo == codigo_producto:
-            return price_id
+    ids = [p for p, codigo in settings.STRIPE_PRECIOS.items() if codigo == codigo_producto]
     # El catálogo y Stripe son dos listas que hay que mantener alineadas: mejor
     # fallar acá que abrir un pago que después nadie puede acreditar.
-    raise StripeNoConfigurado(f"{codigo_producto} no tiene precio en Stripe")
+    if not ids:
+        raise StripeNoConfigurado(f"{codigo_producto} no tiene precio en Stripe")
+    if len(ids) > 1:
+        # Elegir uno sería elegir al azar entre el precio nuevo y el viejo, y
+        # el viejo cobra un monto que el catálogo ya no acepta. El id que se
+        # deja de vender va a `STRIPE_PRECIOS_RETIRADOS`.
+        raise StripeNoConfigurado(
+            f"{codigo_producto} tiene {len(ids)} precios a la venta en STRIPE_PRECIOS: {ids}",
+        )
+    return ids[0]
 
 
 #: Cómo se llama, en la URL de retorno, el parámetro con la sesión de Stripe.

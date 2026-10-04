@@ -93,3 +93,31 @@ def test_el_precio_congelado_no_acepta_cualquier_monto(
     _stripe_avisa_el_pago(client, monkeypatch, 500)
 
     assert not _acreditada()
+
+
+def test_un_precio_retirado_se_sigue_acreditando(
+    account_client, client, stripe_abre, monkeypatch, settings,
+):
+    """El precio viejo sale de `STRIPE_PRECIOS` —con él ya no se vende— pero
+    una sesión abierta con él todavía puede pagarse durante una hora."""
+    _cambiar_precio(monkeypatch, 2900)
+    account_client.post("/api/checkout/", {"producto": "informe_natal"})
+    _cambiar_precio(monkeypatch, 500)
+    settings.STRIPE_PRECIOS = {"price_nuevo": "informe_natal"}
+    settings.STRIPE_PRECIOS_RETIRADOS = {"price_natal": "informe_natal"}
+
+    assert _stripe_avisa_el_pago(client, monkeypatch, 2900).status_code == 200
+    assert _acreditada()
+
+
+def test_con_dos_precios_a_la_venta_para_un_producto_no_se_abre_el_pago(
+    account_client, stripe_abre, settings,
+):
+    """Con dos ids para el mismo producto, el checkout elegía el primero del
+    mapeo: si era el viejo, cobraba US$ 29 contra un catálogo de 5 y el
+    webhook rechazaba la compra ya cobrada. Mejor no abrir el pago."""
+    settings.STRIPE_PRECIOS = {"price_viejo": "informe_natal", "price_nuevo": "informe_natal"}
+
+    r = account_client.post("/api/checkout/", {"producto": "informe_natal"})
+
+    assert r.status_code == 503

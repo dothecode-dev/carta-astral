@@ -455,6 +455,11 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # webhook. Los ids de Stripe no se comparten entre modo test y live, así que
 # este mapeo es distinto en cada entorno y el código, el mismo.
 STRIPE_PRECIOS = _mapa_json("STRIPE_PRECIOS")
+# Precios que ya no se venden pero se siguen ACEPTANDO al acreditar: una sesión
+# de Stripe vive una hora y cobra el precio con el que se abrió, así que al
+# cambiar un precio el id viejo pasa de `STRIPE_PRECIOS` a éste. Dejarlo en
+# `STRIPE_PRECIOS` no sirve: el checkout abriría pagos con él.
+STRIPE_PRECIOS_RETIRADOS = _mapa_json("STRIPE_PRECIOS_RETIRADOS")
 # Plantilla con `{locale}` (lo pone el checkout, de la lista blanca) y con
 # `{CHECKOUT_SESSION_ID}`, que reemplaza Stripe al redirigir.
 STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL", "")
