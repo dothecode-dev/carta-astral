@@ -119,6 +119,7 @@ def _aplicar_otorgamiento(acc, account, prod, codigo_otorgado: str, otorgado: in
 def aplicar_compra(
     account, codigo_producto, monto_centavos, external_id,
     chart=None, chart_id=None, descuento_centavos=0, origen="compra",
+    precio_centavos=None,
 ) -> bool:
     """Traduce un pago a derechos, con lo que el producto declara en el catálogo.
 
@@ -128,19 +129,24 @@ def aplicar_compra(
     `origen` es `compra` salvo para el regalo de un cupón del 100 %, que se
     registra como `cupon`: en el ledger un regalo tiene que distinguirse de
     una venta.
+
+    `precio_centavos` es el precio congelado al abrir el checkout: si viene,
+    manda sobre el catálogo actual, que pudo cambiar mientras la sesión
+    seguía abierta. `None` en las filas viejas y en los caminos sin pasarela.
     """
     prod = producto(codigo_producto)
-    if not (0 <= descuento_centavos <= prod.precio_centavos):
+    precio = prod.precio_centavos if precio_centavos is None else precio_centavos
+    if not (0 <= descuento_centavos <= precio):
         # Sin esta cota, un descuento inventado en el payload hace pasar
         # cualquier monto (incluido 0 o negativo) como si el catálogo lo
         # avalara: el descuento tiene que achicar el precio, nunca invertirlo.
         logger.error(
             "descuento fuera de rango: producto=%s precio=%s descuento=%s external_id=%s",
-            codigo_producto, prod.precio_centavos, descuento_centavos, external_id,
+            codigo_producto, precio, descuento_centavos, external_id,
         )
         raise MontoInvalido(codigo_producto)
 
-    esperado = prod.precio_centavos - descuento_centavos
+    esperado = precio - descuento_centavos
     if monto_centavos != esperado:
         # Hay dos fuentes de precio —este catálogo y el de Polar—: si divergen,
         # todos los pagos de este producto se rechazan. Sin este error a la

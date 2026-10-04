@@ -273,6 +273,7 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
             external_id=external_id,
             chart=fila.chart if fila is not None else None,
             descuento_centavos=descuento,
+            precio_centavos=fila.precio_de_lista() if fila is not None else None,
         )
     except MontoInvalido:
         # Ya lo logueó `aplicar_compra` con los dos montos: acá no se repite.
@@ -350,7 +351,7 @@ def acreditar_a_mano(fila, sesion: dict) -> None:
     congelada, salteando la comparación con lo que Stripe reporta. Quien lo
     corre ya miró los dos valores."""
     codigo = fila.codigo_producto
-    precio = catalogo.producto(codigo).precio_centavos
+    precio = fila.precio_de_lista()
     _entregar(
         fila.checkout_id, sesion, fila.account, fila, codigo,
         precio, fila.descuento_centavos, fila.cupon if fila.descuento_centavos else None,
@@ -430,7 +431,7 @@ def _reembolsar(refund: dict) -> None:
     # reembolsado entero caía en la rama parcial y revocaba 3, y la persona se
     # quedaba con dos informes y toda la plata. Con un regalo del 100 % lo
     # pagado es 0: cualquier reembolso es total, y no hay división que hacer.
-    precio_pagado = prod.precio_centavos - fila.descuento_centavos
+    precio_pagado = fila.precio_de_lista() - fila.descuento_centavos
 
     if precio_pagado == 0 or monto >= precio_pagado:
         # Reembolso total: se revoca el producto COMPRADO, que es lo que deja

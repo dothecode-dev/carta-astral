@@ -428,6 +428,12 @@ class PasarelaCheckout(models.Model):
         "Cupon", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts",
     )
     descuento_centavos = models.PositiveIntegerField(default=0)
+    # El precio de lista con el que se abrió la sesión, congelado igual que el
+    # descuento. Stripe cobra ESE precio durante la hora que vive la sesión,
+    # aunque el catálogo cambie en el medio: validar contra el catálogo de ese
+    # momento le cobraría a alguien sin darle nada. Nulo en las filas
+    # anteriores a este campo, que siguen validando contra el catálogo.
+    precio_centavos = models.PositiveIntegerField(null=True, blank=True)
     # Cuánto devolvió Stripe de esta compra, sumando reembolsos. Es lo que
     # deja que la pantalla de cuenta diga «reembolsada» sin sumar movimientos.
     reembolsado_centavos = models.PositiveIntegerField(default=0)
@@ -445,6 +451,15 @@ class PasarelaCheckout(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def precio_de_lista(self) -> int:
+        """El precio con el que se abrió. Las filas sin él caen al catálogo,
+        pero la migración `0037` se lo completó a todas las anteriores."""
+        if self.precio_centavos is not None:
+            return self.precio_centavos
+        from api.catalogo import producto
+
+        return producto(self.codigo_producto).precio_centavos
 
     def __str__(self):
         return f"{self.checkout_id} ({self.codigo_producto})"

@@ -221,3 +221,30 @@ def test_dos_reembolsos_parciales_se_suman(client, pack_comprado):
 
     pack_comprado.refresh_from_db()
     assert pack_comprado.reembolsado_centavos == 5000
+
+
+def test_el_reembolso_se_mide_contra_lo_que_se_pago_no_contra_el_precio_de_hoy(
+    client, make_account, monkeypatch,
+):
+    """Un pack comprado a 12500 y reembolsado a medias, después de que el
+    catálogo cambió su precio: contra el precio nuevo, la mitad de lo pagado
+    parecería un reembolso total y se revocarían los cinco."""
+    import dataclasses
+
+    from api import catalogo
+
+    cuenta = make_account()
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
+        payment_intent=PI, precio_centavos=12500,
+    )
+    aplicar_compra(cuenta, "pack_5_natal", 12500, external_id="stripe:session:cs_pack")
+    monkeypatch.setitem(
+        catalogo.CATALOGO, "pack_5_natal",
+        dataclasses.replace(catalogo.CATALOGO["pack_5_natal"], precio_centavos=2500),
+    )
+
+    r = _entregar(client, _refund(amount=6250))
+
+    assert r.status_code == 200
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 2

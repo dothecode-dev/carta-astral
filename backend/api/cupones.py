@@ -103,6 +103,7 @@ def canjear_gratis(account, cupon: Cupon, codigo_producto: str, carta, locale: s
             checkout_id=checkout_id, account=account, codigo_producto=codigo_producto,
             chart=carta, locale=locale, acreditado_at=timezone.now(),
             cupon=cupon, descuento_centavos=prod.precio_centavos,
+            precio_centavos=prod.precio_centavos,
         )
         CuponUso.objects.create(
             cupon=cupon, account=account, codigo_producto=codigo_producto,

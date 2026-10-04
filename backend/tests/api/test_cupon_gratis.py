@@ -131,3 +131,22 @@ def test_un_cupon_invalido_responde_400_con_motivo(account_client, avisos):
 def test_el_id_sintetico_no_parece_de_stripe(account_client, regalo, avisos):
     url = account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO"}).json()["url"]
     assert "checkout_id=cupon_" in url and "cs_" not in url
+
+
+def test_un_regalo_sigue_valiendo_cero_aunque_el_precio_cambie(
+    account_client, regalo, avisos, monkeypatch,
+):
+    """El regalo descuenta la lista de ESE momento. Si la fila no la guarda,
+    un cambio de precio posterior lo muestra como un monto negativo."""
+    import dataclasses
+
+    from api import catalogo
+
+    account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO"})
+    monkeypatch.setitem(
+        catalogo.CATALOGO, "informe_natal",
+        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=500),
+    )
+
+    compra = account_client.get("/api/compras/").json()["compras"][0]
+    assert compra["monto_centavos"] == 0

@@ -26,7 +26,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.auth import AccountTokenAuthentication
-from api.catalogo import producto
 from api.models import PasarelaCheckout
 from api.permissions import HasAccount
 from api.stripe_client import VENCIMIENTO_SESION
@@ -80,6 +79,6 @@ def _pagado(c) -> int:
     """Lista menos el descuento congelado en la fila. Un producto que ya no
     está en el catálogo se muestra igual, con lo que se pueda decir de él."""
     try:
-        return producto(c.codigo_producto).precio_centavos - c.descuento_centavos
+        return c.precio_de_lista() - c.descuento_centavos
     except KeyError:
         return 0

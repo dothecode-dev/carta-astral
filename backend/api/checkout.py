@@ -112,13 +112,16 @@ class CheckoutView(APIView):
 
         # Después del éxito y no antes: una fila huérfana dejaría que el webhook
         # de otra orden resolviera contra ella. El descuento queda congelado
-        # acá: es contra ESTO que el webhook valida lo que Stripe cobró.
+        # acá, y el precio también: es contra ESTO que el webhook valida lo que
+        # Stripe cobró, aunque el catálogo cambie mientras la sesión sigue viva.
+        precio = catalogo.producto(codigo).precio_centavos
         descuento = 0
         if cupon is not None:
-            _, descuento = cupones.precio_final(catalogo.producto(codigo).precio_centavos, cupon.porcentaje)
+            _, descuento = cupones.precio_final(precio, cupon.porcentaje)
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
             chart=carta, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
+            precio_centavos=precio,
         )
         return Response({"url": url})
 

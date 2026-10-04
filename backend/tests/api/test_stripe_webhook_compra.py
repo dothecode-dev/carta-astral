@@ -324,3 +324,27 @@ def test_el_reintento_no_avisa_dos_veces(client, monkeypatch, compra):
     _entregar(client, monkeypatch)
 
     assert avisos == ["compra_acreditada"]
+
+
+def _bajar_el_precio(monkeypatch, centavos):
+    import dataclasses
+
+    from api import catalogo
+    monkeypatch.setitem(
+        catalogo.CATALOGO, "informe_natal",
+        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=centavos),
+    )
+
+
+def test_una_sesion_abierta_antes_de_bajar_el_precio_se_acredita_a_su_precio(
+    client, monkeypatch, compra,
+):
+    """Stripe cobra el precio con el que se ABRIÓ la sesión, que vive una hora.
+    Si el catálogo cambió en el medio, validar contra el catálogo actual le
+    cobraría a alguien sin darle nada."""
+    compra.precio_centavos = 2900
+    compra.save(update_fields=["precio_centavos"])
+    _bajar_el_precio(monkeypatch, 500)
+
+    assert _entregar(client, monkeypatch).status_code == 200
+    assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1

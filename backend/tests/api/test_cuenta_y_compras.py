@@ -200,3 +200,23 @@ def test_una_compra_acreditada_nunca_trae_la_url(account_client):
 
     assert compra["acreditada"] is True
     assert compra["url"] is None
+
+
+def test_una_compra_vieja_muestra_lo_que_se_pago_aunque_el_precio_cambie(
+    account_client, monkeypatch,
+):
+    import dataclasses
+
+    from api import catalogo
+
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_vieja", account=account_client.account,
+        codigo_producto="informe_natal", acreditado_at=timezone.now(), precio_centavos=2900,
+    )
+    monkeypatch.setitem(
+        catalogo.CATALOGO, "informe_natal",
+        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=500),
+    )
+
+    compra = account_client.get("/api/compras/").json()["compras"][0]
+    assert compra["monto_centavos"] == 2900
