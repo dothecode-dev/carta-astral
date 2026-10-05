@@ -7,7 +7,7 @@ contra una fuente externa vive en `test_sinastria_externa.py`.
 import dataclasses
 
 from core.models import Angle, ChartData, DegradationFlags, House, Placement
-from core.sinastria import ORBES, aspectos_cruzados
+from core.sinastria import ORBES, aspectos_cruzados, casa_en, superposicion
 
 
 def _carta(posiciones: dict[str, float], hora: bool = True) -> ChartData:
@@ -118,3 +118,48 @@ def test_cuerpos_fuera_de_puntos_no_entran():
     a = _carta({"Chiron": 0.0}, hora=False)
     b = _carta({"Sun": 0.0}, hora=False)
     assert aspectos_cruzados(a, b) == []
+
+
+def test_casa_en_casas_iguales():
+    cuspides = [i * 30.0 for i in range(12)]
+    assert casa_en(0.0, cuspides) == 1
+    assert casa_en(45.0, cuspides) == 2
+    assert casa_en(359.9, cuspides) == 12
+
+
+def test_casa_en_cuando_la_casa_cruza_el_cero():
+    """La casa 12 va de 350° a 20°: 5° cae en la 12, no en la 1."""
+    cuspides = [20.0, 50.0, 80.0, 110.0, 140.0, 170.0, 200.0, 230.0, 260.0, 290.0, 320.0, 350.0]
+    assert casa_en(5.0, cuspides) == 12
+    assert casa_en(25.0, cuspides) == 1
+
+
+def test_casa_en_casas_desiguales():
+    """Con Placidus las casas no miden 30°: la 1 va de 0° a 50°, la 2 de 50° a 70°."""
+    cuspides = [0.0, 50.0, 70.0, 100.0, 140.0, 190.0, 200.0, 230.0, 260.0, 290.0, 320.0, 345.0]
+    assert casa_en(49.9, cuspides) == 1
+    assert casa_en(50.0, cuspides) == 2
+    assert casa_en(69.9, cuspides) == 2
+    assert casa_en(70.0, cuspides) == 3
+
+
+def test_superposicion_solo_hacia_quien_tiene_hora():
+    """RF2: sólo B tiene hora → hay A en casas de B y no B en casas de A."""
+    a = _carta({"Sun": 45.0}, hora=False)
+    b = _carta({"Moon": 10.0}, hora=True)
+    assert superposicion(a, b) == {"Sun": 2}
+    assert superposicion(b, a) is None
+
+
+def test_superposicion_ignora_cuerpos_fuera_de_puntos():
+    a = _carta({"Sun": 45.0, "Chiron": 100.0}, hora=False)
+    b = _carta({"Moon": 10.0}, hora=True)
+    assert superposicion(a, b) == {"Sun": 2}
+
+
+def test_superposicion_respeta_time_known_aunque_haya_casas():
+    """Igual que con los ángulos: manda `time_known`, no si `houses` vino vacío."""
+    a = _carta({"Sun": 45.0}, hora=False)
+    b = dataclasses.replace(_carta({"Moon": 10.0}), time_known=False)
+    assert b.houses
+    assert superposicion(a, b) is None

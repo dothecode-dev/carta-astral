@@ -64,3 +64,25 @@ def aspectos_cruzados(a: ChartData, b: ChartData) -> list[AspectoCruzado]:
                     encontrados.append(AspectoCruzado(p_a, p_b, nombre, angulo, orbe))
                     break
     return sorted(encontrados, key=lambda x: x.orbe)
+
+
+def casa_en(lon: float, cuspides: list[float]) -> int:
+    """La casa (1..12) que contiene `lon`, con cúspides en orden de casa."""
+    for i in range(12):
+        ini, fin = cuspides[i], cuspides[(i + 1) % 12]
+        ancho = (fin - ini) % 360.0
+        if (lon - ini) % 360.0 < ancho:
+            return i + 1
+    raise ValueError("cúspides inválidas")
+
+
+def superposicion(de: ChartData, en: ChartData) -> dict[str, int] | None:
+    """En qué casa de `en` cae cada planeta de `de`.
+
+    Sólo existe en la dirección en que `en` tiene hora: sin hora no hay casas
+    donde caer. Es asimétrica a propósito (RF2).
+    """
+    if not en.time_known or not en.houses:
+        return None
+    cuspides = [h.abs_pos for h in en.houses]
+    return {p.name: casa_en(p.abs_pos, cuspides) for p in de.placements if p.name in PUNTOS}
