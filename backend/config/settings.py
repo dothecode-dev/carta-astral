@@ -262,6 +262,12 @@ GSC_CLIENT_ID = os.environ.get("GSC_CLIENT_ID", "")
 GSC_CLIENT_SECRET = os.environ.get("GSC_CLIENT_SECRET", "")
 GSC_REFRESH_TOKEN = os.environ.get("GSC_REFRESH_TOKEN", "")
 GSC_SITE_URL = os.environ.get("GSC_SITE_URL", "")
+# Bing Webmaster Tools (`api/bing.py`): la clave se genera en Settings → API
+# access → API Key, y va como parámetro de la URL, así que `api/bing.py` cuida que
+# ningún error la escriba en un log. `BING_SITE_URL` es la propiedad TAL COMO
+# figura en Bing, con la barra final.
+BING_WEBMASTER_API_KEY = os.environ.get("BING_WEBMASTER_API_KEY", "")
+BING_SITE_URL = os.environ.get("BING_SITE_URL", "https://astraguia.com/")
 # De dónde saca el informe diario las URLs cuya indexación revisa
 # (`api/indexacion.py`). El default es producción: no hace falta setearla ahí.
 SITEMAP_URL = os.environ.get("SITEMAP_URL", "https://astraguia.com/sitemap.xml")

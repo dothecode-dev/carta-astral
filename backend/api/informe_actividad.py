@@ -292,6 +292,10 @@ Reglas:
   una caída. No lo marques ni sugieras revisar el tracking por eso.
 - En Google, `impresiones` y `clics` son el total real. La lista por consulta
   suma menos porque Google oculta las búsquedas poco frecuentes: no es un error.
+- `bing` es lo mismo que Google pero de Bing, el índice que usa ChatGPT. Arrancó
+  vacío el 05-10-2026: hasta que junte historia, un cero es lo esperable y no
+  hay que marcarlo. Sólo importa si aparece una consulta nueva o si Bing empieza
+  a mostrar páginas que Google no.
 - `indexacion` dice cuántas páginas del sitemap tiene Google indexadas y cuáles
   no. Una página recién publicada tarda días en entrar: nombrala sólo si cambió
   de estado o si lleva más de dos semanas sin indexar.
@@ -376,6 +380,20 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
             f"posición {c['posicion']}"
             for c in seo.get("consultas", [])
         ]))
+    en_bing = datos.get("bing")
+    if en_bing:
+        antes = en_bing.get("previo") or {}
+        partes.append(
+            f"<h3>En Bing ({en_bing.get('ventana', '')})</h3>"
+            f"<p>{en_bing.get('impresiones', 0)} impresiones, {en_bing.get('clics', 0)} clics "
+            f"(antes: {antes.get('impresiones', 0)} y {antes.get('clics', 0)}). "
+            f"Con actividad {en_bing.get('dias_con_actividad', 0)} de los últimos 7 días.</p>"
+        )
+        partes.append(tabla("Búsquedas que te muestran en Bing", [
+            f"{c['consulta']}: {c['impresiones']} impresiones, {c['clics']} clics, "
+            f"posición {c['posicion']}"
+            for c in en_bing.get("consultas", [])
+        ]))
     indexacion = datos.get("indexacion")
     if indexacion:
         partes.append(
@@ -399,13 +417,17 @@ def generar_y_enviar() -> dict:
     datos: dict = {}
     fallas: list[str] = []
 
-    # Acá y no arriba: `indexacion` importa el token de Google de este módulo.
+    # Acá y no arriba: `indexacion` y `bing` importan de este módulo.
+    from api import bing
     from api.indexacion import estado_de_indexacion
 
     for nombre, clave, fn in (
         ("PostHog", "sitio", actividad_del_sitio),
         ("Search Console", "busquedas", busquedas),
         ("Indexación", "indexacion", estado_de_indexacion),
+        # `lambda` y no `bing.busquedas` directo: busca el atributo al llamar, y
+        # así los tests pueden reemplazarla.
+        ("Bing", "bing", lambda: bing.busquedas()),
     ):
         try:
             datos[clave] = fn()
