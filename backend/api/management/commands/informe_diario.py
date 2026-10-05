@@ -7,6 +7,8 @@ correr a mano para ver qué saldría:
     python manage.py informe_diario --seco    # lo mismo, sin mandar el mail
 """
 
+import json
+
 from django.core.management.base import BaseCommand
 
 from api import informe_actividad
@@ -24,17 +26,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options["seco"]:
-            datos = {}
-            fallas = []
-            for nombre, clave, fn in (
-                ("PostHog", "sitio", informe_actividad.actividad_del_sitio),
-                ("Search Console", "busquedas", informe_actividad.busquedas),
-            ):
-                try:
-                    datos[clave] = fn()
-                except Exception as exc:  # noqa: BLE001 — es una vista previa
-                    fallas.append(f"{nombre}: {exc}")
+            datos, fallas = informe_actividad.juntar_fuentes()
             self.stdout.write(informe_actividad.redactar(datos))
+            # Los números crudos, que en el mail van abajo: son lo que hay que
+            # mirar para saber si una fuente trajo algo o vino vacía.
+            self.stdout.write("\n--- datos ---")
+            self.stdout.write(json.dumps(datos, ensure_ascii=False, indent=1))
             for falla in fallas:
                 self.stderr.write(falla)
             return

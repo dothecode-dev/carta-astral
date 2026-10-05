@@ -409,10 +409,12 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
     return "".join(partes)
 
 
-def generar_y_enviar() -> dict:
-    """Junta, interpreta y manda. Devuelve lo que hizo, para el log del cron.
+def juntar_fuentes() -> tuple[dict, list[str]]:
+    """Consulta todas las fuentes. Devuelve lo que contestó y lo que se cayó.
 
-    No levanta: una fuente caída se anota y el mail sale igual con el resto.
+    Es el ÚNICO lugar donde está la lista de fuentes: la usan el envío del mail
+    y la vista previa (`informe_diario --seco`). Cuando cada uno tenía la suya,
+    la vista previa mostraba un informe distinto del que llegaba (05-10-2026).
     """
     datos: dict = {}
     fallas: list[str] = []
@@ -437,6 +439,16 @@ def generar_y_enviar() -> dict:
         except Exception as exc:  # noqa: BLE001 — el informe sale igual
             fallas.append(f"{nombre}: {type(exc).__name__}")
             logger.exception("informe diario: %s no contestó", nombre)
+
+    return datos, fallas
+
+
+def generar_y_enviar() -> dict:
+    """Junta, interpreta y manda. Devuelve lo que hizo, para el log del cron.
+
+    No levanta: una fuente caída se anota y el mail sale igual con el resto.
+    """
+    datos, fallas = juntar_fuentes()
 
     try:
         cuerpo = redactar(datos)

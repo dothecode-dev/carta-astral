@@ -184,3 +184,35 @@ def _fijo() -> dict:
         ],
         "paginas": [],
     }
+
+
+def test_juntar_fuentes_incluye_bing_y_lo_que_falla_se_nombra(monkeypatch):
+    monkeypatch.setattr(bing, "busquedas", lambda *a, **k: _fijo())
+
+    datos, fallas = informe.juntar_fuentes()
+
+    assert datos["bing"]["clics"] == 3
+    # Sin credenciales de PostHog ni de Search Console, esas fuentes se nombran.
+    assert any(f.startswith("PostHog") for f in fallas)
+    assert any(f.startswith("Search Console") for f in fallas)
+
+
+def test_la_vista_previa_usa_la_misma_funcion_que_el_mail(monkeypatch, capsys):
+    # `--seco` tenía su propia lista copiada y no incluía Bing ni la indexación:
+    # la vista previa mostraba un informe distinto del que llegaba por mail
+    # (05-10-2026). Las dos tienen que salir de `juntar_fuentes`.
+    from django.core.management import call_command
+
+    pedidos = []
+    monkeypatch.setattr(
+        informe, "juntar_fuentes",
+        lambda: pedidos.append(1) or ({"bing": _fijo()}, ["Prueba: caída de mentira"]),
+    )
+    monkeypatch.setattr(informe, "redactar", lambda datos: f"LECTURA con {sorted(datos)}")
+
+    call_command("informe_diario", "--seco")
+
+    assert pedidos == [1]
+    salida = capsys.readouterr()
+    assert "LECTURA con ['bing']" in salida.out
+    assert "Prueba: caída de mentira" in salida.err
