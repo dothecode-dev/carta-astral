@@ -1,4 +1,5 @@
 import type { SampleChart } from "@/content/sample-chart";
+import { SITE_URL } from "@/lib/config";
 import { drawWheel } from "@/lib/drawWheel";
 
 // La imagen vertical para historias: 1080×1920, la rueda grande y los datos.
@@ -22,6 +23,10 @@ const PALETTE = {
   hairStrong: "rgba(178, 173, 138, 0.6)",
   dotted: "#DCCB54",
 };
+
+/** El dominio sin esquema, para firmar la imagen: quien la ve en una historia
+ *  no puede tocar nada, así que tiene que poder escribir la dirección. */
+export const SITE_HOST = new URL(SITE_URL).host;
 
 const SANS = "system-ui, -apple-system, Helvetica, sans-serif";
 
@@ -92,8 +97,12 @@ export async function renderStoryCard(
   ctx.fillStyle = PALETTE.stardust;
   ctx.font = `28px ${SANS}`;
   ctx.letterSpacing = "8px";
-  ctx.fillText(copy.madeWith.toUpperCase(), STORY_W / 2, STORY_H - 140);
+  ctx.fillText(copy.madeWith.toUpperCase(), STORY_W / 2, STORY_H - 150);
   ctx.letterSpacing = "0px";
+
+  ctx.fillStyle = PALETTE.starlight;
+  ctx.font = `36px ${SANS}`;
+  ctx.fillText(SITE_HOST, STORY_W / 2, STORY_H - 90);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
