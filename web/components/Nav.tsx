@@ -2,7 +2,8 @@ import Link from "next/link";
 
 import { Logo } from "@/components/Logo";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
-import { LOCALES, NOTES_SLUG, type Dict, type Locale } from "@/lib/i18n";
+import { CIELO } from "@/content/cielo";
+import { LOCALES, NOTES_SLUG, SKY_SLUG, type Dict, type Locale } from "@/lib/i18n";
 
 export function Nav({
   locale,
@@ -64,6 +65,9 @@ export function Nav({
               {dict.nav.example}
             </Link>
           )}
+          <Link href={`/${locale}/${SKY_SLUG[locale]}`} {...marca(`/${SKY_SLUG[locale]}`)}>
+            {CIELO[locale].nav}
+          </Link>
           <Link href={`/${locale}/precios`} {...marca("/precios")}>
             {dict.nav.precios}
           </Link>

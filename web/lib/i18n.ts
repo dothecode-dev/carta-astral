@@ -66,6 +66,17 @@ export function isNotesSection(locale: Locale, section: string): boolean {
   return NOTES_SLUG[locale] === section;
 }
 
+/** El segmento de «el cielo de hoy» en cada idioma. Lleva las palabras que se
+ * buscan —«cielo hoy», «sky today», «céu hoje»—, que es una señal de idioma y
+ * de tema para los buscadores. Cada valor es una carpeta estática de
+ * `app/[locale]/`, y la página devuelve 404 si el idioma no es el suyo:
+ * `/en/cielo-hoy` no existe, existe `/en/sky-today`. */
+export const SKY_SLUG: Record<Locale, string> = {
+  es: "cielo-hoy",
+  en: "sky-today",
+  pt: "ceu-hoje",
+};
+
 /** Locale de Intl para fechas y horas, no para el contenido. */
 export const INTL_LOCALE: Record<Locale, string> = {
   es: "es-AR",

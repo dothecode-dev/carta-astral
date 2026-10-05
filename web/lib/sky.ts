@@ -1,3 +1,5 @@
+import type { MajorPhase, Phase } from "@/content/cielo";
+
 import type { BodyKey, Positions } from "./ephemeris";
 import { API_URL } from "./config";
 
@@ -32,9 +34,19 @@ type ApiBody = {
   retrograde: boolean;
 };
 
+/** Un cuerpo tal como lo da el backend, con el nombre en inglés: es la clave
+ *  de `PLANET_NAME_BY_KEY` y `PLANET_GLYPHS`. Incluye a Plutón, que la rueda no
+ *  dibuja pero «el cielo de hoy» sí lista. */
+export type SkyBody = {
+  name: string;
+  longitude: number;
+  retrograde: boolean;
+};
+
 export type Sky = {
   moment: string;
   positions: Positions;
+  bodies: SkyBody[];
 };
 
 /** El backend nombra los cuerpos en inglés y capitalizados. */
@@ -69,9 +81,65 @@ export async function fetchSky(): Promise<Sky | null> {
     // saldría incompleto y es preferible el cálculo local.
     if (Object.keys(positions).length !== Object.keys(KEY_BY_NAME).length) return null;
 
-    return { moment: data.moment, positions };
+    const bodies = data.bodies.map(({ name, longitude, retrograde }) => ({ name, longitude, retrograde }));
+    return { moment: data.moment, positions, bodies };
   } catch {
     // Backend caído, lento o mal configurado: la portada sigue funcionando.
+    return null;
+  }
+}
+
+/** Las abreviaturas de signo de kerykeion, en el orden del zodíaco: el índice
+ *  es el de `SIGN_NAMES`. */
+const KERYKEION_SIGNS = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
+                         "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"];
+
+export type Moon = {
+  moment: string;
+  phase: Phase;
+  illumination: number;
+  waxing: boolean;
+  nextPhases: { phase: MajorPhase; moment: string }[];
+  /** El índice del signo en el que entra, para `SIGN_NAMES`. */
+  nextSignIndex: number;
+  nextSignMoment: string;
+};
+
+/** La Luna de este minuto, de `/api/sky/moon/`.
+ *
+ * Mismo trato que `fetchSky`, y por la misma razón queda fuera de `callApi`:
+ * un pedido por minuto con caché de Next. Si el backend no contesta, la página
+ * sale sin el bloque de fases en vez de caerse. */
+export async function fetchMoon(): Promise<Moon | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/sky/moon/`, {
+      next: { revalidate: REVALIDATE_SECONDS },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+
+    const data: {
+      moment: string;
+      phase: Phase;
+      illumination: number;
+      waxing: boolean;
+      next_phases: { phase: MajorPhase; moment: string }[];
+      next_sign_change: { sign: string; moment: string };
+    } = await res.json();
+
+    const nextSignIndex = KERYKEION_SIGNS.indexOf(data.next_sign_change.sign);
+    if (nextSignIndex < 0) return null;
+
+    return {
+      moment: data.moment,
+      phase: data.phase,
+      illumination: data.illumination,
+      waxing: data.waxing,
+      nextPhases: data.next_phases,
+      nextSignIndex,
+      nextSignMoment: data.next_sign_change.moment,
+    };
+  } catch {
     return null;
   }
 }

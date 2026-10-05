@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { LEGAL_UPDATED } from "@/content/legal/types";
-import { DEFAULT_LOCALE, LOCALES, NOTES_SLUG, type Locale } from "@/lib/i18n";
+import { DEFAULT_LOCALE, LOCALES, NOTES_SLUG, SKY_SLUG, type Locale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { fetchNotesOrNone } from "@/lib/notes";
 
@@ -57,6 +57,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   }));
 
+  // «El cielo de hoy» cambia cada minuto: `hourly` es lo más frecuente que
+  // tiene sentido pedirle a Google, y la prioridad es alta porque es la página
+  // que compite por las búsquedas diarias. Sin `lastModified`, por lo mismo
+  // que arriba: no hay una fecha que no mienta.
+  const cielo = LOCALES.map((locale) => ({
+    url: `${SITE_URL}/${locale}/${SKY_SLUG[locale]}`,
+    changeFrequency: "hourly" as const,
+    priority: 0.9,
+    alternates: {
+      languages: {
+        ...Object.fromEntries(LOCALES.map((code) => [code, `${SITE_URL}/${code}/${SKY_SLUG[code]}`])),
+        "x-default": `${SITE_URL}/${DEFAULT_LOCALE}/${SKY_SLUG[DEFAULT_LOCALE]}`,
+      },
+    },
+  }));
+
   const fixed = LOCALES.flatMap((locale) =>
     PATHS.map((path) => ({
       url: url(locale, path),
@@ -72,5 +88,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   );
 
-  return [...fixed, ...sections, ...notes];
+  return [...fixed, ...cielo, ...sections, ...notes];
 }
