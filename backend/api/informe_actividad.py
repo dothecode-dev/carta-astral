@@ -292,6 +292,9 @@ Reglas:
   una caída. No lo marques ni sugieras revisar el tracking por eso.
 - En Google, `impresiones` y `clics` son el total real. La lista por consulta
   suma menos porque Google oculta las búsquedas poco frecuentes: no es un error.
+- `indexacion` dice cuántas páginas del sitemap tiene Google indexadas y cuáles
+  no. Una página recién publicada tarda días en entrar: nombrala sólo si cambió
+  de estado o si lleva más de dos semanas sin indexar.
 - Si un número es raro, decí qué lo explicaría y qué habría que mirar.
 - Nada de felicitaciones ni de relleno. Prosa directa, en español rioplatense.
 - Máximo 200 palabras."""
@@ -373,6 +376,15 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
             f"posición {c['posicion']}"
             for c in seo.get("consultas", [])
         ]))
+    indexacion = datos.get("indexacion")
+    if indexacion:
+        partes.append(
+            f"<h3>Indexadas en Google: {indexacion['indexadas']} de {indexacion['total']} "
+            "páginas del sitemap</h3>"
+        )
+        partes.append(tabla("Todavía sin indexar", [
+            f"{f['url']}: {f['estado']}" for f in indexacion.get("sin_indexar", [])
+        ]))
     if fallas:
         partes.append(tabla("No se pudo consultar", fallas))
     partes.append("</div>")
@@ -387,9 +399,13 @@ def generar_y_enviar() -> dict:
     datos: dict = {}
     fallas: list[str] = []
 
+    # Acá y no arriba: `indexacion` importa el token de Google de este módulo.
+    from api.indexacion import estado_de_indexacion
+
     for nombre, clave, fn in (
         ("PostHog", "sitio", actividad_del_sitio),
         ("Search Console", "busquedas", busquedas),
+        ("Indexación", "indexacion", estado_de_indexacion),
     ):
         try:
             datos[clave] = fn()

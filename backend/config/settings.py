@@ -262,6 +262,9 @@ GSC_CLIENT_ID = os.environ.get("GSC_CLIENT_ID", "")
 GSC_CLIENT_SECRET = os.environ.get("GSC_CLIENT_SECRET", "")
 GSC_REFRESH_TOKEN = os.environ.get("GSC_REFRESH_TOKEN", "")
 GSC_SITE_URL = os.environ.get("GSC_SITE_URL", "")
+# De dónde saca el informe diario las URLs cuya indexación revisa
+# (`api/indexacion.py`). El default es producción: no hace falta setearla ahí.
+SITEMAP_URL = os.environ.get("SITEMAP_URL", "https://astraguia.com/sitemap.xml")
 #: A quién le llega el informe. Vacío = no se manda (desarrollo y tests).
 INFORME_DESTINO = os.environ.get("INFORME_DESTINO", "")
 POSTHOG_KEY = os.environ.get("POSTHOG_KEY", "")
