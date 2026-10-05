@@ -13,6 +13,8 @@ dependencies = [
     "gunicorn>=26.0.0",
     "httpx>=0.27",
     "kerykeion>=5.12",
+    # Viene con kerykeion, pero `core/lunar.py` la importa directo.
+    "pyswisseph>=2.10.3",
     "psycopg[binary]>=3.3.4",
     "pyjwt[crypto]>=2.9",
     "sentry-sdk>=2.20",
@@ -53,6 +55,12 @@ extend-exclude = ["spike_kerykeion.py"]
 [tool.mypy]
 strict = true
 files = ["core"]
+
+# pyswisseph es una extensión en C sin stubs. `core/lunar.py` la usa para el
+# cruce de la Luna por un grado, que kerykeion no expone.
+[[tool.mypy.overrides]]
+module = ["swisseph"]
+ignore_missing_imports = true
 
 [tool.importlinter]
 root_packages = ["core", "interpret", "cms", "api"]

@@ -21,7 +21,7 @@ from api.views import (
     InterpretationView,
 )
 from api.pdf import ChartPdfView
-from api.sky import SkyView
+from api.sky import SkyMoonView, SkyView
 from api.webhooks import RevenueCatWebhookView
 
 urlpatterns = [
@@ -46,6 +46,7 @@ urlpatterns = [
     path("charts/<uuid:uuid>/pdf/", ChartPdfView.as_view()),
     path("geocode/", GeocodeView.as_view()),
     path("sky/", SkyView.as_view()),
+    path("sky/moon/", SkyMoonView.as_view()),
     # Si el sitio acepta trabajo nuevo: lo mira `make deploy` y la web.
     path("estado/", EstadoView.as_view()),
     path("auth/apple", AppleAuthView.as_view()),

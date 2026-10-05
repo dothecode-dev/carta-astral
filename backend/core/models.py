@@ -72,3 +72,32 @@ class ChartData:
     flags: DegradationFlags
     julian_day: float
     utc_iso: str
+
+
+@dataclass(frozen=True)
+class PhaseEvent:
+    """Una de las cuatro fases principales: new_moon, first_quarter,
+    full_moon o last_quarter, con su instante exacto en UTC."""
+    phase: str
+    moment: datetime.datetime
+
+
+@dataclass(frozen=True)
+class SignChange:
+    """El próximo signo de la Luna y el instante en que entra."""
+    sign: str
+    moment: datetime.datetime
+
+
+@dataclass(frozen=True)
+class MoonState:
+    """La Luna de un instante, con lo que viene después."""
+    sign: str
+    # Una de las ocho fases en snake_case: new_moon, waxing_crescent, …
+    phase: str
+    # Porcentaje de disco iluminado, de 0 a 100.
+    illumination: int
+    waxing: bool
+    # Las cuatro fases principales siguientes, de la más cercana a la más lejana.
+    next_phases: list[PhaseEvent]
+    next_sign_change: SignChange
