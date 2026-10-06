@@ -280,3 +280,59 @@ def test_el_prompt_le_explica_al_modelo_que_son_las_campanas():
     assert "campanas" in sistema
     # Sin esto lee la diferencia con los clics de Google como una falla del sitio.
     assert "cookies" in sistema
+
+
+# --- TODO lo que viene de afuera se escapa, no sólo las campañas -----------
+
+HOSTIL = "<img src=x onerror=alert(1)>"
+
+
+def _datos_hostiles() -> dict:
+    """Un texto hostil en CADA campo que el mail interpola y que no escribimos
+    nosotros: lo que tipea la gente en Google y en Bing, las rutas, las URLs, el
+    estado que devuelve Google y el motivo con que falla una fuente."""
+    consulta = {"consulta": HOSTIL, "impresiones": 1, "clics": 0, "posicion": 3.0}
+    return {
+        "sitio": {
+            "eventos": [{"evento": HOSTIL, "veces": 1, "personas": 1}],
+            "paginas": [{"ruta": HOSTIL, "veces": 1}],
+            "previo": {"dias": 7, "dias_con_actividad": 1, "eventos": []},
+        },
+        "busquedas": {
+            "ventana": "ventana", "impresiones": 1, "clics": 0,
+            "previo": {"impresiones": 0, "clics": 0}, "consultas": [consulta],
+        },
+        "bing": {
+            "ventana": "ventana", "impresiones": 1, "clics": 0,
+            "previo": {"impresiones": 0, "clics": 0}, "dias_con_actividad": 1,
+            "consultas": [consulta],
+        },
+        "indexacion": {
+            "indexadas": 1, "total": 2,
+            "sin_indexar": [{"url": HOSTIL, "estado": HOSTIL}],
+        },
+    }
+
+
+def test_el_mail_escapa_cada_campo_que_viene_de_afuera():
+    html = informe._html(HOSTIL, _datos_hostiles(), [f"PostHog: {HOSTIL}"])
+
+    assert "<img" not in html
+    assert "&lt;img src=x onerror=alert(1)&gt;" in html
+    # Aparece en la lectura, el evento, la ruta, las dos búsquedas, la URL, el
+    # estado y la falla: ocho lugares, ninguno sin escapar.
+    assert html.count("&lt;img") == 8
+
+
+def test_el_escape_no_rompe_lo_que_se_muestra_normal():
+    datos = {"sitio": {
+        "eventos": [{"evento": "carta_calculada", "veces": 3, "personas": 2}],
+        "paginas": [{"ruta": "/carta/[id]", "veces": 4}],
+        "previo": {"dias": 7, "dias_con_actividad": 2, "eventos": []},
+    }}
+
+    html = informe._html("Todo tranquilo.\nUna visita nueva.", datos, [])
+
+    assert "carta_calculada: 3 (2 personas)" in html
+    assert "/carta/[id]: 4" in html
+    assert "Todo tranquilo.\nUna visita nueva." in html  # los saltos de línea quedan

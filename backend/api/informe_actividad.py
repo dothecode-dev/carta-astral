@@ -416,6 +416,13 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
     Los números van SIEMPRE, aunque la lectura haya fallado: son el dato, y la
     interpretación es la ayuda.
     """
+    # Todo lo que no escribimos nosotros se escapa donde se interpola: lo que la
+    # gente tipea en Google y en Bing, las rutas, las URLs, el motivo con que
+    # falla una fuente y el texto que redacta el modelo. Un `<` en una búsqueda
+    # no puede convertirse en HTML dentro del mail.
+    def e(valor: object) -> str:
+        return html.escape(str(valor))
+
     def tabla(titulo: str, filas: list[str]) -> str:
         if not filas:
             return f"<h3>{titulo}</h3><p>—</p>"
@@ -426,18 +433,18 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
 
     partes = [
         "<div style='font-family:system-ui,sans-serif;max-width:640px;line-height:1.5'>",
-        f"<p style='white-space:pre-wrap'>{cuerpo}</p>",
+        f"<p style='white-space:pre-wrap'>{e(cuerpo)}</p>",
         "<hr>",
         tabla("En el sitio (últimas 24 h)", [
-            f"{e['evento']}: {e['veces']} ({e['personas']} personas)"
-            for e in sitio.get("eventos", [])
+            f"{e(ev['evento'])}: {ev['veces']} ({ev['personas']} personas)"
+            for ev in sitio.get("eventos", [])
         ]),
         "<p>Los 7 días anteriores: "
-        f"{sum(e['veces'] for e in (sitio.get('previo') or {}).get('eventos', []))} "
+        f"{sum(ev['veces'] for ev in (sitio.get('previo') or {}).get('eventos', []))} "
         f"eventos, en {(sitio.get('previo') or {}).get('dias_con_actividad', 0)} "
         "días con actividad.</p>" if sitio else "",
         tabla("Páginas más vistas", [
-            f"{p['ruta']}: {p['veces']}" for p in sitio.get("paginas", [])
+            f"{e(p['ruta'])}: {p['veces']}" for p in sitio.get("paginas", [])
         ]),
     ]
     anuncios = datos.get("campanas") or {}
@@ -446,10 +453,10 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
     if ultimas or acumulado.get("campanas"):
         def _linea(campana: dict) -> str:
             eventos = " · ".join(
-                f"{html.escape(str(e['evento']))}: {e['veces']} ({e['personas']} personas)"
-                for e in campana["eventos"]
+                f"{e(ev['evento'])}: {ev['veces']} ({ev['personas']} personas)"
+                for ev in campana["eventos"]
             )
-            return f"<b>{html.escape(str(campana['campana']))}</b> — {eventos}"
+            return f"<b>{e(campana['campana'])}</b> — {eventos}"
 
         partes.append("<h3>De los anuncios (gente que entró por una campaña)</h3>")
         partes.append(tabla("Últimas 24 h", [_linea(c) for c in ultimas]))
@@ -466,7 +473,7 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
             f"Google publica con {DIAS_DE_ATRASO_GSC} días de atraso: esto no es lo de ayer.</p>"
         )
         partes.append(tabla("Búsquedas que te muestran", [
-            f"{c['consulta']}: {c['impresiones']} impresiones, {c['clics']} clics, "
+            f"{e(c['consulta'])}: {c['impresiones']} impresiones, {c['clics']} clics, "
             f"posición {c['posicion']}"
             for c in seo.get("consultas", [])
         ]))
@@ -480,7 +487,7 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
             f"Con actividad {en_bing.get('dias_con_actividad', 0)} de los últimos 7 días.</p>"
         )
         partes.append(tabla("Búsquedas que te muestran en Bing", [
-            f"{c['consulta']}: {c['impresiones']} impresiones, {c['clics']} clics, "
+            f"{e(c['consulta'])}: {c['impresiones']} impresiones, {c['clics']} clics, "
             f"posición {c['posicion']}"
             for c in en_bing.get("consultas", [])
         ]))
@@ -491,10 +498,10 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
             "páginas del sitemap</h3>"
         )
         partes.append(tabla("Todavía sin indexar", [
-            f"{f['url']}: {f['estado']}" for f in indexacion.get("sin_indexar", [])
+            f"{e(f['url'])}: {e(f['estado'])}" for f in indexacion.get("sin_indexar", [])
         ]))
     if fallas:
-        partes.append(tabla("No se pudo consultar", fallas))
+        partes.append(tabla("No se pudo consultar", [e(f) for f in fallas]))
     partes.append("</div>")
     return "".join(partes)
 
