@@ -493,6 +493,12 @@ REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 APP_AUTH_ENABLED = os.environ.get("APP_AUTH_ENABLED", "0") == "1"
 IAP_WEBHOOK_ENABLED = os.environ.get("IAP_WEBHOOK_ENABLED", "0") == "1"
 
+# --- Vínculo (sinastría) ---
+# Fase 1: la vista previa pública, sin compra, para medir la demanda antes de
+# construir el cobro (spec de Vínculo, sección 10). La web no tiene flag
+# propio: le pregunta a `GET /api/vinculo/`, así hay una sola fuente de verdad.
+VINCULO_PREVIEW_ENABLED = os.environ.get("VINCULO_PREVIEW_ENABLED", "0") == "1"
+
 # Cache compartido entre workers: el throttle, el tope global y el lock viven
 # acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache
 # (USE_DB_CACHE=1 + `manage.py createcachetable`). LocMem en prod NO limita:

@@ -22,6 +22,7 @@ from api.views import (
 )
 from api.pdf import ChartPdfView
 from api.sky import SkyMoonView, SkyView
+from api.vinculo import VinculoEstadoView, VinculoPreviewView
 from api.webhooks import RevenueCatWebhookView
 
 urlpatterns = [
@@ -39,6 +40,8 @@ urlpatterns = [
     path("webhooks/resend/", ResendWebhookView.as_view()),
     path("charts/", ChartCollectionView.as_view()),
     path("charts/preview/", ChartPreviewView.as_view()),
+    path("vinculo/", VinculoEstadoView.as_view()),
+    path("vinculo/preview/", VinculoPreviewView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
     path("charts/<uuid:uuid>/interpretation/estado/", InterpretationEstadoView.as_view()),
