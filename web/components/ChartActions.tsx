@@ -275,6 +275,9 @@ export function ChartActions({
    *  que ofrecer (con el informe ya comprado el bloque no se renderiza), y ahí
    *  no hay pantalla que medir. */
   const [nodoAcciones, setNodoAcciones] = useState<HTMLDivElement | null>(null);
+  /** Si el bloque de acciones está a la vista. `null` = no se sabe (antes del
+   *  primer callback, o sin IntersectionObserver): en ese caso no hay barra. */
+  const [bloqueVisible, setBloqueVisible] = useState<boolean | null>(null);
 
   /**
    * Si `tier` ya está completo en algún OTRO idioma de esta carta. El
@@ -603,6 +606,7 @@ export function ChartActions({
       // que se vea entero no serviría —en un teléfono angosto el bloque puede
       // ser más alto que la ventana y el umbral no se cumpliría nunca—.
       for (const entrada of entradas) {
+        setBloqueVisible(entrada.isIntersecting);
         if (entrada.isIntersecting) medirEnPantalla(ofertaBreve, ofertaCompleto);
       }
     });
@@ -766,6 +770,28 @@ export function ChartActions({
           </>
         )}
       </div>
+      {/* El principal, pegado abajo mientras el bloque no está en pantalla. El
+          08-09 una compradora tardó 32 s en encontrar el botón con la lectura,
+          las tablas y la matriz entre medio. Es parte de este componente, no
+          otra instancia: la medición del embudo se emite una sola vez. */}
+      {bloqueVisible === false && !tieneCompleto && (
+        <div className="accionFija" data-testid="accion-fija">
+          {principal === "breve" ? (
+            <button type="button" className="btn btnPrimary" disabled={busy} onClick={() => interpret("corto")}>
+              {dict.chart.interpretBrevePrincipal}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btnPrimary"
+              disabled={busy}
+              onClick={() => (puedeLeerlo ? interpret("largo") : comprar())}
+            >
+              {etiquetaCompleto}
+            </button>
+          )}
+        </div>
+      )}
       {!timeKnown && <p className="fieldNote">{dict.chart.noTimeWarning}</p>}
       {error && (
         <p className="formError" role="alert">

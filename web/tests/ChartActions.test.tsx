@@ -1132,3 +1132,43 @@ describe("ChartActions: un solo botón principal", () => {
     expect(screen.getByRole("link", { name: dict.chart.comoSeEscribe })).toBeTruthy();
   });
 });
+
+describe("ChartActions: barra fija", () => {
+  /** Un IntersectionObserver controlable: el test decide si el bloque está a
+   *  la vista. Avisa al observar, en forma síncrona: el archivo usa timers
+   *  falsos para el sondeo y un `setTimeout` acá no dispararía solo. */
+  function observadorQueDice(visible: boolean) {
+    class Observador {
+      constructor(private cb: IntersectionObserverCallback) {}
+      observe() {
+        this.cb([{ isIntersecting: visible } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+      }
+      disconnect() {}
+    }
+    vi.stubGlobal("IntersectionObserver", Observador);
+  }
+
+  it("aparece con el principal cuando el bloque sale de pantalla", () => {
+    observadorQueDice(false);
+    renderActions({ paidCredits: 0 });
+    expect(screen.getByTestId("accion-fija").textContent).toContain(dict.chart.interpretBrevePrincipal);
+  });
+
+  it("no aparece mientras el bloque está a la vista", () => {
+    observadorQueDice(true);
+    renderActions({ paidCredits: 0 });
+    expect(screen.queryByTestId("accion-fija")).toBeNull();
+  });
+
+  it("con la breve agotada, la barra lleva el único botón que existe: comprar", () => {
+    observadorQueDice(false);
+    renderActions({ freeCredits: 0, paidCredits: 0 });
+    expect(screen.getByTestId("accion-fija").textContent).toContain(dict.chart.interpretCompleto);
+  });
+
+  it("sin IntersectionObserver no aparece nunca", () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    renderActions({ paidCredits: 0 });
+    expect(screen.queryByTestId("accion-fija")).toBeNull();
+  });
+});

@@ -936,6 +936,24 @@ a {
    botón de lectura los hacía parecer pasos de un mismo trámite. */
 /* El bloque entero: rótulo arriba, botones debajo. Vive al final de la carta,
    después de la lectura —llevársela es lo que se hace después de leerla—. */
+/* El botón principal de la carta, pegado abajo mientras el bloque de acciones
+   no está en pantalla (ChartActions decide cuándo). `pointer-events: none` en
+   el contenedor para que la franja no tape lo que hay debajo; sólo el botón
+   recibe el click. */
+.accionFija {
+  position: fixed;
+  inset: auto 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.accionFija .btn {
+  pointer-events: auto;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+
 .chartShareBlock {
   display: flex;
   flex-direction: column;
