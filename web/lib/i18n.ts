@@ -305,6 +305,9 @@ export type Dict = {
     /** Si el catálogo no se pudo cargar. */
     sinCatalogo: string;
     nota: string;
+    /** Debajo de «Comprar», sólo con sesión y sin ninguna carta: comprar un
+     *  informe sin carta es válido, pero hay que decir qué sigue. */
+    sinCartaNota: string;
     /**
      * La lectura breve, arriba de todo lo que se cobra.
      *
@@ -964,6 +967,7 @@ const es: Dict = {
     gratisDetalle: `${segunRegalo("Una por cuenta", "{n} por cuenta")}, sin tarjeta. Tu carta en unos párrafos.`,
     verEjemplo: "Ver un ejemplo",
     nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
+    sinCartaNota: "Después de pagar, calculás tu carta y el informe se escribe sobre ella.",
     cuponLabel: "Cupón",
     cuponAplicar: "Aplicar",
     cuponTengo: "Tengo un cupón",
@@ -1330,6 +1334,7 @@ const en: Dict = {
     gratisDetalle: `${segunRegalo("One per account", "{n} per account")}, no card. Your chart in a few paragraphs.`,
     verEjemplo: "See an example",
     nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
+    sinCartaNota: "After paying, you calculate your chart and the report is written on it.",
     cuponLabel: "Coupon",
     cuponAplicar: "Apply",
     cuponTengo: "I have a coupon",
@@ -1696,6 +1701,7 @@ const pt: Dict = {
     gratisDetalle: `${segunRegalo("Uma por conta", "{n} por conta")}, sem cartão. Seu mapa em alguns parágrafos.`,
     verEjemplo: "Ver um exemplo",
     nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
+    sinCartaNota: "Depois de pagar, você calcula seu mapa e o relatório é escrito sobre ele.",
     cuponLabel: "Cupom",
     cuponAplicar: "Aplicar",
     cuponTengo: "Tenho um cupom",

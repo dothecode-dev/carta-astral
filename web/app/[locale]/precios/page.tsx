@@ -10,7 +10,8 @@ import { fetchCatalogo, formatearPrecio, unidades } from "@/lib/catalogo";
 import { fetchCupon, normalizarCupon } from "@/lib/cupon";
 import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
-import { haySesion } from "@/lib/session";
+import { callApi, haySesion } from "@/lib/session";
+import type { ChartSummary } from "@/components/AccountCharts";
 
 // Los precios se ven SIN cuenta a propósito: quien llega de una publicación
 // tiene que poder saber cuánto sale antes de que le pidan registrarse. Era el
@@ -85,6 +86,12 @@ export default async function PreciosPage({
     haySesion(),
     codigoCupon ? fetchCupon(codigoCupon) : Promise.resolve(null),
   ]);
+  // Cuántas cartas tiene la cuenta, sólo con sesión: decide si la tarjeta
+  // tiene que explicar qué pasa después de pagar sin una carta. Si falla,
+  // se asume que hay —la nota de más es ruido, la de menos no rompe nada—.
+  const charts: ChartSummary[] = signedIn
+    ? await callApi<ChartSummary[]>("/api/charts/").catch(() => [{ id: "desconocida" } as ChartSummary])
+    : [];
   const cuponValido = cupon?.valido ? cupon : null;
   const estadoCupon = cupon === null ? null : cupon.valido ? "valido" : cupon.motivo;
   // El precio final por producto, sólo para los que el cupón abarca.
@@ -154,17 +161,9 @@ export default async function PreciosPage({
         </section>
 
         {/* El cupón y la grilla en una misma sección: lo que diga el cupón
-            cambia los precios de abajo, y separados por el aire que el marco
-            pone entre hermanos parecía un formulario perdido. */}
+            cambia los precios, y separados por el aire que el marco pone
+            entre hermanos parecía un formulario perdido. */}
         <section className="preciosOferta">
-        <CuponInput
-          locale={locale}
-          dict={dict}
-          inicial={codigoCupon}
-          estado={codigoCupon ? estadoCupon : null}
-          porcentaje={cuponValido?.porcentaje}
-        />
-
         {productos === null ? (
           // El backend no respondió. Un aviso y la página en pie: mostrar
           // precios inventados sería peor que no mostrar ninguno.
@@ -221,11 +220,23 @@ export default async function PreciosPage({
                     reanudar={pedido === producto.codigo}
                     cupon={final === undefined ? null : cuponValido?.codigo}
                   />
+                  {signedIn && charts.length === 0 && (
+                    <p className="fieldNote">{dict.precios.sinCartaNota}</p>
+                  )}
                 </li>
               );
             })}
           </ul>
         )}
+        {/* Debajo de la grilla: arriba, «Tengo un cupón» flotaba sobre la
+            tarjeta como si fuera su título. */}
+        <CuponInput
+          locale={locale}
+          dict={dict}
+          inicial={codigoCupon}
+          estado={codigoCupon ? estadoCupon : null}
+          porcentaje={cuponValido?.porcentaje}
+        />
         </section>
 
         {/* Los dos juntos en un hijo del marco: `.docFrame` separa a sus hijos

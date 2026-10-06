@@ -23,8 +23,24 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers(),
 }));
 vi.mock("@/lib/telemetry", () => ({ track: vi.fn() }));
+// La sesión y las cartas de la cuenta, controlables por test: con sesión, la
+// página pregunta cuántas cartas hay para decidir qué dice la tarjeta.
+let sesion = false;
+let cartas: unknown[] = [];
+vi.mock("@/lib/session", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/session")>();
+  return {
+    ...real,
+    haySesion: async () => sesion,
+    // Sólo las cartas se simulan; el cupón sigue yendo al `fetch` stubeado.
+    callApi: async (ruta: string, init?: RequestInit) =>
+      ruta.startsWith("/api/charts/") ? cartas : real.callApi(ruta, init),
+  };
+});
 
 const { default: PreciosPage } = await import("@/app/[locale]/precios/page");
+const { getDict } = await import("@/lib/i18n");
+const dict = getDict("es");
 
 const CATALOGO = {
   productos: [
@@ -63,6 +79,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  sesion = false;
+  cartas = [];
 });
 
 describe("/precios?cupon=", () => {
@@ -143,5 +161,24 @@ describe("/precios?cupon=", () => {
     await pagina({ cupon: "PROMO30" });
 
     expect(screen.getByRole("textbox")).toHaveValue("PROMO30");
+  });
+});
+
+describe("/precios con sesión", () => {
+  it("sin ninguna carta, la tarjeta explica qué pasa después de pagar", async () => {
+    stubBackend(null);
+    sesion = true;
+    cartas = [];
+    await pagina({});
+    // Una por tarjeta: con dos productos en el catálogo de prueba, dos.
+    expect(screen.getAllByText(dict.precios.sinCartaNota).length).toBeGreaterThan(0);
+  });
+
+  it("con cartas, no hace falta explicarlo", async () => {
+    stubBackend(null);
+    sesion = true;
+    cartas = [{ id: "x" }];
+    await pagina({});
+    expect(screen.queryByText(dict.precios.sinCartaNota)).toBeNull();
   });
 });
