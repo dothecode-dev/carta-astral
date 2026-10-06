@@ -20,6 +20,7 @@ import logging
 from django.core.management.base import BaseCommand
 
 from api import interpretation_service as svc
+from api import mantenimiento
 from api.models import Interpretation
 from interpret.prompts import PROMPT_VERSION
 
@@ -30,6 +31,15 @@ class Command(BaseCommand):
     help = "Reanuda los informes incompletos que nadie está escribiendo."
 
     def handle(self, *args, **options):
+        # Con el cartel puesto hay un deploy en curso: lo que se arranque ahora
+        # muere con el contenedor viejo y quema uno de los tres intentos del
+        # informe. `compra_service.arrancar_informe` ya deja las compras para
+        # «cuando el mantenimiento pase»: es esta vuelta del cron la que tiene
+        # que esperarlo.
+        if mantenimiento.activo():
+            logger.info("reanudar_informes: mantenimiento activo, no se reanuda nada")
+            self.stdout.write("mantenimiento activo: no se reanuda nada")
+            return
         # `account__isnull=False`: el FK es SET_NULL, así que una cuenta
         # borrada deja la fila sin dueño. No hay a quién entregarle el informe
         # ni a quién devolverle el derecho si falla, y `completar_generacion`

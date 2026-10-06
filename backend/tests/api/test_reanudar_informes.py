@@ -217,3 +217,25 @@ def test_no_cuenta_como_terminado_un_informe_que_sigue_a_medias(
     call_command("reanudar_informes")
 
     assert "terminados: 0" in capsys.readouterr().out
+
+
+def test_con_el_cartel_de_mantenimiento_no_reanuda_nada(chart, account, reanudados):
+    """Con el cartel puesto hay un deploy en curso: un informe que el cron
+    arranque ahora muere con el contenedor viejo y quema uno de sus tres
+    `INTENTOS_MAXIMOS`. Es lo que ya promete `compra_service.arrancar_informe`
+    («la termina cuando el mantenimiento pase»), y el cron no lo cumplía: el
+    drenaje de `make deploy` esperaba los informes en curso, pero nada impedía
+    que el cron arrancara uno nuevo después."""
+    from api import mantenimiento
+
+    interp = _a_medias(chart, account)
+    mantenimiento.activar()
+    try:
+        call_command("reanudar_informes")
+        assert reanudados == []
+    finally:
+        mantenimiento.desactivar()
+
+    # Pasado el mantenimiento, la retoma.
+    call_command("reanudar_informes")
+    assert reanudados == [interp.pk]
