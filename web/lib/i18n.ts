@@ -77,6 +77,14 @@ export const SKY_SLUG: Record<Locale, string> = {
   pt: "ceu-hoje",
 };
 
+/** Las landings de Vínculo. `pt` comparte el slug de `es`: «sinastria» es la
+ *  palabra que se busca en los dos idiomas. */
+export const SYNASTRY_SLUG: Record<Locale, string> = {
+  es: "sinastria",
+  en: "synastry",
+  pt: "sinastria",
+};
+
 /** Locale de Intl para fechas y horas, no para el contenido. */
 export const INTL_LOCALE: Record<Locale, string> = {
   es: "es-AR",

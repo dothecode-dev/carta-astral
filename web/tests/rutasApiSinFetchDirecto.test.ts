@@ -40,9 +40,15 @@ const RUTAS_API = "app/api";
 const LIB = "lib";
 
 /** Sin caché de Next que perder (`cupon.ts`, no-store) o sin techo que
- *  proteger (`catalogo.ts`, `sky.ts`, `notes.ts`): la razón completa de cada
+ *  proteger (`catalogo.ts`, `sky.ts`, `notes.ts`, `vinculo.ts`): la razón completa de cada
  *  una vive en su propio archivo, no acá. */
-const EXCEPCIONES_LIB = new Set(["lib/session.ts", "lib/sky.ts", "lib/catalogo.ts", "lib/notes.ts"]);
+const EXCEPCIONES_LIB = new Set([
+  "lib/session.ts",
+  "lib/sky.ts",
+  "lib/catalogo.ts",
+  "lib/notes.ts",
+  "lib/vinculo.ts",
+]);
 
 function rutas(dir: string): string[] {
   return readdirSync(dir).flatMap((entrada) => {
