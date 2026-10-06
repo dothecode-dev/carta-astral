@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ChartBody } from "@/components/ChartBody";
+import { ChartTables } from "@/components/ChartTables";
 import type { ApiChart } from "@/lib/chart";
 import { getDict } from "@/lib/i18n";
 
@@ -67,5 +68,13 @@ describe("ChartBody", () => {
     render(<ChartBody chart={CARTA} dict={getDict("es")} locale="es" />);
 
     expect(screen.getByText("XII")).toBeInTheDocument();
+  });
+});
+
+describe("ChartTables", () => {
+  it("las casas se abren con una frase, no con un rótulo", () => {
+    const conCasas = chartCon({ houses: [{ name: "First_House", abs_pos: 357 }] });
+    render(<ChartTables chart={conCasas} dict={getDict("es")} locale="es" />);
+    expect(screen.getByText(getDict("es").chart.verCasas)).toBeInTheDocument();
   });
 });

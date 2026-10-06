@@ -52,6 +52,7 @@ export function AspectMatrix({
   orbeLabel,
   glosarioTitulo,
   glosarioCuenta,
+  verAspectos,
 }: {
   bodies: string[];
   aspects: { a: string; b: string; type: string; orb: number }[];
@@ -63,6 +64,8 @@ export function AspectMatrix({
   glosarioTitulo: string;
   /** Cuántos hay de ese tipo en esta carta. Lleva `{n}`. */
   glosarioCuenta: string;
+  /** El desplegable de la lista, como frase: «Ver los {n} aspectos». */
+  verAspectos: string;
 }) {
   const participantes = new Set(aspects.flatMap((a) => [a.a, a.b]));
   const order = [
@@ -197,7 +200,7 @@ export function AspectMatrix({
           <details>, que abre sin JavaScript. */}
       <details className="foldout aspectListWrap">
         <summary className="foldoutHead">
-          {pairs.length} {titulo.toLowerCase()}
+          {verAspectos.replace("{n}", String(pairs.length))}
         </summary>
         <table className="chartTable">
           <tbody>

@@ -31,7 +31,7 @@ export function ChartTables({
     <div className="foldouts">
       {houses && houses.length > 0 && (
         <details className="foldout">
-          <summary className="foldoutHead">{dict.chart.houses}</summary>
+          <summary className="foldoutHead">{dict.chart.verCasas}</summary>
           <table className="chartTable">
             <tbody>
               {HOUSE_ORDER.map((name, i) => {

@@ -22,6 +22,7 @@ function pintar(aspects = ASPECTS, bodies = BODIES) {
       orbeLabel={dict.chart.aspectColumns.orb}
       glosarioTitulo={dict.chart.aspectGlossary}
       glosarioCuenta={dict.chart.aspectGlossaryCount}
+      verAspectos={dict.chart.verAspectos}
     />,
   );
 }
@@ -35,11 +36,12 @@ function cuentaDelGlosario(container: HTMLElement, nombre: string): string | nul
 }
 
 describe("AspectMatrix", () => {
-  it("el desplegable dice cuantos aspectos hay", () => {
-    // Con la matriz al lado, repetir "Aspectos" no aportaba; el numero si.
+  it("el desplegable se lee como acción, con la cuenta", () => {
+    // «+ 39 ASPECTOS» en mono mayúscula se leía como rótulo y nadie lo tocaba:
+    // ahora es una frase con verbo, y el número sigue porque es lo que informa.
     pintar();
     expect(screen.getByRole("group").querySelector("summary")?.textContent?.trim()).toBe(
-      `${ASPECTS.length} ${dict.chart.aspects.toLowerCase()}`,
+      dict.chart.verAspectos.replace("{n}", String(ASPECTS.length)),
     );
   });
 

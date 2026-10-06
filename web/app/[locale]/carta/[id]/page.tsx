@@ -180,6 +180,7 @@ export default async function ChartPage({
             orbeLabel={dict.chart.aspectColumns.orb}
             glosarioTitulo={dict.chart.aspectGlossary}
             glosarioCuenta={dict.chart.aspectGlossaryCount}
+            verAspectos={dict.chart.verAspectos}
           />
         )}
 

@@ -131,7 +131,7 @@ describe("ChartTables", () => {
       />,
     );
 
-    const bloque = screen.getByText(dict.chart.houses).closest("details")!;
+    const bloque = screen.getByText(dict.chart.verCasas).closest("details")!;
     expect(bloque.open).toBe(false);
     expect(within(bloque).getByText("I")).toBeInTheDocument();
     expect(within(bloque).getByText("15°30′ ♈ Aries")).toBeInTheDocument();

@@ -147,6 +147,7 @@ export default async function SampleChartPage({
             orbeLabel={dict.chart.aspectColumns.orb}
             glosarioTitulo={dict.chart.aspectGlossary}
             glosarioCuenta={dict.chart.aspectGlossaryCount}
+            verAspectos={dict.chart.verAspectos}
             />
           </div>
         </div>

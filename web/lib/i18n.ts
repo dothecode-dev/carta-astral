@@ -551,6 +551,10 @@ export type Dict = {
     generationInProgress: string;
     columns: { body: string; position: string; house: string };
     houses: string;
+    /** Los desplegables de datos, en frase y no en rótulo: «+ CASAS» en mono
+     *  mayúscula se leía como título y nadie lo tocaba. `verAspectos` lleva `{n}`. */
+    verCasas: string;
+    verAspectos: string;
     aspects: string;
     axisNames: { AC: string; MC: string };
     aspectColumns: { pair: string; aspect: string; orb: string };
@@ -831,6 +835,8 @@ const es: Dict = {
       "Ya hay una generación en curso para esta carta en otro idioma. Esperá unos segundos y volvé a intentar.",
     columns: { body: "Cuerpo", position: "Posición", house: "Casa" },
     houses: "Casas",
+    verCasas: "Ver las casas",
+    verAspectos: "Ver los {n} aspectos",
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Medio Cielo" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
@@ -1192,6 +1198,8 @@ const en: Dict = {
       "There's already a generation in progress for this chart in another language. Wait a few seconds and try again.",
     columns: { body: "Body", position: "Position", house: "House" },
     houses: "Houses",
+    verCasas: "Show the houses",
+    verAspectos: "Show all {n} aspects",
     aspects: "Aspects",
     axisNames: { AC: "Ascendant", MC: "Midheaven" },
     aspectColumns: { pair: "Between", aspect: "Aspect", orb: "Orb" },
@@ -1553,6 +1561,8 @@ const pt: Dict = {
       "Já há uma geração em andamento para este mapa em outro idioma. Espere alguns segundos e tente de novo.",
     columns: { body: "Corpo", position: "Posição", house: "Casa" },
     houses: "Casas",
+    verCasas: "Ver as casas",
+    verAspectos: "Ver os {n} aspectos",
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Meio do Céu" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
