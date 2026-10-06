@@ -22,7 +22,7 @@ from api import notificaciones
 from api.canje import SinDerecho, canjear, devolver
 from api.catalogo import codigos_otorgados_por
 from api.exceptions import CapReached, GenerationInProgress
-from api.models import Interpretation, Movimiento, Sujeto
+from api.models import Chart, Interpretation, Movimiento, Sujeto
 from api.sujetos import a_sujeto
 from interpret.exceptions import InterpretationError
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
@@ -118,7 +118,10 @@ def esta_generandose(objetivo, tier: str) -> bool:
     La usa `_chart_repr` para que la carta pueda decir qué se está generando
     cuando alguien vuelve después de cerrar la pestaña.
     """
-    return cache.get(_lock_key(objetivo, tier)) is not None
+    if cache.get(_lock_key(objetivo, tier)) is not None:
+        return True
+    viejo = _lock_key_viejo(objetivo, tier)
+    return viejo is not None and cache.get(viejo) is not None
 
 
 def _lock_key(objetivo, tier: str) -> str:
@@ -141,6 +144,21 @@ def _lock_key(objetivo, tier: str) -> str:
     # se consulta una vez por sección y sólo necesita la clave.
     sujeto = a_sujeto(objetivo, adoptar=False)
     return f"interp:lock:s{sujeto.pk}:{PROMPT_VERSION}:{tier}"
+
+
+def _lock_key_viejo(objetivo, tier: str) -> str | None:
+    """EXPANDIR (deploy 1): la clave con la que el código anterior a la parte 2
+    toma el lock, por carta.
+
+    Durante el deploy conviven los dos contenedores, y el cron del viejo puede
+    arrancar un informe después del drenaje: si el nuevo no viera ese lock,
+    escribirían la misma fila en paralelo (doble gasto de LLM e intentos
+    contados dos veces). Sólo se CONSULTA, nunca se toma. Se borra en el deploy
+    2, cuando ya no queda código que la use."""
+    sujeto = a_sujeto(objetivo, adoptar=False)
+    if sujeto.natal_de_id is None:
+        return None
+    return f"interp:lock:{sujeto.natal_de_id}:{PROMPT_VERSION}:{tier}"
 
 
 def renovar_lock(objetivo, tier: str, token: str) -> bool:
@@ -199,7 +217,9 @@ def _sibling_completo(objetivo, lang: str, tier: str) -> Interpretation | None:
     otro. Sin este filtro, pedir la breve en "en" después de tener el
     completo en "es" encontraría ese completo como sibling y lo entregaría
     gratis en vez de cobrar el crédito free que corresponde."""
-    sujeto = a_sujeto(objetivo)
+    # Adopta sólo si llega una carta: quien pasa un sujeto ya lo resolvió (y
+    # adoptó) un renglón antes, y repetirlo son tres UPDATE por consulta.
+    sujeto = a_sujeto(objetivo, adoptar=isinstance(objetivo, Chart))
     return (
         Interpretation.objects.filter(
             sujeto=sujeto, prompt_version=PROMPT_VERSION, tier=tier, completa=True,
@@ -278,8 +298,8 @@ def _sibling_en_curso(objetivo, lang: str, tier: str) -> Interpretation | None:
     fix round 1): el lock es por (chart, tier) desde que dos tiers de la
     misma carta pueden generarse en paralelo — mirar el lock de OTRO tier
     acá no diría nada sobre si hay una generación en curso de ESTE."""
-    sujeto = a_sujeto(objetivo)
-    if cache.get(_lock_key(sujeto, tier)) is None:
+    sujeto = a_sujeto(objetivo, adoptar=isinstance(objetivo, Chart))
+    if not esta_generandose(sujeto, tier):
         return None
     return (
         Interpretation.objects.filter(
@@ -487,7 +507,12 @@ def completar_generacion(interpretacion: Interpretation, objetivo, account) -> N
     sujeto = a_sujeto(objetivo)
     lock_key = _lock_key(sujeto, interpretacion.tier)
     token = uuid.uuid4().hex
-    got_lock = cache.add(lock_key, token, timeout=LOCK_TTL)
+    # EXPANDIR: si el contenedor viejo está generando esta carta (con su clave
+    # vieja), no se toma el lock nuevo: sería escribir la misma fila en paralelo.
+    viejo = _lock_key_viejo(sujeto, interpretacion.tier)
+    got_lock = (viejo is None or cache.get(viejo) is None) and cache.add(
+        lock_key, token, timeout=LOCK_TTL,
+    )
 
     from api import informe_service  # import diferido: ver nota al tope del módulo
 

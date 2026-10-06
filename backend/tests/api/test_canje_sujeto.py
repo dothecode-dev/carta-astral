@@ -127,3 +127,21 @@ def test_aplicar_compra_sin_carta_ni_sujeto_acredita_y_no_canjea(cuenta):
     aplicar_compra(cuenta, "informe_natal", _precio(), external_id="stripe:2")
     assert _restante(cuenta) == 1
     assert not _consumos(cuenta).exists()
+
+
+def test_una_devolucion_del_codigo_viejo_permite_volver_a_cobrar(cuenta, carta):
+    """El `devolver` viejo (durante el deploy) repone el derecho y desvincula el
+    consumo sólo por carta. El informe se tiene que poder volver a cobrar: si
+    no, sería un informe gratis más el derecho devuelto."""
+    otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:8")
+    canjear(cuenta, "leer_informe", carta)
+    # Lo que hace el código viejo al devolver:
+    _consumos(cuenta).update(chart=None)
+    Derecho.objects.filter(account=cuenta, codigo_producto="informe_natal").update(
+        cantidad_restante=1,
+    )
+
+    canjear(cuenta, "leer_informe", carta)
+
+    assert _restante(cuenta) == 0
+    assert _consumos(cuenta).filter(sujeto__isnull=False).count() == 1

@@ -132,3 +132,25 @@ def test_borrar_la_carta_borra_su_sujeto_natal_y_el_informe(chart, account):
     chart.delete()
     assert not Sujeto.objects.exists()
     assert not Interpretation.objects.filter(pk=i.pk).exists()
+
+
+def test_un_consumo_desvinculado_por_el_codigo_viejo_se_suelta_del_sujeto(chart, account):
+    """El `devolver` viejo desvincula con `update(chart=None)` y deja el sujeto
+    puesto. Sin soltarlo, el canje nuevo lo vería «ya canjeado» y regalaría el
+    informe. Un consumo natal sin carta es exactamente eso: el código nuevo
+    siempre lo escribe con `chart`, y si la carta se borra, el sujeto natal cae
+    con ella y el consumo queda sin sujeto."""
+    s = sujeto_natal(chart)
+    desvinculado = Movimiento.objects.create(
+        account=account, codigo_producto="informe_natal", tipo="consumo",
+        origen="compra", cantidad=-1, chart=None, sujeto=s,
+    )
+    vigente = Movimiento.objects.create(
+        account=account, codigo_producto="informe_natal", tipo="consumo",
+        origen="compra", cantidad=-1, chart=chart, sujeto=s,
+    )
+
+    adoptar_huerfanas(s)
+
+    assert Movimiento.objects.get(pk=desvinculado.pk).sujeto_id is None
+    assert Movimiento.objects.get(pk=vigente.pk).sujeto_id == s.pk

@@ -58,10 +58,13 @@ def generando() -> int:
     """
     pendientes = Interpretation.objects.filter(
         completa=False, prompt_version=PROMPT_VERSION,
-    ).select_related("chart")
+    ).select_related("chart", "sujeto")
+    # Con el sujeto ya cargado: `/api/estado/` lo consulta la web en cada
+    # pedido, y resolverlo desde la carta son consultas de más por fila.
     return sum(
         1 for i in pendientes
-        if i.chart is not None and interpretation_service.esta_generandose(i.chart, i.tier)
+        if (i.sujeto or i.chart) is not None
+        and interpretation_service.esta_generandose(i.sujeto or i.chart, i.tier)
     )
 
 

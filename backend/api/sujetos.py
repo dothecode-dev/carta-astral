@@ -44,6 +44,12 @@ def adoptar_huerfanas(sujeto: Sujeto) -> None:
     Interpretation.objects.filter(chart_id=carta_id, sujeto__isnull=True).update(sujeto=sujeto)
     Movimiento.objects.filter(chart_id=carta_id, sujeto__isnull=True).update(sujeto=sujeto)
     PasarelaCheckout.objects.filter(chart_id=carta_id, sujeto__isnull=True).update(sujeto=sujeto)
+    # Y al revés: el `devolver` viejo desvincula sólo con `update(chart=None)` y
+    # deja el sujeto puesto. Un consumo natal sin carta es eso —el código nuevo
+    # siempre lo escribe con `chart`, y si la carta se borra el sujeto natal cae
+    # con ella—: sin soltarlo, el canje lo daría por cobrado y regalaría el
+    # informe junto con el derecho devuelto.
+    Movimiento.objects.filter(sujeto=sujeto, tipo="consumo", chart__isnull=True).update(sujeto=None)
 
 
 def a_sujeto(objetivo, adoptar: bool = True) -> Sujeto:

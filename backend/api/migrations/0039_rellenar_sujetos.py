@@ -6,6 +6,7 @@ dos, el contenedor viejo pudo escribir filas sin sujeto (ver
 `api.sujetos.adoptar_huerfanas`)."""
 
 from django.db import migrations
+from django.db.models import OuterRef, Subquery
 
 
 def rellenar(apps, schema_editor=None) -> dict:
@@ -23,13 +24,17 @@ def rellenar(apps, schema_editor=None) -> dict:
     ]
     Sujeto.objects.bulk_create(nuevos, batch_size=500)
 
-    por_carta = dict(Sujeto.objects.filter(natal_de__isnull=False).values_list("natal_de_id", "id"))
+    # Una sola sentencia por modelo. Si el contenedor viejo creó una carta
+    # después del `bulk_create`, su subconsulta da NULL y la fila queda sin
+    # sujeto: la adopta `api.sujetos.adoptar_huerfanas` al primer uso, y la
+    # 0040 vuelve a pasar. Con un dict en memoria eso era un `KeyError` que
+    # abortaba la migración y tiraba el deploy.
+    natal = Sujeto.objects.filter(natal_de_id=OuterRef("chart_id")).values("id")[:1]
     filas = 0
     for modelo in (Interpretation, Movimiento, PasarelaCheckout):
-        for pk, carta_id in modelo.objects.filter(
-            sujeto__isnull=True, chart__isnull=False,
-        ).values_list("pk", "chart_id"):
-            filas += modelo.objects.filter(pk=pk).update(sujeto_id=por_carta[carta_id])
+        filas += modelo.objects.filter(sujeto__isnull=True, chart__isnull=False).update(
+            sujeto_id=Subquery(natal),
+        )
     return {"sujetos": len(nuevos), "filas": filas}
 
 

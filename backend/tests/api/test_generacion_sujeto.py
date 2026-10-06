@@ -139,3 +139,47 @@ def test_completar_devuelve_sobre_el_sujeto_si_agota_los_intentos(cuenta, carta,
     assert not Interpretation.objects.filter(pk=i.pk).exists()
     devolucion = Movimiento.objects.get(account=cuenta, tipo="devolucion")
     assert devolucion.sujeto_id == s.pk
+
+
+# --- el lock del contenedor viejo, durante el deploy 1 ---------------------
+
+
+def _lock_viejo(carta, tier=TIER_LARGO) -> str:
+    """La clave con la que el código de antes de la parte 2 toma el lock."""
+    return f"interp:lock:{carta.pk}:{PROMPT_VERSION}:{tier}"
+
+
+def test_ve_el_lock_que_toma_el_contenedor_viejo(carta):
+    """Durante el deploy conviven los dos contenedores: si el viejo está
+    generando, el nuevo tiene que verlo, o escriben la misma fila en paralelo."""
+    cache.set(_lock_viejo(carta), "token-viejo", timeout=600)
+    assert svc.esta_generandose(carta, TIER_LARGO)
+    assert svc.esta_generandose(sujeto_natal(carta), TIER_LARGO)
+
+
+def test_con_el_lock_viejo_tomado_no_genera_en_paralelo(cuenta, carta, monkeypatch):
+    otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:7")
+    i = svc.iniciar_generacion(carta, "es", cuenta, TIER_LARGO)
+    cache.set(_lock_viejo(carta), "token-viejo", timeout=600)
+
+    from api import informe_service
+
+    generados = []
+    monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **k: generados.append(1))
+    # Sin esto `_build_client` revienta por la falta de clave de Anthropic antes
+    # de llegar a `generar_informe`, y el test pasaría por la razón equivocada.
+    monkeypatch.setattr(svc, "_build_client", lambda: object())
+
+    svc.completar_generacion(i, carta, cuenta)
+
+    assert generados == []
+    assert cache.get(svc._lock_key(carta, TIER_LARGO)) is None
+
+
+def test_con_el_lock_viejo_tomado_otro_idioma_da_409(cuenta, carta):
+    otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:9")
+    svc.iniciar_generacion(carta, "es", cuenta, TIER_LARGO)
+    cache.set(_lock_viejo(carta), "token-viejo", timeout=600)
+
+    with pytest.raises(GenerationInProgress):
+        svc.iniciar_generacion(carta, "en", cuenta, TIER_LARGO)
