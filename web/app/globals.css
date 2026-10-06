@@ -1247,6 +1247,11 @@ a {
   color: var(--accent);
 }
 
+.linkButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .formError {
   margin: 0;
   color: var(--danger);

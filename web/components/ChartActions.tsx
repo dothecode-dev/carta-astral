@@ -137,6 +137,15 @@ function tierEnCursoServidor(
 type OfertaBreve = "disponible" | "agotada" | "no_se_ofrece";
 type OfertaCompleto = "comprar" | "leer" | "no_se_ofrece";
 
+/** Cuál de los dos productos lleva el botón lleno. Hay uno solo: gratis
+ *  primero, pago después. Con derecho ya comprado el informe es siempre el
+ *  principal —ya está pago, leerlo es lo único que falta—. */
+export function principalDe(breve: OfertaBreve, completo: OfertaCompleto): "breve" | "completo" {
+  if (completo === "leer") return "completo";
+  if (breve === "disponible") return "breve";
+  return "completo";
+}
+
 /**
  * Cuenta la oferta que quedó a la vista. Es un componente y no un efecto del
  * padre por una razón concreta: sólo se monta en la rama que muestra los
@@ -641,91 +650,120 @@ export function ChartActions({
   // desperdicio.
   if (tieneCompleto) return <MedirOferta breve={ofertaBreve} completo={ofertaCompleto} medir={medirOferta} />;
 
+  // Un solo botón lleno por estado: gratis primero, pago después. Hasta el
+  // 06-10-2026 los dos iban al mismo nivel —la breve en fantasma, «Comprar»
+  // lleno— y el embudo mostraba el resultado: la gente veía el precio antes
+  // de haber leído una palabra y se iba sin intentar pagar.
+  const principal = principalDe(ofertaBreve, ofertaCompleto);
+  const etiquetaCompleto = puedeLeerlo
+    ? dict.chart.interpretCompletoConDerecho
+    : dict.chart.interpretCompleto;
+  const notaCompleto = enOtroIdioma("largo")
+    ? dict.chart.interpretFreeLang
+    : // Con derecho no se nombra el precio: el botón dice "Leer" y decir el
+      // precio abajo hacía parecer que iba a cobrar otra vez a quien ya había
+      // pagado —un pack deja cinco—.
+      informesPagos > 0
+      ? timeKnown
+        ? dict.chart.interpretCompletoNotaConDerecho
+        : dict.chart.interpretCompletoNotaConDerechoSinHora
+      : // RF12: sin hora de nacimiento el informe sale con siete secciones, sin
+        // la de casas (`noTimeWarning`, debajo). Sin esta rama, el botón
+        // prometía "ocho secciones" para cualquier carta.
+        conPrecio(
+          timeKnown ? dict.chart.interpretCompletoNota : dict.chart.interpretCompletoNotaSinHora,
+          precioInforme,
+        );
+  const notaBreve = enOtroIdioma("corto")
+    ? dict.chart.interpretFreeLang
+    : dict.chart.interpretBreveNota.replace("{n}", String(breveDisponibles));
+
   return (
     <div className="chartActions" ref={setNodoAcciones}>
       <MedirOferta breve={ofertaBreve} completo={ofertaCompleto} medir={medirOferta} />
       <div className="chartActionsRow">
-        {!tieneBreve &&
-          // Agotadas las tres de por vida, el botón quedaba ahí deshabilitado
-          // con "Gratis. Te quedan 0." debajo: un callejón, porque la lectura
-          // breve no se vende ni se repone nunca (`catalogo.py`). Se dice qué
-          // pasó y se deja sola la acción que sí existe, la de al lado.
-          (breveAgotada ? (
-            <p className="fieldNote">{dict.chart.sinLeerBreve}</p>
-          ) : (
-            <div className="chartActionCol">
-              <button
-                type="button"
-                className="btn btnGhost"
-                // `enOtroIdioma` habilita igual que en el completo: con la
-                // breve ya escrita en otro idioma el backend la traduce sin
-                // tocar el ledger, así que deshabilitar acá dejaba un botón
-                // muerto abajo del cartel que anuncia que es gratis.
-                disabled={(!puede(derechos, "leer_breve") && !enOtroIdioma("corto")) || busy}
-                onClick={() => interpret("corto")}
-              >
-                {dict.chart.interpretBreve}
-              </button>
-              <p className="fieldNote">
-                {enOtroIdioma("corto")
-                  ? dict.chart.interpretFreeLang
-                  : dict.chart.interpretBreveNota.replace("{n}", String(breveDisponibles))}
-              </p>
-            </div>
-          ))}
-        {!tieneCompleto && (
+        {/* El principal va primero en el DOM: es el primer foco con Tab y lo
+            que lee primero un lector de pantalla. */}
+        {principal === "breve" ? (
           <div className="chartActionCol">
-            {/* Con derecho se lee; sin derecho se paga. El mismo lugar de la
-                pantalla hace las dos cosas porque para quien mira es el mismo
-                gesto —"quiero mi informe"—, y cobrarle a quien ya pagó (un
-                pack deja cinco) sería cobrarle dos veces lo mismo. */}
             <button
               type="button"
               className="btn btnPrimary"
               disabled={busy}
-              onClick={() => (puedeLeerlo ? interpret("largo") : comprar())}
+              onClick={() => interpret("corto")}
             >
-              {puedeLeerlo
-                ? dict.chart.interpretCompletoConDerecho
-                : dict.chart.interpretCompleto}
+              {dict.chart.interpretBrevePrincipal}
             </button>
-            <p className="fieldNote">
-              {enOtroIdioma("largo")
-                ? dict.chart.interpretFreeLang
-                : // Con derecho no se nombra el precio: el botón dice "Leer" y
-                  // decir el precio abajo hacía parecer que iba a cobrar otra
-                  // vez a quien ya había pagado —un pack deja cinco—.
-                  informesPagos > 0
-                    ? timeKnown
-                      ? dict.chart.interpretCompletoNotaConDerecho
-                      : dict.chart.interpretCompletoNotaConDerechoSinHora
-                    : // RF12: sin hora de nacimiento el informe sale con siete
-                      // secciones, sin la de casas (`noTimeWarning`, debajo). Sin
-                      // esta rama, el botón prometía "ocho secciones" para
-                      // cualquier carta, contradiciendo ese aviso en la misma
-                      // pantalla.
-                      conPrecio(
-                        timeKnown
-                          ? dict.chart.interpretCompletoNota
-                          : dict.chart.interpretCompletoNotaSinHora,
-                        precioInforme,
-                      )}
-            </p>
-            {/* Sólo con más de uno: con el último, lo que importa es que ya
-                está pago, y "te queda 1" no agrega nada. */}
-            {informesPagos > 1 && (
+            <p className="fieldNote">{notaBreve}</p>
+            {!tieneCompleto && (
+              <button type="button" className="linkButton" disabled={busy} onClick={() => comprar()}>
+                {conPrecio(dict.chart.interpretCompletoEnlace, precioInforme)}
+              </button>
+            )}
+            {!tieneCompleto && !timeKnown && (
               <p className="fieldNote">
-                {dict.chart.interpretCompletoSaldo.replace("{n}", String(informesPagos - 1))}
+                {conPrecio(dict.chart.interpretCompletoNotaSinHora, precioInforme)}
               </p>
             )}
-            {/* El pie de la lectura ya no anuncia que la escribe una IA: la
-                explicación entera está en los Términos de uso. Acá queda a un
-                clic, que es el único lugar donde callarlo sale caro — antes de
-                que alguien ponga US$ 29. */}
-            <Link className="fieldNote comoSeEscribe" href={`/${locale}/legal/terms`}>
-              {dict.chart.comoSeEscribe}
-            </Link>
+            {/* A un clic ANTES de pagar, igual que en el otro estado: la
+                explicación de cómo se escribe la lectura vive en los Términos,
+                y éste es el único lugar donde callarla sale caro. */}
+            {!tieneCompleto && (
+              <Link className="fieldNote comoSeEscribe" href={`/${locale}/legal/terms`}>
+                {dict.chart.comoSeEscribe}
+              </Link>
+            )}
           </div>
+        ) : (
+          <>
+            {!tieneCompleto && (
+              <div className="chartActionCol">
+                {/* Con derecho se lee; sin derecho se paga. El mismo lugar de la
+                    pantalla hace las dos cosas porque para quien mira es el mismo
+                    gesto —"quiero mi informe"—, y cobrarle a quien ya pagó (un
+                    pack deja cinco) sería cobrarle dos veces lo mismo. */}
+                <button
+                  type="button"
+                  className="btn btnPrimary"
+                  disabled={busy}
+                  onClick={() => (puedeLeerlo ? interpret("largo") : comprar())}
+                >
+                  {etiquetaCompleto}
+                </button>
+                <p className="fieldNote">{notaCompleto}</p>
+                {/* Sólo con más de uno: con el último, lo que importa es que ya
+                    está pago, y "te queda 1" no agrega nada. */}
+                {informesPagos > 1 && (
+                  <p className="fieldNote">
+                    {dict.chart.interpretCompletoSaldo.replace("{n}", String(informesPagos - 1))}
+                  </p>
+                )}
+                <Link className="fieldNote comoSeEscribe" href={`/${locale}/legal/terms`}>
+                  {dict.chart.comoSeEscribe}
+                </Link>
+              </div>
+            )}
+            {/* La breve, en fantasma, sólo cuando todavía se puede leer: con
+                derecho de informe la breve es la secundaria, y agotadas las
+                tres de por vida se dice qué pasó en vez de dejar un botón
+                muerto (la breve no se vende ni se repone, `catalogo.py`). */}
+            {!tieneBreve && ofertaBreve === "disponible" && (
+              <div className="chartActionCol">
+                <button
+                  type="button"
+                  className="btn btnGhost"
+                  disabled={busy}
+                  onClick={() => interpret("corto")}
+                >
+                  {dict.chart.interpretBreve}
+                </button>
+                <p className="fieldNote">{notaBreve}</p>
+              </div>
+            )}
+            {!tieneBreve && ofertaBreve === "agotada" && (
+              <p className="fieldNote">{dict.chart.sinLeerBreve}</p>
+            )}
+          </>
         )}
       </div>
       {!timeKnown && <p className="fieldNote">{dict.chart.noTimeWarning}</p>}

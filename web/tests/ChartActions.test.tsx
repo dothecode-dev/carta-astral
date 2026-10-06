@@ -97,6 +97,9 @@ async function correr(ms = 0) {
   });
 }
 
+/** El informe como enlace de texto, en el estado sin lecturas: lleva el precio. */
+const enlaceCompra = (precio: string | null = "US$ 5") => conPrecio(dict.chart.interpretCompletoEnlace, precio);
+
 /** Busca el botón por su nombre exacto — hay dos desde que la carta ofrece
  *  dos productos, así que no alcanza con "el botón" a secas. */
 async function clickBoton(name: string) {
@@ -107,8 +110,8 @@ async function clickBoton(name: string) {
 describe("ChartActions", () => {
   it("ofrece la lectura breve gratis y, sin derecho, la compra del completo", () => {
     renderActions({ freeCredits: 2, paidCredits: 0 });
-    expect(screen.getByRole("button", { name: dict.chart.interpretBreve })).toBeEnabled();
-    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto })).toBeEnabled();
+    expect(screen.getByRole("button", { name: dict.chart.interpretBrevePrincipal })).toBeEnabled();
+    expect(screen.getByRole("button", { name: enlaceCompra() })).toBeEnabled();
   });
 
   it("manda el tier que se apretó", async () => {
@@ -183,11 +186,10 @@ describe("ChartActions", () => {
     );
   });
 
-  it("sin lectura en otro idioma, la nota del completo sigue mostrando el precio", () => {
+  it("sin lectura en otro idioma, el enlace del completo sigue mostrando el precio", () => {
     renderActions({ interpretations: {}, paidCredits: 0 });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
-    expect(boton.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, "US$ 5"));
-    expect(boton.parentElement).not.toHaveTextContent(dict.chart.interpretFreeLang);
+    const enlace = screen.getByRole("button", { name: enlaceCompra() });
+    expect(enlace.parentElement).not.toHaveTextContent(dict.chart.interpretFreeLang);
   });
 
   it("el 402 distingue quedarse sin gratis de no tener el informe comprado", async () => {
@@ -443,14 +445,21 @@ describe("ChartActions", () => {
   // secciones" en la nota del botón y admitía, en la misma pantalla, que el
   // informe sale con siete (`noTimeWarning`, debajo).
   it("sin hora de nacimiento, la nota del completo dice siete secciones, no ocho", () => {
-    renderActions({ timeKnown: false, paidCredits: 0 });
+    // Con la breve ya escrita el completo es el principal y lleva su nota.
+    renderActions({ timeKnown: false, paidCredits: 0, interpretations: { es: ["corto"] } });
     const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
     expect(boton.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNotaSinHora, "US$ 5"));
     expect(boton.parentElement).not.toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, "US$ 5"));
   });
 
+  it("sin hora y sin ninguna lectura, el enlace del completo también avisa las siete secciones", () => {
+    renderActions({ timeKnown: false, paidCredits: 0 });
+    const enlace = screen.getByRole("button", { name: enlaceCompra() });
+    expect(enlace.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNotaSinHora, "US$ 5"));
+  });
+
   it("con hora de nacimiento, la nota del completo sigue diciendo ocho secciones", () => {
-    renderActions({ timeKnown: true, paidCredits: 0 });
+    renderActions({ timeKnown: true, paidCredits: 0, interpretations: { es: ["corto"] } });
     const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
     expect(boton.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, "US$ 5"));
   });
@@ -750,7 +759,7 @@ describe("volver a la carta después de cerrar la pestaña", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderActions({ paidCredits: 0 });
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(enlaceCompra());
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/checkout");
@@ -783,7 +792,7 @@ describe("volver a la carta después de cerrar la pestaña", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(502, { error: "x" })));
 
     renderActions({ paidCredits: 0 });
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(enlaceCompra());
 
     expect(screen.getByText(dict.chart.compraFallo)).toBeInTheDocument();
     expect(assign).not.toHaveBeenCalled();
@@ -831,7 +840,7 @@ describe("ChartActions — medición del momento de decidir", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(200, { url: "https://stripe.test/c" })));
 
     renderActions({ paidCredits: 0 });
-    await clickBoton(dict.chart.interpretCompleto);
+    await clickBoton(enlaceCompra());
 
     expect(track).toHaveBeenCalledWith("checkout_iniciado", { producto: "informe_natal", desde: "carta" });
     expect(track).not.toHaveBeenCalledWith("interpretacion_pedida", expect.anything());
@@ -1069,15 +1078,57 @@ describe("la oferta vista de verdad", () => {
 describe("el precio de la nota", () => {
   it("es el del catálogo", () => {
     renderActions({ paidCredits: 0, precioInforme: "US$ 5" });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
-    expect(boton.parentElement).toHaveTextContent("US$ 5");
-    expect(boton.parentElement).not.toHaveTextContent("29");
+    const enlace = screen.getByRole("button", { name: enlaceCompra("US$ 5") });
+    expect(enlace).toHaveTextContent("US$ 5");
+    expect(enlace).not.toHaveTextContent("29");
   });
 
-  it("si el catálogo no respondió, la nota no muestra el marcador", () => {
+  it("si el catálogo no respondió, el enlace no muestra el marcador", () => {
     renderActions({ paidCredits: 0, precioInforme: null });
-    const boton = screen.getByRole("button", { name: dict.chart.interpretCompleto });
-    expect(boton.parentElement).not.toHaveTextContent("{precio}");
-    expect(boton.parentElement).toHaveTextContent(conPrecio(dict.chart.interpretCompletoNota, null));
+    const enlace = screen.getByRole("button", { name: enlaceCompra(null) });
+    expect(enlace).not.toHaveTextContent("{precio}");
+  });
+});
+
+describe("ChartActions: un solo botón principal", () => {
+  it("sin ninguna lectura, el principal es la breve gratis y el informe es un enlace", () => {
+    renderActions({ paidCredits: 0 });
+    const breve = screen.getByRole("button", { name: dict.chart.interpretBrevePrincipal });
+    expect(breve.className).toContain("btnPrimary");
+    const completo = screen.getByRole("button", {
+      name: conPrecio(dict.chart.interpretCompletoEnlace, "US$ 5"),
+    });
+    expect(completo.className).toContain("linkButton");
+    expect(completo.className).not.toContain("btnPrimary");
+  });
+
+  it("con la breve ya escrita, el principal es comprar el informe", () => {
+    renderActions({ interpretations: { es: ["corto"] }, paidCredits: 0 });
+    const completo = screen.getByRole("button", { name: dict.chart.interpretCompleto });
+    expect(completo.className).toContain("btnPrimary");
+    expect(screen.queryByRole("button", { name: dict.chart.interpretBrevePrincipal })).toBeNull();
+  });
+
+  it("con la breve agotada, el único botón es comprar", () => {
+    renderActions({ freeCredits: 0, paidCredits: 0 });
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompleto }).className).toContain("btnPrimary");
+    expect(screen.getByText(dict.chart.sinLeerBreve)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: dict.chart.interpretBrevePrincipal })).toBeNull();
+  });
+
+  it("con el informe ya pago, el principal es leerlo y la breve queda en fantasma", () => {
+    renderActions({ paidCredits: 1 });
+    expect(screen.getByRole("button", { name: dict.chart.interpretCompletoConDerecho }).className).toContain("btnPrimary");
+    expect(screen.getByRole("button", { name: dict.chart.interpretBreve }).className).toContain("btnGhost");
+  });
+
+  it("sin hora, el enlace del informe dice siete secciones", () => {
+    renderActions({ paidCredits: 0, timeKnown: false });
+    expect(screen.getByText(conPrecio(dict.chart.interpretCompletoNotaSinHora, "US$ 5"))).toBeTruthy();
+  });
+
+  it("el enlace a cómo se escribe la lectura sigue a un clic antes de pagar", () => {
+    renderActions({ paidCredits: 0 });
+    expect(screen.getByRole("link", { name: dict.chart.comoSeEscribe })).toBeTruthy();
   });
 });

@@ -77,3 +77,9 @@ describe("el precio en los textos", () => {
     expect(conPrecio("{precio} · ocho secciones", null)).toBe("ocho secciones");
   });
 });
+
+describe("conPrecio con el precio al final", () => {
+  it("sin precio, no deja el separador colgando", () => {
+    expect(conPrecio("Comprar el informe completo · {precio}", null)).toBe("Comprar el informe completo");
+  });
+});

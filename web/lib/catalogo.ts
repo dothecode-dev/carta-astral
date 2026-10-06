@@ -85,5 +85,11 @@ export function precioDe(
  */
 export function conPrecio(texto: string, precio: string | null): string {
   if (precio !== null) return texto.replaceAll("{precio}", precio);
-  return texto.replace(/\{precio\}\s*·\s*/g, "").replaceAll("{precio}", "").trim();
+  // El separador se va con el precio, esté el precio adelante («{precio} ·
+  // ocho secciones») o al final («Comprar el informe · {precio}»).
+  return texto
+    .replace(/\{precio\}\s*·\s*/g, "")
+    .replace(/\s*·\s*\{precio\}/g, "")
+    .replaceAll("{precio}", "")
+    .trim();
 }

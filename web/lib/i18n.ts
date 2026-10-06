@@ -471,6 +471,11 @@ export type Dict = {
     incomplete: string;
     /** Botón de la lectura breve gratis (tier "corto"). */
     interpretBreve: string;
+    /** La breve como botón PRINCIPAL, cuando todavía no hay ninguna lectura:
+     *  dice que es gratis en el botón mismo, no en la nota de abajo. */
+    interpretBrevePrincipal: string;
+    /** El informe como enlace de texto, debajo del principal. Lleva `{precio}`. */
+    interpretCompletoEnlace: string;
     /** Nota bajo el botón de la breve. Lleva `{n}`: cuántas lecturas breves gratis quedan. */
     interpretBreveNota: string;
     /** Botón del informe completo pago (tier "largo"). */
@@ -801,6 +806,8 @@ const es: Dict = {
     noWheelBody: "Se cargó sin hora de nacimiento, así que no hay Ascendente ni casas para orientarla. Las posiciones planetarias sí están.",
     incomplete: "Falta algún cuerpo: su efeméride no cubre esa fecha.",
     interpretBreve: "Leer la lectura breve",
+    interpretBrevePrincipal: "Leer mi lectura breve · gratis",
+    interpretCompletoEnlace: "Comprar el informe completo · {precio}",
     interpretBreveNota: "Gratis. Te quedan {n}.",
     interpretCompleto: "Comprar el informe completo",
     comoSeEscribe: "Cómo se escribe tu lectura",
@@ -1160,6 +1167,8 @@ const en: Dict = {
     noWheelBody: "It was entered without a birth time, so there's no Ascendant or houses to orient it. The planetary positions are there.",
     incomplete: "A body is missing: its ephemeris doesn't cover that date.",
     interpretBreve: "Read the short reading",
+    interpretBrevePrincipal: "Read my short reading · free",
+    interpretCompletoEnlace: "Buy the full report · {precio}",
     interpretBreveNota: "Free. You have {n} left.",
     interpretCompleto: "Buy the full report",
     comoSeEscribe: "How your reading is written",
@@ -1519,6 +1528,8 @@ const pt: Dict = {
     noWheelBody: "Foi criado sem hora de nascimento, então não há Ascendente nem casas para orientá-la. As posições planetárias estão.",
     incomplete: "Falta algum corpo: a efeméride dele não cobre essa data.",
     interpretBreve: "Ler a leitura breve",
+    interpretBrevePrincipal: "Ler minha leitura breve · grátis",
+    interpretCompletoEnlace: "Comprar o relatório completo · {precio}",
     interpretBreveNota: "Grátis. Restam {n}.",
     interpretCompleto: "Comprar o relatório completo",
     comoSeEscribe: "Como sua leitura é escrita",
