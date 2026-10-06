@@ -37,6 +37,49 @@ class Chart(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class Sujeto(models.Model):
+    """De qué es un informe pago: hoy una carta (natal); con Vínculo, un par.
+
+    Parte 2 de la spec de Vínculo (RF5). El natal es un sujeto con UNA carta,
+    `natal_de`, y hay uno solo por carta: lo garantiza la base (OneToOne), no la
+    disciplina del código, porque dos sujetos natales para la misma carta
+    romperían la idempotencia del cobro —el mismo informe se podría canjear
+    una vez por cada sujeto—. Las cartas de un vínculo llegan en la parte 3.
+    """
+
+    NATAL = "natal"
+    VINCULO = "vinculo"
+    PRODUCTOS = ((NATAL, NATAL), (VINCULO, VINCULO))
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="sujetos",
+    )
+    producto = models.CharField(max_length=20, choices=PRODUCTOS)
+    natal_de = models.OneToOneField(
+        Chart, on_delete=models.CASCADE, null=True, blank=True, related_name="sujeto_natal",
+    )
+    parametros = models.JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
+    engine_version = models.CharField(max_length=120, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            # Un natal tiene carta, y sólo un natal la tiene en `natal_de`.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(producto="natal", natal_de__isnull=False)
+                    | (~models.Q(producto="natal") & models.Q(natal_de__isnull=True))
+                ),
+                name="sujeto_natal_tiene_carta_y_solo_el",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.producto} {self.uuid}"
+
+
 class GeoName(models.Model):
     """Localidad de GeoNames (dataset cities500). Dato de referencia, se puebla
     con el management command import_geonames."""
@@ -65,6 +108,12 @@ class Interpretation(models.Model):
     TIERS = ((TIER_CORTO, TIER_CORTO), (TIER_LARGO, TIER_LARGO))
 
     chart = models.ForeignKey(Chart, on_delete=models.CASCADE, related_name="interpretations")
+    # Parte 2 de Vínculo, deploy 1 (EXPANDIR): convive con `chart`. Lo rellenan
+    # la 0039 y `save()`; el deploy 2 lo vuelve obligatorio y borra `chart`.
+    sujeto = models.ForeignKey(
+        "Sujeto", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="interpretations",
+    )
     account = models.ForeignKey(
         "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="interpretations",
     )
@@ -94,6 +143,24 @@ class Interpretation(models.Model):
 
     class Meta:
         unique_together = ("chart", "lang", "prompt_version", "tier")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sujeto", "lang", "prompt_version", "tier"],
+                name="uniq_interpretacion_por_sujeto",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        # EXPANDIR (parte 2 de Vínculo): toda fila que se escribe con carta
+        # sale con su sujeto natal. Se borra en el deploy 2, junto con `chart`.
+        if self.sujeto_id is None and self.chart_id is not None:
+            from api.sujetos import sujeto_natal
+
+            self.sujeto = sujeto_natal(self.chart)
+            campos = kwargs.get("update_fields")
+            if campos is not None:
+                kwargs["update_fields"] = {*campos, "sujeto"}
+        super().save(*args, **kwargs)
 
 
 class InterpretationSection(models.Model):
@@ -360,6 +427,11 @@ class Movimiento(models.Model):
     chart = models.ForeignKey(
         "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos",
     )
+    # Parte 2 de Vínculo: lo escribe `canje.py`, explícito (sin `save()` mágico).
+    sujeto = models.ForeignKey(
+        "Sujeto", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="movimientos",
+    )
     external_id = models.CharField(max_length=255, blank=True, default="")
     note = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -401,6 +473,11 @@ class PasarelaCheckout(models.Model):
     codigo_producto = models.CharField(max_length=50)
     chart = models.ForeignKey(
         "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts",
+    )
+    # Parte 2 de Vínculo, deploy 1: convive con `chart` (ver `Interpretation`).
+    sujeto = models.ForeignKey(
+        "Sujeto", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="checkouts",
     )
     # En qué idioma se compró, para escribir el informe en ése. El webhook no
     # tiene otra forma de saberlo: quien paga puede cerrar la pestaña en Polar
@@ -451,6 +528,19 @@ class PasarelaCheckout(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        # EXPANDIR (parte 2 de Vínculo): el checkout de una carta sale con su
+        # sujeto natal; el de un pack no tiene ni una cosa ni la otra. Se borra
+        # en el deploy 2, junto con `chart`.
+        if self.sujeto_id is None and self.chart_id is not None:
+            from api.sujetos import sujeto_natal
+
+            self.sujeto = sujeto_natal(self.chart)
+            campos = kwargs.get("update_fields")
+            if campos is not None:
+                kwargs["update_fields"] = {*campos, "sujeto"}
+        super().save(*args, **kwargs)
 
     def precio_de_lista(self) -> int:
         """El precio con el que se abrió. Las filas sin él caen al catálogo,

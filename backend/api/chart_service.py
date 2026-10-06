@@ -72,20 +72,25 @@ def calcular(payload: dict) -> CartaCalculada:
 def create_chart(payload: dict, account) -> Chart:
     """Calcula y guarda. El cálculo es el mismo de `calcular`, a propósito: si
     se bifurcan, la carta que vio el visitante deja de ser la que recibe."""
-    carta = calcular(payload)
-    bi = carta.birth_input
+    carta_calc = calcular(payload)
+    bi = carta_calc.birth_input
 
     with transaction.atomic():
         birth_data = BirthData.objects.create(
-            name=bi.name, date=bi.date, time=bi.time, time_known=carta.data.time_known,
-            lat=bi.lat, lng=bi.lng, tz_name=carta.tz_name,
-            datetime_utc=carta.datetime_utc, place_label=carta.place_label,
+            name=bi.name, date=bi.date, time=bi.time, time_known=carta_calc.data.time_known,
+            lat=bi.lat, lng=bi.lng, tz_name=carta_calc.tz_name,
+            datetime_utc=carta_calc.datetime_utc, place_label=carta_calc.place_label,
         )
-        return Chart.objects.create(
+        carta = Chart.objects.create(
             birth_data=birth_data,
-            house_system=carta.data.house_system,
-            zodiac=carta.data.zodiac,
-            data=serialize_chart_data(carta.data),
+            house_system=carta_calc.data.house_system,
+            zodiac=carta_calc.data.zodiac,
+            data=serialize_chart_data(carta_calc.data),
             engine_version=engine_version(),
             account=account,
         )
+        # El sujeto natal nace con la carta: es de él que va a colgar su informe.
+        from api.sujetos import sujeto_natal
+
+        sujeto_natal(carta)
+        return carta
