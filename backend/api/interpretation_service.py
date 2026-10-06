@@ -22,7 +22,8 @@ from api import notificaciones
 from api.canje import SinDerecho, canjear, devolver
 from api.catalogo import codigos_otorgados_por
 from api.exceptions import CapReached, GenerationInProgress
-from api.models import Interpretation, Movimiento
+from api.models import Interpretation, Movimiento, Sujeto
+from api.sujetos import a_sujeto
 from interpret.exceptions import InterpretationError
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 
@@ -104,7 +105,7 @@ def _seconds_until_midnight() -> int:
     return int((tomorrow - now).total_seconds())
 
 
-def esta_generandose(chart, tier: str) -> bool:
+def esta_generandose(objetivo, tier: str) -> bool:
     """¿Hay un proceso escribiendo este tier de esta carta ahora mismo?
 
     La fila con `completa=False` no alcanza para responder que sí: si el proceso
@@ -117,10 +118,10 @@ def esta_generandose(chart, tier: str) -> bool:
     La usa `_chart_repr` para que la carta pueda decir qué se está generando
     cuando alguien vuelve después de cerrar la pestaña.
     """
-    return cache.get(_lock_key(chart, tier)) is not None
+    return cache.get(_lock_key(objetivo, tier)) is not None
 
 
-def _lock_key(chart, tier: str) -> str:
+def _lock_key(objetivo, tier: str) -> str:
     # Por (chart, tier), no sólo por chart (fix round 1, Important 1): el
     # corto y el largo de la misma carta son dos `Interpretation` distintas
     # (RF9, cada una con su propio set de secciones) que un usuario puede
@@ -132,10 +133,17 @@ def _lock_key(chart, tier: str) -> str:
     # lock del primero tomado, hacía `return` con `got_lock=False` y ni
     # generaba ni devolvía el crédito ya cobrado por `iniciar_generacion`
     # — quedaba cobrado y sin informe, para siempre.
-    return f"interp:lock:{chart.id}:{PROMPT_VERSION}:{tier}"
+    #
+    # Desde la parte 2 de Vínculo la clave es por SUJETO: el natal tiene uno
+    # por carta, así que para el natal es la misma exclusión que antes. La `s`
+    # del formato la distingue de la clave vieja (por carta): un deploy que la
+    # cambia tiene que drenar primero (`make deploy`). Sin adoptar huérfanas:
+    # se consulta una vez por sección y sólo necesita la clave.
+    sujeto = a_sujeto(objetivo, adoptar=False)
+    return f"interp:lock:s{sujeto.pk}:{PROMPT_VERSION}:{tier}"
 
 
-def renovar_lock(chart, tier: str, token: str) -> bool:
+def renovar_lock(objetivo, tier: str, token: str) -> bool:
     """Repone el TTL del lock de esta carta y este tier mientras hay progreso real.
 
     Un informe son ocho llamadas secuenciales al LLM: la Tarea 6 llama a esto
@@ -154,25 +162,25 @@ def renovar_lock(chart, tier: str, token: str) -> bool:
     medio; el peor caso ahí es extender un lock propio recién vencido, nunca
     resucitar ni pisar el de otro proceso.
     """
-    key = _lock_key(chart, tier)
+    key = _lock_key(objetivo, tier)
     if cache.get(key) != token:
         return False
     return bool(cache.touch(key, LOCK_TTL))
 
 
-def soltar_lock(chart, tier: str, token: str) -> None:
+def soltar_lock(objetivo, tier: str, token: str) -> None:
     """Libera el lock de esta carta y este tier sólo si sigue siendo el propio.
 
     Sin este chequeo, un proceso cuyo lock ya expiró y fue tomado por otro
     borraría el lock ajeno al terminar (o fallar) tarde. Mismo principio que
     `renovar_lock`: nunca tocar una clave cuyo token no es el nuestro.
     """
-    key = _lock_key(chart, tier)
+    key = _lock_key(objetivo, tier)
     if cache.get(key) == token:
         cache.delete(key)
 
 
-def _sibling_completo(chart, lang: str, tier: str) -> Interpretation | None:
+def _sibling_completo(objetivo, lang: str, tier: str) -> Interpretation | None:
     """Informe COMPLETO de esta misma carta, MISMO tier, en otro idioma, si existe.
 
     Es el mismo criterio del flujo viejo de interpretación (RF8: un crédito
@@ -191,16 +199,17 @@ def _sibling_completo(chart, lang: str, tier: str) -> Interpretation | None:
     otro. Sin este filtro, pedir la breve en "en" después de tener el
     completo en "es" encontraría ese completo como sibling y lo entregaría
     gratis en vez de cobrar el crédito free que corresponde."""
+    sujeto = a_sujeto(objetivo)
     return (
         Interpretation.objects.filter(
-            chart=chart, prompt_version=PROMPT_VERSION, tier=tier, completa=True,
+            sujeto=sujeto, prompt_version=PROMPT_VERSION, tier=tier, completa=True,
         )
         .exclude(lang=lang)
         .first()
     )
 
 
-def _sibling_en_curso(chart, lang: str, tier: str) -> Interpretation | None:
+def _sibling_en_curso(objetivo, lang: str, tier: str) -> Interpretation | None:
     """Informe de esta misma carta en OTRO idioma que ya arrancó pero
     todavía no terminó (`completa=False`).
 
@@ -269,11 +278,12 @@ def _sibling_en_curso(chart, lang: str, tier: str) -> Interpretation | None:
     fix round 1): el lock es por (chart, tier) desde que dos tiers de la
     misma carta pueden generarse en paralelo — mirar el lock de OTRO tier
     acá no diría nada sobre si hay una generación en curso de ESTE."""
-    if cache.get(_lock_key(chart, tier)) is None:
+    sujeto = a_sujeto(objetivo)
+    if cache.get(_lock_key(sujeto, tier)) is None:
         return None
     return (
         Interpretation.objects.filter(
-            chart=chart, prompt_version=PROMPT_VERSION, tier=tier, completa=False,
+            sujeto=sujeto, prompt_version=PROMPT_VERSION, tier=tier, completa=False,
         )
         .exclude(lang=lang)
         .first()
@@ -295,7 +305,7 @@ def content_key(chart_data: dict, lang: str, prompt_version: str, tier: str) -> 
     return hashlib.sha256(f"{prompt_version}:{lang}:{tier}:{canonical}".encode()).hexdigest()
 
 
-def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
+def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretation:
     """Crea (o recupera) la `Interpretation` de un informe y cobra si
     corresponde. Corre siempre en el hilo del request —nunca en el hilo de
     fondo—: es lo que le permite a la vista responder 402/503 sincrónicamente
@@ -347,17 +357,22 @@ def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
     para el detalle y la justificación de por qué se rechaza acá en vez de
     esperar). Se lanza `GenerationInProgress` ANTES de cobrar: no hay nada
     que devolver porque nunca se llega a tocar ningún derecho."""
+    sujeto = a_sujeto(objetivo)
+    if sujeto.producto != Sujeto.NATAL:
+        # El informe de vínculo es la parte 3: sin su prompt y sus secciones,
+        # generar acá escribiría un informe natal sobre datos vacíos.
+        raise NotImplementedError("el informe de vínculo todavía no existe")
     interpretacion, creada = Interpretation.objects.get_or_create(
-        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
-        defaults={"text": "", "account": account},
+        sujeto=sujeto, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
+        defaults={"text": "", "account": account, "chart": sujeto.natal_de},
     )
     if not creada:
         return interpretacion
 
-    if _sibling_completo(chart, lang, tier) is not None:
+    if _sibling_completo(sujeto, lang, tier) is not None:
         return interpretacion
 
-    if _sibling_en_curso(chart, lang, tier) is not None:
+    if _sibling_en_curso(sujeto, lang, tier) is not None:
         interpretacion.delete()
         raise GenerationInProgress(
             "hay una generación en curso para esta carta en otro idioma, "
@@ -379,7 +394,7 @@ def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
         raise CapReached()
 
     try:
-        canjear(account, capacidad, chart, build=lambda: interpretacion)
+        canjear(account, capacidad, sujeto, build=lambda: interpretacion)
     except SinDerecho:
         interpretacion.delete()
         raise
@@ -390,7 +405,7 @@ def iniciar_generacion(chart, lang: str, account, tier: str) -> Interpretation:
     return interpretacion
 
 
-def completar_generacion(interpretacion: Interpretation, chart, account) -> None:
+def completar_generacion(interpretacion: Interpretation, objetivo, account) -> None:
     """Toma el lock de la carta y corre `informe_service.generar_informe`
     hasta terminar o fallar; al final liquida el crédito.
 
@@ -469,7 +484,8 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     if interpretacion.completa:
         return
 
-    lock_key = _lock_key(chart, interpretacion.tier)
+    sujeto = a_sujeto(objetivo)
+    lock_key = _lock_key(sujeto, interpretacion.tier)
     token = uuid.uuid4().hex
     got_lock = cache.add(lock_key, token, timeout=LOCK_TTL)
 
@@ -478,7 +494,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     if not got_lock:
         logger.info(
             "ya hay una generación en curso para la carta %s; se ignora este pedido",
-            chart.pk,
+            sujeto.natal_de_id or sujeto.pk,
         )
         return
 
@@ -507,7 +523,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
     # after `got_lock=True` puede tirar el lock a la basura— es real y
     # existía en producción también, no sólo en el test.
     try:
-        sibling = _sibling_completo(chart, interpretacion.lang, interpretacion.tier)
+        sibling = _sibling_completo(sujeto, interpretacion.lang, interpretacion.tier)
 
         # Un intento más de terminar este informe, cuente como generación o
         # como traducción de un sibling: las dos pueden fallar, y las dos
@@ -574,7 +590,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # read-back por una constante, y esto lo repone.
         codigos = codigos_otorgados_por(CAPACIDAD_POR_TIER[interpretacion.tier])
         consumo = Movimiento.objects.filter(
-            account=account, chart=chart, tipo="consumo", codigo_producto__in=codigos,
+            account=account, sujeto=sujeto, tipo="consumo", codigo_producto__in=codigos,
         ).first()
         codigo = consumo.codigo_producto if consumo is not None else None
         # Critical de la revisión final: `interpretacion.completa` en
@@ -608,7 +624,7 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # entregada — se devolvía +1 informe nunca pagado y de paso se
         # desvinculaba el consumo real, dejando la carta como "no comprada".
         completo_ahora = Interpretation.objects.filter(
-            chart=chart, tier=interpretacion.tier, completa=True,
+            sujeto=sujeto, tier=interpretacion.tier, completa=True,
         ).exists()
         # Task 10 / RF21: ya no "sin secciones" sino "sin completar tras
         # agotar los intentos" — devolver antes de agotarlos regalaría el
@@ -621,13 +637,13 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
             and interpretacion.intentos >= INTENTOS_MAXIMOS
         ):
             pk = interpretacion.pk
-            chart_uuid = str(chart.uuid)
+            chart_uuid = str(sujeto.natal_de.uuid) if sujeto.natal_de_id else str(sujeto.uuid)
             tier = interpretacion.tier
             lang = interpretacion.lang
             devolver(
                 account, codigo,
                 external_id=f"informe:{pk}:devolucion",
-                chart=chart,
+                sujeto=sujeto,
                 note=f"informe {pk} sin completar tras {INTENTOS_MAXIMOS} intentos",
             )
             # No se muestran las secciones sueltas de un informe que no se
@@ -652,10 +668,10 @@ def completar_generacion(interpretacion: Interpretation, chart, account) -> None
         # lock y empiece a escribir sobre una fila que esta misma llamada
         # está por borrar — la misma clase de carrera que el hallazgo
         # Critical de arriba.
-        soltar_lock(chart, interpretacion.tier, token)
+        soltar_lock(sujeto, interpretacion.tier, token)
 
 
-def arrancar_en_hilo(interpretacion: Interpretation, chart, account) -> None:
+def arrancar_en_hilo(interpretacion: Interpretation, objetivo, account) -> None:
     """Termina en un hilo aparte un informe cuya fila ya existe.
 
     Vive acá y no en la vista porque tiene dos llamadores: el POST de la web y
@@ -680,7 +696,7 @@ def arrancar_en_hilo(interpretacion: Interpretation, chart, account) -> None:
         # de fondo que muere en silencio deja el informe colgado y nadie se
         # entera.
         try:
-            completar_generacion(interpretacion, chart, account)
+            completar_generacion(interpretacion, objetivo, account)
         except Exception:
             logger.exception(
                 "el hilo de generación del informe %s murió sin control", interpretacion.pk,
@@ -691,7 +707,7 @@ def arrancar_en_hilo(interpretacion: Interpretation, chart, account) -> None:
     threading.Thread(target=_en_hilo, daemon=True).start()
 
 
-def generar_en_segundo_plano(chart, lang: str, account, tier: str) -> None:
+def generar_en_segundo_plano(objetivo, lang: str, account, tier: str) -> None:
     """Arranca (o reanuda) el informe de principio a fin, para el tier
     pedido: `iniciar_generacion` + `completar_generacion`.
 
@@ -700,5 +716,5 @@ def generar_en_segundo_plano(chart, lang: str, account, tier: str) -> None:
     antes de responder, para poder devolver 402/503 sincrónicamente), pero
     todo lo demás —un cron, un management command, o un test que quiere
     correr el flujo entero sincrónico sobre su propia conexión— sí."""
-    interpretacion = iniciar_generacion(chart, lang, account, tier)
-    completar_generacion(interpretacion, chart, account)
+    interpretacion = iniciar_generacion(objetivo, lang, account, tier)
+    completar_generacion(interpretacion, objetivo, account)
