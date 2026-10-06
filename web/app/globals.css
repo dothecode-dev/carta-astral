@@ -3144,3 +3144,69 @@ a {
   text-transform: uppercase;
   color: var(--ink-label);
 }
+
+/* Vínculo, fase 1: las dos personas del formulario y su vista previa. Usa los
+   mismos tokens y las mismas clases de campo que `/nueva`; acá sólo vive lo que
+   no existía —el grupo por persona y las dos columnas del resultado—. */
+.vinculoPersona {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.vinculoPersona > legend {
+  padding: 0;
+  margin-bottom: 1rem;
+}
+
+.vinculoColumnas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1rem, 3vw, 2rem);
+}
+
+.vinculoColumna {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.vinculoAspectos {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.vinculoLista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.vinculoLista li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.vinculoLista p {
+  margin: 0;
+  color: var(--ink-soft);
+  max-width: 60ch;
+}
+
+@media (max-width: 640px) {
+  .vinculoColumnas {
+    grid-template-columns: 1fr;
+  }
+}

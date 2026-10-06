@@ -8,6 +8,7 @@ import { CartaPreview } from "@/components/CartaPreview";
 import { track } from "@/lib/telemetry";
 import { PlaceField } from "@/components/PlaceField";
 import type { CartaDibujable } from "@/lib/chart";
+import { armarDatosCarta, errorDeFecha, type DatosCarta } from "@/lib/datosCarta";
 import type { Dict, Locale } from "@/lib/i18n";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
@@ -23,17 +24,6 @@ import type { Dict, Locale } from "@/lib/i18n";
 //   —el de Instagram, el de una búsqueda— tenía que crear una cuenta para ver
 //   si el sitio servía. Ahora ve SU carta y la cuenta se pide para la lectura,
 //   que es lo que cuesta plata.
-
-/** Los datos del formulario, tal como los espera el backend. */
-type DatosCarta = {
-  name: string | null;
-  date: string;
-  time: string | null;
-  time_known: boolean;
-  lat: number;
-  lng: number;
-  place_label: string;
-};
 
 /** Dónde espera la carta calculada mientras la persona pasa por el login.
  *
@@ -122,23 +112,19 @@ export function NewChartForm({
     event.preventDefault();
     if (sending) return;
 
-    if (!date) return setError(t.needDate);
-    const year = Number(date.slice(0, 4));
-    if (year < 1800 || new Date(date) > new Date()) return setError(t.badDate);
+    const errorFecha = errorDeFecha(date);
+    if (errorFecha) return setError(t[errorFecha]);
     if (!place) return setError(t.needPlace);
     setError(null);
     setSending(true);
 
-    const cuerpo: DatosCarta = {
+    const cuerpo: DatosCarta = armarDatosCarta({
       name: name.trim() || null,
       date,
-      // Sin hora, el backend calcula igual pero sin casas ni ángulos.
-      time: timeUnknown ? null : time || null,
-      time_known: !timeUnknown && Boolean(time),
-      lat: place.lat,
-      lng: place.lng,
-      place_label: place.place_query,
-    };
+      time,
+      timeUnknown,
+      place,
+    });
 
     const res = await fetch(signedIn ? "/api/charts" : "/api/charts/preview", {
       method: "POST",

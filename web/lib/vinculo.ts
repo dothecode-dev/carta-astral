@@ -1,5 +1,5 @@
 import { API_URL } from "./config";
-import type { ApiChart } from "./chart";
+import type { CartaDibujable } from "./chart";
 import { SYNASTRY_SLUG, isLocale, type Locale } from "./i18n";
 
 // Vínculo, fase 1: la vista previa pública. La web no tiene flag propio: le
@@ -31,7 +31,15 @@ export type AspectoPreview = {
   frase: string;
 };
 
-export type VinculoPreview = { a: ApiChart; b: ApiChart; aspectos: AspectoPreview[] };
+/** Las dos cartas llegan como `CartaDibujable` y no como `ApiChart`: la vista
+ *  previa no guarda nada, así que no tienen id ni interpretaciones. */
+export type VinculoPreview = {
+  a: CartaDibujable;
+  b: CartaDibujable;
+  aspectos: AspectoPreview[];
+};
+
+export type MotivoFallo = "misma_persona" | "datos_invalidos" | "demasiadas" | "no_disponible";
 
 /** ¿Está encendida la vista previa? Ante cualquier duda, no: una landing que
  *  no puede confirmar el flag no se muestra ni va al sitemap. */

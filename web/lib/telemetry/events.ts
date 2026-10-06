@@ -157,6 +157,21 @@ export type EventoProps = {
     paso: "pedido" | "canje";
     motivo: "invalido" | "demasiados" | "no_disponible" | "red";
   };
+  /** Vio la vista previa de un vínculo: las dos ruedas y los aspectos. Es el
+   *  denominador de la fase 1 de Vínculo, que se publica para medir la demanda
+   *  antes de construir la compra. `tipo` dice qué vínculo trae a la gente, que
+   *  es lo que decide qué prompt se afina primero. Nunca datos de nacimiento
+   *  ni el alias: son de dos personas y una ni siquiera usa el sitio. */
+  vinculo_preview_visto: { tipo: "pareja" | "trabajo" | "familia" | "amistad" };
+  /** Apretó «leer el vínculo completo» cuando todavía no se vende: el
+   *  numerador. Sin mail y sin compra, sólo la intención. */
+  vinculo_cta_click: { tipo: "pareja" | "trabajo" | "familia" | "amistad" };
+  /** La vista previa no salió. Separa el «mismos datos» (un error de uso) del
+   *  techo por IP y de la caída del backend: sin esto, un 429 se leería como
+   *  gente que no entiende el formulario. */
+  vinculo_preview_fallido: {
+    motivo: "misma_persona" | "datos_invalidos" | "demasiadas" | "no_disponible";
+  };
 };
 
 export type EventoNombre = keyof EventoProps;
