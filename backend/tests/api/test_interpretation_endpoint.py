@@ -163,12 +163,25 @@ def test_lock_tomado_no_bloquea_el_202(account_client, fake_client, db_cache):
     assert resp.status_code == 202
 
 
-def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fake_client):
+def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(
+    account_client, fake_client, monkeypatch,
+):
     """BUG de la revisión de seguridad: pedir "es" y, con esa generación
     todavía en curso (`completa=False`), pedir "en" no puede aceptar un 202
     que cobre y nunca vaya a completarse. La vista responde 409 —el mismo
     código que ya espera la web (`web/app/api/charts/[id]/interpretation/
-    route.ts`) para "generación en curso"— y no cobra nada."""
+    route.ts`) para "generación en curso"— y no cobra nada.
+
+    DETERMINISTA a propósito. La versión anterior lanzaba el hilo real y
+    esperaba que siguiera vivo cuando llegara el segundo pedido, pero ese hilo,
+    con datos de test sin commitear y SQLite, termina o muere en un tiempo que
+    depende de la máquina y suelta el lock: si lo hacía antes del segundo
+    pedido la vista respondía 202. Falló 1 de 30 corridas en el commit anterior
+    y 6 de 30 el 06-10-2026, y frenó un push. «En curso» es exactamente esto
+    —la fila `completa=False` y el lock de la carta tomado (ver
+    `_sibling_en_curso`)—, así que se simula lo segundo en lugar de competir
+    contra un hilo."""
+    monkeypatch.setattr(svc, "arrancar_en_hilo", lambda *args, **kwargs: None)
     c = _chart(account=account_client.account)
     antes = _derechos_de_cobro(account_client.account)
 
@@ -176,6 +189,9 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(account_client, fak
         f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
     )
     assert r1.status_code == 202
+
+    # El hilo de "es" —que no arrancó— es quien tomaría el lock de la carta.
+    cache.add(svc._lock_key(c, "largo"), "hilo-de-es", timeout=30)
 
     r2 = account_client.post(
         f"/api/charts/{c.uuid}/interpretation/", {"lang": "en", "tier": "largo"}, format="json"
