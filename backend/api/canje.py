@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from api.catalogo import ACCESO, codigos_otorgados_por, producto
 from api.models import Account, Chart, Derecho, Movimiento
+from api.sujetos import a_sujeto
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ def _aplicar_otorgamiento(acc, account, prod, codigo_otorgado: str, otorgado: in
 def aplicar_compra(
     account, codigo_producto, monto_centavos, external_id,
     chart=None, chart_id=None, descuento_centavos=0, origen="compra",
-    precio_centavos=None,
+    precio_centavos=None, sujeto=None,
 ) -> bool:
     """Traduce un pago a derechos, con lo que el producto declara en el catálogo.
 
@@ -183,19 +184,25 @@ def aplicar_compra(
         carta = chart
         if carta is None and chart_id is not None:
             carta = Chart.objects.filter(pk=chart_id).first()
+        # Parte 2 de Vínculo: lo que se canjea es un sujeto; una carta vale por
+        # su sujeto natal (la conversión la hace `canjear`).
+        objetivo = sujeto if sujeto is not None else carta
         # Sólo canjea una compra suelta: un producto que otorga más de una
         # unidad es un pack, y uno que otorga más de un producto es un combo —
         # ninguno de los dos canjea al comprar, porque no hay una sola cosa que
         # canjear, aunque el llamador le pase una carta. Si la carta ya no
         # existe, el otorgamiento ya ocurrió y el canje se omite igual.
         suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
-        if carta is not None and suelto and prod.capacidades:
-            canjear(account, prod.capacidades[0], carta)
+        if objetivo is not None and suelto and prod.capacidades:
+            canjear(account, prod.capacidades[0], objetivo)
     return True
 
 
-def canjear(account, capacidad: str, chart, build=None):
-    """Consume una unidad de la capacidad y la vincula a esa carta.
+def canjear(account, capacidad: str, objetivo, build=None):
+    """Consume una unidad de la capacidad y la vincula a ese sujeto.
+
+    `objetivo` es una carta o un sujeto (parte 2 de Vínculo, deploy 1): la
+    idempotencia es por SUJETO, y una carta vale por su sujeto natal.
 
     Si la carta ya tiene canjeada esa capacidad, es un no-op: NO se consume
     nada y el derecho queda disponible. El mismo camino lo recorre alguien que
@@ -210,9 +217,12 @@ def canjear(account, capacidad: str, chart, build=None):
     codigos = codigos_otorgados_por(capacidad)
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
+        # Bajo el lock de la cuenta, que el código viejo también toma durante
+        # el deploy: adoptar las filas huérfanas acá no compite con otro canje.
+        sujeto = a_sujeto(objetivo)
 
         ya = Movimiento.objects.filter(
-            account=acc, chart=chart, tipo="consumo", codigo_producto__in=codigos,
+            account=acc, sujeto=sujeto, tipo="consumo", codigo_producto__in=codigos,
         ).first()
         if ya is not None:
             return None, ya.codigo_producto
@@ -232,12 +242,12 @@ def canjear(account, capacidad: str, chart, build=None):
         construido = build() if build is not None else None
         Movimiento.objects.create(
             account=acc, codigo_producto=derecho.codigo_producto, tipo="consumo",
-            cantidad=-1, origen="compra", chart=chart,
+            cantidad=-1, origen="compra", sujeto=sujeto, chart=sujeto.natal_de,
         )
     return construido, derecho.codigo_producto
 
 
-def devolver(account, codigo_producto, external_id, chart=None, note="") -> bool:
+def devolver(account, codigo_producto, external_id, chart=None, note="", sujeto=None) -> bool:
     """Repone un derecho cuya entrega falló. Idempotente por external_id.
 
     Desvincula el movimiento de consumo de esa carta (no lo borra: `Movimiento`
@@ -247,9 +257,14 @@ def devolver(account, codigo_producto, external_id, chart=None, note="") -> bool
     """
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
+        # Parte 2 de Vínculo: se devuelve sobre un sujeto; una carta vale por
+        # su sujeto natal.
+        objetivo = sujeto if sujeto is not None else chart
+        s = a_sujeto(objetivo) if objetivo is not None else None
         if not _movimiento_idempotente(
             account=acc, codigo_producto=codigo_producto, tipo="devolucion",
-            cantidad=1, origen="ajuste", chart=chart, external_id=external_id, note=note,
+            cantidad=1, origen="ajuste", sujeto=s, chart=s.natal_de if s is not None else None,
+            external_id=external_id, note=note,
         ):
             logger.info("devolución duplicada ignorada (external_id=%s)", external_id)
             return False
@@ -267,10 +282,10 @@ def devolver(account, codigo_producto, external_id, chart=None, note="") -> bool
             )
             return False
 
-        if chart is not None:
+        if s is not None:
             Movimiento.objects.filter(
-                account=acc, chart=chart, tipo="consumo", codigo_producto=codigo_producto,
-            ).update(chart=None)
+                account=acc, sujeto=s, tipo="consumo", codigo_producto=codigo_producto,
+            ).update(sujeto=None, chart=None)
         else:
             # Rastro para diagnosticar una carta que quedó bloqueada porque
             # quien llamó a `devolver` se olvidó de pasar la carta.

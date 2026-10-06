@@ -231,3 +231,21 @@ def test_dos_entregas_de_la_misma_compra_suelta_dejan_un_otorgamiento_y_un_consu
     assert _restante() == 0  # el único derecho otorgado se canjeó
     assert Movimiento.objects.filter(tipo="otorgamiento").count() == 1
     assert Movimiento.objects.filter(tipo="consumo", chart=carta).count() == 1
+
+
+@requiere_postgres
+@pytest.mark.django_db(transaction=True)
+def test_dos_canjes_simultaneos_del_mismo_sujeto_cobran_uno(make_account):
+    """La idempotencia por sujeto bajo concurrencia real: dos pestañas pidiendo
+    el mismo informe de vínculo a la vez cobran una sola vez."""
+    from api.models import Sujeto
+
+    cuenta = make_account()
+    otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:s")
+    sujeto = Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
+
+    _, errores = en_hilos(lambda i: canjear(cuenta, "leer_informe", sujeto), 2)
+
+    assert errores == []
+    assert Movimiento.objects.filter(tipo="consumo").count() == 1
+    assert _restante() == 1
