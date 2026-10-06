@@ -12,6 +12,11 @@ import { LOCALES, SKY_SLUG, getDict } from "@/lib/i18n";
 import { fetchMoon, type Moon, type Sky } from "@/lib/sky";
 
 vi.mock("@/lib/notes", () => ({ fetchNotesOrNone: async () => [] }));
+// El sitemap pregunta si Vínculo está encendido: sin esto pegaría al backend real.
+vi.mock("@/lib/vinculo", async (original) => ({
+  ...(await original<typeof import("@/lib/vinculo")>()),
+  vinculoActivo: async () => false,
+}));
 
 // La rueda es un canvas: jsdom no lo dibuja, y acá lo que importa es el texto.
 vi.mock("@/components/SkyWheel", () => ({ SkyWheel: () => null }));

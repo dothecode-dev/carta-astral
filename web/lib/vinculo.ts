@@ -14,8 +14,10 @@ import { SYNASTRY_SLUG, isLocale, type Locale } from "./i18n";
 // que proteger: `VinculoEstadoView` (`backend/api/vinculo.py`) no declara
 // `throttle_classes`, así que reenviar `x-forwarded-for` no cambiaría nada.
 //
-// Consecuencia a tener presente: el resultado se cachea 5 minutos. Encender el
-// flag en el backend tarda hasta ese tiempo en verse en la web.
+// Consecuencia a tener presente: el resultado se cachea 5 minutos, y vale para
+// encender y para apagar. Un cambio del flag en el backend tarda hasta ese
+// tiempo en verse en la web, más un pedido (la caché sirve el valor viejo una
+// vez mientras lo renueva).
 
 const REVALIDATE_SECONDS = 300;
 const TIMEOUT_MS = 3000;
@@ -42,14 +44,21 @@ export type VinculoPreview = {
 export type MotivoFallo = "misma_persona" | "datos_invalidos" | "demasiadas" | "no_disponible";
 
 /** ¿Está encendida la vista previa? Ante cualquier duda, no: una landing que
- *  no puede confirmar el flag no se muestra ni va al sitemap. */
+ *  no puede confirmar el flag no se muestra ni va al sitemap.
+ *
+ *  El backend responde 200 con `{"preview": true|false}` y no 404 para
+ *  «apagado» (`VinculoEstadoView`). Importa: el caché de datos de Next sólo
+ *  guarda las respuestas 200, así que con un 404 el «encendido» viejo seguía
+ *  vigente para siempre y apagar el flag no apagaba la landing. */
 export async function vinculoActivo(): Promise<boolean> {
   try {
     const res = await fetch(`${API_URL}/api/vinculo/`, {
       next: { revalidate: REVALIDATE_SECONDS },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const cuerpo: unknown = await res.json();
+    return (cuerpo as { preview?: unknown } | null)?.preview === true;
   } catch {
     // Sin log a propósito: el server de Next lo registra igual y esto corre en
     // cada revalidación. Lo que importa es que la página no se caiga.

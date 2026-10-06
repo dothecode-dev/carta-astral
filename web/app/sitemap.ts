@@ -1,9 +1,17 @@
 import type { MetadataRoute } from "next";
 
 import { LEGAL_UPDATED } from "@/content/legal/types";
-import { DEFAULT_LOCALE, LOCALES, NOTES_SLUG, SKY_SLUG, type Locale } from "@/lib/i18n";
+import {
+  DEFAULT_LOCALE,
+  LOCALES,
+  NOTES_SLUG,
+  SKY_SLUG,
+  SYNASTRY_SLUG,
+  type Locale,
+} from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { fetchNotesOrNone } from "@/lib/notes";
+import { vinculoActivo } from "@/lib/vinculo";
 
 // Sólo lo que es público e indexable. Las páginas con sesión (`cuenta`,
 // `carta/[id]`) y la de acceso son `noindex` y no entran acá.
@@ -73,6 +81,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   }));
 
+  // Vínculo, fase 1: sólo si el backend dice que la vista previa está
+  // encendida. Una URL en el sitemap que responde 404 es peor que ninguna: le
+  // dice a Google que rastree algo que no existe. `pt` comparte slug con `es`.
+  const sinastria = (await vinculoActivo())
+    ? LOCALES.map((locale) => ({
+        url: `${SITE_URL}/${locale}/${SYNASTRY_SLUG[locale]}`,
+        changeFrequency: "monthly" as const,
+        priority: 0.8,
+        alternates: {
+          languages: {
+            ...Object.fromEntries(
+              LOCALES.map((code) => [code, `${SITE_URL}/${code}/${SYNASTRY_SLUG[code]}`]),
+            ),
+            "x-default": `${SITE_URL}/${DEFAULT_LOCALE}/${SYNASTRY_SLUG[DEFAULT_LOCALE]}`,
+          },
+        },
+      }))
+    : [];
+
   const fixed = LOCALES.flatMap((locale) =>
     PATHS.map((path) => ({
       url: url(locale, path),
@@ -88,5 +115,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   );
 
-  return [...fixed, ...cielo, ...sections, ...notes];
+  return [...fixed, ...cielo, ...sinastria, ...sections, ...notes];
 }
