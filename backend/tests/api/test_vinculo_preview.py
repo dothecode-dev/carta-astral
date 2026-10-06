@@ -127,16 +127,29 @@ def test_sin_aspectos_personales_devuelve_lista_vacia(monkeypatch):
     assert r.data["aspectos"] == []
 
 
-def test_flag_apagado_es_404(settings):
+def test_flag_apagado_la_vista_previa_es_404(settings):
     settings.VINCULO_PREVIEW_ENABLED = False
     assert _post({"lang": "es", "a": A, "b": B}).status_code == 404
-    assert APIClient().get("/api/vinculo/").status_code == 404
 
 
 def test_estado_con_flag_encendido():
     r = APIClient().get("/api/vinculo/")
     assert r.status_code == 200
     assert r.data == {"preview": True}
+
+
+def test_estado_con_flag_apagado_responde_200_y_dice_false(settings):
+    """El estado se INFORMA, no se esconde con un 404.
+
+    La web guarda esta respuesta en el caché de datos de Next, que sólo guarda
+    las 200: con un 404 de «apagado», el valor viejo («encendido») quedaba
+    vigente para siempre y apagar el flag no apagaba la landing (comprobado el
+    05-10-2026 con un backend de mentira). Un 200 con el valor se cachea igual
+    en los dos sentidos."""
+    settings.VINCULO_PREVIEW_ENABLED = False
+    r = APIClient().get("/api/vinculo/")
+    assert r.status_code == 200
+    assert r.data == {"preview": False}
 
 
 def test_hay_techo_por_ip(monkeypatch):

@@ -36,14 +36,20 @@ def _exigir_flag() -> None:
 
 class VinculoEstadoView(APIView):
     """`GET /api/vinculo/`: si la vista previa está encendida. La web lo
-    consulta para decidir si muestra las landings y si van al sitemap."""
+    consulta para decidir si muestra las landings y si van al sitemap.
+
+    Responde SIEMPRE 200, con el valor en el cuerpo. No es un detalle: el
+    caché de datos de Next sólo guarda las respuestas 200, así que con un 404
+    para «apagado» el valor viejo («encendido») quedaba vigente para siempre y
+    apagar el flag no apagaba la landing. Un 200 con `preview: false` se cachea
+    igual que uno con `true`. Es público y no revela nada que `/api/estado/` no
+    diga ya."""
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
 
     def get(self, request):
-        _exigir_flag()
-        return Response({"preview": True})
+        return Response({"preview": bool(settings.VINCULO_PREVIEW_ENABLED)})
 
 
 class VinculoPreviewView(APIView):
