@@ -483,67 +483,17 @@ a {
   gap: 1rem;
 }
 
-/* Cada unidad disponible, una línea. Antes era una fila con el recuento
-   ("3 lecturas breves"), que informa cuántas hay y no qué hacer con ellas. */
-.usos {
-  list-style: none;
+/* Lo disponible, en una frase: «Tenés 2 lecturas breves para leer en la carta
+   que elijas». Reemplazó al inventario de filas con dos enlaces chicos. */
+.derechosFrase {
   margin: 0;
-  padding: 0;
-  width: 100%;
-  max-width: 34rem;
-  display: flex;
-  flex-direction: column;
-}
-
-/* El renglón entero es el enlace: el área clickeable es la línea, no el texto.
-   El hilo de arriba separa sin encerrar, como el resto de la página. */
-.uso {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 0.75rem;
-  padding: 0.75rem 0.25rem;
-  border-top: 1px solid var(--hairline);
-}
-
-.usos li:last-child {
-  border-bottom: 1px solid var(--hairline);
-}
-
-.usoGlifo {
-  color: var(--accent);
-  font-size: 1.0625rem;
-  line-height: 1;
-}
-
-.usoNombre {
-  font-size: 1.0625rem;
-}
-
-/* Las dos salidas de cada línea, a la derecha: usarlo en una carta nueva o
-   en una que ya existe. Siempre visibles: son la decisión, no un adorno. */
-.usoAcciones {
-  margin-left: auto;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.25rem 1rem;
-}
-
-.usoAccion {
-  font-size: 0.875rem;
-  color: var(--ink-soft);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-}
-
-.usoAccion:hover,
-.usoAccion:focus-visible {
+  font-size: 1.125rem;
   color: var(--ink);
+  max-width: 42ch;
 }
 
 .derechosNota {
-  margin: 0.75rem 0 0;
+  margin: 0;
   font-size: 0.875rem;
   color: var(--ink-soft);
 }
@@ -712,6 +662,12 @@ a {
 
 .dangerEyebrow {
   color: var(--danger);
+}
+
+/* Plegado: un enlace de texto y nada más. El marco aparece al abrir. */
+.dangerPlegado {
+  border: none;
+  padding: 0;
 }
 
 .dangerBlock {

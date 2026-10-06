@@ -386,6 +386,13 @@ export type Dict = {
      * cosas estaba escrita.
      */
     listoTitle: string;
+    /** Lo disponible, como frase y no como inventario. Lleva `{que}`: el
+     *  recuento ya formado (`derechosBreve`, etc.). */
+    derechosFrase: string;
+    /** La única salida del bloque cuando hay cartas: ir a elegir una. */
+    elegirCarta: string;
+    /** El enlace que abre el bloque de borrado, plegado por defecto. */
+    borrarAbrir: string;
     /** El paso siguiente cuando ya hay cartas donde gastar el derecho. */
     /** «Usar en una carta nueva» / «…en una de mis cartas». */
     usarEnNueva: string;
@@ -997,6 +1004,9 @@ const es: Dict = {
     puertaGoogle: "Entrar con Google",
     puertaMail: "Entrar con tu mail",
     listoTitle: "Listo para usar",
+    derechosFrase: "Tenés {que} para leer en la carta que elijas.",
+    elegirCarta: "Elegir una carta",
+    borrarAbrir: "Borrar cartas o cuenta",
     usarEnNueva: "Usar en una carta nueva",
     usarEnMisCartas: "Usar en una de mis cartas",
     listoNota: "Nada se gasta hasta que lo pidas en la carta.",
@@ -1360,6 +1370,9 @@ const en: Dict = {
     puertaGoogle: "Sign in with Google",
     puertaMail: "Sign in with your email",
     listoTitle: "Ready to use",
+    derechosFrase: "You have {que} to read on any chart you choose.",
+    elegirCarta: "Choose a chart",
+    borrarAbrir: "Delete charts or account",
     usarEnNueva: "Use on a new chart",
     usarEnMisCartas: "Use on one of my charts",
     listoNota: "Nothing is spent until you ask for it on the chart.",
@@ -1723,6 +1736,9 @@ const pt: Dict = {
     puertaGoogle: "Entrar com o Google",
     puertaMail: "Entrar com seu e-mail",
     listoTitle: "Pronto para usar",
+    derechosFrase: "Você tem {que} para ler no mapa que escolher.",
+    elegirCarta: "Escolher um mapa",
+    borrarAbrir: "Apagar mapas ou conta",
     usarEnNueva: "Usar em um mapa novo",
     usarEnMisCartas: "Usar em um dos meus mapas",
     listoNota: "Nada é gasto até você pedir no mapa.",

@@ -21,13 +21,11 @@ import { cantidad, type Derecho } from "@/lib/derechos";
 const PRODUCTOS = [
   {
     codigo: "lectura_breve",
-    glifo: "☉",
     texto: (dict: Dict, n: number) =>
       n === 1 ? dict.auth.derechosBreveUno : dict.auth.derechosBreve.replace("{n}", String(n)),
   },
   {
     codigo: "informe_natal",
-    glifo: "☾",
     texto: (dict: Dict, n: number) =>
       n === 1 ? dict.auth.derechosInformeUno : dict.auth.derechosInforme.replace("{n}", String(n)),
   },
@@ -68,36 +66,26 @@ export function Derechos({
     );
   }
 
+  // Una frase y una salida, no un inventario: «3 lecturas breves · Usar en una
+  // carta nueva · Usar en una de mis cartas» era un stock con dos enlaces
+  // chicos, y lo que la persona quiere saber es qué puede leer y dónde.
+  const que = disponibles.map((linea) => linea.texto(dict, linea.n)).join(" · ");
   return (
     <div className="derechos">
-      <ul className="usos">
-        {disponibles.map((linea) => (
-          <li key={linea.codigo} className="uso">
-            <span className="usoGlifo" aria-hidden="true">
-              {linea.glifo}
-            </span>
-            <span className="usoNombre">{linea.texto(dict, linea.n)}</span>
-            <span className="usoAcciones">
-              {/* Primero la nueva: es el camino que no existía, y el que no
-                  depende de nada. */}
-              <Link className="usoAccion" href={`/${locale}/nueva`}>
-                {dict.auth.usarEnNueva}
-              </Link>
-              {hayCartas && (
-                <Link className="usoAccion" href="#tus-cartas">
-                  {dict.auth.usarEnMisCartas}
-                </Link>
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
-
+      <p className="derechosFrase">{dict.auth.derechosFrase.replace("{que}", que)}</p>
       <p className="derechosNota">{dict.auth.listoNota}</p>
-      {!hayCartas && <p className="derechosNota">{dict.auth.listoSinCartasNota}</p>}
-
-      {/* Debajo del listado y en gris: comprar más es lo que se hace cuando ya
-          no queda nada de lo de arriba, no la acción principal de este bloque. */}
+      {hayCartas ? (
+        <Link className="btn btnGhost" href="#tus-cartas">
+          {dict.auth.elegirCarta}
+        </Link>
+      ) : (
+        <>
+          <p className="derechosNota">{dict.auth.listoSinCartasNota}</p>
+          <Link className="btn btnPrimary" href={`/${locale}/nueva`}>
+            {dict.auth.chartsEmptyCta}
+          </Link>
+        </>
+      )}
       <Link className="derechosMas" href={`/${locale}/precios`}>
         {dict.auth.verPrecios}
       </Link>

@@ -18,7 +18,10 @@ const t = dict.auth;
 const ok = { ok: true, status: 200 };
 const falla = { ok: false, status: 502 };
 
+/** Despliega el bloque (arranca plegado detrás de un enlace de texto) y abre
+ *  la confirmación de ese borrado. */
 function abrir(titulo: string) {
+  fireEvent.click(screen.getByRole("button", { name: t.borrarAbrir }));
   fireEvent.click(screen.getAllByRole("button", { name: titulo })[0]);
 }
 
@@ -37,6 +40,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("DangerZone", () => {
+  it("arranca plegado detrás de un enlace de texto", () => {
+    expect(screen.queryByRole("button", { name: t.deleteChartsTitle })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: t.borrarAbrir }));
+    expect(screen.getByRole("button", { name: t.deleteChartsTitle })).toBeInTheDocument();
+  });
+
   it("no borra nada con un solo click", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

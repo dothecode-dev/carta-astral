@@ -14,6 +14,9 @@ type Target = "charts" | "account" | null;
 export function DangerZone({ locale, dict }: { locale: string; dict: Dict }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState<Target>(null);
+  /** Plegado por defecto: era la única tarjeta con marco de toda la cuenta, y
+   *  la jerarquía decía que lo importante acá era irse. */
+  const [abierto, setAbierto] = useState(false);
   const [busy, setBusy] = useState(false);
   const t = dict.auth;
 
@@ -71,6 +74,16 @@ export function DangerZone({ locale, dict }: { locale: string; dict: Dict }) {
           </button>
         )}
       </div>
+    );
+  }
+
+  if (!abierto) {
+    return (
+      <section className="danger dangerPlegado">
+        <button type="button" className="linkButton" onClick={() => setAbierto(true)}>
+          {t.borrarAbrir}
+        </button>
+      </section>
     );
   }
 
