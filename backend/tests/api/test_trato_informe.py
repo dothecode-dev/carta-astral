@@ -171,3 +171,88 @@ def test_carta_sin_trato_usa_vacio(make_chart, cuenta, llamadas):
     svc.completar_generacion(interp, carta, cuenta)
 
     assert llamadas["seccion"] == [""] * len(SECCIONES)
+
+
+# --- Fix round 1: no mezclar secciones escritas de cero con traducidas ---
+
+
+def _origen_completo(carta, cuenta, trato="femenino"):
+    origen = Interpretation.objects.create(
+        chart=carta, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        account=cuenta, completa=True, trato=trato,
+    )
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=origen, slug=seccion.slug, orden=orden, texto=f"es {seccion.slug}",
+        )
+    return origen
+
+
+def test_un_destino_con_secciones_de_cero_se_retraduce_entero(make_chart, cuenta, llamadas):
+    """Un "pt" empezó de cero, escribió 3 secciones y falló; después apareció el
+    "es" completo. Terminarlo traduciendo sólo lo que falta mezclaba textos
+    escritos de cero (otro trato, otro contenido) con traducciones."""
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    origen = _origen_completo(carta, cuenta, trato="femenino")
+    destino = Interpretation.objects.create(
+        chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        account=cuenta, trato="masculino",
+    )
+    for orden, seccion in enumerate(SECCIONES[:3]):
+        InterpretationSection.objects.create(
+            interpretation=destino, slug=seccion.slug, orden=orden, texto="escrita de cero",
+        )
+
+    informe_service.traducir_informe(origen, "pt", object())
+
+    destino.refresh_from_db()
+    assert destino.trato == "femenino"
+    assert destino.completa is True
+    textos = {s.texto for s in destino.secciones.all()}
+    assert textos == {"traducido"}
+    assert destino.secciones.count() == len(SECCIONES)
+    assert llamadas["traduccion"] == ["femenino"] * len(SECCIONES)
+
+
+def test_reintento_de_una_traduccion_a_medias_no_retraduce_lo_hecho(make_chart, cuenta, monkeypatch, llamadas):
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    origen = _origen_completo(carta, cuenta)
+
+    def _falla_en_la_cuarta(text, target_lang, client, trato=""):
+        if len(llamadas["traduccion"]) == 3:
+            raise RuntimeError("cayó la API")
+        llamadas["traduccion"].append(trato)
+        return "traducido"
+
+    monkeypatch.setattr(informe_service, "translate_interpretation", _falla_en_la_cuarta)
+    with pytest.raises(RuntimeError):
+        informe_service.traducir_informe(origen, "pt", object())
+    destino = Interpretation.objects.get(chart=carta, lang="pt", tier="largo")
+    assert destino.secciones.count() == 3
+
+    def _bien(text, target_lang, client, trato=""):
+        llamadas["traduccion"].append(trato)
+        return "traducido"
+
+    monkeypatch.setattr(informe_service, "translate_interpretation", _bien)
+    informe_service.traducir_informe(origen, "pt", object())
+
+    destino.refresh_from_db()
+    assert destino.secciones.count() == len(SECCIONES)
+    assert len(llamadas["traduccion"]) == len(SECCIONES)  # 3 + 5, ninguna repetida
+
+
+def test_completar_generacion_retraduce_el_destino_escrito_de_cero(make_chart, cuenta, llamadas):
+    """Por el camino real: el "pt" quedó a medias de cero y existe el "es"."""
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    pt = svc.iniciar_generacion(carta, "pt", cuenta, tier="largo")
+    InterpretationSection.objects.create(
+        interpretation=pt, slug=SECCIONES[0].slug, orden=0, texto="escrita de cero",
+    )
+    _origen_completo(carta, cuenta, trato="femenino")
+
+    svc.completar_generacion(pt, carta, cuenta)
+
+    pt.refresh_from_db()
+    assert pt.completa is True
+    assert {s.texto for s in pt.secciones.all()} == {"traducido"}

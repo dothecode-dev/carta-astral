@@ -131,6 +131,13 @@ class Interpretation(models.Model):
     # Copia del de la carta al crear el informe: lo usan todas sus secciones,
     # el cron y sus traducciones, aunque la persona lo cambie después (RF5).
     trato = models.CharField(max_length=10, blank=True, default="")
+    # De qué informe es traducción este (nulo = se escribió de cero). Es lo que
+    # permite distinguir, al retomar, una traducción a medias del mismo origen
+    # (se completa lo que falta) de secciones escritas de cero (se descartan y
+    # se traduce todo: mezclarlas deja contenido y trato inconsistentes).
+    traducido_de = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="traducciones",
+    )
     text = models.TextField()
     # sha256 del input del LLM (chart.data canónico + lang + prompt_version).
     # Permite reutilizar el texto entre cartas idénticas sin llamar a la API.

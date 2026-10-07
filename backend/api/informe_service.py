@@ -399,14 +399,22 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
     destino, _ = Interpretation.objects.get_or_create(
         chart=origen.chart, lang=destino_lang, prompt_version=origen.prompt_version,
         tier=origen.tier,
-        defaults={"text": "", "account": origen.account, "trato": origen.trato},
+        defaults={"text": "", "account": origen.account, "trato": origen.trato, "traducido_de": origen},
     )
-    # La traducción es del informe de origen y habla igual que él (RF5). Si el
-    # destino ya existía (lo crea `iniciar_generacion` con el trato ACTUAL de
-    # la carta, que pudo cambiar desde que nació el origen) se alinea acá.
-    if destino.trato != origen.trato:
-        destino.trato = origen.trato
-        destino.save(update_fields=["trato"])
+    # La traducción es del informe de origen y habla igual que él (RF5). El
+    # destino puede existir ya: lo crea `iniciar_generacion` (con el trato
+    # ACTUAL de la carta) y quizá ya tiene secciones escritas de cero por un
+    # intento que falló. Regla: si `traducido_de` no es este origen, esas
+    # secciones NO son traducción de él —contenido y trato propios— y se
+    # descartan para traducir todo; si lo es, es un reintento y se completa lo
+    # que falta. Todo en una transacción, bajo el lock de la carta que ya
+    # tiene `completar_generacion`.
+    if destino.traducido_de_id != origen.pk:
+        with transaction.atomic():
+            destino.secciones.all().delete()
+            destino.traducido_de = origen
+            destino.trato = origen.trato
+            destino.save(update_fields=["traducido_de", "trato"])
     hechas = set(destino.secciones.values_list("slug", flat=True))
     for seccion in origen.secciones.all():
         if seccion.slug in hechas:
