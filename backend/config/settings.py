@@ -391,6 +391,10 @@ REST_FRAMEWORK = {
         # Público, por IP, y cada pedido crea una carta y una sesión de Stripe
         # sin cuenta a la que atribuirlas: más estricto que el de `preview`.
         "checkout_anonimo": os.environ.get("CHECKOUT_ANONIMO_RATE", "10/hour"),
+        # Público, por IP: la vuelta de Stripe. La web lo sondea cada 3 s
+        # hasta 2 min mientras el pago está `pendiente`; sin nonce no da
+        # nada, así que el techo es contra el bucle, no contra la adivinanza.
+        "canje_compra": os.environ.get("CANJE_COMPRA_RATE", "120/hour"),
     },
 }
 

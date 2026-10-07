@@ -98,14 +98,16 @@ class CheckoutCanjeView(APIView):
     sin decir qué condición falló (RF11).
 
     Sin chequeo de mantenimiento a propósito (RF14b): quien pagó durante un
-    deploy no puede quedar frente a un 503. Throttle `auth`, como las otras
-    puertas de entrada.
+    deploy no puede quedar frente a un 503. Throttle propio (`canje_compra`),
+    no el `auth` del login: la web lo sondea mientras está `pendiente`
+    (RF13), y con el balde compartido un webhook lento dejaría a quien pagó
+    sin poder entrar por código o Google el resto del día.
     """
 
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "auth"
+    throttle_scope = "canje_compra"
 
     def post(self, request):
         checkout_id = request.data.get("checkout_id")

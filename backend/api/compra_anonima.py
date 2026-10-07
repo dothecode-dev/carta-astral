@@ -213,6 +213,40 @@ def descartar(checkout_id: str) -> bool:
     return True
 
 
+#: Hasta cuándo, desde que se acreditó el pago, el nonce del navegador abre
+#: sesión en la cuenta que creó la compra. Es la vida máxima de la cookie del
+#: nonce (spec RF2, ≤ 24 h): pasado eso nadie legítimo lo tiene, y un nonce
+#: guardado aparte no tiene por qué seguir sirviendo para entrar.
+VIDA_CANJE_POR_NONCE = timezone.timedelta(hours=24)
+
+#: Un código sin usar para el mismo mail y destino creado hace menos que esto
+#: alcanza: recargar /compra no manda otro mail.
+CODIGO_RECIENTE = timezone.timedelta(minutes=10)
+
+
+def _sesion_por_nonce_vigente(fila: PasarelaCheckout) -> bool:
+    """Si el canje de una cuenta creada por la compra todavía puede abrir sesión.
+
+    No alcanza con `cuenta_nueva` (que dice quién creó la cuenta, no qué es
+    hoy). Canje tardío: alguien paga con el mail de otra persona que no tenía
+    cuenta y no canjea; la dueña del mail entra con código (RF17: la cuenta
+    se verifica y se cierran las demás sesiones); si después el nonce del
+    pagador abriera sesión, se llevaría un token de la cuenta de ella. Con el
+    mail ya verificado, o pasada la vida de la cookie del nonce, el canje
+    cae a la rama del código.
+    """
+    if fila.account.email_verified:
+        return False
+    return timezone.now() - fila.acreditado_at <= VIDA_CANJE_POR_NONCE
+
+
+def _codigo_reciente(email: str, destino: str) -> bool:
+    return CodigoAcceso.objects.filter(
+        email=normalizar(email), destino=destino, usado_en__isnull=True,
+        expira_en__gt=timezone.now(), creado_en__gte=timezone.now() - CODIGO_RECIENTE,
+    ).exists()
+
+
 def canjear(checkout_id: str, nonce: str) -> dict:
     """El navegador que pagó vuelve de Stripe (RF10-RF13).
 
@@ -224,8 +258,11 @@ def canjear(checkout_id: str, nonce: str) -> dict:
 
     A un mail que ya tenía cuenta (`cuenta_nueva=False`) NUNCA se le abre
     sesión (RF11): se le manda el código de acceso con destino la carta
-    (RF12). Eso no se gasta —un segundo canje vuelve a dar `codigo`— y el
-    cupo por hora de `codigos_acceso.pedir` frena el reenvío. El mail sale
+    (RF12). Tampoco a una cuenta nueva ya verificada o pasadas 24 h del pago
+    (`_sesion_por_nonce_vigente`). Eso no se gasta —un segundo canje vuelve a
+    dar `codigo`—, pero si ya hay un código reciente sin usar para ese mail y
+    destino no se manda otro, y el cupo por hora de `codigos_acceso.pedir`
+    frena el resto. El mail sale
     después del commit: el lock de la fila no espera a Resend.
 
     `select_for_update` sobre la fila: dos canjes simultáneos con el mismo
@@ -252,19 +289,22 @@ def canjear(checkout_id: str, nonce: str) -> dict:
             f"/{fila.locale}/carta/{fila.chart.uuid}" if fila.chart_id is not None
             else f"/{fila.locale}/cuenta"
         )
-        if fila.cuenta_nueva:
-            if fila.canjeado_at is not None:
-                return {"estado": "invalido"}
+        if fila.cuenta_nueva and fila.canjeado_at is not None:
+            return {"estado": "invalido"}
+        if fila.cuenta_nueva and _sesion_por_nonce_vigente(fila):
             fila.canjeado_at = timezone.now()
             fila.save(update_fields=["canjeado_at"])
             return {
                 "estado": "sesion", "token": create_session(fila.account),
                 "destino": destino, "account_id": fila.account_id,
             }
+        # Mail que ya tenía cuenta, o cuenta nueva que dejó de serlo (ver
+        # `_sesion_por_nonce_vigente`): NUNCA sesión (RF11). Se le manda el código.
         email = fila.account.email
         try:
-            codigo, claro, _ = codigos_acceso.pedir(email, destino=destino)
-            envio = (codigo, claro, fila.locale)
+            if not _codigo_reciente(email, destino):
+                codigo, claro, _ = codigos_acceso.pedir(email, destino=destino)
+                envio = (codigo, claro, fila.locale)
         except codigos_acceso.DemasiadosPedidos:
             logger.info(
                 "compra anónima %s: %s ya pidió todos los códigos de la hora, no se reenvía",

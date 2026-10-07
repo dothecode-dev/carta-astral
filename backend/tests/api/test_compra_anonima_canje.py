@@ -17,9 +17,9 @@ from api.identity import hash_token
 from api.models import Account, CodigoAcceso, ProviderIdentity, Session
 from tests.api.conftest import SESSION_ANONIMA
 
-# El caché se vacía antes y después de cada test: el canje comparte el
-# throttle `auth` (30/día) con el login por mail, y sin esto este archivo
-# agota el cupo de los tests de `test_codigo_endpoints.py` que corren después.
+# El caché (donde viven los baldes de throttle) se vacía antes y después de
+# cada test: este archivo también entra por código (`auth`, 30/día) y prueba
+# baldes del canje; sin vaciarlo, el resultado dependería del orden.
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("django_cache_cleared")]
 
 URL_CANJE = "/api/checkout/anonimo/canjear/"
@@ -182,12 +182,39 @@ def test_con_nonce_malo_una_cuenta_existente_no_revela_el_mail(client, anonima, 
     assert not CodigoAcceso.objects.exists()
 
 
-def test_un_segundo_canje_de_cuenta_existente_vuelve_a_dar_codigo(client, anonima, make_account, enviados):
+def test_recargar_la_pagina_no_manda_otro_mail(client, anonima, make_account, enviados):
+    """Un segundo canje de una cuenta existente vuelve a dar `codigo` (no es un
+    secreto que se gaste), pero si ya hay un código vigente reciente para ese
+    mail y ese destino no se pide ni se manda otro: recargar /compra no es
+    otro mail."""
     _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
 
     assert _canje(client).json()["estado"] == "codigo"
-    assert _canje(client).json()["estado"] == "codigo"
+    assert _canje(client).json() == {
+        "estado": "codigo", "email": "g***@gmail.com", "destino": _destino(anonima),
+    }
+    assert enviados == ["gustavo@gmail.com"]
+    assert CodigoAcceso.objects.filter(email="gustavo@gmail.com").count() == 1
+
+
+def test_pasados_diez_minutos_si_manda_otro_codigo(client, anonima, make_account, enviados):
+    _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
+    _canje(client)
+    CodigoAcceso.objects.update(creado_en=timezone.now() - timezone.timedelta(minutes=11))
+
+    _canje(client)
+
     assert enviados == ["gustavo@gmail.com", "gustavo@gmail.com"]
+
+
+def test_un_codigo_usado_no_frena_el_siguiente(client, anonima, make_account, enviados):
+    _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
+    _canje(client)
+    CodigoAcceso.objects.update(usado_en=timezone.now())
+
+    _canje(client)
+
+    assert len(enviados) == 2
 
 
 def test_con_el_cupo_de_codigos_gastado_no_reenvia(client, anonima, make_account, enviados, settings):
@@ -236,14 +263,79 @@ def test_sin_acreditar_y_nonce_malo_no_dice_pendiente(client, anonima):
     assert r.status_code == 404 and r.json() == {"error": "no encontrado"}
 
 
-def test_el_canje_comparte_el_throttle_de_las_puertas_de_entrada():
-    from rest_framework.throttling import ScopedRateThrottle
+def test_el_canje_no_gasta_el_cupo_del_login(client, anonima, resend):
+    """La web sondea el canje mientras está `pendiente` (RF13): si compartiera
+    el balde `auth` (30/día por IP), un webhook lento dejaría a quien pagó sin
+    poder entrar por código ni por Google el resto del día."""
+    anonima.nonce_hash = hash_token(NONCE)
+    anonima.save()
+    for _ in range(40):
+        assert _canje(client).json() == {"estado": "pendiente"}
 
-    from api.compra_anonima_api import CheckoutCanjeView
+    r = client.post("/api/auth/email/codigo", {"email": "p@mail.com", "lang": "es"},
+                    content_type="application/json")
 
-    assert CheckoutCanjeView.throttle_scope == "auth"
-    assert ScopedRateThrottle in CheckoutCanjeView.throttle_classes
-    assert CheckoutCanjeView.authentication_classes == []
+    assert r.status_code == 202
+
+
+def test_el_canje_tiene_su_propio_techo(client, anonima, monkeypatch):
+    monkeypatch.setattr(
+        "rest_framework.throttling.SimpleRateThrottle.THROTTLE_RATES",
+        {"canje_compra": "2/hour", "auth": "30/day"},
+    )
+    anonima.nonce_hash = hash_token(NONCE)
+    anonima.save()
+
+    estados = [_canje(client).status_code for _ in range(3)]
+
+    assert estados == [200, 200, 429]
+
+
+# --- Canje tardío: la cuenta ya no es «nueva» -------------------------------
+
+
+def test_si_la_duenia_del_mail_entro_antes_el_nonce_ya_no_abre_sesion(client, anonima, enviados):
+    """El atacante paga con el mail de la víctima (sin cuenta) y no canjea; la
+    víctima entra con código (RF17: la cuenta se verifica); después el
+    atacante canjea con su nonce. No puede recibir un token de esa cuenta."""
+    cuenta = compra_anonima.adjudicar(SESSION_ANONIMA, "victima@mail.com")
+    anonima.refresh_from_db()
+    anonima.acreditado_at = timezone.now()
+    anonima.nonce_hash = hash_token(NONCE)
+    anonima.save()
+    assert _entrar_con_codigo(client, "victima@mail.com").status_code == 200
+    sesiones_antes = Session.objects.filter(account=cuenta).count()
+
+    r = _canje(client)
+
+    assert r.status_code == 200
+    assert r.json() == {"estado": "codigo", "email": "v***@mail.com", "destino": _destino(anonima)}
+    assert Session.objects.filter(account=cuenta).count() == sesiones_antes
+    anonima.refresh_from_db()
+    assert anonima.canjeado_at is None
+
+
+def test_pasadas_24_horas_el_nonce_ya_no_abre_sesion(client, anonima, make_account, enviados):
+    cuenta = make_account(email="tarde@mail.com", email_verified=False)
+    _acreditada(anonima, cuenta, nueva=True)
+    anonima.acreditado_at = timezone.now() - timezone.timedelta(hours=25)
+    anonima.save()
+
+    r = _canje(client)
+
+    assert r.json()["estado"] == "codigo"
+    assert "token" not in r.json()
+    assert not Session.objects.filter(account=cuenta).exists()
+    assert enviados == ["tarde@mail.com"]
+
+
+def test_poco_antes_de_las_24_horas_el_nonce_si_abre_sesion(client, anonima, make_account):
+    cuenta = make_account(email="justo@mail.com", email_verified=False)
+    _acreditada(anonima, cuenta, nueva=True)
+    anonima.acreditado_at = timezone.now() - timezone.timedelta(hours=23)
+    anonima.save()
+
+    assert _canje(client).json()["estado"] == "sesion"
 
 
 # --- RF14b: el canje sigue andando durante un deploy -------------------------
