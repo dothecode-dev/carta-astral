@@ -110,6 +110,10 @@ def _vencer(session_id: str) -> None:
     ).update(vencido_at=timezone.now())
     if not marcadas:
         logger.info("sesión %s vencida sin fila abierta que marcar", session_id)
+    # Una compra sin cuenta que no se pagó no deja nada guardado (RF8). Corre
+    # también si la fila ya estaba vencida: es idempotente y repara un
+    # reintento tras un fallo a mitad.
+    compra_anonima.descartar(session_id)
 
 
 def _resolver_cuenta_y_fila(sesion: dict):

@@ -14,7 +14,7 @@ from api import cupones, stripe_client
 from api.accounts import resolver_cuenta
 from api.chart_service import create_chart
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
-from api.models import Account, Chart, PasarelaCheckout, ProviderIdentity, Sujeto
+from api.models import Account, BirthData, Chart, PasarelaCheckout, ProviderIdentity, Sujeto
 from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
@@ -175,3 +175,36 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
         checkout_id, cuenta.pk, nueva, enmascarar(email),
     )
     return cuenta
+
+
+def descartar(checkout_id: str) -> bool:
+    """Borra lo que dejó una compra sin cuenta que nunca se pagó (RF8).
+
+    Se llama cuando Stripe avisa que la sesión venció. Con `select_for_update`
+    sobre la fila, para que `expired` y un `completed` que llega a la vez se
+    serialicen: gana el que toma el lock primero. Si ya hay cuenta o plata
+    acreditada —aunque el acreditado haya fallado y esté pendiente de
+    reintento— no se borra nada: la carta es de alguien.
+
+    Borra la carta (su sujeto natal cae por CASCADE) y el `BirthData` si
+    ninguna otra carta lo usa. La fila queda como registro, sin carta.
+    `True` si descartó algo. Sólo se loguea el checkout, nunca datos de
+    nacimiento.
+    """
+    with transaction.atomic():
+        fila = PasarelaCheckout.objects.select_for_update().filter(checkout_id=checkout_id).first()
+        if (
+            fila is None or not fila.anonimo or fila.account_id is not None
+            or fila.acreditado_at is not None or fila.chart_id is None
+        ):
+            return False
+        carta_id = fila.chart_id
+        birth_data_id = Chart.objects.values_list("birth_data_id", flat=True).get(pk=carta_id)
+        fila.chart = None
+        fila.sujeto = None
+        fila.save(update_fields=["chart", "sujeto"])
+        Chart.objects.filter(pk=carta_id).delete()
+        if not Chart.objects.filter(birth_data_id=birth_data_id).exists():
+            BirthData.objects.filter(pk=birth_data_id).delete()
+    logger.info("compra anónima %s vencida sin pagar: carta descartada", checkout_id)
+    return True
