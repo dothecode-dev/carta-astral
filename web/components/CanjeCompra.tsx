@@ -175,7 +175,12 @@ export function CanjeCompra({
             {dict.compra.canjeCodigoTitle.replace("{email}", vista.email)}
           </h1>
           <p className="waitingBody">{dict.compra.canjeCodigoBody}</p>
-          {vista.saldoPendiente && <p className="waitingBody">{dict.compra.saldoPendiente}</p>}
+          {vista.saldoPendiente && (
+            <>
+              <p className="waitingBody">{dict.compra.saldoPendiente}</p>
+              <p className="waitingBody">{dict.compra.saldoPendienteCuerpo}</p>
+            </>
+          )}
           <EntrarPorMail
             locale={locale}
             next={vista.destino}

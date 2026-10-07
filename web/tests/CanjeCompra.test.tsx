@@ -138,6 +138,7 @@ describe("CanjeCompra", () => {
     await correr(3);
 
     expect(screen.getByText(dict.compra.saldoPendiente)).toBeInTheDocument();
+    expect(screen.getByText(dict.compra.saldoPendienteCuerpo)).toBeInTheDocument();
     expect(screen.getByLabelText(dict.auth.codigoLabel)).toBeInTheDocument();
   });
 
