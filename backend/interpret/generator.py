@@ -20,6 +20,7 @@ from interpret.prompts import (
     TRANSLATE_MODEL,
     Seccion,
 )
+from interpret.trato import instruccion
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +42,13 @@ _DEGRADED_NOTES = {
 }
 
 
-def _user_content(chart_data: dict, lang: str) -> str:
+def _user_content(chart_data: dict, lang: str, trato: str = "") -> str:
     body = json.dumps(chart_data, ensure_ascii=False)
     content = f"{_INSTRUCTIONS[lang]}\n{body}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
+    if nota := instruccion(trato, lang):
+        content += f"\n\n{nota}"
     return content
 
 
@@ -85,11 +88,11 @@ def _stream_text(client, model: str, system: list, user_content: str, max_tokens
     return text
 
 
-def build_interpretation(chart_data: dict, lang: str, prompt_version: str, client) -> str:
+def build_interpretation(chart_data: dict, lang: str, prompt_version: str, client, trato: str = "") -> str:
     system = [
         {"type": "text", "text": SYSTEM_PROMPTS[lang], "cache_control": {"type": "ephemeral"}}
     ]
-    return _stream_text(client, MODEL, system, _user_content(chart_data, lang), MAX_TOKENS)
+    return _stream_text(client, MODEL, system, _user_content(chart_data, lang, trato), MAX_TOKENS)
 
 
 _TRANSLATE_TARGETS = {
@@ -106,10 +109,14 @@ _TRANSLATE_SYSTEM = (
 )
 
 
-def translate_interpretation(text: str, target_lang: str, client) -> str:
+def translate_interpretation(text: str, target_lang: str, client, trato: str = "") -> str:
     """Traduce una lectura ya generada. Modelo barato: el contenido ya está
     escrito, solo cambia el idioma."""
     system = [{"type": "text", "text": _TRANSLATE_SYSTEM.format(target=_TRANSLATE_TARGETS[target_lang])}]
+    if nota := instruccion(trato, target_lang):
+        # Segundo elemento del system y no parte del contenido: el contenido es
+        # el texto a traducir, y una nota ahí podría traducirse y quedar pegada.
+        system.append({"type": "text", "text": nota})
     return _stream_text(client, TRANSLATE_MODEL, system, text, TRANSLATE_MAX_TOKENS)
 
 
@@ -141,7 +148,7 @@ _CONTEXTO_PREVIO = {
 }
 
 
-def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, client, reparto: str = "") -> str:
+def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, client, reparto: str = "", trato: str = "") -> str:
     """Genera una sección del informe. `previo` es el resumen de lo ya
     escrito en secciones anteriores: es lo único que impide que, por ejemplo,
     la sección de tensiones repita lo que ya dijo la de la firma. Vacío
@@ -165,6 +172,8 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     content = f"{pedido}\n\n{cuerpo}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
+    if nota := instruccion(trato, lang):
+        content += f"\n\n{nota}"
     if reparto:
         # Quién explica qué: lo que impide que la misma oposición se explique
         # en cuatro secciones (interpret/reparto.py, spec 2026-10-07).
