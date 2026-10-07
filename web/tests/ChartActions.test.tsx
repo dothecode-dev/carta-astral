@@ -1256,6 +1256,26 @@ describe("ChartActions: leer mientras se escribe", () => {
     ).toBeInTheDocument();
   });
 
+  it("la espera de la breve no se pinta como informe: sin h2 ni evento de sección", async () => {
+    const breve = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        completa: false,
+        total: 1,
+        secciones: [{ slug: "breve", titulo: "Tu lectura", texto: "Texto de la breve." }],
+      }),
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(reply(202)).mockResolvedValue(breve);
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions();
+    await clickBoton(dict.chart.interpretBreve);
+    await correr(POLL_MS);
+    expect(screen.getByText("Texto de la breve.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
+    expect(track).not.toHaveBeenCalledWith("seccion_informe_leida", expect.anything());
+  });
+
   it("una sección sin títulos se muestra igual, como párrafos", async () => {
     const fetchMock = vi
       .fn()

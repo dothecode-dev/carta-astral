@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { InformeSecciones, type SeccionEscrita } from "@/components/InformeSecciones";
+import { Reading } from "@/components/Reading";
 import { SolarSystem } from "@/components/SolarSystem";
 import { conPrecio } from "@/lib/catalogo";
 import { cantidad, puede, type Derecho } from "@/lib/derechos";
@@ -642,7 +643,13 @@ export function ChartActions({
             arranque, cuando todavía no hay nada que leer. */}
         {escritas.length > 0 ? (
           <div className="reading waitingReading">
-            <InformeSecciones secciones={escritas} indice={false} />
+            {tierEnCurso === "largo" ? (
+              <InformeSecciones secciones={escritas} indice={false} claveMedicion={`${chartId}:${locale}`} />
+            ) : (
+              // La breve no tiene secciones: se lee como siempre, sin título
+              // ni evento (spec 2026-10-07, RF10).
+              escritas.map((s) => <Reading key={s.slug} texto={s.texto} />)
+            )}
             {avisoEscritas && <p className="disclaimer">{avisoEscritas}</p>}
           </div>
         ) : (

@@ -95,6 +95,35 @@ describe("InformeSecciones", () => {
     expect(track).toHaveBeenCalledWith("seccion_informe_leida", { slug: "mente", orden: 2, segundos: 0 });
   });
 
+  it("dos instancias de la misma carta no cuentan dos veces la misma sección", () => {
+    // La espera (que desmonta al terminar) y la lectura final (que monta con
+    // `router.refresh()`) son instancias distintas de la misma vista: lo leído
+    // durante la espera no se vuelve a contar.
+    const a = render(<InformeSecciones secciones={SECCIONES} indice={false} claveMedicion="carta-1:es" />);
+    ver(a.container.querySelector('[data-fin="firma"]')!);
+    a.unmount();
+    const b = render(<InformeSecciones secciones={SECCIONES} indice claveMedicion="carta-1:es" />);
+    ver(b.container.querySelector('[data-fin="firma"]')!, b.container.querySelector('[data-fin="mente"]')!);
+    expect(track).toHaveBeenCalledTimes(2);
+    expect(track.mock.calls.map((c) => (c[1] as { slug: string }).slug)).toEqual(["firma", "mente"]);
+  });
+
+  it("otra carta sí cuenta de nuevo", () => {
+    const a = render(<InformeSecciones secciones={SECCIONES} indice={false} claveMedicion="carta-2:es" />);
+    ver(a.container.querySelector('[data-fin="firma"]')!);
+    a.unmount();
+    const b = render(<InformeSecciones secciones={SECCIONES} indice={false} claveMedicion="carta-3:es" />);
+    ver(b.container.querySelector('[data-fin="firma"]')!);
+    expect(track).toHaveBeenCalledTimes(2);
+  });
+
+  it("dos secciones llegando a su final suman dos eventos", () => {
+    const { container } = render(<InformeSecciones secciones={SECCIONES} indice={false} />);
+    ver(container.querySelector('[data-fin="firma"]')!);
+    ver(container.querySelector('[data-fin="mente"]')!);
+    expect(track).toHaveBeenCalledTimes(2);
+  });
+
   it("sin IntersectionObserver no mide ni rompe", () => {
     vi.stubGlobal("IntersectionObserver", undefined);
     render(<InformeSecciones secciones={SECCIONES} indice />);

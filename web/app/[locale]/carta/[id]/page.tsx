@@ -170,7 +170,12 @@ export default async function ChartPage({
           <section className="reading">
             <p className="eyebrow">{dict.chart.reading}</p>
             {reading.secciones && reading.secciones.length > 0 ? (
-              <InformeSecciones secciones={reading.secciones} indice etiquetaIndice={dict.chart.indiceInforme} />
+              <InformeSecciones
+                secciones={reading.secciones}
+                indice
+                etiquetaIndice={dict.chart.indiceInforme}
+                claveMedicion={`${id}:${locale}`}
+              />
             ) : (
               <Reading texto={reading.text} />
             )}
