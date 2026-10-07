@@ -143,13 +143,13 @@ describe("CanjeCompra", () => {
   it("codigo: muestra el mail enmascarado y el texto de soporte", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(reply(200, { estado: "codigo", email: "g***@gmail.com", destino: CARTA }));
+      .mockResolvedValue(reply(200, { estado: "codigo", email: "g***@example.com", destino: CARTA }));
     vi.stubGlobal("fetch", fetchMock);
 
     renderCanje();
     await correr(3);
 
-    expect(screen.getByText(/g\*\*\*@gmail\.com/)).toBeInTheDocument();
+    expect(screen.getByText(/g\*\*\*@example\.com/)).toBeInTheDocument();
     const soporte = screen.getByText(/info@astraguia\.com/);
     expect(soporte).toHaveTextContent("NhtxZOwIt1");
     expect(soporte).not.toHaveTextContent(CHECKOUT);
@@ -161,7 +161,7 @@ describe("CanjeCompra", () => {
   it("codigo: el formulario de mail y código está ahí, sin pedir otro código", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(reply(200, { estado: "codigo", email: "g***@gmail.com", destino: CARTA }));
+      .mockResolvedValue(reply(200, { estado: "codigo", email: "g***@example.com", destino: CARTA }));
     vi.stubGlobal("fetch", fetchMock);
 
     renderCanje();
@@ -178,13 +178,13 @@ describe("CanjeCompra", () => {
     const fetchMock = vi.fn<Fetch>(async (url) =>
       url === "/api/session"
         ? reply(200, { derechos: [], account_id: 9 })
-        : reply(200, { estado: "codigo", email: "g***@gmail.com", destino: CARTA }),
+        : reply(200, { estado: "codigo", email: "g***@example.com", destino: CARTA }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     renderCanje();
     await correr();
-    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@gmail.com" } });
+    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@example.com" } });
     fireEvent.change(screen.getByLabelText(dict.auth.codigoLabel), { target: { value: "123456" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: dict.auth.codigoButton }));
@@ -193,7 +193,7 @@ describe("CanjeCompra", () => {
     const canje = fetchMock.mock.calls.find(([url]) => url === "/api/session")!;
     expect(JSON.parse((canje[1] as RequestInit).body as string)).toEqual({
       provider: "email",
-      email: "gus@gmail.com",
+      email: "gus@example.com",
       codigo: "123456",
     });
     expect(replace).toHaveBeenCalledWith(CARTA);
@@ -204,13 +204,13 @@ describe("CanjeCompra", () => {
     const fetchMock = vi.fn<Fetch>(async (url) =>
       url === "/api/session/codigo"
         ? reply(200, {})
-        : reply(200, { estado: "codigo", email: "g***@gmail.com", destino: CARTA }),
+        : reply(200, { estado: "codigo", email: "g***@example.com", destino: CARTA }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     renderCanje();
     await correr();
-    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@gmail.com" } });
+    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@example.com" } });
     // El reenvío espera un minuto, como en /entrar: el mail recién salió.
     expect(screen.getByRole("button", { name: dict.auth.reenviar })).toBeDisabled();
     await act(async () => {
@@ -222,7 +222,7 @@ describe("CanjeCompra", () => {
 
     const pedido = fetchMock.mock.calls.find(([url]) => url === "/api/session/codigo")!;
     expect(JSON.parse((pedido[1] as RequestInit).body as string)).toEqual({
-      email: "gus@gmail.com",
+      email: "gus@example.com",
       lang: "es",
       destino: CARTA,
     });
@@ -232,13 +232,13 @@ describe("CanjeCompra", () => {
     const fetchMock = vi.fn<Fetch>(async (url) =>
       url === "/api/session"
         ? reply(200, { derechos: [], account_id: 9 })
-        : reply(200, { estado: "codigo", email: "g***@gmail.com", destino: "//malo" }),
+        : reply(200, { estado: "codigo", email: "g***@example.com", destino: "//malo" }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     renderCanje();
     await correr();
-    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@gmail.com" } });
+    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@example.com" } });
     fireEvent.change(screen.getByLabelText(dict.auth.codigoLabel), { target: { value: "123456" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: dict.auth.codigoButton }));

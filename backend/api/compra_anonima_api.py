@@ -16,7 +16,7 @@ from core.exceptions import CoreError
 
 from api import compra_anonima, cupones, mantenimiento, stripe_client
 from api.chart_service import calcular
-from api.checkout import _idioma, _respuesta_de_stripe
+from api.checkout import idioma_pedido, respuesta_de_stripe
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class CheckoutAnonimoView(APIView):
             logger.error("checkout anónimo sin TOMBSTONE_HMAC_KEY: no se abre")
             return Response(_NO_DISPONIBLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        idioma = _idioma(request)
+        idioma = idioma_pedido(request)
         # Misma validación que la vista previa (`calcular`), ANTES de crear
         # nada. Sin `exc_info` ni payload en el log: es la fecha de nacimiento
         # de alguien que todavía no aceptó nada.
@@ -85,7 +85,7 @@ class CheckoutAnonimoView(APIView):
             logger.exception("checkout anónimo: el producto %r no se puede vender", compra_anonima.PRODUCTO)
             return Response(_NO_DISPONIBLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except (stripe_client.StripeNoConfigurado, stripe_client.StripeError) as exc:
-            return _respuesta_de_stripe(exc, compra_anonima.PRODUCTO)
+            return respuesta_de_stripe(exc, compra_anonima.PRODUCTO)
         return Response({"url": fila.url, "checkout_id": fila.checkout_id, "nonce": nonce})
 
 

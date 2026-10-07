@@ -106,11 +106,11 @@ describe("POST /api/compra/canjear", () => {
   });
 
   it("codigo: devuelve el mail enmascarado y el destino, sin sesión", async () => {
-    fetchMock.mockResolvedValue(json({ estado: "codigo", email: "g***@gmail.com", destino: CARTA }));
+    fetchMock.mockResolvedValue(json({ estado: "codigo", email: "g***@example.com", destino: CARTA }));
 
     const res = await POST(req({ checkout_id: CHECKOUT }));
 
-    expect(await res.json()).toEqual({ estado: "codigo", email: "g***@gmail.com", destino: CARTA });
+    expect(await res.json()).toEqual({ estado: "codigo", email: "g***@example.com", destino: CARTA });
     expect(store.has(SESSION_COOKIE)).toBe(false);
   });
 

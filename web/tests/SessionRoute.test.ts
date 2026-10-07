@@ -58,7 +58,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
       ),
     );
 
-    const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+    const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
     const cuerpo = await res.json();
 
     expect(cuerpo).not.toHaveProperty("token");
@@ -73,7 +73,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
       vi.fn().mockResolvedValue(json({ token: "un-token", derechos: [], account_id: 7, destino: "" })),
     );
 
-    await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+    await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
 
     expect(store.get(SESSION_COOKIE)?.value).toBe("un-token");
     expect(store.get(SESSION_COOKIE)?.options).toMatchObject({ httpOnly: true });
@@ -86,12 +86,12 @@ describe("POST /api/session con provider email (canje del código)", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+    await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toContain("/api/auth/email");
     expect(url).not.toContain("/api/auth/email/codigo");
-    expect(JSON.parse(init.body)).toEqual({ email: "juan@gmail.com", codigo: "123456" });
+    expect(JSON.parse(init.body)).toEqual({ email: "juan@example.com", codigo: "123456" });
   });
 
   it("rechaza un cuerpo sin código", async () => {
@@ -99,7 +99,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com" }));
+    const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com" }));
 
     expect(res.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -120,7 +120,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
     const { POST } = await import("@/app/api/session/route");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ error: "código inválido" }, 401)));
 
-    const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "000000" }));
+    const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "000000" }));
 
     expect(res.status).toBe(401);
     expect(store.has(SESSION_COOKIE)).toBe(false);
@@ -130,7 +130,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
     const { POST } = await import("@/app/api/session/route");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ error: "login no disponible" }, 503)));
 
-    const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+    const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
 
     expect(res.status).toBe(503);
   });
@@ -143,7 +143,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
     vi.stubGlobal("fetch", fetchMock);
     ipVisitante = "203.0.113.7";
 
-    await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+    await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("203.0.113.7");
@@ -156,7 +156,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+    await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBeUndefined();
@@ -172,7 +172,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
         ),
       );
 
-      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
       const cuerpo = await res.json();
 
       expect(cuerpo.destino).toBe("/es/precios");
@@ -187,7 +187,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
         ),
       );
 
-      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
       const cuerpo = await res.json();
 
       expect(cuerpo).not.toHaveProperty("destino");
@@ -202,7 +202,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
         ),
       );
 
-      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
       const cuerpo = await res.json();
 
       expect(cuerpo).not.toHaveProperty("destino");
@@ -225,7 +225,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
         ),
       );
 
-      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
       const cuerpo = await res.json();
 
       expect(cuerpo.destino).toBe("/es/precios?comprar=informe_natal&cupon=VERANO10");
@@ -245,7 +245,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
         ),
       );
 
-      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
       const cuerpo = await res.json();
 
       expect(cuerpo).not.toHaveProperty("destino");
@@ -265,7 +265,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
         ),
       );
 
-      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
       const cuerpo = await res.json();
 
       expect(cuerpo).not.toHaveProperty("destino");
@@ -284,7 +284,7 @@ describe("POST /api/session con provider email (canje del código)", () => {
         ),
       );
 
-      const res = await POST(pedidoCanje({ provider: "email", email: "juan@gmail.com", codigo: "123456" }));
+      const res = await POST(pedidoCanje({ provider: "email", email: "juan@example.com", codigo: "123456" }));
       const cuerpo = await res.json();
 
       expect(cuerpo).not.toHaveProperty("destino");
@@ -346,13 +346,13 @@ describe("POST /api/session/codigo (pedir el código por mail)", () => {
     const fetchMock = vi.fn().mockResolvedValue(json({}, 202));
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await POST(pedidoCodigo({ email: "juan@gmail.com", lang: "es", destino: "/es/precios" }));
+    const res = await POST(pedidoCodigo({ email: "juan@example.com", lang: "es", destino: "/es/precios" }));
 
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({});
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toContain("/api/auth/email/codigo");
-    expect(JSON.parse(init.body)).toEqual({ email: "juan@gmail.com", lang: "es", destino: "/es/precios" });
+    expect(JSON.parse(init.body)).toEqual({ email: "juan@example.com", lang: "es", destino: "/es/precios" });
   });
 
   it("no manda el token de sesión: es un pedido público", async () => {
@@ -361,7 +361,7 @@ describe("POST /api/session/codigo (pedir el código por mail)", () => {
     vi.stubGlobal("fetch", fetchMock);
     store.set(SESSION_COOKIE, { value: "un-token-de-otra-sesion" });
 
-    await POST(pedidoCodigo({ email: "juan@gmail.com", lang: "es" }));
+    await POST(pedidoCodigo({ email: "juan@example.com", lang: "es" }));
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
@@ -373,7 +373,7 @@ describe("POST /api/session/codigo (pedir el código por mail)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     ipVisitante = "203.0.113.7";
-    await POST(pedidoCodigo({ email: "juan@gmail.com", lang: "es" }));
+    await POST(pedidoCodigo({ email: "juan@example.com", lang: "es" }));
 
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>)["x-forwarded-for"]).toBe("203.0.113.7");
@@ -383,7 +383,7 @@ describe("POST /api/session/codigo (pedir el código por mail)", () => {
     const { POST } = await import("@/app/api/session/codigo/route");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ error: "demasiados pedidos" }, 429)));
 
-    const res = await POST(pedidoCodigo({ email: "juan@gmail.com", lang: "es" }));
+    const res = await POST(pedidoCodigo({ email: "juan@example.com", lang: "es" }));
 
     expect(res.status).toBe(429);
   });
@@ -392,7 +392,7 @@ describe("POST /api/session/codigo (pedir el código por mail)", () => {
     const { POST } = await import("@/app/api/session/codigo/route");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ error: "login no disponible" }, 503)));
 
-    const res = await POST(pedidoCodigo({ email: "juan@gmail.com", lang: "es" }));
+    const res = await POST(pedidoCodigo({ email: "juan@example.com", lang: "es" }));
 
     expect(res.status).toBe(503);
   });
@@ -432,7 +432,7 @@ describe("POST /api/session con la sesión de otra cuenta abierta", () => {
       vi.fn().mockResolvedValue(json({ token: "token-nuevo", derechos: [], account_id: 9, destino: "" })),
     );
 
-    const res = await POST(pedidoCanje({ provider: "email", email: "gus@gmail.com", codigo: "123456" }));
+    const res = await POST(pedidoCanje({ provider: "email", email: "gus@example.com", codigo: "123456" }));
 
     expect(res.status).toBe(200);
     expect(store.get(SESSION_COOKIE)?.value).toBe("token-nuevo");

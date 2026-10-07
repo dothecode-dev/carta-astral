@@ -150,7 +150,8 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
             .select_related("account").first()
         )
         # La más antigua si hay varias (cuentas duplicadas de antes de C3).
-        verificada = (
+        # Sólo se consulta si la identidad no resolvió: es el paso 2.
+        verificada = None if identidad is not None else (
             Account.objects.filter(email__iexact=email, email_verified=True)
             .order_by("pk").first()
         )
@@ -319,6 +320,12 @@ def canjear(checkout_id: str, nonce: str) -> dict:
             }
         # Mail que ya tenía cuenta, o cuenta nueva que dejó de serlo (ver
         # `_cuenta_nueva_sin_verificar`): NUNCA sesión (RF11). Se le manda el código.
+        #
+        # Al mail de la CUENTA, no a uno guardado en la fila: por construcción
+        # de `adjudicar` coinciden —la cuenta se eligió o se creó por el mail
+        # del pago (identidad email, verificada con ese mail, o alta con él)—.
+        # Si `Account.email` llegara a ser editable, eso deja de valer y hay
+        # que guardar el mail del pago en la fila y mandar el código ahí.
         email = fila.account.email
         try:
             if not _codigo_reciente(email, destino):

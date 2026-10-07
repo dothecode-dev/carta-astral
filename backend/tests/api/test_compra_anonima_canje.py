@@ -138,16 +138,16 @@ def test_el_cuerpo_sin_campos_es_el_mismo_404(client, anonima, make_account):
 
 
 def test_cuenta_existente_nunca_abre_sesion_y_manda_codigo(client, anonima, make_account, enviados):
-    duenia = make_account(email="gustavo@gmail.com", email_verified=True)
+    duenia = make_account(email="gustavo@example.com", email_verified=True)
     _acreditada(anonima, duenia, nueva=False)
 
     r = _canje(client)
 
     assert r.status_code == 200
-    assert r.json() == {"estado": "codigo", "email": "g***@gmail.com", "destino": _destino(anonima)}
+    assert r.json() == {"estado": "codigo", "email": "g***@example.com", "destino": _destino(anonima)}
     assert not Session.objects.filter(account=duenia).exists()
-    assert CodigoAcceso.objects.filter(email="gustavo@gmail.com", destino=_destino(anonima)).exists()
-    assert enviados == ["gustavo@gmail.com"]
+    assert CodigoAcceso.objects.filter(email="gustavo@example.com", destino=_destino(anonima)).exists()
+    assert enviados == ["gustavo@example.com"]
     anonima.refresh_from_db()
     assert anonima.canjeado_at is None
 
@@ -173,7 +173,7 @@ def test_adjudicada_por_la_adjudicacion_real_tampoco_abre_sesion(client, anonima
 
 
 def test_con_nonce_malo_una_cuenta_existente_no_revela_el_mail(client, anonima, make_account, enviados):
-    _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
+    _acreditada(anonima, make_account(email="gustavo@example.com", email_verified=True), nueva=False)
 
     r = _canje(client, nonce="otro")
 
@@ -187,28 +187,28 @@ def test_recargar_la_pagina_no_manda_otro_mail(client, anonima, make_account, en
     secreto que se gaste), pero si ya hay un código vigente reciente para ese
     mail y ese destino no se pide ni se manda otro: recargar /compra no es
     otro mail."""
-    _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
+    _acreditada(anonima, make_account(email="gustavo@example.com", email_verified=True), nueva=False)
 
     assert _canje(client).json()["estado"] == "codigo"
     assert _canje(client).json() == {
-        "estado": "codigo", "email": "g***@gmail.com", "destino": _destino(anonima),
+        "estado": "codigo", "email": "g***@example.com", "destino": _destino(anonima),
     }
-    assert enviados == ["gustavo@gmail.com"]
-    assert CodigoAcceso.objects.filter(email="gustavo@gmail.com").count() == 1
+    assert enviados == ["gustavo@example.com"]
+    assert CodigoAcceso.objects.filter(email="gustavo@example.com").count() == 1
 
 
 def test_pasados_diez_minutos_si_manda_otro_codigo(client, anonima, make_account, enviados):
-    _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
+    _acreditada(anonima, make_account(email="gustavo@example.com", email_verified=True), nueva=False)
     _canje(client)
     CodigoAcceso.objects.update(creado_en=timezone.now() - timezone.timedelta(minutes=11))
 
     _canje(client)
 
-    assert enviados == ["gustavo@gmail.com", "gustavo@gmail.com"]
+    assert enviados == ["gustavo@example.com", "gustavo@example.com"]
 
 
 def test_un_codigo_usado_no_frena_el_siguiente(client, anonima, make_account, enviados):
-    _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
+    _acreditada(anonima, make_account(email="gustavo@example.com", email_verified=True), nueva=False)
     _canje(client)
     CodigoAcceso.objects.update(usado_en=timezone.now())
 
@@ -219,8 +219,8 @@ def test_un_codigo_usado_no_frena_el_siguiente(client, anonima, make_account, en
 
 def test_con_el_cupo_de_codigos_gastado_no_reenvia(client, anonima, make_account, enviados, settings):
     settings.CODIGO_PEDIDOS_HORA = 1
-    _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
-    codigos_acceso.pedir("gustavo@gmail.com")
+    _acreditada(anonima, make_account(email="gustavo@example.com", email_verified=True), nueva=False)
+    codigos_acceso.pedir("gustavo@example.com")
 
     r = _canje(client)
 
@@ -233,7 +233,7 @@ def test_si_el_mail_no_sale_se_loguea_enmascarado(client, anonima, make_account,
         raise notificaciones.EnvioFallido("resend caído")
 
     monkeypatch.setattr(notificaciones, "enviar_codigo", falla)
-    _acreditada(anonima, make_account(email="gustavo@gmail.com", email_verified=True), nueva=False)
+    _acreditada(anonima, make_account(email="gustavo@example.com", email_verified=True), nueva=False)
 
     with caplog.at_level(logging.ERROR, logger="api.compra_anonima"):
         r = _canje(client)
@@ -242,8 +242,8 @@ def test_si_el_mail_no_sale_se_loguea_enmascarado(client, anonima, make_account,
     errores = [rec for rec in caplog.records if rec.levelno == logging.ERROR]
     assert errores, "un envío fallido no puede pasar en silencio"
     texto = " ".join(rec.getMessage() for rec in errores)
-    assert "g***@gmail.com" in texto
-    assert "gustavo@gmail.com" not in texto
+    assert "g***@example.com" in texto
+    assert "gustavo@example.com" not in texto
 
 
 # --- RF13: todavía no acreditada ---------------------------------------------

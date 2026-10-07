@@ -23,6 +23,7 @@ from api.models import (
     Derecho,
     Interpretation,
     Movimiento,
+    PasarelaCheckout,
 )
 
 
@@ -57,7 +58,10 @@ def admin_montado(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "modelo", [Account, Chart, Interpretation, CreditTransaction, Derecho, Movimiento, CuponUso],
+    "modelo", [
+        Account, Chart, Interpretation, CreditTransaction, Derecho, Movimiento, CuponUso,
+        PasarelaCheckout,
+    ],
 )
 def test_ningun_modelo_se_puede_crear_editar_ni_borrar(modelo):
     """Las mutaciones van por management command, no por el panel.
@@ -127,6 +131,31 @@ def test_los_derechos_se_pueden_buscar_por_producto(admin_montado):
 
     assert r.status_code == 200
     assert "informe_natal" in r.content.decode()
+
+
+@pytest.mark.django_db
+@sin_manifiesto
+def test_una_compra_se_encuentra_por_el_numero_abreviado_de_la_web(admin_montado):
+    """Soporte recibe «mi número de compra es …» con los últimos 10
+    caracteres del checkout (lo que muestra `CanjeCompra`): la búsqueda por
+    sufijo tiene que encontrar la fila, y no las demás."""
+    checkout = "cs_test_a1Sh1ZbUWea0ALlpcnM7qsHid0vYGjWtPNhtxZOwIt1"
+    fila = PasarelaCheckout.objects.create(
+        checkout_id=checkout, codigo_producto="informe_natal", anonimo=True,
+    )
+    PasarelaCheckout.objects.create(checkout_id="cs_test_otra_compra", codigo_producto="informe_natal")
+    staff = User.objects.create_superuser("staff5", "s5@x.com", "pw-de-test-12345")
+    c = Client()
+    c.force_login(staff)
+
+    r = c.get("/panel-test/api/pasarelacheckout/", {"q": checkout[-10:]})
+
+    assert r.status_code == 200
+    cuerpo = r.content.decode()
+    assert checkout in cuerpo
+    assert "cs_test_otra_compra" not in cuerpo
+    # La ficha se dibuja (un campo mal declarado explota al renderizar).
+    assert c.get(f"/panel-test/api/pasarelacheckout/{fila.pk}/change/").status_code == 200
 
 
 def test_la_ficha_de_cuenta_muestra_la_deuda():

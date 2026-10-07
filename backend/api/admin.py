@@ -35,6 +35,7 @@ from api import canje, cupones, stripe_client
 from api.catalogo import CATALOGO, a_la_venta, producto
 from api.models import (
     Account, Chart, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, Movimiento,
+    PasarelaCheckout,
 )
 
 
@@ -186,6 +187,27 @@ class MovimientoAdmin(SoloLectura):
     list_filter = ("tipo", "origen", "codigo_producto")
     search_fields = ("external_id", "account__id", "account__email")
     readonly_fields = list_display + ("chart", "note")
+
+
+@admin.register(PasarelaCheckout)
+class PasarelaCheckoutAdmin(SoloLectura):
+    """Cada checkout abierto, con o sin cuenta. Para contestar «pagué y no
+    puedo entrar»: la web le muestra a quien pagó sin cuenta los últimos 10
+    caracteres del checkout como número de compra (`CanjeCompra`), y la
+    búsqueda por `checkout_id` es `icontains`, así que ese sufijo la
+    encuentra. Sin el nonce: aunque está hasheado, no le sirve a soporte."""
+
+    list_display = (
+        "checkout_id", "account", "codigo_producto", "anonimo", "cuenta_nueva",
+        "acreditado_at", "canjeado_at", "vencido_at", "saldo_deuda", "created_at",
+    )
+    list_filter = ("anonimo", "codigo_producto")
+    search_fields = ("checkout_id", "account__email")
+    readonly_fields = list_display + (
+        "chart", "locale", "cupon", "precio_centavos", "descuento_centavos",
+        "reembolsado_centavos", "payment_intent",
+    )
+    fields = readonly_fields
 
 
 # GeoName y GeoNameToken NO se registran: son millones de filas de un dataset

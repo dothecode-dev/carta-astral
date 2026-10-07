@@ -24,14 +24,14 @@ from api.permissions import HasAccount
 logger = logging.getLogger(__name__)
 
 
-def _idioma(request) -> str:
+def idioma_pedido(request) -> str:
     """El idioma que navega la persona, por lista blanca: viene del navegador
     y termina en una URL y en la base, así que no se guarda tal cual."""
     pedido = request.data.get("locale") or stripe_client.LOCALE_POR_DEFECTO
     return pedido if pedido in stripe_client.LOCALES else stripe_client.LOCALE_POR_DEFECTO
 
 
-def _respuesta_de_stripe(exc, codigo) -> Response:
+def respuesta_de_stripe(exc, codigo) -> Response:
     """Qué le decimos a quien compra cuando `crear_checkout` falla."""
     if isinstance(exc, stripe_client.StripeNoConfigurado):
         # Falta la clave o el precio en Stripe: problema de configuración
@@ -94,7 +94,7 @@ class CheckoutView(APIView):
         # qué idioma se escribe el informe cuando el webhook lo arranque. Se valida contra la lista
         # blanca acá —no se concatena ni se guarda tal cual— porque viene del
         # navegador y termina en una URL y en la base.
-        idioma = _idioma(request)
+        idioma = idioma_pedido(request)
 
         cupon = None
         codigo_cupon = request.data.get("cupon")
@@ -120,7 +120,7 @@ class CheckoutView(APIView):
             logger.warning("checkout rechazado para %r: %s", codigo, exc)
             return Response({"error": "producto inválido"}, status=status.HTTP_400_BAD_REQUEST)
         except (stripe_client.StripeNoConfigurado, stripe_client.StripeError) as exc:
-            return _respuesta_de_stripe(exc, codigo)
+            return respuesta_de_stripe(exc, codigo)
 
         # Después del éxito y no antes: una fila huérfana dejaría que el webhook
         # de otra orden resolviera contra ella. El descuento queda congelado
