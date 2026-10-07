@@ -6,6 +6,12 @@ revisión de `puertas-de-acceso`) una o más cuentas verificadas -> linkear el
 sub a la más antigua de ellas; (3) si no matchea ninguna, crear cuenta nueva
 descontando el free-tier ya consumido segun el tombstone del sub.
 
+Entre (2) y (3), una excepción acotada («pagar es entrar», revisión final):
+con el mail verificado por el proveedor y sin cuenta verificada que lo tenga,
+se enlaza la cuenta SIN verificar que creó una compra sin cuenta con ese mail
+(`_cuenta_de_compra`), y entrar así la verifica y cierra sus otras sesiones
+(`probar_mail`, el mismo criterio que el login por código, RF17).
+
 El match es case-insensitive porque el email no llega normalizado desde el
 mismo lugar en las tres puertas: `codigos_acceso.py` lo normaliza al guardar
 el `CodigoAcceso`, pero un `id_token` de Google o Apple trae el casing que el
@@ -22,7 +28,7 @@ from django.db import IntegrityError, transaction
 
 from api.canje import otorgar
 from api.identity import normalizar, sub_hash
-from api.models import Account, ProviderIdentity, SubTombstone
+from api.models import Account, PasarelaCheckout, ProviderIdentity, Session, SubTombstone
 from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
@@ -47,6 +53,78 @@ def otorgar_bienvenida(account, cantidad: int) -> None:
         origen="regalo", external_id=f"bienvenida:{account.pk}",
         note="regalo de bienvenida",
     )
+
+
+def probar_mail(account: Account) -> None:
+    """Alguien acaba de probar que el mail de una cuenta sin verificar es suyo
+    (RF17): la cuenta queda verificada y se cierran TODAS sus sesiones.
+
+    La cuenta la creó una compra sin cuenta con un mail que nadie había
+    probado, y quien pagó pudo usar el mail de otra persona: su navegador
+    entró por el nonce. Cuando la dueña real del mail aparece —con el código
+    o con un proveedor que verificó el mail—, el pagador no puede seguir
+    viendo los datos de ella. Quien llama crea la sesión nueva DESPUÉS, así
+    que «todas» son las demás.
+
+    Lo comparten el login por código (`sessions.py`) y el enlace por
+    proveedor (`_enlazar_cuenta_de_compra`): si el criterio cambia, cambia
+    para las dos puertas.
+    """
+    account.email_verified = True
+    account.save(update_fields=["email_verified"])
+    Session.objects.filter(account=account).delete()
+
+
+def _cuenta_de_compra(email: str) -> Account | None:
+    """La cuenta sin verificar que nació de una compra sin cuenta con este
+    mail, si existe. Tiene que cumplir TODO:
+
+    - `email` igual (sin distinguir mayúsculas) y `email_verified=False`;
+    - es la dueña de la identidad `(email, <mail normalizado>)`: la puerta por
+      la que entra el código de ese mail;
+    - un checkout anónimo la CREÓ (`anonimo=True, cuenta_nueva=True`).
+
+    Por la unicidad de la identidad hay a lo sumo una. Cualquier otra cuenta
+    sin verificar sigue sin enlazarse: puede ser la de alguien que entró con
+    Google usando un mail ajeno sin verificar (pre-account-hijacking).
+    """
+    return (
+        Account.objects.filter(
+            email__iexact=email, email_verified=False,
+            identities__provider="email", identities__sub=email,
+        )
+        .filter(pk__in=PasarelaCheckout.objects.filter(
+            anonimo=True, cuenta_nueva=True,
+        ).values("account_id"))
+        .order_by("pk").first()
+    )
+
+
+def _enlazar_cuenta_de_compra(vid: VerifiedIdentity, cuenta: Account) -> Account:
+    """Enlaza el sub del proveedor a la cuenta que creó una compra, la
+    verifica y cierra sus otras sesiones, en una sola transacción.
+
+    La cuenta se relee con `select_for_update`: el canje del nonce
+    (`compra_anonima._cuenta_nueva_sin_verificar`) la lockea para decidir si
+    abre sesión, así que o el canje termina antes (y su sesión cae acá) o
+    espera y la ve verificada. Si el sub se enlazó en paralelo, se devuelve
+    la cuenta ganadora sin tocar nada más.
+    """
+    with transaction.atomic():
+        acc = Account.objects.select_for_update().get(pk=cuenta.pk)
+        try:
+            with transaction.atomic():
+                ProviderIdentity.objects.create(provider=vid.provider, sub=vid.sub, account=acc)
+        except IntegrityError:  # carrera: el sub se creó en paralelo
+            logger.info("race linking %s sub to purchase account; re-reading", vid.provider)
+            return ProviderIdentity.objects.get(provider=vid.provider, sub=vid.sub).account
+        if not acc.email_verified:
+            probar_mail(acc)
+    logger.info(
+        "%s enlazado a la cuenta %s, creada por una compra sin cuenta: verificada",
+        vid.provider, acc.pk,
+    )
+    return acc
 
 
 def resolve_account(vid: VerifiedIdentity) -> Account:
@@ -101,6 +179,13 @@ def resolver_cuenta(vid: VerifiedIdentity) -> tuple[Account, bool]:
                     provider=vid.provider, sub=vid.sub,
                 ).account, False
             return account, False
+
+        # Sólo si no hay una verificada (que manda, arriba) y sólo con el mail
+        # verificado por el proveedor: con `email_verified=False` esto nunca
+        # corre.
+        de_compra = _cuenta_de_compra(normalizado)
+        if de_compra is not None:
+            return _enlazar_cuenta_de_compra(vid, de_compra), False
 
     return _create_account(vid)
 

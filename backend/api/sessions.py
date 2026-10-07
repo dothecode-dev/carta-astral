@@ -17,7 +17,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from api import codigos_acceso, notificaciones
-from api.accounts import resolve_account
+from api.accounts import probar_mail, resolve_account
 from api.auth import create_session
 from api.canje import derechos_de
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
@@ -130,16 +130,11 @@ class CanjearCodigoView(APIView):
             account = resolve_account(vid)
             if not account.email_verified and normalizar(account.email or "") == fila.email:
                 # La cuenta la creó una compra sin cuenta con un mail que
-                # nadie había probado (RF17): entrar con el código lo prueba.
-                # Y quien pagó pudo usar el mail de otra persona: su navegador
-                # entró por el nonce, así que cuando la dueña real del mail
-                # aparece, todas las sesiones anteriores se cierran — el
-                # pagador no puede seguir viendo los datos de ella. Una cuenta
-                # ya verificada no pasa por acá: entrar desde otro
+                # nadie había probado (RF17): entrar con el código lo prueba,
+                # y se cierran las sesiones anteriores (ver `probar_mail`).
+                # Una cuenta ya verificada no pasa por acá: entrar desde otro
                 # dispositivo no echa a nadie.
-                account.email_verified = True
-                account.save(update_fields=["email_verified"])
-                Session.objects.filter(account=account).delete()
+                probar_mail(account)
             resultado["account"] = account
             resultado["token"] = create_session(account)
 
