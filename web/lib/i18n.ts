@@ -712,6 +712,7 @@ export type Dict = {
     /** Cualquier cupón en el pago sin cuenta (`requiere_cuenta`): sólo con cuenta. */
     comprarRequiereCuenta: string;
     previewPrivacidad: string;
+    previewPrivacidadSinCompra: string;
     previewRetomando: string;
     /** Copy indexable: sin esto la página es un formulario vacío para Google. */
     seoTitle: string;
@@ -973,7 +974,10 @@ const es: Dict = {
     legalPrivacidad: "política de privacidad",
     legalDespues: ".",
     comprarRequiereCuenta: "Para usar este cupón, entrá con tu mail.",
-    previewPrivacidad: "No guardamos nada de esto. Si querés conservarla, hace falta una cuenta.",
+    previewPrivacidad:
+      "No guardamos nada de esto mientras sólo la mirás. Si la comprás o creás una cuenta, la carta queda guardada.",
+    previewPrivacidadSinCompra:
+      "No guardamos nada de esto mientras sólo la mirás. Si creás una cuenta, la carta queda guardada.",
     previewRetomando: "Guardando tu carta…",
     seoTitle: "Calculá tu carta natal gratis",
     seoDescription:
@@ -1359,7 +1363,10 @@ const en: Dict = {
     legalPrivacidad: "privacy policy",
     legalDespues: ".",
     comprarRequiereCuenta: "To use this coupon, sign in with your email.",
-    previewPrivacidad: "We're not storing any of this. To keep the chart you'll need an account.",
+    previewPrivacidad:
+      "We don't store any of this while you're just looking at it. If you buy it or create an account, the chart is saved.",
+    previewPrivacidadSinCompra:
+      "We don't store any of this while you're just looking at it. If you create an account, the chart is saved.",
     previewRetomando: "Saving your chart…",
     seoTitle: "Calculate your birth chart, free",
     seoDescription:
@@ -1745,7 +1752,10 @@ const pt: Dict = {
     legalPrivacidad: "política de privacidade",
     legalDespues: ".",
     comprarRequiereCuenta: "Para usar este cupom, entre com o seu e-mail.",
-    previewPrivacidad: "Não guardamos nada disso. Para conservar o mapa é preciso uma conta.",
+    previewPrivacidad:
+      "Não guardamos nada disso enquanto você só olha. Se você comprar ou criar uma conta, o mapa fica guardado.",
+    previewPrivacidadSinCompra:
+      "Não guardamos nada disso enquanto você só olha. Se você criar uma conta, o mapa fica guardado.",
     previewRetomando: "Salvando seu mapa…",
     seoTitle: "Calcule seu mapa natal grátis",
     seoDescription:

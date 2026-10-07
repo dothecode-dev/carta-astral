@@ -89,7 +89,7 @@ export function CartaPreview({
       <DatosCarta chart={carta} dict={dict} locale={locale} />
 
       <footer className="previewPie">
-        <p className="fieldNote">{t.previewPrivacidad}</p>
+        <p className="fieldNote">{precio ? t.previewPrivacidad : t.previewPrivacidadSinCompra}</p>
         <button type="button" className="btn btnGhost" onClick={onVolver}>
           {t.navNew}
         </button>

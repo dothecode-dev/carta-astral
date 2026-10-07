@@ -75,6 +75,32 @@ describe("botón de compra de la vista previa", () => {
     expect(onPedirLectura).not.toHaveBeenCalled();
   });
 
+  it("la nota de privacidad no promete que no se guarda nada: abrir el pago guarda la carta", () => {
+    pintar("es");
+    expect(
+      screen.getByText(
+        "No guardamos nada de esto mientras sólo la mirás. Si la comprás o creás una cuenta, la carta queda guardada.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/No guardamos nada de esto\. /)).toBeNull();
+  });
+
+  it("sin precio no hay compra que mencionar: la nota habla sólo de la cuenta", () => {
+    pintar("es", { precio: null });
+    expect(
+      screen.getByText(
+        "No guardamos nada de esto mientras sólo la mirás. Si creás una cuenta, la carta queda guardada.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it.each(LOCALES)("%s: la nota de privacidad existe y cambia con y sin precio", (locale) => {
+    const t = getDict(locale).newChart;
+    expect(t.previewPrivacidad).toBeTruthy();
+    expect(t.previewPrivacidadSinCompra).toBeTruthy();
+    expect(t.previewPrivacidad).not.toBe(t.previewPrivacidadSinCompra);
+  });
+
   it("sin precio no se muestra el botón de pago ni la nota", () => {
     pintar("es", { precio: null });
 
