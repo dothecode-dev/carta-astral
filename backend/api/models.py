@@ -21,6 +21,8 @@ class BirthData(models.Model):
     tz_name = models.CharField(max_length=64)
     datetime_utc = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Trato del lector (spec 2026-10-07-trato-lector). "" = no eligió → neutro.
+    trato = models.CharField(max_length=10, blank=True, default="")
 
 
 class Chart(models.Model):
@@ -125,6 +127,10 @@ class Interpretation(models.Model):
     # leyó la breve y después paga tiene que poder generar el completo sin
     # perder la breve.
     tier = models.CharField(max_length=6, choices=TIERS, default=TIER_LARGO)
+    # Trato del lector (spec 2026-10-07-trato-lector). "" = no eligió → neutro.
+    # Copia del de la carta al crear el informe: lo usan todas sus secciones,
+    # el cron y sus traducciones, aunque la persona lo cambie después (RF5).
+    trato = models.CharField(max_length=10, blank=True, default="")
     text = models.TextField()
     # sha256 del input del LLM (chart.data canónico + lang + prompt_version).
     # Permite reutilizar el texto entre cartas idénticas sin llamar a la API.
