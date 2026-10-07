@@ -424,6 +424,101 @@ def test_entrar_con_codigo_a_la_cuenta_creada_cierra_la_sesion_del_que_pago(clie
     assert client.get("/api/account/", HTTP_AUTHORIZATION=f"Bearer {token_duenia}").status_code == 200
 
 
+#: La segunda compra sin cuenta con el mismo mail (la de la dueña real).
+SESSION_VICTIMA = "cs_test_victima"
+
+
+def _segunda_compra(make_chart, email):
+    """Otra compra anónima con `email`, adjudicada: la de la dueña del mail."""
+    from api.models import PasarelaCheckout
+
+    fila = PasarelaCheckout.objects.create(
+        checkout_id=SESSION_VICTIMA, account=None, codigo_producto="informe_natal",
+        chart=make_chart(account=None), anonimo=True, nonce_hash=hash_token("otro-nonce"),
+        precio_centavos=2900,
+    )
+    cuenta = compra_anonima.adjudicar(SESSION_VICTIMA, email)
+    fila.refresh_from_db()
+    return fila, cuenta
+
+
+def _primera_compra_del_atacante(anonima, email):
+    cuenta = compra_anonima.adjudicar(SESSION_ANONIMA, email)
+    anonima.refresh_from_db()
+    anonima.acreditado_at = timezone.now()
+    anonima.nonce_hash = hash_token(NONCE)
+    anonima.save()
+    return cuenta
+
+
+def test_una_segunda_compra_sobre_la_cuenta_sin_verificar_cierra_las_sesiones(client, anonima, make_chart):
+    """Review 07-10, punto 1 (a). El atacante paga sin cuenta con el mail de
+    la víctima y entra por el nonce: cuenta A sin verificar con la identidad
+    email. Cuando la víctima compra sin cuenta con su mail, la compra va a A
+    (es donde ella va a entrar con el código), pero el atacante no puede
+    seguir mirando: sus sesiones en A se cierran."""
+    cuenta = _primera_compra_del_atacante(anonima, "victima2@mail.com")
+    token_atacante = _canje(client).json()["token"]
+    assert client.get("/api/account/", HTTP_AUTHORIZATION=f"Bearer {token_atacante}").status_code == 200
+
+    fila, adjudicada = _segunda_compra(make_chart, "victima2@mail.com")
+
+    assert adjudicada == cuenta and fila.cuenta_nueva is False
+    assert not Session.objects.filter(account=cuenta).exists()
+    assert client.get("/api/account/", HTTP_AUTHORIZATION=f"Bearer {token_atacante}").status_code == 401
+    cuenta.refresh_from_db()
+    assert cuenta.email_verified is False  # nadie probó el mail en la adjudicación
+
+
+def test_un_nonce_sin_canjear_de_la_primera_compra_ya_no_abre_sesion(client, anonima, make_chart, enviados):
+    """Review 07-10, punto 1 (b). Variante: el atacante guarda el nonce sin
+    canjear y lo canjea DESPUÉS de la compra de la víctima (dentro de las 24
+    h). La cuenta sigue sin verificar, así que `_cuenta_nueva_sin_verificar`
+    sola le abriría sesión: la adjudicación tiene que haber gastado ese nonce."""
+    cuenta = _primera_compra_del_atacante(anonima, "victima3@mail.com")
+    _segunda_compra(make_chart, "victima3@mail.com")
+
+    r = _canje(client)
+
+    assert r.status_code in (200, 404)
+    assert "token" not in r.json()
+    if r.status_code == 200:
+        assert r.json()["estado"] == "codigo"
+    assert not Session.objects.filter(account=cuenta).exists()
+
+
+def test_la_duenia_entra_con_codigo_y_ve_su_carta(client, anonima, make_chart, enviados):
+    """Review 07-10, punto 1 (c): la compra de la dueña quedó en la cuenta A;
+    entrando con el código cae ahí, la cuenta se verifica y ve su carta."""
+    cuenta = _primera_compra_del_atacante(anonima, "victima4@mail.com")
+    _canje(client)
+    fila, _ = _segunda_compra(make_chart, "victima4@mail.com")
+
+    r = _entrar_con_codigo(client, "victima4@mail.com")
+
+    assert r.status_code == 200 and r.json()["account_id"] == cuenta.pk
+    cuenta.refresh_from_db()
+    assert cuenta.email_verified is True
+    token = r.json()["token"]
+    carta = client.get(f"/api/charts/{fila.chart.uuid}/", HTTP_AUTHORIZATION=f"Bearer {token}")
+    assert carta.status_code == 200
+
+
+def test_una_compra_sobre_una_cuenta_verificada_no_cierra_sus_sesiones(client, anonima, make_account):
+    """Review 07-10, punto 1 (d): con el mail verificado el comportamiento no
+    cambia; la dueña probó su mail y sus sesiones son suyas."""
+    from api.auth import create_session
+
+    cuenta = make_account(email="verif@mail.com", email_verified=True)
+    ProviderIdentity.objects.create(provider="email", sub="verif@mail.com", account=cuenta)
+    token = create_session(cuenta)
+
+    assert compra_anonima.adjudicar(SESSION_ANONIMA, "verif@mail.com") == cuenta
+
+    assert Session.objects.filter(token_hash=hash_token(token)).exists()
+    assert client.get("/api/account/", HTTP_AUTHORIZATION=f"Bearer {token}").status_code == 200
+
+
 def test_entrar_con_codigo_a_una_cuenta_verificada_no_cierra_las_otras_sesiones(client, make_account):
     """El login normal desde un segundo dispositivo no echa al primero."""
     from api.auth import create_session

@@ -13,7 +13,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from api import codigos_acceso, cupones, notificaciones, stripe_client
-from api.accounts import resolver_cuenta
+from api.accounts import cerrar_sesiones, resolver_cuenta
 from api.auth import create_session
 from api.chart_service import create_chart
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
@@ -102,6 +102,42 @@ def _asegurar_identidad_email(cuenta: Account, email: str) -> None:
         )
 
 
+def _cerrar_puertas_sin_probar(fila: PasarelaCheckout, cuenta: Account) -> None:
+    """Una compra va a una cuenta SIN verificar que no creó: nadie que haya
+    entrado antes por un nonce puede ver lo que llega ahora (review 07-10).
+
+    Cierra TODAS las sesiones de la cuenta y gasta (`canjeado_at`) los nonces
+    todavía sin canjear de las compras que la crearon. No marca el mail como
+    verificado: en la adjudicación nadie probó nada; eso lo hace entrar con
+    el código (`accounts.probar_mail`).
+
+    Orden de locks: fila propia (ya tomada por `adjudicar`) → filas
+    pendientes de la cuenta, por pk → cuenta. Las filas van ANTES que la
+    cuenta porque `canjear` toma su fila y después la cuenta: al revés, un
+    canje en curso y esta adjudicación se esperarían mutuamente. Así, o el
+    canje termina primero (y su sesión cae acá) o espera y encuentra el nonce
+    gastado. Con la cuenta ya verificada no hay nada que cerrar: el mail
+    verificado no vuelve atrás, así que esa lectura sin lock alcanza.
+    """
+    if cuenta.email_verified:
+        return
+    pendientes = list(
+        PasarelaCheckout.objects.select_for_update()
+        .filter(account=cuenta, anonimo=True, cuenta_nueva=True, canjeado_at__isnull=True)
+        .exclude(pk=fila.pk).order_by("pk").values_list("pk", flat=True)
+    )
+    acc = Account.objects.select_for_update().get(pk=cuenta.pk)
+    if acc.email_verified:  # un login por código la verificó mientras tanto
+        return
+    cerradas = cerrar_sesiones(acc)
+    PasarelaCheckout.objects.filter(pk__in=pendientes).update(canjeado_at=timezone.now())
+    logger.warning(
+        "compra anónima %s cae en la cuenta %s sin verificar que no creó: "
+        "%s sesiones cerradas y %s nonces gastados",
+        fila.checkout_id, acc.pk, cerradas, len(pendientes),
+    )
+
+
 def adjudicar(checkout_id: str, email: str) -> Account | None:
     """La cuenta de una compra anónima pagada, por el mail del pago (RF5).
 
@@ -109,7 +145,14 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
 
     1. `ProviderIdentity(email, mail)` → esa cuenta. Es la puerta por la que
        entra quien prueba el mail con el código, así que la compra va donde
-       esa persona la va a ver.
+       esa persona la va a ver. Esa cuenta puede estar SIN verificar: la creó
+       una compra anterior con el mismo mail (paso 3), y quien pagó aquella
+       pudo usar un mail ajeno y tener una sesión abierta por su nonce. La
+       compra igual va ahí —es donde la dueña va a entrar con el código—,
+       pero antes se cierran todas las sesiones de la cuenta y se gastan los
+       nonces sin canjear de las compras que la crearon
+       (`_cerrar_puertas_sin_probar`): lo que llega ahora sólo lo ve quien
+       pruebe el mail. La cuenta sigue sin verificar.
     2. Una cuenta con `email__iexact=mail` y `email_verified=True` (la más
        antigua) → esa cuenta, y se le agrega la identidad email para que el
        login por código caiga ahí (sin ella `resolve_account` sí la enlazaría,
@@ -117,8 +160,8 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
     3. Si no → cuenta nueva por `resolver_cuenta`, el mismo camino que el alta
        por mail de hoy (regalo de bienvenida descontado por el tombstone).
 
-    Una cuenta con el mail SIN verificar y sin identidad email nunca recibe
-    nada: es pre-account-hijacking. Alguien puede entrar con Google usando un
+    Una cuenta con el mail SIN verificar y sin la identidad email de ese mail
+    nunca recibe nada: es pre-account-hijacking. Alguien puede entrar con Google usando un
     mail ajeno que Google no verificó (`sso.py` lo acepta) y quedar con una
     cuenta a nombre de ese mail; si la compra de la dueña real —y su carta, y
     la identidad email— fueran ahí, al entrar por código caería en la cuenta
@@ -130,7 +173,9 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
     quien CREÓ la cuenta (`resolver_cuenta`), no de que los lookups no hayan
     encontrado nada: dos compras distintas con el mismo mail nuevo a la vez
     (cada una con el lock de SU fila; la carrera la decide la unicidad de la
-    identidad) devuelven, a la que pierde, una cuenta que no creó.
+    identidad) devuelven, a la que pierde, una cuenta que no creó. Por eso el
+    cierre de sesiones y nonces corre para TODA cuenta que no salió `nueva`,
+    no sólo en el paso 1: esa carrera cae en la misma cuenta sin verificar.
 
     Con `select_for_update` sobre la fila: dos entregas del mismo evento (o
     `completed` + `async_payment_succeeded`) se serializan acá y la segunda
@@ -167,6 +212,8 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
             cuenta, nueva = resolver_cuenta(VerifiedIdentity(
                 provider="email", sub=email, email=email, email_verified=False,
             ))
+        if not nueva:
+            _cerrar_puertas_sin_probar(fila, cuenta)
         fila.account, fila.cuenta_nueva = cuenta, nueva
         fila.save(update_fields=["account", "cuenta_nueva"])
         if fila.chart_id is not None:

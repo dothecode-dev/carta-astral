@@ -72,7 +72,19 @@ def probar_mail(account: Account) -> None:
     """
     account.email_verified = True
     account.save(update_fields=["email_verified"])
-    Session.objects.filter(account=account).delete()
+    cerrar_sesiones(account)
+
+
+def cerrar_sesiones(account: Account) -> int:
+    """Borra TODAS las sesiones de la cuenta; devuelve cuántas.
+
+    Lo usan `probar_mail` (la dueña probó el mail) y
+    `compra_anonima.adjudicar` (una compra de un mail que nadie probó cae en
+    una cuenta sin verificar que no creó): en los dos casos, quien haya
+    entrado antes por un nonce no puede seguir viendo lo que llega después.
+    """
+    borradas, _ = Session.objects.filter(account=account).delete()
+    return borradas
 
 
 def _cuenta_de_compra(email: str) -> Account | None:
