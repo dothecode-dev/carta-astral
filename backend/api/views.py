@@ -337,15 +337,18 @@ class InterpretationView(APIView):
             # (reintentar, o consultar `/estado` para seguir el progreso);
             # un 200 vacío no.
             return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(
-            {
-                "text": interp.text,
-                "lang": interp.lang,
-                "prompt_version": interp.prompt_version,
-                "disclaimer": DISCLAIMERS[interp.lang],
-                "created_at": interp.created_at.isoformat(),
-            }
-        )
+        cuerpo = {
+            "text": interp.text,
+            "lang": interp.lang,
+            "prompt_version": interp.prompt_version,
+            "disclaimer": DISCLAIMERS[interp.lang],
+            "created_at": interp.created_at.isoformat(),
+        }
+        if tier == TIER_LARGO:
+            # Para el índice (spec 2026-10-07 RF8): las secciones con su título
+            # del catálogo. `text` se queda para el PDF y la app.
+            cuerpo["secciones"] = informe_service.secciones_escritas(interp, chart)
+        return Response(cuerpo)
 
     def post(self, request, uuid):
         """Arranca la generación pedida (la lectura breve o el informe de

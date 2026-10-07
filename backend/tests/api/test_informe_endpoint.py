@@ -574,7 +574,8 @@ def test_las_secciones_escritas_llegan_con_su_texto(client_autenticado, chart, i
     assert r.data["completa"] is False
     assert r.data["total"] == 8
     assert [s["slug"] for s in r.data["secciones"]] == ["firma"]
-    assert r.data["secciones"][0]["texto"].startswith("## Tu firma")
+    # El título lo pone el catálogo: el «## Tu firma» del modelo se quita al leer.
+    assert r.data["secciones"][0]["texto"] == "Hola."
     assert r.data["secciones"][0]["titulo"]
 
 
@@ -605,3 +606,56 @@ def test_las_secciones_sin_tier_es_400(client_autenticado, chart):
 def test_las_secciones_de_otra_cuenta_es_404(account_client, chart):
     r = account_client.get(f"/api/charts/{chart.uuid}/interpretation/secciones/?lang=es&tier=largo")
     assert r.status_code == 404
+
+
+# El informe largo entrega sus secciones para el índice (spec 2026-10-07, RF8-RF9).
+
+
+def _completar(interpretacion, secciones):
+    from api.models import InterpretationSection
+
+    for orden, (slug, texto) in enumerate(secciones):
+        InterpretationSection.objects.create(interpretation=interpretacion, slug=slug, orden=orden, texto=texto)
+    interpretacion.tier = "largo"
+    interpretacion.completa = True
+    interpretacion.text = "\n\n".join(t for _, t in secciones)
+    interpretacion.save()
+
+
+def test_el_informe_largo_trae_sus_secciones(client_autenticado, chart, interpretacion):
+    _completar(interpretacion, [("firma", "Hola."), ("mente", "Chau.")])
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/?lang=es&tier=largo")
+    assert r.status_code == 200
+    assert [s["slug"] for s in r.data["secciones"]] == ["firma", "mente"]
+    assert r.data["secciones"][0]["titulo"] == "Tu firma"
+    assert r.data["text"] == "Hola.\n\nChau."  # `text` no cambia: lo usan el PDF y la app
+
+
+def test_la_breve_no_trae_secciones(client_autenticado, chart, interpretacion):
+    interpretacion.tier = "corto"
+    interpretacion.completa = True
+    interpretacion.text = "Breve."
+    interpretacion.save()
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/?lang=es&tier=corto")
+    assert r.status_code == 200
+    assert "secciones" not in r.data
+
+
+def test_se_quita_el_encabezado_que_repite_el_titulo(client_autenticado, chart, interpretacion):
+    _completar(interpretacion, [
+        ("firma", "## TU FIRMA\n\nPrimer párrafo."),
+        ("mente", "## La mente en Tauro\n\nOtro."),
+        ("afectos", "Sin encabezado."),
+    ])
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/?lang=es&tier=largo")
+    textos = {s["slug"]: s["texto"] for s in r.data["secciones"]}
+    assert textos["firma"] == "Primer párrafo."
+    assert textos["mente"].startswith("## La mente en Tauro")  # subtítulo propio: se queda
+    assert textos["afectos"] == "Sin encabezado."
+
+
+def test_un_informe_viejo_se_muestra_igual_con_sus_secciones(client_autenticado, chart, interpretacion):
+    # Escrito antes de este cambio: mismas filas en la base, sin nada nuevo.
+    _completar(interpretacion, [("firma", "# Tu firma\n\nViejo.")])
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/?lang=es&tier=largo")
+    assert r.data["secciones"][0]["texto"] == "Viejo."

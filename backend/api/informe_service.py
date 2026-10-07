@@ -8,6 +8,7 @@ el mismo párrafo.
 """
 
 import logging
+import unicodedata
 
 from django.db import IntegrityError, transaction
 
@@ -192,6 +193,23 @@ def indice_informe(chart, lang: str) -> list[dict]:
     ]
 
 
+def _normalizar(texto: str) -> str:
+    sin_acentos = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return "".join(c for c in sin_acentos.lower() if c.isalnum())
+
+
+def _sin_titulo(texto: str, titulo: str) -> str:
+    """Quita el encabezado inicial SÓLO si repite el título de la sección.
+
+    El título lo pone el catálogo (la web lo pinta como `h2` con ancla para el
+    índice). Un subtítulo propio del modelo es contenido y se queda. Se limpia
+    al leer, no al guardar: cubre también los informes ya escritos."""
+    cabeza, _, resto = texto.lstrip().partition("\n")
+    if cabeza.startswith("#") and _normalizar(cabeza.lstrip("#")) == _normalizar(titulo):
+        return resto.lstrip("\n")
+    return texto
+
+
 def secciones_escritas(interpretacion, chart) -> list[dict]:
     """Las secciones que ya están, con su texto entero, para leerlas mientras
     se escriben las demás. Son las mismas filas que después forman `text`.
@@ -204,7 +222,11 @@ def secciones_escritas(interpretacion, chart) -> list[dict]:
         for s in secciones_aplicables(chart, interpretacion.tier)
     }
     return [
-        {"slug": s.slug, "titulo": titulos.get(s.slug, s.slug), "texto": s.texto}
+        {
+            "slug": s.slug,
+            "titulo": titulos.get(s.slug, s.slug),
+            "texto": _sin_titulo(s.texto, titulos.get(s.slug, s.slug)),
+        }
         for s in interpretacion.secciones.all()
     ]
 
