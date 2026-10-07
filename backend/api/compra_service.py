@@ -6,8 +6,10 @@ una compra suelta trae una carta atada, y duplicar cuarenta líneas de lógica d
 plata es la forma más segura de que un día se arreglen en un archivo y no en el
 otro.
 
-No captura errores a propósito: cada pasarela decide qué hacer con un fallo, y
-la decisión es distinta. Polar deshabilita el endpoint tras diez entregas
+No captura errores a propósito —la única excepción es `SinDerecho` cuando la
+unidad comprada saldó una deuda de la cuenta (RF5b), y sólo si el rastro lo
+confirma: cualquier otra falta de derecho sube—: cada pasarela decide qué hacer
+con un fallo, y la decisión es distinta. Polar deshabilita el endpoint tras diez entregas
 fallidas, así que allá se loguea y se responde 2xx; Stripe reintenta tres días
 sin castigar el endpoint, así que allá conviene el 5xx.
 """
@@ -16,6 +18,7 @@ import logging
 
 from api import catalogo, interpretation_service, mantenimiento
 from api.canje import SinDerecho
+from api.models import Movimiento
 from interpret.prompts import TIER_LARGO
 
 logger = logging.getLogger(__name__)
@@ -53,6 +56,10 @@ def arrancar_informe(cuenta, fila) -> None:
             fila.chart, fila.locale, cuenta, TIER_LARGO,
         )
     except SinDerecho:
+        if not _saldo_deuda(cuenta, fila):
+            # Cobré y no entregué por una causa que no entendemos: que suba
+            # (el webhook pide reintento y llega a Sentry).
+            raise
         # La unidad comprada saldó una deuda de la cuenta y no quedó derecho
         # con qué escribir el informe (RF5b; ver `aplicar_compra`). La compra ya
         # está acreditada: reintentar no lo arregla y un 5xx dejaría el pago en
@@ -73,3 +80,24 @@ def arrancar_informe(cuenta, fila) -> None:
         )
         return
     interpretation_service.arrancar_en_hilo(interpretacion, fila.chart, cuenta)
+
+
+def _saldo_deuda(cuenta, fila) -> bool:
+    """¿Se explica la falta de derecho porque la unidad comprada saldó deuda?
+
+    Sin estado propio, por el rastro: hay un otorgamiento de ese producto para
+    la cuenta y NADA movió sus derechos después (ni consumo, devolución ni
+    revocación). Si sobra un otorgamiento sin saldo y nadie lo gastó, la unidad
+    fue a la deuda. Si falta el otorgamiento o algo lo gastó, es otra cosa.
+    """
+    otorgamiento = (
+        Movimiento.objects
+        .filter(account=cuenta, codigo_producto=fila.codigo_producto, tipo="otorgamiento")
+        .order_by("-created_at", "-pk").first()
+    )
+    if otorgamiento is None:
+        return False
+    return not Movimiento.objects.filter(
+        account=cuenta, tipo__in=("consumo", "devolucion", "revocacion"),
+        created_at__gte=otorgamiento.created_at,
+    ).exists()

@@ -9,7 +9,9 @@ import pytest
 
 from api import webhooks_stripe
 from api.canje import aplicar_compra
-from api.models import Derecho, Movimiento, PasarelaCheckout
+from api import compra_service, interpretation_service
+from api.canje import SinDerecho
+from api.models import Derecho, Interpretation, Movimiento, PasarelaCheckout
 from tests.api.stripe_firma import SECRETO, firmar
 
 pytestmark = pytest.mark.django_db
@@ -72,3 +74,48 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
     assert fila.acreditado_at is not None
     assert cuenta.deuda == 0
     assert not Movimiento.objects.filter(account=cuenta, tipo="consumo").exists()
+    assert not Interpretation.objects.filter(chart=fila.chart).exists()
+
+
+def _fila(cuenta, make_chart):
+    return PasarelaCheckout.objects.create(
+        checkout_id="cs_x", account=cuenta, codigo_producto="informe_natal",
+        chart=make_chart(account=cuenta),
+    )
+
+
+def test_sin_derecho_que_la_deuda_no_explica_sube(make_account, make_chart, monkeypatch):
+    """Cobré y no entregué por una causa que no entendemos: tiene que subir
+    (5xx y reintento), no quedar como un warning."""
+    cuenta = make_account()
+    fila = _fila(cuenta, make_chart)  # sin otorgamiento previo: la deuda no lo explica
+
+    def sin_derecho(*a, **k):
+        raise SinDerecho("leer_informe")
+
+    monkeypatch.setattr(interpretation_service, "iniciar_generacion", sin_derecho)
+    with pytest.raises(SinDerecho):
+        compra_service.arrancar_informe(cuenta, fila)
+
+
+def test_sin_derecho_tras_un_consumo_posterior_al_otorgamiento_sube(
+    make_account, make_chart, monkeypatch,
+):
+    """El derecho se gastó en otra cosa después del pago: no es deuda."""
+    cuenta = make_account()
+    fila = _fila(cuenta, make_chart)
+    Movimiento.objects.create(
+        account=cuenta, codigo_producto="informe_natal", tipo="otorgamiento",
+        cantidad=1, origen="compra", external_id="stripe:session:cs_x",
+    )
+    Movimiento.objects.create(
+        account=cuenta, codigo_producto="informe_natal", tipo="consumo",
+        cantidad=-1, origen="compra",
+    )
+
+    def sin_derecho(*a, **k):
+        raise SinDerecho("leer_informe")
+
+    monkeypatch.setattr(interpretation_service, "iniciar_generacion", sin_derecho)
+    with pytest.raises(SinDerecho):
+        compra_service.arrancar_informe(cuenta, fila)

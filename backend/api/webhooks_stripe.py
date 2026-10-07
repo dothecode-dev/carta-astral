@@ -317,7 +317,9 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
         )
 
     # Sin `try`: si el informe no arranca, la excepción sube y la vista pide el
-    # reintento. La plata ya está acreditada —los requests no corren en
+    # reintento. Única excepción: `arrancar_informe` absorbe `SinDerecho` cuando
+    # la unidad comprada saldó una deuda (RF5b) y el rastro lo confirma; ahí no
+    # hay informe que escribir y reintentar no lo arregla. La plata ya está acreditada —los requests no corren en
     # transacción y el átomo de `aplicar_compra` cerró antes— y el arranque es
     # idempotente (`iniciar_generacion` usa `get_or_create`), así que el
     # reintento lo único que hace es volver a intentar lo que falló. Con Polar
