@@ -74,13 +74,12 @@ def enmascarar(email: str) -> str:
 def _asegurar_identidad_email(cuenta: Account, email: str) -> None:
     """Que el login por código con este mail caiga en `cuenta` (RF12/RF17).
 
-    `resolve_account` sólo enlaza por mail cuentas VERIFICADAS: una cuenta
-    sin verificar y sin identidad `(email, mail)` quedaría fuera del login por
-    código, que crearía otra cuenta y dejaría la compra invisible para quien
-    pagó. Se agrega la identidad sin tocar `email_verified` ni `cuenta_nueva`:
+    Sólo para una cuenta con el mail VERIFICADO (ver `adjudicar`: a una sin
+    verificar nunca se le agrega). No toca `email_verified` ni `cuenta_nueva`:
     entrar sigue exigiendo el código del mail, nunca el pago.
 
-    Si la identidad ya es de OTRA cuenta no se mueve nada —el login por código
+    Si entre el lookup y el `INSERT` la identidad se creó para OTRA cuenta
+    (carrera con un login por código en paralelo) no se mueve nada —el login
     ya va a esa otra, y reasignarla sería quitarle la puerta a alguien—: queda
     a la vista para resolverlo a mano.
     """
@@ -103,21 +102,38 @@ def _asegurar_identidad_email(cuenta: Account, email: str) -> None:
 def adjudicar(checkout_id: str, email: str) -> Account | None:
     """La cuenta de una compra anónima pagada, por el mail del pago (RF5).
 
+    Sólo se confía en mails PROBADOS. Con el mail normalizado, en este orden:
+
+    1. `ProviderIdentity(email, mail)` → esa cuenta. Es la puerta por la que
+       entra quien prueba el mail con el código, así que la compra va donde
+       esa persona la va a ver.
+    2. Una cuenta con `email__iexact=mail` y `email_verified=True` (la más
+       antigua) → esa cuenta, y se le agrega la identidad email para que el
+       login por código caiga ahí (sin ella `resolve_account` sí la enlazaría,
+       pero queda explícito y no depende de esa regla).
+    3. Si no → cuenta nueva por `resolver_cuenta`, el mismo camino que el alta
+       por mail de hoy (regalo de bienvenida descontado por el tombstone).
+
+    Una cuenta con el mail SIN verificar y sin identidad email nunca recibe
+    nada: es pre-account-hijacking. Alguien puede entrar con Google usando un
+    mail ajeno que Google no verificó (`sso.py` lo acepta) y quedar con una
+    cuenta a nombre de ese mail; si la compra de la dueña real —y su carta, y
+    la identidad email— fueran ahí, al entrar por código caería en la cuenta
+    del atacante. Se crea otra cuenta aunque ya exista una con el mismo mail
+    sin verificar (`Account.email` no es único).
+
+    Ninguna cuenta encontrada (1 y 2) se marca `cuenta_nueva`: pagar con el
+    mail de otro no abre sesión en su cuenta (RF11). Y `cuenta_nueva` sale de
+    quien CREÓ la cuenta (`resolver_cuenta`), no de que los lookups no hayan
+    encontrado nada: dos compras distintas con el mismo mail nuevo a la vez
+    (cada una con el lock de SU fila; la carrera la decide la unicidad de la
+    identidad) devuelven, a la que pierde, una cuenta que no creó.
+
     Con `select_for_update` sobre la fila: dos entregas del mismo evento (o
     `completed` + `async_payment_succeeded`) se serializan acá y la segunda
-    encuentra la cuenta ya puesta. Un mail existente —verificado o no— es
-    esa cuenta y NUNCA se marca `cuenta_nueva`: es lo que impide entrar a una
-    cuenta ajena pagando con su mail (RF11).
-
-    `cuenta_nueva` sale de quien CREÓ la cuenta (`resolver_cuenta`), no de que
-    el lookup por mail no haya encontrado nada: una `ProviderIdentity(email,
-    sub)` previa de una cuenta con otro mail, o dos compras distintas con el
-    mismo mail nuevo a la vez (cada una con el lock de SU fila; la carrera la
-    decide la unicidad de la identidad), devuelven una cuenta que esta compra
-    no creó.
-
-    `None` si la fila no existe o no es anónima. Idempotente: si la fila ya
-    tiene cuenta, la devuelve sin tocar nada.
+    encuentra la cuenta ya puesta. `None` si la fila no existe o no es
+    anónima. Idempotente: si la fila ya tiene cuenta, la devuelve sin tocar
+    nada.
     """
     email = normalizar(email)
     with transaction.atomic():
@@ -126,16 +142,24 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
             return None
         if fila.account_id is not None:
             return fila.account
+        identidad = (
+            ProviderIdentity.objects.filter(provider="email", sub=email)
+            .select_related("account").first()
+        )
         # La más antigua si hay varias (cuentas duplicadas de antes de C3).
-        existente = Account.objects.filter(email__iexact=email).order_by("pk").first()
-        if existente is not None:
-            cuenta, nueva = existente, False
+        verificada = (
+            Account.objects.filter(email__iexact=email, email_verified=True)
+            .order_by("pk").first()
+        )
+        if identidad is not None:
+            cuenta, nueva = identidad.account, False
+        elif verificada is not None:
+            cuenta, nueva = verificada, False
             _asegurar_identidad_email(cuenta, email)
         else:
-            # El mismo camino que el alta por mail de hoy: identidad
-            # `(email, <mail normalizado>)` y regalo de bienvenida descontado
-            # por el tombstone. Sin verificar: nadie probó todavía que el mail
-            # sea de quien pagó; lo verifica entrar con el código (RF12).
+            # Identidad `(email, <mail normalizado>)` y cuenta sin verificar:
+            # nadie probó todavía que el mail sea de quien pagó; lo verifica
+            # entrar con el código (RF12).
             cuenta, nueva = resolver_cuenta(VerifiedIdentity(
                 provider="email", sub=email, email=email, email_verified=False,
             ))

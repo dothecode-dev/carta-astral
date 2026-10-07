@@ -4,6 +4,10 @@ Superficie crítica: plata + identidad. La regla que sostiene todo lo demás es
 que `cuenta_nueva` sólo es True cuando ESTA compra creó la cuenta: es lo que
 después (RF11) decide si el navegador que pagó puede entrar. Pagar con el
 mail de otra persona acredita en su cuenta, pero nunca la marca como nueva.
+
+Y sólo se confía en mails PROBADOS (identidad email o cuenta verificada): una
+cuenta con el mail sin verificar puede ser de alguien que lo tomó prestado
+(pre-account-hijacking) y nunca recibe la compra ni la identidad.
 """
 
 import logging
@@ -11,7 +15,7 @@ import logging
 import pytest
 from django.conf import settings as django_settings
 
-from api import analitica
+from api import analitica, codigos_acceso
 from api.identity import sub_hash
 from api.models import (
     Account, Chart, Cupon, CuponUso, Derecho, Movimiento, PasarelaCheckout, ProviderIdentity,
@@ -20,6 +24,16 @@ from api.models import (
 from tests.api.conftest import PI_ANONIMA, SESSION_ANONIMA, con_mail, sesion_anonima
 
 pytestmark = pytest.mark.django_db
+
+
+def _entrar_por_codigo(client, email):
+    """El login por código de hoy (`test_codigo_endpoints`): la cuenta en la
+    que cae quien prueba que el mail es suyo."""
+    _, claro, _ = codigos_acceso.pedir(email)
+    r = client.post("/api/auth/email", {"email": email, "codigo": claro},
+                    content_type="application/json")
+    assert r.status_code == 200
+    return str(r.json()["account_id"])
 
 
 def _restante(cuenta, codigo):
@@ -69,7 +83,9 @@ def test_el_tombstone_descuenta_el_regalo_de_una_cuenta_borrada(entregar_anonima
     assert not Movimiento.objects.filter(external_id=f"bienvenida:{anonima.account.pk}").exists()
 
 
-def test_mail_existente_acredita_ahi_sin_cuenta_nueva(entregar_anonima, anonima, make_account, sin_hilo):
+def test_cuenta_verificada_sin_identidad_recibe_la_compra_y_la_identidad(
+    client, entregar_anonima, anonima, make_account, sin_hilo,
+):
     dueña = make_account(email="ya@mail.com", email_verified=True)
 
     assert entregar_anonima(con_mail("YA@mail.com")).status_code == 200
@@ -78,24 +94,40 @@ def test_mail_existente_acredita_ahi_sin_cuenta_nueva(entregar_anonima, anonima,
     assert anonima.account == dueña and anonima.cuenta_nueva is False
     assert Account.objects.filter(email__iexact="ya@mail.com").count() == 1
     assert Chart.objects.get(pk=anonima.chart_id).account == dueña
+    assert ProviderIdentity.objects.filter(provider="email", sub="ya@mail.com", account=dueña).exists()
     # Sin regalo nuevo: la cuenta ya existía.
     assert _restante(dueña, "lectura_breve") == 0
+    assert _entrar_por_codigo(client, "ya@mail.com") == str(dueña.pk)
 
 
-def test_mail_existente_sin_verificar_tambien_es_esa(entregar_anonima, anonima, make_account, sin_hilo):
-    previa = make_account(email="previa@mail.com", email_verified=False)
+def test_una_cuenta_con_el_mail_sin_verificar_no_recibe_nada(
+    client, entregar_anonima, anonima, make_account, sin_hilo,
+):
+    """Pre-account-hijacking: alguien entra con Google usando un mail ajeno que
+    Google no verificó (`sso.py` lo acepta) y queda una cuenta con ese mail sin
+    verificar. La compra de la dueña real del mail no puede ir a parar ahí:
+    se crea OTRA cuenta, y es en ésa donde la dueña entra por código."""
+    atacante = make_account(email="victima@mail.com", email_verified=False)
+    ProviderIdentity.objects.create(provider="google", sub="g-atacante", account=atacante)
 
-    entregar_anonima(con_mail("previa@mail.com"))
+    entregar_anonima(con_mail("Victima@mail.com"))
 
     anonima.refresh_from_db()
-    assert anonima.account == previa and anonima.cuenta_nueva is False
+    nueva = anonima.account
+    assert nueva is not None and nueva != atacante and anonima.cuenta_nueva is True
+    assert Chart.objects.get(pk=anonima.chart_id).account == nueva
+    assert Sujeto.objects.get(natal_de_id=anonima.chart_id).account == nueva
+    assert not Movimiento.objects.filter(account=atacante).exists()
+    assert not ProviderIdentity.objects.filter(account=atacante, provider="email").exists()
+    assert ProviderIdentity.objects.get(provider="email", sub="victima@mail.com").account == nueva
+    assert _entrar_por_codigo(client, "victima@mail.com") == str(nueva.pk)
 
 
-def test_con_varias_cuentas_del_mismo_mail_va_a_la_mas_antigua(
+def test_con_varias_cuentas_verificadas_del_mismo_mail_va_a_la_mas_antigua(
     entregar_anonima, anonima, make_account, sin_hilo,
 ):
-    vieja = make_account(email="Dup@mail.com")
-    make_account(email="dup@mail.com")
+    vieja = make_account(email="Dup@mail.com", email_verified=True)
+    make_account(email="dup@mail.com", email_verified=True)
 
     entregar_anonima(con_mail("dup@mail.com"))
 
@@ -257,32 +289,20 @@ def test_si_falla_despues_de_adjudicar_el_reintento_acredita_en_la_misma_cuenta(
     assert Account.objects.filter(email="reintento@mail.com").count() == 1
 
 
-def test_cuenta_existente_sin_verificar_queda_alcanzable_por_el_login_con_codigo(
-    client, entregar_anonima, anonima, make_account, sin_hilo,
+def test_la_identidad_email_manda_sobre_una_cuenta_verificada_mas_antigua(
+    entregar_anonima, anonima, make_account, sin_hilo,
 ):
-    """Una cuenta sin verificar y sin identidad email: `resolve_account` sólo
-    enlaza cuentas VERIFICADAS por mail, así que sin la identidad el login por
-    código crearía otra cuenta y la compra quedaría invisible para quien
-    pagó (RF12/RF17). La adjudicación le agrega la identidad, sin verificarla
-    ni marcarla nueva."""
-    from api import codigos_acceso
+    """La identidad `(email, mail)` es la puerta por la que entra quien prueba
+    el mail: si existe, la compra va ahí aunque otra cuenta verificada más
+    antigua tenga el mismo mail en `Account.email`."""
+    make_account(email="puerta@mail.com", email_verified=True)
+    con_puerta = make_account(email="puerta@mail.com", email_verified=True)
+    ProviderIdentity.objects.create(provider="email", sub="puerta@mail.com", account=con_puerta)
 
-    previa = make_account(email="Sinverif@mail.com", email_verified=False)
-
-    entregar_anonima(con_mail("sinverif@mail.com"))
+    entregar_anonima(con_mail("puerta@mail.com"))
 
     anonima.refresh_from_db()
-    assert anonima.account == previa and anonima.cuenta_nueva is False
-    previa.refresh_from_db()
-    assert previa.email_verified is False
-    assert ProviderIdentity.objects.filter(provider="email", sub="sinverif@mail.com", account=previa).exists()
-
-    _, claro, _ = codigos_acceso.pedir("sinverif@mail.com")
-    r = client.post("/api/auth/email", {"email": "sinverif@mail.com", "codigo": claro},
-                    content_type="application/json")
-    assert r.status_code == 200
-    assert str(r.json()["account_id"]) == str(previa.pk)
-    assert Account.objects.filter(email__iexact="sinverif@mail.com").count() == 1
+    assert anonima.account == con_puerta and anonima.cuenta_nueva is False
 
 
 def test_cuenta_verificada_con_identidad_no_la_duplica(entregar_anonima, anonima, make_account, sin_hilo):
@@ -294,22 +314,3 @@ def test_cuenta_verificada_con_identidad_no_la_duplica(entregar_anonima, anonima
     anonima.refresh_from_db()
     assert anonima.account == dueña and anonima.cuenta_nueva is False
     assert ProviderIdentity.objects.filter(provider="email", sub="conid@mail.com").count() == 1
-
-
-def test_si_la_identidad_email_es_de_otra_cuenta_no_se_toca(
-    entregar_anonima, anonima, make_account, sin_hilo, caplog,
-):
-    """El mail matchea una cuenta por `Account.email`, pero la identidad
-    `(email, mail)` ya es de OTRA cuenta: no se mueve nada, se avisa."""
-    por_mail = make_account(email="choque@mail.com", email_verified=False)
-    otra = make_account(email="otra@mail.com", email_verified=True)
-    ProviderIdentity.objects.create(provider="email", sub="choque@mail.com", account=otra)
-
-    with caplog.at_level(logging.WARNING):
-        entregar_anonima(con_mail("choque@mail.com"))
-
-    anonima.refresh_from_db()
-    assert anonima.account == por_mail and anonima.cuenta_nueva is False
-    assert ProviderIdentity.objects.get(provider="email", sub="choque@mail.com").account == otra
-    assert any(r.levelno == logging.WARNING for r in caplog.records)
-    assert "choque@mail.com" not in caplog.text
