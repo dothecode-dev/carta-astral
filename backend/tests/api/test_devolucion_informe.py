@@ -249,7 +249,7 @@ def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
         )
     monkeypatch.setattr(
         informe_service, "translate_interpretation",
-        lambda texto, lang, client: f"[es] {texto}",
+        lambda texto, lang, client, trato="": f"[es] {texto}",
     )
 
     svc.completar_generacion(interp_es, chart, acc)  # 3er intento: encuentra el sibling y traduce
@@ -302,7 +302,7 @@ def test_traduccion_a_un_tercer_idioma_que_falla_no_devuelve_lo_ya_entregado(
 
     monkeypatch.setattr(
         informe_service, "translate_interpretation",
-        lambda texto, lang, client: (_ for _ in ()).throw(InterpretationError("no traduce")),
+        lambda texto, lang, client, trato="": (_ for _ in ()).throw(InterpretationError("no traduce")),
     )
 
     for _ in range(svc.INTENTOS_MAXIMOS):

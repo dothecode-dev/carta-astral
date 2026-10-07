@@ -384,7 +384,12 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
         raise NotImplementedError("el informe de vínculo todavía no existe")
     interpretacion, creada = Interpretation.objects.get_or_create(
         sujeto=sujeto, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
-        defaults={"text": "", "account": account, "chart": sujeto.natal_de},
+        defaults={
+            "text": "", "account": account, "chart": sujeto.natal_de,
+            # RF5: el informe fija el trato al nacer; cambiar la carta después
+            # no lo toca.
+            "trato": sujeto.natal_de.birth_data.trato if sujeto.natal_de else "",
+        },
     )
     if not creada:
         return interpretacion

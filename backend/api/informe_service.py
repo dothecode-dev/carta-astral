@@ -308,6 +308,7 @@ def generar_informe(interpretacion, client, token: str) -> bool:
             # secciones que nadie va a leer (ver interpret/prompts.py).
             texto = build_interpretation(
                 interpretacion.chart.data, interpretacion.lang, PROMPT_VERSION, client,
+                trato=interpretacion.trato,
             )
         else:
             texto = build_seccion(
@@ -321,6 +322,7 @@ def generar_informe(interpretacion, client, token: str) -> bool:
                     interpretacion.lang,
                     titulos,
                 ),
+                trato=interpretacion.trato,
             )
         InterpretationSection.objects.create(
             interpretation=interpretacion,
@@ -397,13 +399,21 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
     destino, _ = Interpretation.objects.get_or_create(
         chart=origen.chart, lang=destino_lang, prompt_version=origen.prompt_version,
         tier=origen.tier,
-        defaults={"text": "", "account": origen.account},
+        defaults={"text": "", "account": origen.account, "trato": origen.trato},
     )
+    # La traducción es del informe de origen y habla igual que él (RF5). Si el
+    # destino ya existía (lo crea `iniciar_generacion` con el trato ACTUAL de
+    # la carta, que pudo cambiar desde que nació el origen) se alinea acá.
+    if destino.trato != origen.trato:
+        destino.trato = origen.trato
+        destino.save(update_fields=["trato"])
     hechas = set(destino.secciones.values_list("slug", flat=True))
     for seccion in origen.secciones.all():
         if seccion.slug in hechas:
             continue
-        texto = translate_interpretation(seccion.texto, destino_lang, client)
+        texto = translate_interpretation(
+            seccion.texto, destino_lang, client, trato=origen.trato,
+        )
         try:
             with transaction.atomic():
                 InterpretationSection.objects.create(

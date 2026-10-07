@@ -273,7 +273,7 @@ def fake_translator(monkeypatch):
     calls = []
     monkeypatch.setattr(
         informe_service, "translate_interpretation",
-        lambda text, lang, client: calls.append((text, lang)) or f"[{lang}] {text}",
+        lambda text, lang, client, trato="": calls.append((text, lang)) or f"[{lang}] {text}",
     )
     return calls
 
