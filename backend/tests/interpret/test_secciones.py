@@ -30,3 +30,24 @@ def test_la_seccion_de_casas_esta_marcada_como_dependiente_de_la_hora():
     por_slug = {s.slug: s for s in SECCIONES}
     assert por_slug["casas"].requiere_hora is True
     assert por_slug["afectos"].requiere_hora is False
+
+
+def test_cada_planeta_es_tema_del_foco_de_una_sola_seccion():
+    # Spec 2026-10-07 RF6b: dos focos que nombran el mismo planeta son dos
+    # secciones que lo explican. La síntesis no cuenta: lo usa todo.
+    import re
+
+    from interpret.prompts import SECCIONES
+
+    planetas = {
+        "es": ["Sol", "Luna", "Mercurio", "Venus", "Marte", "Júpiter", "Saturno", "Urano", "Neptuno", "Plutón"],
+        "en": ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"],
+        "pt": ["Sol", "Lua", "Mercúrio", "Vênus", "Marte", "Júpiter", "Saturno", "Urano", "Netuno", "Plutão"],
+    }
+    for lang, nombres in planetas.items():
+        for nombre in nombres:
+            con = [
+                s.slug for s in SECCIONES
+                if s.slug != "sintesis" and re.search(rf"\b{nombre}\b", s.foco[lang])
+            ]
+            assert len(con) <= 1, (lang, nombre, con)

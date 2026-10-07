@@ -1,7 +1,10 @@
 """Prompts versionados para la interpretación.
 
-Tocar un prompt obliga a subir PROMPT_VERSION; si no, se sirve prosa vieja del
-cache (la clave de cache incluye prompt_version).
+PROMPT_VERSION NO se sube por tocar un prompt: las vistas filtran las lecturas
+por versión, así que subirla esconde todas las ya escritas —incluidas las
+pagas— y la web vuelve a ofrecer generarlas. Se sube sólo si lo escrito con la
+versión anterior deja de ser válido y se decidió regenerarlo (07-10-2026: el
+reparto de temas y los focos nuevos se aplicaron sin subirla, a propósito).
 """
 
 from dataclasses import dataclass
@@ -225,9 +228,9 @@ SECCIONES: tuple[Seccion, ...] = (
         slug="afectos",
         titulo={"es": "Afectos y vínculos", "en": "Love and relationships", "pt": "Afetos e vínculos"},
         foco={
-            "es": "Venus y la Luna en los vínculos: qué buscás, qué ofrecés y dónde se te complica.",
-            "en": "Venus and the Moon in relationships: what you seek, what you offer, where it gets hard.",
-            "pt": "Vênus e a Lua nos vínculos: o que busca, o que oferece e onde complica.",
+            "es": "Venus en los vínculos: qué buscás, qué ofrecés, qué necesitás del otro y dónde se te complica.",
+            "en": "Venus in relationships: what you seek, what you offer, what you need from the other and where it gets hard.",
+            "pt": "Vênus nos vínculos: o que busca, o que oferece, do que precisa do outro e onde complica.",
         },
         palabras=900,
     ),
@@ -239,9 +242,9 @@ SECCIONES: tuple[Seccion, ...] = (
             "pt": "Trabalho, dinheiro e vocação",
         },
         foco={
-            "es": "Marte, Saturno y el Medio Cielo: cómo trabajás y con qué te sostenés.",
-            "en": "Mars, Saturn and the Midheaven: how you work and what sustains you.",
-            "pt": "Marte, Saturno e o Meio do Céu: como trabalha e com o que se sustenta.",
+            "es": "Marte, Saturno y el Medio Cielo: cómo trabajás, qué te exige y con qué te sostenés.",
+            "en": "Mars, Saturn and the Midheaven: how you work, what it demands of you and what sustains you.",
+            "pt": "Marte, Saturno e o Meio do Céu: como trabalha, o que exige de você e com o que se sustenta.",
         },
         palabras=800,
     ),
@@ -259,9 +262,9 @@ SECCIONES: tuple[Seccion, ...] = (
         slug="lentos",
         titulo={"es": "Los planetas lentos", "en": "The slow planets", "pt": "Os planetas lentos"},
         foco={
-            "es": "Júpiter, Saturno, Urano, Neptuno y Plutón: lo generacional y lo que sí es tuyo.",
-            "en": "Jupiter through Pluto: what is generational and what is actually yours.",
-            "pt": "Júpiter a Plutão: o geracional e o que é realmente seu.",
+            "es": "Júpiter, Urano, Neptuno y Plutón: lo generacional y lo que sí es tuyo.",
+            "en": "Jupiter, Uranus, Neptune and Pluto: what is generational and what is actually yours.",
+            "pt": "Júpiter, Urano, Netuno e Plutão: o geracional e o que é realmente seu.",
         },
         palabras=800,
     ),
