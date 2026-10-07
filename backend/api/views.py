@@ -189,8 +189,12 @@ class ChartCollectionView(APIView):
         try:
             chart = create_chart(request.data, request.user)
         except (KeyError, ValueError, CoreError) as exc:
-            logger.warning("chart creation rejected: %s", exc, exc_info=True)
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            # Sin `exc_info` ni el mensaje: el traceback adjunta las variables
+            # locales, y acá adentro están los datos de nacimiento.
+            logger.warning("chart creation rejected: %s", type(exc).__name__)
+            return Response(
+                {"error": mensaje_de_datos_invalidos(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
         return Response(_chart_repr(chart), status=status.HTTP_201_CREATED)
 
     def delete(self, request):
