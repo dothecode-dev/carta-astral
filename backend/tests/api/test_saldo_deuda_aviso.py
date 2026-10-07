@@ -168,6 +168,36 @@ def test_los_dos_logs_son_error_y_sin_mail(
     assert not any(cuenta.email in r.getMessage() for r in caplog.records)
 
 
+def test_con_deuda_y_saldo_de_un_pack_el_informe_se_escribe_y_no_se_avisa_deuda(
+    entregar, account_client, make_chart, sin_hilo, caplog, monkeypatch,
+):
+    """Review 07-10, punto 3, de punta a punta: deuda 2 y dos unidades de un
+    pack. La compra se canjea, el informe arranca, la fila no queda marcada
+    (la web no muestra «saldo pendiente») y nadie loguea un error falso."""
+    from api.models import Derecho
+
+    monkeypatch.setattr(logging.getLogger("api"), "propagate", True)
+    cuenta = account_client.account
+    cuenta.deuda = 2
+    cuenta.save(update_fields=["deuda"])
+    Derecho.objects.update_or_create(
+        account=cuenta, codigo_producto="informe_natal", defaults={"cantidad_restante": 2},
+    )
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_pack", account=cuenta, codigo_producto="informe_natal",
+        chart=make_chart(account=cuenta),
+    )
+
+    with caplog.at_level(logging.ERROR):
+        assert entregar("cs_pack").status_code == 200
+
+    fila.refresh_from_db()
+    assert fila.acreditado_at is not None and fila.saldo_deuda is False
+    assert len(sin_hilo) == 1
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert "saldo_pendiente" not in account_client.get("/api/checkout/cs_pack/").json()
+
+
 # --- Compra SIN cuenta: el canje lo devuelve -----------------------------------
 
 

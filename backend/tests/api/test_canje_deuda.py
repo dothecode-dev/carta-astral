@@ -4,6 +4,7 @@ derecho, el átomo se revertía y el webhook quedaba en 5xx los tres días de
 reintentos: plata cobrada y nunca acreditada."""
 
 import json
+import logging
 
 import pytest
 
@@ -145,3 +146,42 @@ def test_un_consumo_de_otro_producto_no_esconde_la_deuda(make_account, make_char
 
     fila.refresh_from_db()
     assert fila.saldo_deuda is True
+
+
+def _deuda_con_pack(cuenta, deuda=2, saldo=2):
+    """Deuda de un reembolso y saldo de un pack a la vez: `otorgar` aplica la
+    unidad comprada a la deuda, pero el saldo del pack sigue ahí."""
+    cuenta.deuda = deuda
+    cuenta.save(update_fields=["deuda"])
+    Derecho.objects.update_or_create(
+        account=cuenta, codigo_producto="informe_natal", defaults={"cantidad_restante": saldo},
+    )
+    return cuenta
+
+
+def test_con_deuda_pero_saldo_de_un_pack_se_canjea_y_no_marca_deuda(
+    make_account, make_chart, caplog, monkeypatch,
+):
+    """Review 07-10, punto 3. Antes la condición era `deuda == 0 and saldo >
+    0`: con deuda 2 y dos unidades de un pack se marcaba «saldó deuda» (y un
+    error a Sentry), pero `iniciar_generacion` gastaba una unidad del pack y
+    el informe se escribía igual mientras la web mostraba «saldo pendiente».
+    El criterio es el saldo: si hay con qué canjear, se canjea."""
+    # `api` no propaga a la raíz (LOGGING): sin esto caplog no ve nada.
+    monkeypatch.setattr(logging.getLogger("api"), "propagate", True)
+    cuenta = _deuda_con_pack(make_account())
+    carta = make_chart(account=cuenta)
+    saldadas = []
+
+    with caplog.at_level(logging.ERROR, logger="api.canje"):
+        assert aplicar_compra(
+            cuenta, "informe_natal", 2900, external_id="stripe:session:cs_pack", chart=carta,
+            al_saldar_deuda=lambda: saldadas.append(True),
+        ) is True
+
+    assert saldadas == []
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert Movimiento.objects.filter(account=cuenta, tipo="consumo", sujeto__natal_de=carta).exists()
+    cuenta.refresh_from_db()
+    assert cuenta.deuda == 1  # la unidad comprada fue a la deuda
+    assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 1

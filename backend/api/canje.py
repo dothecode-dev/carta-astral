@@ -199,13 +199,19 @@ def aplicar_compra(
         # existe, el otorgamiento ya ocurrió y el canje se omite igual.
         suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
         if objetivo is not None and suelto and prod.capacidades:
+            # El criterio es el SALDO, no la deuda (review 07-10): con deuda
+            # que sigue y saldo de un pack, la unidad comprada fue a la deuda
+            # pero hay con qué canjear, y el informe se escribe igual
+            # (`iniciar_generacion` gastaría esa unidad del pack). Marcarlo
+            # como «saldó deuda» mostraba «saldo pendiente» y mandaba un
+            # error falso a Sentry sobre un informe que sí se escribía.
             acc = Account.objects.get(pk=account.pk)
-            if acc.deuda == 0 and _saldo(acc, prod.otorga[0][0]) > 0:
+            if _saldo(acc, prod.otorga[0][0]) > 0:
                 canjear(account, prod.capacidades[0], objetivo)
             else:
                 # La unidad comprada saldó una deuda (un reembolso de algo ya
-                # usado): no queda derecho que canjear. Revertir todo dejaba el
-                # webhook en 5xx tres días y el pago sin acreditar (RF5b).
+                # usado) y no quedó saldo con qué canjear. Revertir todo dejaba
+                # el webhook en 5xx tres días y el pago sin acreditar (RF5b).
                 # `error` y no `warning`: alguien pagó y no recibe el informe
                 # que compró; que Sentry avise (sin PII: id externo y pk).
                 logger.error(
