@@ -37,14 +37,26 @@ function destinoDe(locale: Locale, id: string | undefined): string {
   return `/${locale}/carta/${id}`;
 }
 
+async function motivoDe(res: Response): Promise<string | null> {
+  try {
+    const cuerpo = (await res.json()) as { motivo?: unknown };
+    return typeof cuerpo.motivo === "string" ? cuerpo.motivo : null;
+  } catch {
+    return null;
+  }
+}
+
 export function NewChartForm({
   locale,
   dict,
   signedIn = false,
+  precio = null,
 }: {
   locale: Locale;
   dict: Dict;
   signedIn?: boolean;
+  /** Precio del informe ya formateado; `null` si el catálogo no respondió. */
+  precio?: string | null;
 }) {
   const router = useRouter();
   const t = dict.newChart;
@@ -58,6 +70,8 @@ export function NewChartForm({
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<CartaDibujable | null>(null);
   const [retomando, setRetomando] = useState(false);
+  const [comprando, setComprando] = useState(false);
+  const [errorCompra, setErrorCompra] = useState<string | null>(null);
   const datos = useRef<DatosCarta | null>(null);
 
   // Vuelve del login con una carta que ya vio: se la guardamos y la llevamos a
@@ -170,6 +184,42 @@ export function NewChartForm({
     router.push(`/${locale}/entrar?next=${encodeURIComponent(`/${locale}/nueva`)}`);
   }
 
+  /** Paga el informe sin crear cuenta antes (pagar es entrar): la carta de la
+   *  vista previa viaja al backend, que abre Stripe. El nonce de la vuelta
+   *  queda en una cookie httpOnly puesta por `/api/checkout/anonimo`. */
+  async function comprarSinCuenta() {
+    if (comprando || !datos.current) return;
+    setComprando(true);
+    setErrorCompra(null);
+    // Antes de salir del sitio, como en `ComprarBoton`. `anonimo` separa esta
+    // puerta de las otras; PostHog une al visitante con la cuenta cuando la
+    // carta, ya con sesión, llama a `identify`.
+    track("checkout_iniciado", { producto: "informe_natal", desde: "carta", anonimo: true });
+    try {
+      const res = await fetch("/api/checkout/anonimo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...datos.current, locale }),
+      });
+      if (!res.ok) {
+        setComprando(false);
+        const motivo = res.status === 400 ? await motivoDe(res) : null;
+        setErrorCompra(
+          motivo === "requiere_cuenta"
+            ? t.comprarRequiereCuenta
+            : (motivo && dict.precios.cuponMotivo[motivo]) || dict.precios.fallo,
+        );
+        return;
+      }
+      const { url } = (await res.json()) as { url: string };
+      // El checkout de Stripe es otro sitio: no es una navegación de Next.
+      window.location.assign(url);
+    } catch {
+      setComprando(false);
+      setErrorCompra(dict.precios.fallo);
+    }
+  }
+
   if (retomando) {
     return (
       <p className="formLede" role="status">
@@ -185,7 +235,14 @@ export function NewChartForm({
         dict={dict}
         locale={locale}
         onPedirLectura={pedirLectura}
-        onVolver={() => setPreview(null)}
+        onVolver={() => {
+          setPreview(null);
+          setErrorCompra(null);
+        }}
+        precio={precio}
+        onComprar={comprarSinCuenta}
+        comprando={comprando}
+        errorCompra={errorCompra}
       />
     );
   }

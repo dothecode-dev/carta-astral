@@ -635,7 +635,6 @@ export type Dict = {
      *  existía: se le mandó un código. `{email}` llega enmascarado. */
     canjeCodigoTitle: string;
     canjeCodigoBody: string;
-    canjeEntrar: string;
     /** Por si el mail no es suyo (RF12). `{numero}` es el final del
      *  `checkout_id`, para que soporte encuentre la compra. */
     canjeSoporte: string;
@@ -701,6 +700,16 @@ export type Dict = {
     previewLede: string;
     previewCta: string;
     previewNote: string;
+    /** El botón de pago de la vista previa, sin cuenta. `{precio}` sale del catálogo. */
+    comprarCta: string;
+    /** Frase legal armada con dos enlaces: antes + términos + y + privacidad + después. */
+    legalAntes: string;
+    legalTerminos: string;
+    legalY: string;
+    legalPrivacidad: string;
+    legalDespues: string;
+    /** Cupón del 100 % en el pago sin cuenta (`requiere_cuenta`). */
+    comprarRequiereCuenta: string;
     previewPrivacidad: string;
     previewRetomando: string;
     /** Copy indexable: sin esto la página es un formulario vacío para Google. */
@@ -905,7 +914,6 @@ const es: Dict = {
     irACuenta: "Ir a mi cuenta",
     canjeCodigoTitle: "Te mandamos un código a {email}",
     canjeCodigoBody: "Ya tenías una cuenta con ese mail. Entrá con el mail y el código para ver lo que compraste.",
-    canjeEntrar: "Entrar con el código",
     canjeSoporte: "¿No es tu mail? Escribinos a info@astraguia.com con el número de compra {numero}.",
     canjeProcesoTitle: "Tu pago está en proceso",
     canjeProcesoBody: "Te avisamos por mail en cuanto se confirme. No hace falta que pagues de nuevo.",
@@ -957,6 +965,13 @@ const es: Dict = {
     previewLede: "Es tuya y está completa: las posiciones, las casas y los aspectos del cielo del día en que naciste.",
     previewCta: "Leer qué dice",
     previewNote: "Creás tu cuenta y la primera lectura va de regalo.",
+    comprarCta: "Leer el informe completo · {precio}",
+    legalAntes: "Al continuar aceptás los ",
+    legalTerminos: "términos",
+    legalY: " y la ",
+    legalPrivacidad: "política de privacidad",
+    legalDespues: ".",
+    comprarRequiereCuenta: "Para usar este cupón, entrá con tu mail.",
     previewPrivacidad: "No guardamos nada de esto. Si querés conservarla, hace falta una cuenta.",
     previewRetomando: "Guardando tu carta…",
     seoTitle: "Calculá tu carta natal gratis",
@@ -1285,7 +1300,6 @@ const en: Dict = {
     irACuenta: "Go to my account",
     canjeCodigoTitle: "We sent a code to {email}",
     canjeCodigoBody: "You already had an account with that email. Sign in with the email and the code to see what you bought.",
-    canjeEntrar: "Sign in with the code",
     canjeSoporte: "Not your email? Write to us at info@astraguia.com with the purchase number {numero}.",
     canjeProcesoTitle: "Your payment is being processed",
     canjeProcesoBody: "We'll email you as soon as it's confirmed. There's no need to pay again.",
@@ -1337,6 +1351,13 @@ const en: Dict = {
     previewLede: "It's yours and it's complete: the positions, the houses and the aspects of the sky on the day you were born.",
     previewCta: "Read what it says",
     previewNote: "Create your account and the first reading is on us.",
+    comprarCta: "Read the full report · {precio}",
+    legalAntes: "By continuing you accept the ",
+    legalTerminos: "terms",
+    legalY: " and the ",
+    legalPrivacidad: "privacy policy",
+    legalDespues: ".",
+    comprarRequiereCuenta: "To use this coupon, sign in with your email.",
     previewPrivacidad: "We're not storing any of this. To keep the chart you'll need an account.",
     previewRetomando: "Saving your chart…",
     seoTitle: "Calculate your birth chart, free",
@@ -1665,7 +1686,6 @@ const pt: Dict = {
     irACuenta: "Ir para minha conta",
     canjeCodigoTitle: "Enviamos um código para {email}",
     canjeCodigoBody: "Você já tinha uma conta com esse e-mail. Entre com o e-mail e o código para ver o que comprou.",
-    canjeEntrar: "Entrar com o código",
     canjeSoporte: "Não é o seu e-mail? Escreva para info@astraguia.com com o número da compra {numero}.",
     canjeProcesoTitle: "Seu pagamento está em processamento",
     canjeProcesoBody: "Avisamos por e-mail assim que for confirmado. Não precisa pagar de novo.",
@@ -1717,6 +1737,13 @@ const pt: Dict = {
     previewLede: "É seu e está completo: as posições, as casas e os aspectos do céu do dia em que você nasceu.",
     previewCta: "Ler o que diz",
     previewNote: "Você cria sua conta e a primeira leitura é por nossa conta.",
+    comprarCta: "Ler o relatório completo · {precio}",
+    legalAntes: "Ao continuar, você aceita os ",
+    legalTerminos: "termos",
+    legalY: " e a ",
+    legalPrivacidad: "política de privacidade",
+    legalDespues: ".",
+    comprarRequiereCuenta: "Para usar este cupom, entre com o seu e-mail.",
     previewPrivacidad: "Não guardamos nada disso. Para conservar o mapa é preciso uma conta.",
     previewRetomando: "Salvando seu mapa…",
     seoTitle: "Calcule seu mapa natal grátis",

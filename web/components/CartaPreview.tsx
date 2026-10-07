@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { ChartBody } from "@/components/ChartBody";
 import { DatosCarta } from "@/components/DatosCarta";
 import { Firma } from "@/components/Firma";
@@ -18,12 +20,22 @@ export function CartaPreview({
   locale,
   onPedirLectura,
   onVolver,
+  precio,
+  onComprar,
+  comprando,
+  errorCompra,
 }: {
   carta: CartaDibujable;
   dict: Dict;
   locale: Locale;
   onPedirLectura: () => void;
   onVolver: () => void;
+  /** El precio del informe, ya formateado por `lib/catalogo`. `null` si el
+   *  catálogo no respondió: sin precio no se ofrece comprar. */
+  precio: string | null;
+  onComprar: () => void | Promise<void>;
+  comprando: boolean;
+  errorCompra: string | null;
 }) {
   const t = dict.newChart;
 
@@ -44,6 +56,34 @@ export function CartaPreview({
           {t.previewCta}
         </button>
         <p className="fieldNote">{t.previewNote}</p>
+
+        {/* Pagar es entrar: el informe se compra acá mismo, sin pasar por
+            /entrar. Es secundario a propósito: la lectura gratis sigue siendo
+            lo primero que se ofrece. */}
+        {precio && (
+          <>
+            {errorCompra && (
+              <p className="compraError" role="alert">
+                {errorCompra}
+              </p>
+            )}
+            <button
+              type="button"
+              className="btn btnGhost"
+              disabled={comprando}
+              onClick={() => void onComprar()}
+            >
+              {comprando ? dict.precios.abriendo : t.comprarCta.replace("{precio}", precio)}
+            </button>
+            <p className="fieldNote">
+              {t.legalAntes}
+              <Link href={`/${locale}/legal/terms`}>{t.legalTerminos}</Link>
+              {t.legalY}
+              <Link href={`/${locale}/legal/privacy`}>{t.legalPrivacidad}</Link>
+              {t.legalDespues}
+            </p>
+          </>
+        )}
       </div>
 
       <DatosCarta chart={carta} dict={dict} locale={locale} />

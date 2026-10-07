@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 
 import { Nav } from "@/components/Nav";
 import { NewChartForm } from "@/components/NewChartForm";
-import { DEFAULT_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
+import { fetchCatalogo, precioDe } from "@/lib/catalogo";
+import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
 import { haySesion } from "@/lib/session";
 import { Footer } from "@/components/Footer";
@@ -68,6 +69,9 @@ export default async function NewChartPage({
   const dict = getDict(locale);
   const signedIn = await haySesion();
   const t = dict.newChart;
+  // Sólo hace falta para el botón de la vista previa, que es de quien no
+  // entró. Sin respuesta del catálogo, `null`: el botón no se dibuja.
+  const precio = signedIn ? null : precioDe(await fetchCatalogo(), "informe_natal", INTL_LOCALE[locale]);
 
   return (
     <>
@@ -79,7 +83,7 @@ export default async function NewChartPage({
           <p className="formLede">{signedIn ? t.lede : t.seoIntro}</p>
         </section>
 
-        <NewChartForm locale={locale} dict={dict} signedIn={signedIn} />
+        <NewChartForm locale={locale} dict={dict} signedIn={signedIn} precio={precio} />
 
         {/* El texto va DEBAJO del formulario y sólo para quien no entró: es lo
             que hace la página indexable —un formulario solo no es contenido

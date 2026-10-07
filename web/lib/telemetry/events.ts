@@ -114,7 +114,14 @@ export type EventoProps = {
    *  `desde` separa las dos puertas de compra, que no valen lo mismo: en
    *  /precios se compra a secas, y dentro de una carta se compra el informe DE
    *  esa carta, después de haber leído la breve. */
-  checkout_iniciado: { producto: string; desde: "precios" | "carta"; cupon?: string };
+  checkout_iniciado: {
+    producto: string;
+    desde: "precios" | "carta";
+    cupon?: string;
+    /** Compró sin cuenta, desde la vista previa. No lleva el id de PostHog a
+     *  ningún lado: la unión con la cuenta la hace `identify` después. */
+    anonimo?: boolean;
+  };
   /** Llegó con un cupón (por link o por el campo) y la página ya sabe si
    *  sirvió. `resultado` es `valido` o el motivo: es lo que separa «el cupón
    *  vendió» de «la gente lo intentó y estaba agotado». */

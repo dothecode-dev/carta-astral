@@ -1,0 +1,98 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { CartaPreview } from "@/components/CartaPreview";
+import { getDict, LOCALES } from "@/lib/i18n";
+
+// El botón de pago de la vista previa es secundario: el principal sigue siendo
+// la lectura gratis, que va a /entrar. Y sin precio no hay botón: el precio
+// sale del catálogo y no se inventa.
+
+const CARTA = {
+  data: {
+    placements: [
+      { name: "Sun", sign: "Gem", abs_pos: 70.5, house: "First_House", retrograde: false },
+    ],
+    houses: null,
+    angles: null,
+    aspects: [],
+    flags: {
+      moon_approximate: false,
+      precision_degraded: false,
+      bodies_missing: false,
+      house_system_fallback: false,
+    },
+  },
+};
+
+afterEach(cleanup);
+
+function pintar(locale: "es" | "en" | "pt", extra: Partial<Parameters<typeof CartaPreview>[0]> = {}) {
+  const props = {
+    carta: CARTA,
+    dict: getDict(locale),
+    locale,
+    onPedirLectura: vi.fn(),
+    onVolver: vi.fn(),
+    precio: "US$ 29",
+    onComprar: vi.fn().mockResolvedValue(undefined),
+    comprando: false,
+    errorCompra: null,
+    ...extra,
+  };
+  render(<CartaPreview {...props} />);
+  return props;
+}
+
+describe("botón de compra de la vista previa", () => {
+  it.each(LOCALES)("%s: muestra el botón con el precio y la nota legal con sus enlaces", (locale) => {
+    pintar(locale);
+    const t = getDict(locale).newChart;
+
+    expect(screen.getByRole("button", { name: t.comprarCta.replace("{precio}", "US$ 29") })).toBeTruthy();
+    const terminos = screen.getByRole("link", { name: t.legalTerminos });
+    const privacidad = screen.getByRole("link", { name: t.legalPrivacidad });
+    expect(terminos.getAttribute("href")).toBe(`/${locale}/legal/terms`);
+    expect(privacidad.getAttribute("href")).toBe(`/${locale}/legal/privacy`);
+  });
+
+  it("el principal gratis va primero y el de pago es secundario, debajo", () => {
+    pintar("es");
+    const t = getDict("es").newChart;
+    const gratis = screen.getByRole("button", { name: t.previewCta });
+    const pago = screen.getByRole("button", { name: /Leer el informe completo/ });
+
+    expect(gratis.className).toContain("btnPrimary");
+    expect(pago.className).not.toContain("btnPrimary");
+    expect(gratis.compareDocumentPosition(pago) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("apretarlo llama a onComprar y no manda a entrar", () => {
+    const { onComprar, onPedirLectura } = pintar("es");
+    fireEvent.click(screen.getByRole("button", { name: /Leer el informe completo/ }));
+
+    expect(onComprar).toHaveBeenCalledTimes(1);
+    expect(onPedirLectura).not.toHaveBeenCalled();
+  });
+
+  it("sin precio no se muestra el botón de pago ni la nota", () => {
+    pintar("es", { precio: null });
+
+    expect(screen.queryByRole("button", { name: /Leer el informe completo/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: getDict("es").newChart.legalTerminos })).toBeNull();
+    expect(screen.getByRole("button", { name: getDict("es").newChart.previewCta })).toBeTruthy();
+  });
+
+  it("mientras la compra está en curso el botón queda deshabilitado", () => {
+    pintar("es", { comprando: true });
+    const boton = screen.getByRole("button", { name: getDict("es").precios.abriendo });
+
+    expect((boton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("muestra el error de la compra", () => {
+    pintar("es", { errorCompra: "No pudimos abrir el pago." });
+
+    expect(screen.getByRole("alert").textContent).toBe("No pudimos abrir el pago.");
+  });
+});
