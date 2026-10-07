@@ -524,6 +524,14 @@ class PasarelaCheckout(models.Model):
     # pago en curso, y deja de listarse. Nunca convive con `acreditado_at`:
     # una sesión pagada no vence, y si el evento llegara igual la plata manda.
     vencido_at = models.DateTimeField(null=True, blank=True)
+    # «Pagar es entrar» (spec 2026-10-07): checkout abierto sin cuenta. La
+    # cuenta la pone el webhook por el mail del pago; `cuenta_nueva` dice si la
+    # creó esta compra (sólo entonces se puede canjear por sesión); el nonce
+    # ata el canje al navegador que pagó y se guarda sólo hasheado.
+    anonimo = models.BooleanField(default=False)
+    nonce_hash = models.CharField(max_length=64, blank=True, default="")
+    cuenta_nueva = models.BooleanField(default=False)
+    canjeado_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
