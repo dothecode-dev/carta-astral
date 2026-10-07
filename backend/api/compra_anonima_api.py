@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from core.exceptions import CoreError
 
-from api import compra_anonima, cupones, mantenimiento, stripe_client
+from api import compra_anonima, mantenimiento, stripe_client
 from api.chart_service import calcular
 from api.checkout import idioma_pedido, respuesta_de_stripe
 
@@ -52,6 +52,15 @@ class CheckoutAnonimoView(APIView):
             logger.error("checkout anónimo sin TOMBSTONE_HMAC_KEY: no se abre")
             return Response(_NO_DISPONIBLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+        # Sin cuenta no hay cupón (review 07-10): «uno por cuenta» no se puede
+        # aplicar a nadie, y la compra podía terminar en una cuenta que ya lo
+        # usó. La web no lo manda desde la vista previa; el mismo texto que
+        # ya muestra para este motivo lo manda a entrar con el mail.
+        if request.data.get("cupon"):
+            return Response(
+                {"error": "el cupón no sirve sin cuenta", "motivo": "requiere_cuenta"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         idioma = idioma_pedido(request)
         # Misma validación que la vista previa (`calcular`), ANTES de crear
         # nada. Sin `exc_info` ni payload en el log: es la fecha de nacimiento
@@ -65,20 +74,9 @@ class CheckoutAnonimoView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            fila, nonce = compra_anonima.abrir(request.data, idioma, request.data.get("cupon"))
+            fila, nonce = compra_anonima.abrir(request.data, idioma)
         except compra_anonima.NoDisponible:
             return Response(_NO_DISPONIBLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        except compra_anonima.CuponNoAdmitido:
-            return Response(
-                {"error": "el cupón no sirve sin cuenta", "motivo": "requiere_cuenta"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except cupones.CuponInvalido as exc:
-            logger.info("cupón rechazado en checkout anónimo: %s", exc.motivo)
-            return Response(
-                {"error": "el cupón no sirve", "motivo": cupones.motivo_publico(exc.motivo)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         except (KeyError, ValueError):
             # El producto es fijo: que el catálogo no lo conozca, lo retire o
             # lo tenga gratis es configuración nuestra, no un pedido mal armado.

@@ -79,29 +79,34 @@ def test_idioma_fuera_de_la_lista_blanca_cae_al_por_defecto(client, stripe_respo
     assert fila.locale == stripe_client.LOCALE_POR_DEFECTO
 
 
-def test_cupon_parcial_viaja_como_descuento(client, stripe_responde):
+@pytest.mark.parametrize("codigo", ["PROMO30", "NOEXISTE", "REGALO"])
+def test_el_pago_sin_cuenta_no_admite_cupones(client, stripe_responde, codigo):
+    """Review 07-10, punto 2. Sin cuenta, `cupones.validar` no puede aplicar
+    «uno por cuenta» (`account=None`), y después la adjudicación lleva la
+    compra a una cuenta que quizás ya lo usó: era una forma de usar dos veces
+    un cupón de un uso por cuenta. La web no manda cupón desde la vista
+    previa, así que el camino sólo servía para abusar. Cualquier cupón —parcial,
+    inexistente o del 100 %— es el mismo 400 y no se crea nada."""
     Cupon.objects.create(
         codigo="PROMO30", porcentaje=30, productos=["informe_natal"], usos_maximos=10,
         stripe_promotion_code_id="promo_x",
     )
-    r = _post(client, {**DATOS, "cupon": "PROMO30"})
-    assert r.status_code == 200
-    assert stripe_responde[0]["discounts"] == [{"promotion_code": "promo_x"}]
-    fila = PasarelaCheckout.objects.get()
-    assert fila.cupon.codigo == "PROMO30" and fila.descuento_centavos > 0
+    Cupon.objects.create(codigo="REGALO", porcentaje=100, productos=["informe_natal"], usos_maximos=1)
 
+    r = _post(client, {**DATOS, "cupon": codigo})
 
-def test_cupon_inexistente_es_400_y_no_crea_nada(client, stripe_responde):
-    r = _post(client, {**DATOS, "cupon": "NOEXISTE"})
-    assert r.status_code == 400 and r.json()["motivo"]
-    assert not Chart.objects.exists() and not PasarelaCheckout.objects.exists()
-
-
-def test_cupon_del_100_no_se_admite_sin_cuenta(client, stripe_responde, cupon_100):
-    r = _post(client, {**DATOS, "cupon": cupon_100.codigo})
     assert r.status_code == 400 and r.json()["motivo"] == "requiere_cuenta"
     assert not Chart.objects.exists() and not PasarelaCheckout.objects.exists()
     assert stripe_responde == []
+
+
+@pytest.mark.parametrize("vacio", ["", None])
+def test_un_cupon_vacio_abre_igual_y_sin_descuento(client, stripe_responde, vacio):
+    r = _post(client, {**DATOS, "cupon": vacio})
+    assert r.status_code == 200
+    fila = PasarelaCheckout.objects.get()
+    assert fila.cupon is None and fila.descuento_centavos == 0
+    assert "discounts" not in stripe_responde[0]
 
 
 def test_datos_de_nacimiento_invalidos_son_400_y_no_crean_nada(client, stripe_responde):

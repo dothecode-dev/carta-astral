@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 502;
     if (status === 400) {
-      // Cupón que no sirve (incluido `requiere_cuenta`, el de 100 %) o datos
+      // Cupón (sin cuenta no se admite ninguno: `requiere_cuenta`) o datos
       // de nacimiento inválidos: el motivo es lo único que se reenvía.
       const motivo = motivoDe(error);
       if (motivo) return NextResponse.json({ error: "el cupón no sirve", motivo }, { status: 400 });

@@ -709,7 +709,7 @@ export type Dict = {
     legalY: string;
     legalPrivacidad: string;
     legalDespues: string;
-    /** Cupón del 100 % en el pago sin cuenta (`requiere_cuenta`). */
+    /** Cualquier cupón en el pago sin cuenta (`requiere_cuenta`): sólo con cuenta. */
     comprarRequiereCuenta: string;
     previewPrivacidad: string;
     previewRetomando: string;
