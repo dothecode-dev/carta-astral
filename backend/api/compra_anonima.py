@@ -213,10 +213,11 @@ def descartar(checkout_id: str) -> bool:
     return True
 
 
-#: Hasta cuándo, desde que se acreditó el pago, el nonce del navegador abre
-#: sesión en la cuenta que creó la compra. Es la vida máxima de la cookie del
-#: nonce (spec RF2, ≤ 24 h): pasado eso nadie legítimo lo tiene, y un nonce
-#: guardado aparte no tiene por qué seguir sirviendo para entrar.
+#: Vida del nonce, desde que se acreditó el pago. Es la vida máxima de la
+#: cookie del nonce (spec RF2, ≤ 24 h): pasado eso nadie legítimo lo tiene,
+#: así que el canje responde `invalido` en TODAS sus ramas —ni sesión ni
+#: código—. Si no, quien guardó el nonce aparte podría seguir disparando
+#: mails de código a la dueña del mail para siempre.
 VIDA_CANJE_POR_NONCE = timezone.timedelta(hours=24)
 
 #: Un código sin usar para el mismo mail y destino creado hace menos que esto
@@ -224,20 +225,28 @@ VIDA_CANJE_POR_NONCE = timezone.timedelta(hours=24)
 CODIGO_RECIENTE = timezone.timedelta(minutes=10)
 
 
-def _sesion_por_nonce_vigente(fila: PasarelaCheckout) -> bool:
-    """Si el canje de una cuenta creada por la compra todavía puede abrir sesión.
+def _cuenta_nueva_sin_verificar(fila: PasarelaCheckout) -> Account | None:
+    """La cuenta creada por la compra, lockeada, si el nonce todavía puede
+    abrir sesión en ella; `None` si no.
 
     No alcanza con `cuenta_nueva` (que dice quién creó la cuenta, no qué es
     hoy). Canje tardío: alguien paga con el mail de otra persona que no tenía
     cuenta y no canjea; la dueña del mail entra con código (RF17: la cuenta
     se verifica y se cierran las demás sesiones); si después el nonce del
     pagador abriera sesión, se llevaría un token de la cuenta de ella. Con el
-    mail ya verificado, o pasada la vida de la cookie del nonce, el canje
-    cae a la rama del código.
+    mail ya verificado, el canje cae a la rama del código.
+
+    La cuenta se relee con `select_for_update`, no se usa la del
+    `select_related`: el lock del canje es sobre la fila del checkout, y un
+    login por código en paralelo puede verificar la cuenta y borrar sus
+    sesiones entre esa lectura y el `create_session`. Con el lock, o el login
+    termina antes (y acá se ve verificada) o espera a que el canje termine (y
+    borra la sesión recién creada). Orden de locks: fila del checkout →
+    cuenta, el mismo que el resto del módulo; ningún camino lockea la cuenta
+    y después la fila.
     """
-    if fila.account.email_verified:
-        return False
-    return timezone.now() - fila.acreditado_at <= VIDA_CANJE_POR_NONCE
+    cuenta = Account.objects.select_for_update().get(pk=fila.account_id)
+    return None if cuenta.email_verified else cuenta
 
 
 def _codigo_reciente(email: str, destino: str) -> bool:
@@ -258,11 +267,13 @@ def canjear(checkout_id: str, nonce: str) -> dict:
 
     A un mail que ya tenía cuenta (`cuenta_nueva=False`) NUNCA se le abre
     sesión (RF11): se le manda el código de acceso con destino la carta
-    (RF12). Tampoco a una cuenta nueva ya verificada o pasadas 24 h del pago
-    (`_sesion_por_nonce_vigente`). Eso no se gasta —un segundo canje vuelve a
-    dar `codigo`—, pero si ya hay un código reciente sin usar para ese mail y
-    destino no se manda otro, y el cupo por hora de `codigos_acceso.pedir`
-    frena el resto. El mail sale
+    (RF12). Tampoco a una cuenta nueva ya verificada
+    (`_cuenta_nueva_sin_verificar`). Eso no se gasta —un segundo canje vuelve
+    a dar `codigo`—, pero si ya hay un código reciente sin usar para ese mail
+    y destino no se manda otro (dos canjes del mismo checkout se serializan
+    en el lock de la fila, así que el segundo ve el código del primero), y el
+    cupo por hora de `codigos_acceso.pedir` frena el resto. Pasadas
+    `VIDA_CANJE_POR_NONCE` desde el pago, todo es `invalido`. El mail sale
     después del commit: el lock de la fila no espera a Resend.
 
     `select_for_update` sobre la fila: dos canjes simultáneos con el mismo
@@ -285,21 +296,24 @@ def canjear(checkout_id: str, nonce: str) -> dict:
             return {"estado": "invalido"}
         if fila.acreditado_at is None or fila.account_id is None:
             return {"estado": "pendiente"}
+        if timezone.now() - fila.acreditado_at > VIDA_CANJE_POR_NONCE:
+            return {"estado": "invalido"}
         destino = (
             f"/{fila.locale}/carta/{fila.chart.uuid}" if fila.chart_id is not None
             else f"/{fila.locale}/cuenta"
         )
         if fila.cuenta_nueva and fila.canjeado_at is not None:
             return {"estado": "invalido"}
-        if fila.cuenta_nueva and _sesion_por_nonce_vigente(fila):
+        cuenta = _cuenta_nueva_sin_verificar(fila) if fila.cuenta_nueva else None
+        if cuenta is not None:
             fila.canjeado_at = timezone.now()
             fila.save(update_fields=["canjeado_at"])
             return {
-                "estado": "sesion", "token": create_session(fila.account),
-                "destino": destino, "account_id": fila.account_id,
+                "estado": "sesion", "token": create_session(cuenta),
+                "destino": destino, "account_id": cuenta.pk,
             }
         # Mail que ya tenía cuenta, o cuenta nueva que dejó de serlo (ver
-        # `_sesion_por_nonce_vigente`): NUNCA sesión (RF11). Se le manda el código.
+        # `_cuenta_nueva_sin_verificar`): NUNCA sesión (RF11). Se le manda el código.
         email = fila.account.email
         try:
             if not _codigo_reciente(email, destino):

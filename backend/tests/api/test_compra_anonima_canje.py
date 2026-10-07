@@ -315,18 +315,49 @@ def test_si_la_duenia_del_mail_entro_antes_el_nonce_ya_no_abre_sesion(client, an
     assert anonima.canjeado_at is None
 
 
-def test_pasadas_24_horas_el_nonce_ya_no_abre_sesion(client, anonima, make_account, enviados):
-    cuenta = make_account(email="tarde@mail.com", email_verified=False)
-    _acreditada(anonima, cuenta, nueva=True)
+@pytest.mark.parametrize("nueva", [True, False])
+def test_pasadas_24_horas_el_nonce_ya_no_sirve_para_nada(client, anonima, make_account, enviados, nueva):
+    """Nadie legítimo conserva el nonce más de 24 h (RF2): pasado eso, ni
+    sesión ni código. Si no, quien guardó el nonce podría seguir disparando
+    mails a la dueña del mail para siempre."""
+    cuenta = make_account(email="tarde@mail.com", email_verified=not nueva)
+    _acreditada(anonima, cuenta, nueva=nueva)
     anonima.acreditado_at = timezone.now() - timezone.timedelta(hours=25)
     anonima.save()
+
+    r = _canje(client)
+
+    assert r.status_code == 404 and r.json() == {"error": "no encontrado"}
+    assert not Session.objects.filter(account=cuenta).exists()
+    assert enviados == []
+    assert not CodigoAcceso.objects.exists()
+
+
+def test_la_verificacion_entre_la_lectura_y_el_lock_de_la_cuenta_gana(client, anonima, monkeypatch, enviados):
+    """Carrera canje ↔ login por código. El lock del canje es sobre la fila
+    del checkout, no sobre la cuenta: la cuenta que trae el `select_related`
+    puede quedar vieja si un login por código la verifica (y borra sus
+    sesiones) justo después. No es determinista como test de hilos, así que
+    se simula: `hash_token` corre después de leer la fila y antes de decidir,
+    y ahí se verifica la cuenta en la base. El canje tiene que releerla con
+    lock y no abrir sesión."""
+    cuenta = compra_anonima.adjudicar(SESSION_ANONIMA, "carrera@mail.com")
+    anonima.refresh_from_db()
+    anonima.acreditado_at = timezone.now()
+    anonima.nonce_hash = hash_token(NONCE)
+    anonima.save()
+
+    def hash_y_login_en_paralelo(valor):
+        Account.objects.filter(pk=cuenta.pk).update(email_verified=True)
+        return hash_token(valor)
+
+    monkeypatch.setattr(compra_anonima, "hash_token", hash_y_login_en_paralelo)
 
     r = _canje(client)
 
     assert r.json()["estado"] == "codigo"
     assert "token" not in r.json()
     assert not Session.objects.filter(account=cuenta).exists()
-    assert enviados == ["tarde@mail.com"]
 
 
 def test_poco_antes_de_las_24_horas_el_nonce_si_abre_sesion(client, anonima, make_account):
