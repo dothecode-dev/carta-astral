@@ -219,3 +219,97 @@ def test_reembolso_de_una_compra_anonima(client, entregar_anonima, anonima, sin_
     assert r.status_code == 200
     revocacion = Movimiento.objects.get(tipo="revocacion", external_id="stripe:refund:re_anonima")
     assert revocacion.account == anonima.account
+
+
+# --- Fix round 1 -------------------------------------------------------------
+
+
+def test_si_falla_despues_de_adjudicar_el_reintento_acredita_en_la_misma_cuenta(
+    entregar_anonima, anonima, sin_hilo, monkeypatch,
+):
+    """`adjudicar` commitea en su propia transacción: un fallo al acreditar deja
+    la fila con cuenta y sin Movimiento. El reintento de Stripe tiene que
+    acreditar ahí, sin crear otra cuenta ni perder `cuenta_nueva`."""
+    from api import webhooks_stripe
+
+    real = webhooks_stripe.aplicar_compra
+    llamadas = []
+
+    def falla_la_primera(*args, **kwargs):
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            raise RuntimeError("la base se cayó")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(webhooks_stripe, "aplicar_compra", falla_la_primera)
+
+    assert entregar_anonima(con_mail("reintento@mail.com")).status_code == 500
+    anonima.refresh_from_db()
+    cuenta = anonima.account
+    assert cuenta is not None and anonima.cuenta_nueva is True
+    assert not Movimiento.objects.filter(external_id=f"stripe:session:{SESSION_ANONIMA}").exists()
+
+    assert entregar_anonima(con_mail("reintento@mail.com"), evt="evt_2").status_code == 200
+    anonima.refresh_from_db()
+    assert anonima.account == cuenta and anonima.cuenta_nueva is True
+    movs = Movimiento.objects.filter(external_id=f"stripe:session:{SESSION_ANONIMA}")
+    assert movs.count() == 1 and movs.get().account == cuenta
+    assert Account.objects.filter(email="reintento@mail.com").count() == 1
+
+
+def test_cuenta_existente_sin_verificar_queda_alcanzable_por_el_login_con_codigo(
+    client, entregar_anonima, anonima, make_account, sin_hilo,
+):
+    """Una cuenta sin verificar y sin identidad email: `resolve_account` sólo
+    enlaza cuentas VERIFICADAS por mail, así que sin la identidad el login por
+    código crearía otra cuenta y la compra quedaría invisible para quien
+    pagó (RF12/RF17). La adjudicación le agrega la identidad, sin verificarla
+    ni marcarla nueva."""
+    from api import codigos_acceso
+
+    previa = make_account(email="Sinverif@mail.com", email_verified=False)
+
+    entregar_anonima(con_mail("sinverif@mail.com"))
+
+    anonima.refresh_from_db()
+    assert anonima.account == previa and anonima.cuenta_nueva is False
+    previa.refresh_from_db()
+    assert previa.email_verified is False
+    assert ProviderIdentity.objects.filter(provider="email", sub="sinverif@mail.com", account=previa).exists()
+
+    _, claro, _ = codigos_acceso.pedir("sinverif@mail.com")
+    r = client.post("/api/auth/email", {"email": "sinverif@mail.com", "codigo": claro},
+                    content_type="application/json")
+    assert r.status_code == 200
+    assert str(r.json()["account_id"]) == str(previa.pk)
+    assert Account.objects.filter(email__iexact="sinverif@mail.com").count() == 1
+
+
+def test_cuenta_verificada_con_identidad_no_la_duplica(entregar_anonima, anonima, make_account, sin_hilo):
+    dueña = make_account(email="conid@mail.com", email_verified=True)
+    ProviderIdentity.objects.create(provider="email", sub="conid@mail.com", account=dueña)
+
+    entregar_anonima(con_mail("conid@mail.com"))
+
+    anonima.refresh_from_db()
+    assert anonima.account == dueña and anonima.cuenta_nueva is False
+    assert ProviderIdentity.objects.filter(provider="email", sub="conid@mail.com").count() == 1
+
+
+def test_si_la_identidad_email_es_de_otra_cuenta_no_se_toca(
+    entregar_anonima, anonima, make_account, sin_hilo, caplog,
+):
+    """El mail matchea una cuenta por `Account.email`, pero la identidad
+    `(email, mail)` ya es de OTRA cuenta: no se mueve nada, se avisa."""
+    por_mail = make_account(email="choque@mail.com", email_verified=False)
+    otra = make_account(email="otra@mail.com", email_verified=True)
+    ProviderIdentity.objects.create(provider="email", sub="choque@mail.com", account=otra)
+
+    with caplog.at_level(logging.WARNING):
+        entregar_anonima(con_mail("choque@mail.com"))
+
+    anonima.refresh_from_db()
+    assert anonima.account == por_mail and anonima.cuenta_nueva is False
+    assert ProviderIdentity.objects.get(provider="email", sub="choque@mail.com").account == otra
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+    assert "choque@mail.com" not in caplog.text

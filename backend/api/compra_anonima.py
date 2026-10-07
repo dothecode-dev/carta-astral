@@ -8,13 +8,13 @@ antes de la compra, y el checkout_id solo nunca alcanza para entrar.
 import logging
 import secrets
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from api import cupones, stripe_client
 from api.accounts import resolver_cuenta
 from api.chart_service import create_chart
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
-from api.models import Account, Chart, PasarelaCheckout, Sujeto
+from api.models import Account, Chart, PasarelaCheckout, ProviderIdentity, Sujeto
 from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,35 @@ def enmascarar(email: str) -> str:
     return f"{local[:1]}***@{dominio}" if dominio else "***"
 
 
+def _asegurar_identidad_email(cuenta: Account, email: str) -> None:
+    """Que el login por código con este mail caiga en `cuenta` (RF12/RF17).
+
+    `resolve_account` sólo enlaza por mail cuentas VERIFICADAS: una cuenta
+    sin verificar y sin identidad `(email, mail)` quedaría fuera del login por
+    código, que crearía otra cuenta y dejaría la compra invisible para quien
+    pagó. Se agrega la identidad sin tocar `email_verified` ni `cuenta_nueva`:
+    entrar sigue exigiendo el código del mail, nunca el pago.
+
+    Si la identidad ya es de OTRA cuenta no se mueve nada —el login por código
+    ya va a esa otra, y reasignarla sería quitarle la puerta a alguien—: queda
+    a la vista para resolverlo a mano.
+    """
+    identidad = ProviderIdentity.objects.filter(provider="email", sub=email).first()
+    if identidad is None:
+        try:
+            with transaction.atomic():
+                ProviderIdentity.objects.create(provider="email", sub=email, account=cuenta)
+            return
+        except IntegrityError:  # carrera: la identidad se creó en paralelo
+            identidad = ProviderIdentity.objects.get(provider="email", sub=email)
+    if identidad.account_id != cuenta.pk:
+        logger.warning(
+            "compra anónima con mail %s: la cuenta %s lo tiene como email pero la "
+            "identidad de login es de la cuenta %s; no se toca, revisar a mano",
+            enmascarar(email), cuenta.pk, identidad.account_id,
+        )
+
+
 def adjudicar(checkout_id: str, email: str) -> Account | None:
     """La cuenta de una compra anónima pagada, por el mail del pago (RF5).
 
@@ -101,6 +130,7 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
         existente = Account.objects.filter(email__iexact=email).order_by("pk").first()
         if existente is not None:
             cuenta, nueva = existente, False
+            _asegurar_identidad_email(cuenta, email)
         else:
             # El mismo camino que el alta por mail de hoy: identidad
             # `(email, <mail normalizado>)` y regalo de bienvenida descontado

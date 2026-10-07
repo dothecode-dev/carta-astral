@@ -178,6 +178,11 @@ def _acreditar(session_id: str) -> None:
         )
         return
 
+    # Antes de validar precio, producto y monto, y a propósito: si alguno de
+    # esos falla, la entrega responde 200 sin acreditar, pero la cuenta ya
+    # quedó creada (con su regalo de bienvenida) y la fila con cuenta. Es lo
+    # que deja resolverlos a mano con `manage.py acreditar_sesion`, que
+    # acredita sobre `fila.account`: sin cuenta en la fila no tendría a quién.
     _adjudicar_si_es_anonima(session_id, sesion)
 
     cuenta, fila = _resolver_cuenta_y_fila(sesion)
