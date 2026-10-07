@@ -345,3 +345,32 @@ def test_perder_el_lock_al_traducir_no_gasta_un_intento(make_chart, cuenta, llam
     assert pt.completa is False
     assert pt.intentos == 0
     assert len(llamadas["traduccion"]) == 1
+
+
+def test_completar_generacion_relee_la_fila_antes_de_generar(make_chart, cuenta, llamadas):
+    """Aísla el `refresh_from_db()` de `completar_generacion`: sin sibling, la
+    defensa de `traducir_informe` no entra en juego. Una foto vieja de un
+    informe que en la base ya está entregado no puede gastar un intento ni
+    reescribir nada."""
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    es = Interpretation.objects.create(
+        chart=carta, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        account=cuenta, completa=True, trato="femenino", text="entregado", intentos=1,
+    )
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=es, slug=seccion.slug, orden=orden, texto=f"es {seccion.slug}",
+        )
+    antes = sorted(es.secciones.values_list("id", "slug", "texto"))
+
+    foto_vieja = Interpretation.objects.get(pk=es.pk)
+    foto_vieja.completa = False
+
+    svc.completar_generacion(foto_vieja, carta, cuenta)
+
+    es.refresh_from_db()
+    assert es.completa is True
+    assert es.intentos == 1
+    assert es.text == "entregado"
+    assert sorted(es.secciones.values_list("id", "slug", "texto")) == antes
+    assert llamadas == {"seccion": [], "breve": [], "traduccion": []}
