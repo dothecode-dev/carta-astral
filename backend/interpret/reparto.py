@@ -31,13 +31,14 @@ DUENA_PUNTO = {
     "Jupiter": "lentos", "Uranus": "lentos", "Neptune": "lentos", "Pluto": "lentos",
 }
 
-DUENA_CASA = {
-    "First_House": "firma", "Second_House": "trabajo", "Third_House": "mente",
-    "Fourth_House": "casas", "Fifth_House": "afectos", "Sixth_House": "trabajo",
-    "Seventh_House": "afectos", "Eighth_House": "casas", "Ninth_House": "casas",
-    "Tenth_House": "trabajo", "Eleventh_House": "casas", "Twelfth_House": "casas",
-}
-CASAS = tuple(DUENA_CASA)
+CASAS = (
+    "First_House", "Second_House", "Third_House", "Fourth_House", "Fifth_House", "Sixth_House",
+    "Seventh_House", "Eighth_House", "Ninth_House", "Tenth_House", "Eleventh_House", "Twelfth_House",
+)
+# Todo cúmulo es de «casas», cuyo foco es la acumulación. Se probó repartirlos por
+# el tema de la casa (la X a «trabajo») y en staging «casas» lo describía igual
+# (07-10-2026): el foco de una sección pesa más que el reparto.
+DUENA_CUMULO = "casas"
 # El ángulo que abre una casa forma parte de su cúmulo.
 ANGULO_DE_CASA = {"First_House": "Ascendant", "Tenth_House": "Medium_Coeli"}
 
@@ -109,7 +110,7 @@ def temas(chart_data: dict) -> list[Tema]:
                 and (a["p1"] in miembros or a["p2"] in miembros)
             )
             absorbidos |= set(internos)
-            salida.append(Tema("cumulo", DUENA_CASA[casa], miembros, casa=casa, internos=internos))
+            salida.append(Tema("cumulo", DUENA_CUMULO, miembros, casa=casa, internos=internos))
 
     for a in aspectos:
         trio = (a["p1"], a["aspect"], a["p2"])

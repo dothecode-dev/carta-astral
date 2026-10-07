@@ -100,10 +100,10 @@ def test_los_aspectos_que_no_califican_no_son_temas():
         assert fuera not in claves, fuera
 
 
-def test_el_cumulo_de_casa_x_es_de_trabajo_y_absorbe_sus_conjunciones():
+def test_el_cumulo_de_casa_x_es_de_casas_y_absorbe_sus_conjunciones():
     t = _por_clave(temas(CARTA))
     cumulo = t["cumulo:Tenth_House"]
-    assert cumulo.duena == "trabajo"
+    assert cumulo.duena == "casas"
     assert cumulo.puntos == ("Mercury", "Venus", "Mars")
     assert set(cumulo.internos) == {
         ("Venus", "conjunction", "Mars"),
@@ -124,15 +124,18 @@ def test_quiron_no_cuenta_para_el_cumulo():
     assert "cumulo:Tenth_House" not in _por_clave(temas(_sin_mercurio_en_x(CARTA)))
 
 
-def test_duena_del_cumulo_segun_la_casa():
-    from interpret.reparto import DUENA_CASA
+def test_todo_cumulo_es_de_casas_sin_importar_la_casa():
+    # Verificado en staging (07-10-2026): con la dueña repartida por casa, «casas»
+    # —cuyo foco es la acumulación— igual describía el cúmulo de la X que era de
+    # «trabajo». El cúmulo es de la sección cuyo foco es la acumulación.
+    from interpret.reparto import CASAS
 
-    assert DUENA_CASA == {
-        "First_House": "firma", "Second_House": "trabajo", "Third_House": "mente",
-        "Fourth_House": "casas", "Fifth_House": "afectos", "Sixth_House": "trabajo",
-        "Seventh_House": "afectos", "Eighth_House": "casas", "Ninth_House": "casas",
-        "Tenth_House": "trabajo", "Eleventh_House": "casas", "Twelfth_House": "casas",
-    }
+    for casa in CASAS:
+        carta = {**CARTA, "placements": [
+            {**p, "house": casa} if p["name"] in ("Sun", "Moon", "Mercury") else p for p in CARTA["placements"]
+        ]}
+        cumulos = [x for x in temas(carta) if x.tipo == "cumulo" and x.casa == casa]
+        assert cumulos and all(x.duena == "casas" for x in cumulos), casa
 
 
 def test_planetas_y_angulos_con_su_duena():
@@ -221,8 +224,11 @@ def test_bloque_nombra_lo_propio_y_lo_ajeno_con_el_verbo_correcto():
 
 
 def test_bloque_del_cumulo():
-    texto = bloque(parte_de(CARTA, "trabajo", ORDEN), "es", TITULOS_ES)
-    assert "cúmulo en la casa X (Mercurio, Venus, Marte)" in texto
+    propio = bloque(parte_de(CARTA, "casas", ORDEN), "es", TITULOS_ES)
+    assert "cúmulo en la casa X (Mercurio, Venus, Marte)" in propio
+    assert "TE TOCA EXPLICAR" in propio.split("LOS EXPLICA")[0]
+    ajeno = bloque(parte_de(CARTA, "trabajo", ORDEN), "es", TITULOS_ES)
+    assert "cúmulo en la casa X (Mercurio, Venus, Marte) — lo vas a ver en «Dónde se juega tu vida»" in ajeno
 
 
 def test_bloque_en_ingles_y_portugues():
