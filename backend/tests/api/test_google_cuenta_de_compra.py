@@ -222,7 +222,9 @@ def test_cuenta_borrada_entre_la_lectura_y_el_lock_crea_cuenta_nueva(google, pag
 
     def leer_y_borrar(email):
         leida = real(email)
-        delete_account(leida)
+        # Se borra una copia: `delete_account` deja `pk=None` en el objeto que
+        # recibe, y el código bajo prueba tiene que consultar el pk real.
+        delete_account(Account.objects.get(pk=leida.pk))
         return leida
 
     monkeypatch.setattr(accounts, "_cuenta_de_compra", leer_y_borrar)
@@ -236,9 +238,12 @@ def test_cuenta_borrada_entre_la_lectura_y_el_lock_crea_cuenta_nueva(google, pag
     assert ident.account_id == r.data["account_id"]
 
 
-def test_ganadora_de_la_carrera_del_sub_que_desaparece_crea_cuenta_nueva(google, pagada, monkeypatch):
+def test_ganadora_de_la_carrera_del_sub_que_desaparece_relee_y_entra_a_la_cuenta_de_la_compra(
+    google, pagada, monkeypatch,
+):
     """Mismo patrón en el `except IntegrityError`: si la identidad que ganó la
-    carrera ya no está al releerla, no es un 500."""
+    carrera ya no está al releerla pero la cuenta de la compra sigue viva, se
+    resuelve de cero y quien pagó entra a SU cuenta (no a una nueva)."""
     from django.db import IntegrityError
 
     cuenta, _ = pagada
@@ -256,16 +261,19 @@ def test_ganadora_de_la_carrera_del_sub_que_desaparece_crea_cuenta_nueva(google,
     r = google()
 
     assert r.status_code == 200
-    assert r.data["account_id"] != cuenta.pk
-    assert ProviderIdentity.objects.get(provider="google", sub="G-1").account_id == r.data["account_id"]
+    assert r.data["account_id"] == cuenta.pk
+    assert Account.objects.filter(email__iexact=MAIL).count() == 1
+    assert ProviderIdentity.objects.get(provider="google", sub="G-1").account_id == cuenta.pk
 
 
-def test_misma_carrera_del_sub_contra_cuenta_verificada_que_desaparece_no_es_500(google, monkeypatch):
+def test_misma_carrera_contra_cuenta_verificada_relee_y_enlaza_a_la_existente(google, monkeypatch):
     """El enlace por mail a una cuenta verificada tiene el mismo `except
-    IntegrityError` + relectura: si la identidad ganadora ya no está, crea."""
+    IntegrityError` + relectura: si la identidad ganadora ya no está, se
+    resuelve de cero y se enlaza a la cuenta verificada, SIN crear otra con el
+    mismo mail."""
     from django.db import IntegrityError
 
-    Account.objects.create(email=MAIL, email_verified=True)
+    existente = Account.objects.create(email=MAIL, email_verified=True)
     real = ProviderIdentity.objects.create
     intentos = []
 
@@ -280,4 +288,33 @@ def test_misma_carrera_del_sub_contra_cuenta_verificada_que_desaparece_no_es_500
     r = google()
 
     assert r.status_code == 200
-    assert ProviderIdentity.objects.get(provider="google", sub="G-1").account_id == r.data["account_id"]
+    assert r.data["account_id"] == existente.pk
+    assert Account.objects.filter(email__iexact=MAIL).count() == 1
+    assert ProviderIdentity.objects.get(provider="google", sub="G-1").account_id == existente.pk
+
+
+def test_colision_real_dentro_de_una_transaccion_abierta_no_rompe_la_relectura(monkeypatch):
+    """Quien llama puede haber abierto ya una transacción (login por código):
+    un `IntegrityError` sin savepoint propio deja la transacción rota y la
+    relectura falla. Acá la colisión es REAL (unique de la base): el primer
+    chequeo de `resolver_cuenta` no ve la identidad, el `create` choca, y la
+    ganadora se relee."""
+    from django.db import transaction
+
+    ganadora = Account.objects.create(email=MAIL, email_verified=True)
+    ProviderIdentity.objects.create(provider="google", sub="G-1", account=ganadora)
+    real_filter = ProviderIdentity.objects.filter
+    llamadas = []
+
+    def filter_ciego_la_primera_vez(*args, **kwargs):
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            return ProviderIdentity.objects.none()
+        return real_filter(*args, **kwargs)
+
+    monkeypatch.setattr(ProviderIdentity.objects, "filter", filter_ciego_la_primera_vez)
+
+    with transaction.atomic():
+        cuenta, creada = resolver_cuenta(VerifiedIdentity("google", "G-1", MAIL, True))
+
+    assert cuenta.pk == ganadora.pk and creada is False

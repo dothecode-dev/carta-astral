@@ -122,9 +122,12 @@ def _enlazar_cuenta_de_compra(vid: VerifiedIdentity, cuenta: Account) -> Account
     espera y la ve verificada. Si el sub se enlazó en paralelo, se devuelve
     la cuenta ganadora sin tocar nada más.
 
-    Devuelve `None` si la cuenta de la compra (o la identidad ganadora de la
-    carrera) ya no existe: la borraron entre que se la leyó sin lock y este
-    lock. Quien llama sigue como si no hubiera cuenta de compra.
+    Devuelve `None` sólo si la cuenta de la compra ya no existe: la borraron
+    entre que se la leyó sin lock y este lock, y quien llama sigue como si no
+    hubiera cuenta de compra. Si el sub choca y la identidad ganadora ya no
+    está (con la cuenta de la compra viva y bloqueada), vuelve a levantar el
+    `IntegrityError`: devolver `None` crearía OTRA cuenta y quien pagó
+    entraría sin su informe; `resolver_cuenta` resuelve de cero.
     """
     with transaction.atomic():
         acc = Account.objects.select_for_update().filter(pk=cuenta.pk).first()
@@ -137,7 +140,9 @@ def _enlazar_cuenta_de_compra(vid: VerifiedIdentity, cuenta: Account) -> Account
         except IntegrityError:  # carrera: el sub se creó en paralelo
             logger.info("race linking %s sub to purchase account; re-reading", vid.provider)
             ganadora = ProviderIdentity.objects.filter(provider=vid.provider, sub=vid.sub).first()
-            return ganadora.account if ganadora is not None else None
+            if ganadora is None:
+                raise
+            return ganadora.account
         if not acc.email_verified:
             probar_mail(acc)
     logger.info(
@@ -151,7 +156,7 @@ def resolve_account(vid: VerifiedIdentity) -> Account:
     return resolver_cuenta(vid)[0]
 
 
-def resolver_cuenta(vid: VerifiedIdentity) -> tuple[Account, bool]:
+def resolver_cuenta(vid: VerifiedIdentity, _reintento: bool = True) -> tuple[Account, bool]:
     """`resolve_account`, diciendo además si la cuenta la creó ESTA llamada.
 
     Lo necesita la compra anónima (spec «pagar es entrar», RF5/RF11): sólo una
@@ -159,6 +164,11 @@ def resolver_cuenta(vid: VerifiedIdentity) -> tuple[Account, bool]:
     haya encontrado un lookup previo no alcanza para decirlo —la identidad
     puede existir ya, o crearse en paralelo y ganar la carrera del `INSERT`—:
     el único que sabe si creó es el que creó.
+
+    Si el `INSERT` del enlace choca y la identidad ganadora ya no está al
+    releerla (se borró en el medio), se resuelve de cero UNA vez —releyendo
+    las cuentas— en vez de crear una cuenta nueva con un mail que ya tiene
+    dueña; si vuelve a pasar, se propaga el `IntegrityError` (reintentable).
     """
     existing = ProviderIdentity.objects.filter(provider=vid.provider, sub=vid.sub).first()
     if existing is not None:
@@ -190,18 +200,23 @@ def resolver_cuenta(vid: VerifiedIdentity) -> tuple[Account, bool]:
                 )
             account = matches[0]
             try:
-                ProviderIdentity.objects.create(
-                    provider=vid.provider, sub=vid.sub, account=account,
-                )
+                # Savepoint propio: si el llamador ya abrió una transacción
+                # (login por código), un IntegrityError sin él la dejaría rota
+                # y la relectura de abajo fallaría.
+                with transaction.atomic():
+                    ProviderIdentity.objects.create(
+                        provider=vid.provider, sub=vid.sub, account=account,
+                    )
             except IntegrityError:  # carrera: el sub se creo en paralelo
                 logger.info("race linking %s sub to account; re-reading", vid.provider)
                 ganadora = ProviderIdentity.objects.filter(
                     provider=vid.provider, sub=vid.sub,
                 ).first()
-                # Si la identidad ganadora ya no está (borraron la cuenta en el
-                # medio), no hay a quién devolver: sigue como cuenta nueva.
                 if ganadora is not None:
                     return ganadora.account, False
+                if not _reintento:
+                    raise
+                return resolver_cuenta(vid, _reintento=False)
             else:
                 return account, False
 
@@ -210,7 +225,12 @@ def resolver_cuenta(vid: VerifiedIdentity) -> tuple[Account, bool]:
         # corre.
         de_compra = _cuenta_de_compra(normalizado)
         if de_compra is not None:
-            enlazada = _enlazar_cuenta_de_compra(vid, de_compra)
+            try:
+                enlazada = _enlazar_cuenta_de_compra(vid, de_compra)
+            except IntegrityError:  # la ganadora del sub desapareció: de cero
+                if not _reintento:
+                    raise
+                return resolver_cuenta(vid, _reintento=False)
             if enlazada is not None:
                 return enlazada, False
 
