@@ -119,3 +119,29 @@ def test_sin_derecho_tras_un_consumo_posterior_al_otorgamiento_sube(
     monkeypatch.setattr(interpretation_service, "iniciar_generacion", sin_derecho)
     with pytest.raises(SinDerecho):
         compra_service.arrancar_informe(cuenta, fila)
+
+
+def test_un_consumo_de_otro_producto_no_esconde_la_deuda(make_account, make_chart, monkeypatch):
+    """Revisión final, Important 3: una `lectura_breve` gastada en otra carta
+    entre el otorgamiento y el arranque no es el informe comprado. El rastro
+    se mira por producto; si no, un caso legítimo de deuda subía como 5xx y
+    Stripe reintentaba tres días."""
+    cuenta = make_account()
+    fila = _fila(cuenta, make_chart)
+    Movimiento.objects.create(
+        account=cuenta, codigo_producto="informe_natal", tipo="otorgamiento",
+        cantidad=1, origen="compra", external_id="stripe:session:cs_x",
+    )
+    Movimiento.objects.create(
+        account=cuenta, codigo_producto="lectura_breve", tipo="consumo",
+        cantidad=-1, origen="compra",
+    )
+
+    def sin_derecho(*a, **k):
+        raise SinDerecho("leer_informe")
+
+    monkeypatch.setattr(interpretation_service, "iniciar_generacion", sin_derecho)
+    compra_service.arrancar_informe(cuenta, fila)  # no sube
+
+    fila.refresh_from_db()
+    assert fila.saldo_deuda is True

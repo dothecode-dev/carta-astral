@@ -95,6 +95,11 @@ def _saldo_deuda(cuenta, fila) -> bool:
     la cuenta y NADA movió sus derechos después (ni consumo, devolución ni
     revocación). Si sobra un otorgamiento sin saldo y nadie lo gastó, la unidad
     fue a la deuda. Si falta el otorgamiento o algo lo gastó, es otra cosa.
+
+    «Algo» es de ESTE producto: el comprado o lo que otorga (el consumo y la
+    devolución quedan con el código otorgado; la revocación, con el
+    comprado). Mirando toda la cuenta, una `lectura_breve` gastada en otra
+    carta convertía un caso legítimo de deuda en un 5xx de tres días.
     """
     otorgamiento = (
         Movimiento.objects
@@ -103,7 +108,11 @@ def _saldo_deuda(cuenta, fila) -> bool:
     )
     if otorgamiento is None:
         return False
+    codigos = {fila.codigo_producto} | {
+        codigo for codigo, _ in catalogo.producto(fila.codigo_producto).otorga
+    }
     return not Movimiento.objects.filter(
-        account=cuenta, tipo__in=("consumo", "devolucion", "revocacion"),
+        account=cuenta, codigo_producto__in=codigos,
+        tipo__in=("consumo", "devolucion", "revocacion"),
         created_at__gte=otorgamiento.created_at,
     ).exists()
