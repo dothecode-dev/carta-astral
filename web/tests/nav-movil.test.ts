@@ -18,3 +18,20 @@ describe("la barra en móvil", () => {
     expect(bloque640()).toMatch(/\.nav\s*\{[^}]*position:\s*static/);
   });
 });
+
+describe("los desplegables anidados", () => {
+  it("el chevrón de abierto es sólo del propio summary, no de los hijos", () => {
+    // DatosCarta envuelve a los de casas y aspectos: con el descendiente
+    // (" ") los internos cerrados giraban al abrir el padre.
+    expect(css).toMatch(/\.foldout\[open\]\s*>\s*\.foldoutHead::after/);
+    expect(css).not.toMatch(/\.foldout\[open\]\s+\.foldoutHead::after/);
+  });
+});
+
+describe("la barra fija de la carta", () => {
+  it("se esconde mientras está el banner de consentimiento", () => {
+    // Los dos son fixed abajo; el banner tiene más z-index y tapaba el botón
+    // principal justo en la primera visita.
+    expect(css).toMatch(/body:has\(\.consentBar\)\s+\.accionFija\s*\{[^}]*display:\s*none/);
+  });
+});

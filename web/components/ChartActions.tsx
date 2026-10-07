@@ -626,7 +626,13 @@ export function ChartActions({
       }
     });
     observador.observe(nodoAcciones);
-    return () => observador.disconnect();
+    return () => {
+      observador.disconnect();
+      // Al desmontar el bloque (la espera) se olvida lo medido: si quedara en
+      // `false`, al volver los botones la barra se dibujaría un frame hasta
+      // que el observador nuevo mida de vuelta.
+      setBloqueVisible(null);
+    };
   }, [nodoAcciones, ofertaBreve, ofertaCompleto, medirEnPantalla]);
 
   if (busy || refrescando) {

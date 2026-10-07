@@ -33,8 +33,11 @@ vi.mock("@/lib/session", async (importOriginal) => {
     ...real,
     haySesion: async () => sesion,
     // Sólo las cartas se simulan; el cupón sigue yendo al `fetch` stubeado.
+    // Con la forma REAL del listado: `{ results: [...] }`, no un array. El
+    // test anterior mockeaba un array y daba por viva una nota que en
+    // producción no aparecía nunca (`charts.length` de un objeto es undefined).
     callApi: async (ruta: string, init?: RequestInit) =>
-      ruta.startsWith("/api/charts/") ? cartas : real.callApi(ruta, init),
+      ruta.startsWith("/api/charts/") ? { results: cartas } : real.callApi(ruta, init),
   };
 });
 

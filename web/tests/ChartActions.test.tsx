@@ -1175,6 +1175,36 @@ describe("ChartActions: barra fija", () => {
     expect(screen.getByTestId("accion-fija").textContent).toContain(dict.chart.interpretCompleto);
   });
 
+  it("al volver de la espera no reaparece hasta que el observador vuelve a medir", async () => {
+    // El primer observador dice «fuera de pantalla»; los siguientes no dicen
+    // nada todavía. Si `bloqueVisible` quedara en `false`, la barra se
+    // dibujaría un frame al volver los botones tras un error del sondeo.
+    let instancias = 0;
+    class Observador {
+      constructor(private cb: IntersectionObserverCallback) {
+        instancias += 1;
+      }
+      observe() {
+        if (instancias === 1) {
+          this.cb([{ isIntersecting: false } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+        }
+      }
+      disconnect() {}
+    }
+    vi.stubGlobal("IntersectionObserver", Observador);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(reply(202)).mockResolvedValue(reply(404)));
+    renderActions({ paidCredits: 1 });
+    expect(screen.getByTestId("accion-fija")).toBeInTheDocument();
+
+    // Con la barra puesta hay dos botones con el mismo nombre: el del bloque.
+    fireEvent.click(screen.getAllByRole("button", { name: dict.chart.interpretCompletoConDerecho })[0]);
+    await correr();
+    await correr(POLL_MS);
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByTestId("accion-fija")).toBeNull();
+  });
+
   it("sin IntersectionObserver no aparece nunca", () => {
     vi.stubGlobal("IntersectionObserver", undefined);
     renderActions({ paidCredits: 0 });

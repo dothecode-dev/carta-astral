@@ -777,7 +777,9 @@ a {
   transition: transform 0.18s ease;
 }
 
-.foldout[open] .foldoutHead::after {
+/* Hijo directo: DatosCarta envuelve a los de casas y aspectos, y con el
+   descendiente los internos cerrados giraban al abrir el padre. */
+.foldout[open] > .foldoutHead::after {
   transform: rotate(-135deg) translateY(-0.1em);
 }
 
@@ -795,7 +797,7 @@ a {
   opacity: 0.6;
 }
 
-.foldout .chartTable {
+.foldout > .chartTable {
   margin-top: 0.75rem;
   max-width: var(--measure);
 }
@@ -928,6 +930,12 @@ a {
 .accionFija .btn {
   pointer-events: auto;
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+
+/* El banner de consentimiento también va fijo abajo y con más z-index: en
+   la primera visita tapaba el botón. Mientras esté el banner, no hay barra. */
+body:has(.consentBar) .accionFija {
+  display: none;
 }
 
 /* Los datos de la carta, plegados al final: un solo desplegable que guarda la
@@ -1903,6 +1911,8 @@ a {
 .chartFrame {
   max-width: 1080px;
   gap: clamp(2.5rem, 6vw, 3.5rem);
+  /* Lugar para la barra fija al final de la página, que si no cubre el pie. */
+  padding-bottom: 5rem;
 }
 
 .chartHead {

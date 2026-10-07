@@ -86,12 +86,15 @@ export default async function PreciosPage({
     haySesion(),
     codigoCupon ? fetchCupon(codigoCupon) : Promise.resolve(null),
   ]);
-  // Cuántas cartas tiene la cuenta, sólo con sesión: decide si la tarjeta
-  // tiene que explicar qué pasa después de pagar sin una carta. Si falla,
-  // se asume que hay —la nota de más es ruido, la de menos no rompe nada—.
-  const charts: ChartSummary[] = signedIn
-    ? await callApi<ChartSummary[]>("/api/charts/").catch(() => [{ id: "desconocida" } as ChartSummary])
-    : [];
+  // Si la cuenta tiene alguna carta, sólo con sesión: decide si la tarjeta
+  // tiene que explicar qué pasa después de pagar sin una. El listado viene
+  // como `{ results: [...] }`, igual que lo lee la cuenta. Si falla, se asume
+  // que hay —la nota de más es ruido, la de menos no rompe nada—.
+  const hayCartas: boolean = signedIn
+    ? await callApi<{ results: ChartSummary[] }>("/api/charts/")
+        .then((r) => r.results.length > 0)
+        .catch(() => true)
+    : true;
   const cuponValido = cupon?.valido ? cupon : null;
   const estadoCupon = cupon === null ? null : cupon.valido ? "valido" : cupon.motivo;
   // El precio final por producto, sólo para los que el cupón abarca.
@@ -220,7 +223,7 @@ export default async function PreciosPage({
                     reanudar={pedido === producto.codigo}
                     cupon={final === undefined ? null : cuponValido?.codigo}
                   />
-                  {signedIn && charts.length === 0 && (
+                  {signedIn && !hayCartas && (
                     <p className="fieldNote">{dict.precios.sinCartaNota}</p>
                   )}
                 </li>
