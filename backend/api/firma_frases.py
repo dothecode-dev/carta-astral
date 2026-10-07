@@ -28,7 +28,9 @@ def firma(data: dict) -> list[dict]:
     tiene dos líneas. Toma el `data` ya serializado y no el `ChartData` para
     servir igual a una carta guardada (`Chart.data`) y a una vista previa.
     """
-    signos = {p["name"]: p["sign"] for p in data["placements"]}
+    # `data` puede venir vacío (filas viejas, fixtures): sin cuerpos no hay
+    # firma, y eso no puede ser un 500 en el detalle ni en el listado.
+    signos = {p["name"]: p["sign"] for p in data.get("placements") or []}
     if data.get("time_known") and data.get("angles"):
         signos.update({a["name"]: a["sign"] for a in data["angles"]})
     return [

@@ -62,3 +62,10 @@ def test_firma_con_hora_tiene_tres_lineas():
 def test_firma_sin_hora_no_tiene_ascendente():
     lineas = firma(_data(time_known=False))
     assert [linea["cuerpo"] for linea in lineas] == ["Sun", "Moon"]
+
+
+def test_firma_sin_datos_es_vacia():
+    """Una carta sin `data` calculado (filas viejas, fixtures) no tiene firma,
+    y eso no puede ser un 500 en el detalle ni en el listado de cartas."""
+    assert firma({}) == []
+    assert firma({"placements": [], "angles": None, "time_known": True}) == []
