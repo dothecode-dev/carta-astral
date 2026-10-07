@@ -112,7 +112,7 @@ def _cuenta_de_compra(email: str) -> Account | None:
     )
 
 
-def _enlazar_cuenta_de_compra(vid: VerifiedIdentity, cuenta: Account) -> Account:
+def _enlazar_cuenta_de_compra(vid: VerifiedIdentity, cuenta: Account) -> Account | None:
     """Enlaza el sub del proveedor a la cuenta que creó una compra, la
     verifica y cierra sus otras sesiones, en una sola transacción.
 
@@ -121,15 +121,23 @@ def _enlazar_cuenta_de_compra(vid: VerifiedIdentity, cuenta: Account) -> Account
     abre sesión, así que o el canje termina antes (y su sesión cae acá) o
     espera y la ve verificada. Si el sub se enlazó en paralelo, se devuelve
     la cuenta ganadora sin tocar nada más.
+
+    Devuelve `None` si la cuenta de la compra (o la identidad ganadora de la
+    carrera) ya no existe: la borraron entre que se la leyó sin lock y este
+    lock. Quien llama sigue como si no hubiera cuenta de compra.
     """
     with transaction.atomic():
-        acc = Account.objects.select_for_update().get(pk=cuenta.pk)
+        acc = Account.objects.select_for_update().filter(pk=cuenta.pk).first()
+        if acc is None:
+            logger.info("la cuenta de la compra %s se borró antes del enlace; sigue el camino normal", cuenta.pk)
+            return None
         try:
             with transaction.atomic():
                 ProviderIdentity.objects.create(provider=vid.provider, sub=vid.sub, account=acc)
         except IntegrityError:  # carrera: el sub se creó en paralelo
             logger.info("race linking %s sub to purchase account; re-reading", vid.provider)
-            return ProviderIdentity.objects.get(provider=vid.provider, sub=vid.sub).account
+            ganadora = ProviderIdentity.objects.filter(provider=vid.provider, sub=vid.sub).first()
+            return ganadora.account if ganadora is not None else None
         if not acc.email_verified:
             probar_mail(acc)
     logger.info(
@@ -187,17 +195,24 @@ def resolver_cuenta(vid: VerifiedIdentity) -> tuple[Account, bool]:
                 )
             except IntegrityError:  # carrera: el sub se creo en paralelo
                 logger.info("race linking %s sub to account; re-reading", vid.provider)
-                return ProviderIdentity.objects.get(
+                ganadora = ProviderIdentity.objects.filter(
                     provider=vid.provider, sub=vid.sub,
-                ).account, False
-            return account, False
+                ).first()
+                # Si la identidad ganadora ya no está (borraron la cuenta en el
+                # medio), no hay a quién devolver: sigue como cuenta nueva.
+                if ganadora is not None:
+                    return ganadora.account, False
+            else:
+                return account, False
 
         # Sólo si no hay una verificada (que manda, arriba) y sólo con el mail
         # verificado por el proveedor: con `email_verified=False` esto nunca
         # corre.
         de_compra = _cuenta_de_compra(normalizado)
         if de_compra is not None:
-            return _enlazar_cuenta_de_compra(vid, de_compra), False
+            enlazada = _enlazar_cuenta_de_compra(vid, de_compra)
+            if enlazada is not None:
+                return enlazada, False
 
     return _create_account(vid)
 

@@ -203,3 +203,81 @@ def test_el_login_por_codigo_sigue_verificando_y_cerrando_sesiones(client, pagad
     cuenta.refresh_from_db()
     assert cuenta.email_verified is True
     assert not _sesion_viva(token_pagador)
+
+
+# (d) carrera con un borrado de cuenta ----------------------------------------
+
+
+def test_cuenta_borrada_entre_la_lectura_y_el_lock_crea_cuenta_nueva(google, pagada, monkeypatch):
+    """La cuenta de la compra se lee sin lock y se relee bajo `select_for_update`;
+    si la borraron en el medio, el `get` levantaba `DoesNotExist` y el login
+    respondía 500. Ahora sigue el camino de siempre: como si no hubiera cuenta
+    de compra, crea la cuenta."""
+    from api import accounts
+    from api.deletion import delete_account
+
+    cuenta, _ = pagada
+    cuenta_pk = cuenta.pk
+    real = accounts._cuenta_de_compra
+
+    def leer_y_borrar(email):
+        leida = real(email)
+        delete_account(leida)
+        return leida
+
+    monkeypatch.setattr(accounts, "_cuenta_de_compra", leer_y_borrar)
+
+    r = google()
+
+    assert r.status_code == 200
+    assert r.data["account_id"] != cuenta_pk
+    assert not Account.objects.filter(pk=cuenta_pk).exists()
+    ident = ProviderIdentity.objects.get(provider="google", sub="G-1")
+    assert ident.account_id == r.data["account_id"]
+
+
+def test_ganadora_de_la_carrera_del_sub_que_desaparece_crea_cuenta_nueva(google, pagada, monkeypatch):
+    """Mismo patrón en el `except IntegrityError`: si la identidad que ganó la
+    carrera ya no está al releerla, no es un 500."""
+    from django.db import IntegrityError
+
+    cuenta, _ = pagada
+    real = ProviderIdentity.objects.create
+    intentos = []
+
+    def colision_la_primera_vez(*args, **kwargs):
+        intentos.append(1)
+        if len(intentos) == 1:
+            raise IntegrityError("simulada: el sub ganador ya no existe")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(ProviderIdentity.objects, "create", colision_la_primera_vez)
+
+    r = google()
+
+    assert r.status_code == 200
+    assert r.data["account_id"] != cuenta.pk
+    assert ProviderIdentity.objects.get(provider="google", sub="G-1").account_id == r.data["account_id"]
+
+
+def test_misma_carrera_del_sub_contra_cuenta_verificada_que_desaparece_no_es_500(google, monkeypatch):
+    """El enlace por mail a una cuenta verificada tiene el mismo `except
+    IntegrityError` + relectura: si la identidad ganadora ya no está, crea."""
+    from django.db import IntegrityError
+
+    Account.objects.create(email=MAIL, email_verified=True)
+    real = ProviderIdentity.objects.create
+    intentos = []
+
+    def colision_la_primera_vez(*args, **kwargs):
+        intentos.append(1)
+        if len(intentos) == 1:
+            raise IntegrityError("simulada")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(ProviderIdentity.objects, "create", colision_la_primera_vez)
+
+    r = google()
+
+    assert r.status_code == 200
+    assert ProviderIdentity.objects.get(provider="google", sub="G-1").account_id == r.data["account_id"]
