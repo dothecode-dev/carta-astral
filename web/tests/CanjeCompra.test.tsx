@@ -1,4 +1,5 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CanjeCompra, POLL_MS, POLL_TRIES } from "@/components/CanjeCompra";
@@ -26,6 +27,8 @@ const reply = (status: number, body: unknown = {}) => ({
   status,
   json: async () => body,
 });
+
+type Fetch = (url: string, init?: RequestInit) => Promise<ReturnType<typeof reply>>;
 
 function renderCanje() {
   return render(<CanjeCompra locale="es" checkoutId={CHECKOUT} dict={dict} />);
@@ -114,25 +117,117 @@ describe("CanjeCompra", () => {
     const soporte = screen.getByText(/info@astraguia\.com/);
     expect(soporte).toHaveTextContent("NhtxZOwIt1");
     expect(soporte).not.toHaveTextContent(CHECKOUT);
-    expect(screen.getByRole("link", { name: dict.compra.canjeEntrar })).toHaveAttribute(
-      "href",
-      `/es/entrar?next=${encodeURIComponent(CARTA)}`,
-    );
     expect(replace).not.toHaveBeenCalled();
     // Volver a canjear mandaría otro mail: con `codigo` se deja de preguntar.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("codigo con un destino que no es del sitio: el enlace no lo lleva", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(reply(200, { estado: "codigo", email: "g***@gmail.com", destino: "//malo" })),
+  it("codigo: el formulario de mail y código está ahí, sin pedir otro código", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(reply(200, { estado: "codigo", email: "g***@gmail.com", destino: CARTA }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderCanje();
+    await correr(3);
+
+    expect(screen.getByLabelText(dict.auth.mailLabel)).toHaveValue("");
+    expect(screen.getByLabelText(dict.auth.codigoLabel)).toBeInTheDocument();
+    // El backend ya mandó el código: pedir otro gastaría el cupo por hora y
+    // mandaría un segundo mail.
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain("/api/session/codigo");
+  });
+
+  it("codigo: canjear el código entra a la carta (reemplazando la sesión que hubiera)", async () => {
+    const fetchMock = vi.fn<Fetch>(async (url) =>
+      url === "/api/session"
+        ? reply(200, { derechos: [], account_id: 9 })
+        : reply(200, { estado: "codigo", email: "g***@gmail.com", destino: CARTA }),
     );
+    vi.stubGlobal("fetch", fetchMock);
 
     renderCanje();
     await correr();
+    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@gmail.com" } });
+    fireEvent.change(screen.getByLabelText(dict.auth.codigoLabel), { target: { value: "123456" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: dict.auth.codigoButton }));
+    });
 
-    expect(screen.getByRole("link", { name: dict.compra.canjeEntrar })).toHaveAttribute("href", "/es/entrar");
+    const canje = fetchMock.mock.calls.find(([url]) => url === "/api/session")!;
+    expect(JSON.parse((canje[1] as RequestInit).body as string)).toEqual({
+      provider: "email",
+      email: "gus@gmail.com",
+      codigo: "123456",
+    });
+    expect(replace).toHaveBeenCalledWith(CARTA);
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("codigo: «reenviar» sí pide un código nuevo, al mail escrito y con destino la carta", async () => {
+    const fetchMock = vi.fn<Fetch>(async (url) =>
+      url === "/api/session/codigo"
+        ? reply(200, {})
+        : reply(200, { estado: "codigo", email: "g***@gmail.com", destino: CARTA }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderCanje();
+    await correr();
+    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@gmail.com" } });
+    // El reenvío espera un minuto, como en /entrar: el mail recién salió.
+    expect(screen.getByRole("button", { name: dict.auth.reenviar })).toBeDisabled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: dict.auth.reenviar }));
+    });
+
+    const pedido = fetchMock.mock.calls.find(([url]) => url === "/api/session/codigo")!;
+    expect(JSON.parse((pedido[1] as RequestInit).body as string)).toEqual({
+      email: "gus@gmail.com",
+      lang: "es",
+      destino: CARTA,
+    });
+  });
+
+  it("codigo con un destino que no es del sitio: al canjear va a la cuenta", async () => {
+    const fetchMock = vi.fn<Fetch>(async (url) =>
+      url === "/api/session"
+        ? reply(200, { derechos: [], account_id: 9 })
+        : reply(200, { estado: "codigo", email: "g***@gmail.com", destino: "//malo" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderCanje();
+    await correr();
+    fireEvent.change(screen.getByLabelText(dict.auth.mailLabel), { target: { value: "gus@gmail.com" } });
+    fireEvent.change(screen.getByLabelText(dict.auth.codigoLabel), { target: { value: "123456" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: dict.auth.codigoButton }));
+    });
+
+    expect(replace).toHaveBeenCalledWith("/es/cuenta");
+  });
+
+  it("en StrictMode (efecto doble) sale un solo canje, y su `sesion` se sigue", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply(200, { estado: "sesion", destino: CARTA, account_id: 7 }))
+      .mockResolvedValue(reply(200, { estado: "invalido" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <StrictMode>
+        <CanjeCompra locale="es" checkoutId={CHECKOUT} dict={dict} />
+      </StrictMode>,
+    );
+    await correr(2);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith(CARTA);
+    expect(screen.queryByText(dict.compra.canjeInvalidoTitle)).toBeNull();
   });
 
   it("pendiente: sigue preguntando sin mandar a ningún lado", async () => {

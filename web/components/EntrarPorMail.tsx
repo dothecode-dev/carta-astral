@@ -62,6 +62,7 @@ export function EntrarPorMail({
   locale,
   next,
   labels,
+  codigoYaEnviado = false,
 }: {
   locale: string;
   /** A dónde volver al entrar. Ya validado contra `destinoSeguro` por quien
@@ -73,9 +74,16 @@ export function EntrarPorMail({
    *  pestaña nueva y ese `next` original ya no está en la URL. */
   next?: string | null;
   labels: Labels;
+  /** El código ya salió por otro lado y la pantalla no conoce el mail: es la
+   *  vuelta de una compra sin cuenta (`CanjeCompra`), donde el backend lo
+   *  mandó al canjear y sólo devuelve el mail enmascarado. Arranca en el paso
+   *  del código, con el campo del mail en ese mismo paso, y NO pide otro
+   *  código al montar: sería un segundo mail y un pedido más contra el techo
+   *  por hora. «Reenviar» sí pide, igual que en el modo normal. */
+  codigoYaEnviado?: boolean;
 }) {
   const router = useRouter();
-  const [paso, setPaso] = useState<Paso>("pedir");
+  const [paso, setPaso] = useState<Paso>(codigoYaEnviado ? "codigo" : "pedir");
   const [email, setEmail] = useState("");
   const [codigo, setCodigo] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -84,10 +92,12 @@ export function EntrarPorMail({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // El código acaba de salir: el reenvío espera lo mismo que tras un pedido.
+    if (codigoYaEnviado) timer.current = setTimeout(() => setPuedeReenviar(true), ESPERA_REENVIO_MS);
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, []);
+  }, [codigoYaEnviado]);
 
   function armarEsperaDeReenvio() {
     setPuedeReenviar(false);
@@ -147,7 +157,7 @@ export function EntrarPorMail({
   }
 
   async function onReenviar() {
-    if (!puedeReenviar || enviando) return;
+    if (!puedeReenviar || enviando || !email.trim()) return;
     // El mismo mail que se usó al pedir (RF6): no hay campo para cambiarlo
     // en este paso.
     await pedirCodigo(email.trim(), true);
@@ -156,7 +166,7 @@ export function EntrarPorMail({
   async function onCodigoSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const codigoLimpio = codigo.trim();
-    if (!codigoLimpio || enviando) return;
+    if (!codigoLimpio || !email.trim() || enviando) return;
 
     setEnviando(true);
     setError(null);
@@ -253,6 +263,24 @@ export function EntrarPorMail({
 
   return (
     <form className="form" onSubmit={onCodigoSubmit}>
+      {codigoYaEnviado && (
+        <div className="field">
+          <label className="fieldLabel" htmlFor="entrar-mail">
+            {labels.mailLabel}
+          </label>
+          <input
+            id="entrar-mail"
+            className="input"
+            type="email"
+            autoComplete="email"
+            placeholder={labels.mailPlaceholder}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={enviando}
+            required
+          />
+        </div>
+      )}
       <div className="field">
         <label className="fieldLabel" htmlFor="entrar-codigo">
           {labels.codigoLabel}
@@ -284,13 +312,16 @@ export function EntrarPorMail({
           type="button"
           className="linkButton"
           onClick={onReenviar}
-          disabled={!puedeReenviar || enviando}
+          disabled={!puedeReenviar || enviando || (codigoYaEnviado && !email.trim())}
         >
           {labels.reenviar}
         </button>
-        <button type="button" className="linkButton" onClick={volverAPedir} disabled={enviando}>
-          {labels.cambiarMail}
-        </button>
+        {/* Con el mail en el mismo paso no hay a dónde volver para cambiarlo. */}
+        {!codigoYaEnviado && (
+          <button type="button" className="linkButton" onClick={volverAPedir} disabled={enviando}>
+            {labels.cambiarMail}
+          </button>
+        )}
       </div>
     </form>
   );

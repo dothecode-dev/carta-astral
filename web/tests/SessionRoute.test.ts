@@ -419,3 +419,22 @@ describe("POST /api/session/codigo (pedir el código por mail)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+// RF14 de «pagar es entrar»: quien vuelve de pagar con la sesión de OTRA cuenta
+// abierta canjea el código desde /compra; la compra es suya, así que la sesión
+// nueva reemplaza a la vieja.
+describe("POST /api/session con la sesión de otra cuenta abierta", () => {
+  it("el canje del código reemplaza la sesión", async () => {
+    const { POST } = await import("@/app/api/session/route");
+    store.set(SESSION_COOKIE, { value: "token-de-otro" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(json({ token: "token-nuevo", derechos: [], account_id: 9, destino: "" })),
+    );
+
+    const res = await POST(pedidoCanje({ provider: "email", email: "gus@gmail.com", codigo: "123456" }));
+
+    expect(res.status).toBe(200);
+    expect(store.get(SESSION_COOKIE)?.value).toBe("token-nuevo");
+  });
+});

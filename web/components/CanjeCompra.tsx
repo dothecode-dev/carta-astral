@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { EntrarPorMail } from "@/components/EntrarPorMail";
 import { SolarSystem } from "@/components/SolarSystem";
 import { abreviar } from "@/lib/compraCookie";
 import type { Dict, Locale } from "@/lib/i18n";
@@ -16,7 +17,7 @@ import { identificar } from "@/lib/telemetry";
 // httpOnly de este checkout: acá no se ve) y, según lo que conteste:
 // - `sesion`: la compra creó la cuenta y la sesión ya está puesta. A la carta.
 // - `codigo`: la cuenta ya existía y se le mandó un código a su mail. Se lo
-//   dice y lo manda a `/entrar` a escribir el mail y el código (ver abajo).
+//   dice y le muestra acá mismo el formulario de mail + código (ver abajo).
 // - `pendiente`: el webhook todavía no acreditó. Se vuelve a preguntar.
 // - `invalido`: no hay canje posible. Se lo manda a su cuenta.
 //
@@ -24,12 +25,23 @@ import { identificar } from "@/lib/telemetry";
 // pediría otro mail; después de `sesion` o `invalido` ya no hay nada que
 // preguntar.
 //
-// Por qué un enlace a `/entrar` y no el formulario del código acá mismo:
-// `EntrarPorMail` canjea el código con el mail COMPLETO, y el backend sólo nos
-// da el enmascarado —a propósito: quien vuelve de pagar con el mail de otro no
-// tiene por qué verlo—. Reescribir el mail en `/entrar` es un paso más, pero
-// es el mismo formulario que ya funciona, y pedir el código de nuevo ahí no
-// manda uno distinto: el backend devuelve el mismo mientras esté vigente.
+// El formulario del código va acá y no en `/entrar`, por dos razones:
+// - `/entrar` empieza pidiendo el código, y el backend crea uno NUEVO en cada
+//   pedido (`codigos_acceso.pedir`): sería un segundo mail y un pedido más
+//   contra el techo por hora, para un código que ya salió.
+// - Con la sesión de otra cuenta abierta, `/entrar` redirige sin mostrar nada,
+//   y quien pagó nunca llegaría a escribir su código (RF14: con o sin sesión).
+// Es `EntrarPorMail` en modo `codigoYaEnviado`: mail y código en el mismo
+// paso, sin pedir nada al montar. El mail completo lo escribe la persona —el
+// backend sólo da el enmascarado, a propósito: quien pagó con el mail de otro
+// no tiene por qué verlo—. El canje del código pasa por `/api/session`, que
+// reemplaza la sesión que hubiera. «Reenviar» sí pide uno nuevo.
+//
+// Un solo canje en vuelo por checkout: en desarrollo React monta los efectos
+// dos veces (StrictMode), y dos canjes simultáneos terminan con el primero
+// ganando `sesion` —con la cookie ya puesta por el servidor— y el segundo en
+// 404. Por eso el pedido se comparte (`enVuelo`) y un `sesion` nunca se
+// descarta, aunque el efecto que lo pidió ya se haya limpiado.
 
 /** Cada cuánto se vuelve a preguntar mientras el pago está pendiente. */
 export const POLL_MS = 3000;
@@ -48,6 +60,34 @@ type Vista =
   | { tipo: "codigo"; email: string; destino: string | null }
   | { tipo: "proceso" }
   | { tipo: "invalido" };
+
+/** El canje en curso de cada checkout. Lo comparten las dos corridas del
+ *  efecto en StrictMode (y cualquier otra instancia montada a la vez). */
+const enVuelo = new Map<string, Promise<Respuesta | null>>();
+
+/** Un canje, o el que ya está en vuelo para ese checkout. `null` es una
+ *  falla pasajera (429, 502, red): cuenta como un intento más. */
+function canjear(checkoutId: string): Promise<Respuesta | null> {
+  const ya = enVuelo.get(checkoutId);
+  if (ya) return ya;
+  const pedido = (async () => {
+    try {
+      const res = await fetch("/api/compra/canjear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checkout_id: checkoutId }),
+      });
+      return res.ok ? ((await res.json()) as Respuesta) : null;
+    } catch (err) {
+      console.error("canje de la compra", err);
+      return null;
+    } finally {
+      enVuelo.delete(checkoutId);
+    }
+  })();
+  enVuelo.set(checkoutId, pedido);
+  return pedido;
+}
 
 /** El destino lo valida la ruta del servidor contra la lista cerrada de
  *  `/entrar`; esto es la segunda red, por si algún día alguien la saltea: una
@@ -75,39 +115,29 @@ export function CanjeCompra({
 
     (async () => {
       for (let intento = 0; intento < POLL_TRIES; intento++) {
-        try {
-          const res = await fetch("/api/compra/canjear", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ checkout_id: checkoutId }),
-          });
-          if (res.ok) {
-            const datos = (await res.json()) as Respuesta;
-            if (cancelado) return;
-            if (datos.estado === "sesion") {
-              if (typeof datos.account_id === "number") identificar(datos.account_id);
-              // `replace`: volver atrás desde la carta no tiene que traer a
-              // esta pantalla de paso. `refresh`: el header tiene que ver la
-              // sesión nueva.
-              router.replace(destinoLocal(datos.destino) ?? `/${locale}/cuenta`);
-              router.refresh();
-              return;
-            }
-            if (datos.estado === "codigo") {
-              setVista({ tipo: "codigo", email: datos.email ?? "", destino: destinoLocal(datos.destino) });
-              return;
-            }
-            if (datos.estado === "invalido") {
-              setVista({ tipo: "invalido" });
-              return;
-            }
-            // `pendiente`: a esperar y volver a preguntar.
-          }
-          // Un 429 o un 502 son pasajeros: cuentan como un intento más.
-        } catch (err) {
-          // Un corte de red tampoco termina la espera.
-          console.error("canje de la compra", err);
+        const datos = await canjear(checkoutId);
+        if (datos?.estado === "sesion") {
+          // Aunque este efecto ya se haya limpiado: el servidor ya puso la
+          // cookie de sesión y el nonce se borró, así que otro canje daría
+          // `invalido`. Descartarlo dejaría a quien pagó afuera.
+          if (typeof datos.account_id === "number") identificar(datos.account_id);
+          // `replace`: volver atrás desde la carta no tiene que traer a esta
+          // pantalla de paso. `refresh`: el header tiene que ver la sesión.
+          router.replace(destinoLocal(datos.destino) ?? `/${locale}/cuenta`);
+          router.refresh();
+          return;
         }
+        // El resto lo resuelve la corrida viva, que recibe la misma respuesta.
+        if (cancelado) return;
+        if (datos?.estado === "codigo") {
+          setVista({ tipo: "codigo", email: datos.email ?? "", destino: destinoLocal(datos.destino) });
+          return;
+        }
+        if (datos?.estado === "invalido") {
+          setVista({ tipo: "invalido" });
+          return;
+        }
+        // `pendiente` o una falla pasajera: a esperar y volver a preguntar.
         if (intento < POLL_TRIES - 1) await new Promise((r) => window.setTimeout(r, POLL_MS));
         if (cancelado) return;
       }
@@ -120,9 +150,7 @@ export function CanjeCompra({
   }, [checkoutId, locale, router]);
 
   if (vista.tipo === "codigo") {
-    const entrar = vista.destino
-      ? `/${locale}/entrar?next=${encodeURIComponent(vista.destino)}`
-      : `/${locale}/entrar`;
+    const auth = dict.auth;
     return (
       <section className="waiting">
         <div className="waitingCopy">
@@ -130,9 +158,27 @@ export function CanjeCompra({
             {dict.compra.canjeCodigoTitle.replace("{email}", vista.email)}
           </h1>
           <p className="waitingBody">{dict.compra.canjeCodigoBody}</p>
-          <Link className="btn btnPrimary" href={entrar}>
-            {dict.compra.canjeEntrar}
-          </Link>
+          <EntrarPorMail
+            locale={locale}
+            next={vista.destino}
+            codigoYaEnviado
+            labels={{
+              mailLabel: auth.mailLabel,
+              mailPlaceholder: auth.mailPlaceholder,
+              mailButton: auth.mailButton,
+              codigoLabel: auth.codigoLabel,
+              codigoPlaceholder: auth.codigoPlaceholder,
+              codigoHelp: auth.codigoHelp,
+              codigoButton: auth.codigoButton,
+              enviando: auth.enviando,
+              reenviar: auth.reenviar,
+              cambiarMail: auth.cambiarMail,
+              codigoInvalido: auth.codigoInvalido,
+              demasiadosIntentos: auth.demasiadosIntentos,
+              noDisponible: auth.noDisponible,
+              errorRed: auth.errorRed,
+            }}
+          />
           <p className="fieldNote">{dict.compra.canjeSoporte.replace("{numero}", abreviar(checkoutId))}</p>
         </div>
       </section>
