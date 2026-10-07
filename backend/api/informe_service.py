@@ -199,13 +199,16 @@ def _normalizar(texto: str) -> str:
 
 
 def _sin_titulo(texto: str, titulo: str) -> str:
-    """Quita el encabezado inicial SÓLO si repite el título de la sección.
+    """Quita la primera línea SÓLO si repite el título de la sección: como
+    encabezado markdown, en negrita o en texto plano.
 
     El título lo pone el catálogo (la web lo pinta como `h2` con ancla para el
-    índice). Un subtítulo propio del modelo es contenido y se queda. Se limpia
-    al leer, no al guardar: cubre también los informes ya escritos."""
+    índice). Un subtítulo propio del modelo, o una primera línea que sólo
+    empieza como el título, es contenido y se queda: la comparación es de
+    igualdad. Se limpia al leer, no al guardar: cubre también los informes ya
+    escritos."""
     cabeza, _, resto = texto.lstrip().partition("\n")
-    if cabeza.startswith("#") and _normalizar(cabeza.lstrip("#")) == _normalizar(titulo):
+    if _normalizar(cabeza) == _normalizar(titulo):
         return resto.lstrip("\n")
     return texto
 

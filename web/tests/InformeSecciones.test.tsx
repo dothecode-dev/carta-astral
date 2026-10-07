@@ -124,6 +124,15 @@ describe("InformeSecciones", () => {
     expect(track).toHaveBeenCalledTimes(2);
   });
 
+  it("con medir apagado muestra las secciones pero no emite nada", () => {
+    // La espera: la sección nueva aparece al pie y su final está en pantalla
+    // sin que nadie la haya leído. Medir ahí daría segundos ≈ 0 falsos.
+    const { container } = render(<InformeSecciones secciones={SECCIONES} indice={false} medir={false} />);
+    ver(container.querySelector("#firma")!, container.querySelector('[data-fin="firma"]')!);
+    expect(track).not.toHaveBeenCalled();
+    expect(screen.getByText("Primer párrafo.")).toBeInTheDocument();
+  });
+
   it("sin IntersectionObserver no mide ni rompe", () => {
     vi.stubGlobal("IntersectionObserver", undefined);
     render(<InformeSecciones secciones={SECCIONES} indice />);

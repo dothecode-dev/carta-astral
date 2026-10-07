@@ -38,6 +38,7 @@ export function InformeSecciones({
   indice,
   etiquetaIndice,
   claveMedicion,
+  medir = true,
 }: {
   secciones: SeccionEscrita[];
   indice: boolean;
@@ -45,6 +46,11 @@ export function InformeSecciones({
   /** Identifica la vista (carta + idioma): las instancias con la misma clave
    *  comparten lo ya medido. Sin clave, cada instancia cuenta por su lado. */
   claveMedicion?: string;
+  /** Apagado en la espera: la sección nueva aparece al pie con su final ya en
+   *  pantalla, sin que nadie la haya leído, y medir ahí daría segundos ≈ 0
+   *  falsos (y, por la cuenta compartida, taparía la lectura de verdad). Se
+   *  mide sólo en la lectura terminada. */
+  medir?: boolean;
 }) {
   const raiz = useRef<HTMLDivElement>(null);
   const local = useRef<Medicion>({ inicio: new Map(), contadas: new Set() });
@@ -53,7 +59,7 @@ export function InformeSecciones({
     const nodo = raiz.current;
     // Sin IntersectionObserver no se emite: un fallback que dispare igual
     // daría el falso positivo que este evento existe para evitar.
-    if (!nodo || typeof IntersectionObserver === "undefined") return;
+    if (!medir || !nodo || typeof IntersectionObserver === "undefined") return;
     const { inicio, contadas } = medicionDe(claveMedicion, local.current);
     const orden = new Map(secciones.map((s, i) => [s.slug, i + 1]));
     const observador = new IntersectionObserver((entradas) => {
@@ -78,7 +84,7 @@ export function InformeSecciones({
     });
     nodo.querySelectorAll("[data-inicio], [data-fin]").forEach((el) => observador.observe(el));
     return () => observador.disconnect();
-  }, [secciones, claveMedicion]);
+  }, [secciones, claveMedicion, medir]);
 
   return (
     <div ref={raiz} className="informeSecciones">

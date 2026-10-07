@@ -644,7 +644,7 @@ export function ChartActions({
         {escritas.length > 0 ? (
           <div className="reading waitingReading">
             {tierEnCurso === "largo" ? (
-              <InformeSecciones secciones={escritas} indice={false} claveMedicion={`${chartId}:${locale}`} />
+              <InformeSecciones secciones={escritas} indice={false} medir={false} />
             ) : (
               // La breve no tiene secciones: se lee como siempre, sin título
               // ni evento (spec 2026-10-07, RF10).

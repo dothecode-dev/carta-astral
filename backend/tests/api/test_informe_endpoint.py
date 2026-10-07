@@ -654,6 +654,20 @@ def test_se_quita_el_encabezado_que_repite_el_titulo(client_autenticado, chart, 
     assert textos["afectos"] == "Sin encabezado."
 
 
+def test_se_quita_el_titulo_en_negrita_o_en_texto_plano(client_autenticado, chart, interpretacion):
+    _completar(interpretacion, [
+        ("firma", "**Tu firma**\n\nPrimer párrafo."),
+        ("mente", "Cómo pensás y te comunicás\n\nOtro."),
+        ("afectos", "Afectos y vínculos son el centro de tu carta: Venus lo marca.\n\nMás."),
+    ])
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/?lang=es&tier=largo")
+    textos = {s["slug"]: s["texto"] for s in r.data["secciones"]}
+    assert textos["firma"] == "Primer párrafo."
+    assert textos["mente"] == "Otro."
+    # Una primera línea que sólo EMPIEZA como el título es contenido: se queda.
+    assert textos["afectos"].startswith("Afectos y vínculos son el centro")
+
+
 def test_un_informe_viejo_se_muestra_igual_con_sus_secciones(client_autenticado, chart, interpretacion):
     # Escrito antes de este cambio: mismas filas en la base, sin nada nuevo.
     _completar(interpretacion, [("firma", "# Tu firma\n\nViejo.")])
