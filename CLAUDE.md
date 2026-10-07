@@ -100,12 +100,17 @@ verifica.
 ## El webhook de Stripe escucha eventos que se dan de alta a mano
 
 El endpoint del dashboard de Stripe (live y sandbox por separado) tiene que estar
-suscripto a los cuatro eventos que `api/webhooks_stripe.py` despacha:
+suscripto a los cinco eventos que `api/webhooks_stripe.py` despacha:
 `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
-`refund.created` y `checkout.session.expired`. Nada en el repo lo verifica: si
-falta uno, Stripe nunca lo manda y el backend no se entera. El síntoma del
-último es una compra sin terminar que la cuenta sigue mostrando como
-«Procesando el pago…» hasta el corte de 24 horas. Si sumás un evento al
+`refund.created`, `checkout.session.expired` y
+`checkout.session.async_payment_failed`. Nada en el repo lo verifica: si
+falta uno, Stripe nunca lo manda y el backend no se entera. El síntoma de
+`expired` es una compra sin terminar que la cuenta sigue mostrando como
+«Procesando el pago…» hasta el corte de 24 horas. El de
+`async_payment_failed` es peor y no se ve: con Managed Payments un medio
+asincrónico que falla deja la sesión `complete` y `expired` no llega nunca,
+así que la carta de una compra sin cuenta queda guardada para siempre, contra
+lo que dice la política de privacidad. Si sumás un evento al
 despacho, sumalo también en el dashboard.
 
 ## El webhook de Resend escucha eventos que se dan de alta a mano

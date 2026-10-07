@@ -1,5 +1,11 @@
 """El webhook de Stripe: por acá entra la plata.
 
+Despacha cinco eventos, que el endpoint del dashboard de Stripe (live y
+sandbox) tiene que tener dados de alta a mano —ver el CLAUDE.md del repo—:
+`checkout.session.completed` y `checkout.session.async_payment_succeeded`
+(acreditar), `refund.created` (revocar), y `checkout.session.expired` y
+`checkout.session.async_payment_failed` (vencer y descartar).
+
 La URL es pública, así que la firma es la única autenticación. Sin
 `STRIPE_WEBHOOK_SECRET` configurado se rechaza todo (fail-closed): aceptar
 entregas cuando falta la configuración es la peor forma de fallar en un
@@ -48,10 +54,14 @@ EVENTOS_PAGO = ("checkout.session.completed", "checkout.session.async_payment_su
 # el detalle sin una llamada extra a la API.
 EVENTOS_REEMBOLSO = ("refund.created",)
 
-# La sesión venció sin pagarse (`VENCIMIENTO_SESION` en `stripe_client`). No
-# mueve plata: sólo marca la fila para que la cuenta deje de mostrar un pago
-# que nadie hizo.
-EVENTOS_VENCIMIENTO = ("checkout.session.expired",)
+# La sesión venció sin pagarse (`VENCIMIENTO_SESION` en `stripe_client`), o el
+# medio de pago asincrónico falló. No mueven plata: marcan la fila para que la
+# cuenta deje de mostrar un pago que nadie hizo, y descartan la carta de una
+# compra sin cuenta (RF8). `async_payment_failed` hace falta aparte: con
+# Managed Payments un medio asincrónico que falla deja la sesión `complete` y
+# `expired` no llega nunca, así que sin él la carta anónima quedaba guardada
+# para siempre.
+EVENTOS_VENCIMIENTO = ("checkout.session.expired", "checkout.session.async_payment_failed")
 
 
 class StripeWebhookView(APIView):
@@ -97,7 +107,8 @@ class StripeWebhookView(APIView):
 
 
 def _vencer(session_id: str) -> None:
-    """La sesión venció sin pagarse: la fila deja de ser un pago en curso.
+    """La sesión venció sin pagarse, o su pago asincrónico falló: la fila deja
+    de ser un pago en curso.
 
     Un solo `update` condicional, y por eso idempotente y sin carrera con el
     pago: si la fila ya está acreditada no se toca (la plata manda), y si ya
