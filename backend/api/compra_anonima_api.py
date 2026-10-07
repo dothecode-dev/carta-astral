@@ -21,6 +21,7 @@ from api.checkout import _idioma, _respuesta_de_stripe
 logger = logging.getLogger(__name__)
 
 _NO_DISPONIBLE = {"error": "el cobro no está disponible"}
+_NO_ENCONTRADO = {"error": "no encontrado"}
 
 
 class CheckoutAnonimoView(APIView):
@@ -86,3 +87,32 @@ class CheckoutAnonimoView(APIView):
         except (stripe_client.StripeNoConfigurado, stripe_client.StripeError) as exc:
             return _respuesta_de_stripe(exc, compra_anonima.PRODUCTO)
         return Response({"url": fila.url, "checkout_id": fila.checkout_id, "nonce": nonce})
+
+
+class CheckoutCanjeView(APIView):
+    """`POST /api/checkout/anonimo/canjear/`: la vuelta de Stripe (RF10-RF13).
+
+    La web manda el `checkout_id` y el nonce que guardó en la cookie de ese
+    checkout. Responde `sesion` (con el token), `codigo` (con el mail
+    enmascarado) o `pendiente`; cualquier otra cosa es el mismo 404 genérico,
+    sin decir qué condición falló (RF11).
+
+    Sin chequeo de mantenimiento a propósito (RF14b): quien pagó durante un
+    deploy no puede quedar frente a un 503. Throttle `auth`, como las otras
+    puertas de entrada.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        checkout_id = request.data.get("checkout_id")
+        nonce = request.data.get("nonce")
+        if not isinstance(checkout_id, str) or not isinstance(nonce, str):
+            return Response(_NO_ENCONTRADO, status=status.HTTP_404_NOT_FOUND)
+        resultado = compra_anonima.canjear(checkout_id, nonce)
+        if resultado["estado"] == "invalido":
+            return Response(_NO_ENCONTRADO, status=status.HTTP_404_NOT_FOUND)
+        return Response(resultado)

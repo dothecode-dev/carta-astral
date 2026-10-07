@@ -20,7 +20,7 @@ from api import codigos_acceso, notificaciones
 from api.accounts import resolve_account
 from api.auth import create_session
 from api.canje import derechos_de
-from api.identity import hash_token, tombstone_hmac_configurada
+from api.identity import hash_token, normalizar, tombstone_hmac_configurada
 from api.models import CodigoAcceso, Session
 from api.sso import VerifiedIdentity
 
@@ -128,6 +128,18 @@ class CanjearCodigoView(APIView):
                 provider="email", sub=fila.email, email=fila.email, email_verified=True,
             )
             account = resolve_account(vid)
+            if not account.email_verified and normalizar(account.email or "") == fila.email:
+                # La cuenta la creó una compra sin cuenta con un mail que
+                # nadie había probado (RF17): entrar con el código lo prueba.
+                # Y quien pagó pudo usar el mail de otra persona: su navegador
+                # entró por el nonce, así que cuando la dueña real del mail
+                # aparece, todas las sesiones anteriores se cierran — el
+                # pagador no puede seguir viendo los datos de ella. Una cuenta
+                # ya verificada no pasa por acá: entrar desde otro
+                # dispositivo no echa a nadie.
+                account.email_verified = True
+                account.save(update_fields=["email_verified"])
+                Session.objects.filter(account=account).delete()
             resultado["account"] = account
             resultado["token"] = create_session(account)
 

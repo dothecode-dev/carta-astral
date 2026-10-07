@@ -9,12 +9,15 @@ import logging
 import secrets
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
+from django.utils import timezone
 
-from api import cupones, stripe_client
+from api import codigos_acceso, cupones, notificaciones, stripe_client
 from api.accounts import resolver_cuenta
+from api.auth import create_session
 from api.chart_service import create_chart
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
-from api.models import Account, BirthData, Chart, PasarelaCheckout, ProviderIdentity, Sujeto
+from api.models import Account, BirthData, Chart, CodigoAcceso, PasarelaCheckout, ProviderIdentity, Sujeto
 from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
@@ -208,3 +211,75 @@ def descartar(checkout_id: str) -> bool:
             BirthData.objects.filter(pk=birth_data_id).delete()
     logger.info("compra anónima %s vencida sin pagar: carta descartada", checkout_id)
     return True
+
+
+def canjear(checkout_id: str, nonce: str) -> dict:
+    """El navegador que pagó vuelve de Stripe (RF10-RF13).
+
+    La sesión sólo se abre para una cuenta CREADA por esta compra
+    (`cuenta_nueva`), con el nonce de ese navegador y una sola vez. El nonce
+    se mira ANTES que todo lo demás: sin él, ni siquiera se revela si la
+    compra está pendiente o es de un mail con cuenta. Toda falla es
+    `invalido`, sin decir cuál.
+
+    A un mail que ya tenía cuenta (`cuenta_nueva=False`) NUNCA se le abre
+    sesión (RF11): se le manda el código de acceso con destino la carta
+    (RF12). Eso no se gasta —un segundo canje vuelve a dar `codigo`— y el
+    cupo por hora de `codigos_acceso.pedir` frena el reenvío. El mail sale
+    después del commit: el lock de la fila no espera a Resend.
+
+    `select_for_update` sobre la fila: dos canjes simultáneos con el mismo
+    nonce se serializan y el segundo ve `canjeado_at` puesto.
+    """
+    if not nonce:
+        return {"estado": "invalido"}
+    envio = None
+    with transaction.atomic():
+        # `of=("self",)`: Postgres no deja lockear el lado nullable de un
+        # LEFT JOIN (cuenta y carta pueden faltar); el lock es de la fila.
+        fila = (
+            PasarelaCheckout.objects.select_for_update(of=("self",))
+            .select_related("account", "chart").filter(checkout_id=checkout_id).first()
+        )
+        if (
+            fila is None or not fila.anonimo or not fila.nonce_hash
+            or not secrets.compare_digest(fila.nonce_hash, hash_token(nonce))
+        ):
+            return {"estado": "invalido"}
+        if fila.acreditado_at is None or fila.account_id is None:
+            return {"estado": "pendiente"}
+        destino = (
+            f"/{fila.locale}/carta/{fila.chart.uuid}" if fila.chart_id is not None
+            else f"/{fila.locale}/cuenta"
+        )
+        if fila.cuenta_nueva:
+            if fila.canjeado_at is not None:
+                return {"estado": "invalido"}
+            fila.canjeado_at = timezone.now()
+            fila.save(update_fields=["canjeado_at"])
+            return {
+                "estado": "sesion", "token": create_session(fila.account),
+                "destino": destino, "account_id": fila.account_id,
+            }
+        email = fila.account.email
+        try:
+            codigo, claro, _ = codigos_acceso.pedir(email, destino=destino)
+            envio = (codigo, claro, fila.locale)
+        except codigos_acceso.DemasiadosPedidos:
+            logger.info(
+                "compra anónima %s: %s ya pidió todos los códigos de la hora, no se reenvía",
+                checkout_id, enmascarar(email),
+            )
+    if envio is not None:
+        codigo, claro, lang = envio
+        try:
+            notificaciones.enviar_codigo(codigo.email, claro, lang)
+        except notificaciones.EnvioFallido as exc:
+            logger.error(
+                "compra anónima %s: no se pudo enviar el código a %s: %s",
+                checkout_id, enmascarar(codigo.email), exc,
+            )
+            # Mismo criterio que `PedirCodigoView` (Ruling 13): un mail que no
+            # salió no cuenta para el cupo de la hora.
+            CodigoAcceso.objects.filter(pk=codigo.pk).update(envios=F("envios") - 1)
+    return {"estado": "codigo", "email": enmascarar(email), "destino": destino}

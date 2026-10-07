@@ -99,3 +99,27 @@ def test_dos_compras_distintas_con_el_mismo_mail_nuevo_crean_una_cuenta_y_una_so
     filas = list(PasarelaCheckout.objects.filter(checkout_id__in=ids))
     assert all(f.account == cuenta and f.acreditado_at is not None for f in filas)
     assert sorted(f.cuenta_nueva for f in filas) == [False, True]
+
+
+# --- Volver de Stripe (Task 6, RF11): dos canjes a la vez, una sola sesión ---
+
+
+@requiere_postgres
+def test_canjes_simultaneos_con_el_nonce_abren_una_sola_sesion(anonima, make_account):
+    from django.utils import timezone
+
+    from api import compra_anonima
+    from api.identity import hash_token
+    from api.models import Session
+
+    cuenta = make_account(email="c2@mail.com")
+    anonima.account, anonima.cuenta_nueva = cuenta, True
+    anonima.acreditado_at = timezone.now()
+    anonima.nonce_hash = hash_token("n0nce")
+    anonima.save()
+
+    resultados, errores = en_hilos(lambda _i: compra_anonima.canjear(SESSION_ANONIMA, "n0nce"), 3)
+
+    assert not errores, f"un error inesperado rompió el canje: {errores}"
+    assert sorted(r["estado"] for r in resultados) == ["invalido", "invalido", "sesion"]
+    assert Session.objects.filter(account=cuenta).count() == 1
