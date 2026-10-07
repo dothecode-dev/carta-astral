@@ -202,4 +202,8 @@ class CheckoutEstadoView(APIView):
             destino = {"tipo": "carta", "id": str(fila.chart.uuid)}
         else:
             destino = {"tipo": "cuenta"}
-        return Response({"estado": "acreditado", "destino": destino})
+        cuerpo = {"estado": "acreditado", "destino": destino}
+        if fila.saldo_deuda:
+            # RF5b: el pago saldó una deuda y no hay informe que esperar.
+            cuerpo["saldo_pendiente"] = True
+        return Response(cuerpo)

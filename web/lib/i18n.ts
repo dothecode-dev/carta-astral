@@ -644,8 +644,9 @@ export type Dict = {
     /** El canje ya no vale (ya se usó, pasó un día, otro navegador). */
     canjeInvalidoTitle: string;
     canjeInvalidoBody: string;
-    /** RF5b: el pago sólo saldó una deuda y no arrancó informe. TODAVÍA NO SE
-     *  MUESTRA en ningún lado: el backend no le dice a la web cuándo pasa. */
+    /** RF5b: el pago sólo saldó una deuda y no arrancó informe. Lo muestran
+     *  `CompraEspera` y `CanjeCompra` cuando el backend devuelve
+     *  `saldo_pendiente`. */
     saldoPendiente: string;
   };
   share: {

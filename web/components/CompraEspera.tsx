@@ -30,7 +30,7 @@ export const POLL_MS = 2000;
 export const POLL_TRIES = 22;
 
 type Destino = { tipo: "carta"; id: string } | { tipo: "cuenta" };
-type Estado = { estado: "pendiente" | "acreditado"; destino?: Destino };
+type Estado = { estado: "pendiente" | "acreditado"; destino?: Destino; saldo_pendiente?: boolean };
 
 export function CompraEspera({
   locale,
@@ -43,6 +43,8 @@ export function CompraEspera({
 }) {
   const router = useRouter();
   const [seRindio, setSeRindio] = useState(false);
+  // RF5b: el pago saldó una deuda de la cuenta y no hay informe que esperar.
+  const [saldoPendiente, setSaldoPendiente] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -55,6 +57,12 @@ export function CompraEspera({
             const datos = (await res.json()) as Estado;
             if (datos.estado === "acreditado") {
               if (cancelado) return;
+              if (datos.saldo_pendiente) {
+                // Mandarlo a la carta sería dejarlo esperando un informe que
+                // no va a arrancar: se le dice qué pasó con su pago.
+                setSaldoPendiente(true);
+                return;
+              }
               // `replace` y no `push`: volver atrás desde la carta tiene que
               // llevar a donde estaba antes de pagar, no a esta pantalla de
               // paso —que ya no tendría nada que esperar—.
@@ -90,6 +98,19 @@ export function CompraEspera({
       cancelado = true;
     };
   }, [checkoutId, locale, router]);
+
+  if (saldoPendiente) {
+    return (
+      <section className="waiting">
+        <div className="waitingCopy">
+          <h1 className="display waitingTitle">{dict.compra.saldoPendiente}</h1>
+          <Link className="btn btnPrimary" href={`/${locale}/cuenta`}>
+            {dict.compra.irACuenta}
+          </Link>
+        </div>
+      </section>
+    );
+  }
 
   if (seRindio) {
     return (

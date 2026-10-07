@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 type Estado = {
   estado: "pendiente" | "acreditado";
   destino?: { tipo: "carta"; id: string } | { tipo: "cuenta" };
+  saldo_pendiente?: boolean;
 };
 
 export async function GET(request: Request) {

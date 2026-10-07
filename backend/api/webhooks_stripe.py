@@ -306,6 +306,7 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
             chart=fila.chart if fila is not None else None,
             descuento_centavos=descuento,
             precio_centavos=fila.precio_de_lista() if fila is not None else None,
+            al_saldar_deuda=(lambda: _marcar_saldo_deuda(fila)) if fila is not None else None,
         )
     except MontoInvalido:
         # Ya lo logueó `aplicar_compra` con los dos montos: acá no se repite.
@@ -358,6 +359,14 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
     # esto se tragaba el error por obligación: allá diez fallidas seguidas
     # deshabilitan el endpoint para todos.
     arrancar_informe(cuenta, fila)
+
+
+def _marcar_saldo_deuda(fila) -> None:
+    """RF5b: la compra saldó deuda y no hay informe. Corre dentro del átomo de
+    `aplicar_compra`, antes de que la fila se marque acreditada: quien sondea
+    el estado nunca ve «acreditado» sin el aviso."""
+    PasarelaCheckout.objects.filter(pk=fila.pk).update(saldo_deuda=True)
+    fila.saldo_deuda = True
 
 
 def _registrar_uso(cupon, cuenta, fila, codigo, descuento, pagado, external_id) -> None:

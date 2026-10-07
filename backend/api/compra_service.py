@@ -18,7 +18,7 @@ import logging
 
 from api import catalogo, interpretation_service, mantenimiento
 from api.canje import SinDerecho
-from api.models import Movimiento
+from api.models import Movimiento, PasarelaCheckout
 from interpret.prompts import TIER_LARGO
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def arrancar_informe(cuenta, fila) -> None:
             fila.chart, fila.locale, cuenta, TIER_LARGO,
         )
     except SinDerecho:
-        if not _saldo_deuda(cuenta, fila):
+        if not (fila.saldo_deuda or _saldo_deuda(cuenta, fila)):
             # Cobré y no entregué por una causa que no entendemos: que suba
             # (el webhook pide reintento y llega a Sentry).
             raise
@@ -64,10 +64,16 @@ def arrancar_informe(cuenta, fila) -> None:
         # con qué escribir el informe (RF5b; ver `aplicar_compra`). La compra ya
         # está acreditada: reintentar no lo arregla y un 5xx dejaría el pago en
         # reintento tres días.
-        logger.warning(
-            "compra %s acreditada sin derecho para el informe (deuda saldada): no se escribe",
-            fila.checkout_id,
+        # `error`: cobramos y no hay informe; que Sentry avise. Sin PII.
+        logger.error(
+            "compra %s de acc=%s acreditada sin derecho para el informe (deuda saldada): "
+            "no se escribe", fila.checkout_id, cuenta.pk,
         )
+        if not fila.saldo_deuda:
+            # Lo normal es que `aplicar_compra` ya la haya marcado; esto cubre
+            # un camino que llegue acá sin pasar por el webhook.
+            PasarelaCheckout.objects.filter(pk=fila.pk).update(saldo_deuda=True)
+            fila.saldo_deuda = True
         return
     if mantenimiento.activo():
         # Hay un deploy en curso: la fila queda creada —incompleta— y no se

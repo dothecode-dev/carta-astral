@@ -19,6 +19,8 @@ import { ApiError, callApi, setSessionToken } from "@/lib/session";
 // - `codigo`: la cuenta ya existía; se le mandó un código a ese mail
 //   (enmascarado acá) y hay que entrar con él.
 // - `pendiente`: el webhook todavía no acreditó; la pantalla vuelve a preguntar.
+// - `sesion` y `codigo` pueden traer `saldo_pendiente: true` (RF5b): el pago
+//   saldó una deuda y no hay informe que esperar.
 // - `invalido`: el backend no reconoce el canje (404 genérico: nonce que no
 //   coincide, ya canjeado, más de 24 h…). La cookie del nonce se borra: no
 //   va a servir nunca más.
@@ -29,11 +31,17 @@ import { ApiError, callApi, setSessionToken } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 type Canje =
-  | { estado: "sesion"; token?: unknown; destino?: unknown; account_id?: unknown }
-  | { estado: "codigo"; email?: unknown; destino?: unknown }
+  | { estado: "sesion"; token?: unknown; destino?: unknown; account_id?: unknown; saldo_pendiente?: unknown }
+  | { estado: "codigo"; email?: unknown; destino?: unknown; saldo_pendiente?: unknown }
   | { estado: "pendiente" };
 
 const INVALIDO = { estado: "invalido" } as const;
+
+/** RF5b: el pago saldó una deuda de la cuenta y no arrancó informe. Sólo se
+ *  reenvía cuando el backend lo dice con un `true`. */
+function saldoPendiente(data: { saldo_pendiente?: unknown }) {
+  return data.saldo_pendiente === true ? { saldo_pendiente: true } : {};
+}
 
 export async function POST(request: Request) {
   let checkoutId: unknown;
@@ -78,6 +86,7 @@ export async function POST(request: Request) {
       estado: "codigo",
       email: typeof data.email === "string" ? data.email : "",
       destino: destinoInternoSeguro(data.destino),
+      ...saldoPendiente(data),
     });
   }
 
@@ -90,6 +99,7 @@ export async function POST(request: Request) {
       // cerrada que `/entrar`: un destino que no está ahí no se sigue.
       destino: destinoInternoSeguro(data.destino),
       ...(typeof data.account_id === "number" ? { account_id: data.account_id } : {}),
+      ...saldoPendiente(data),
     });
   }
 

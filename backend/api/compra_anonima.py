@@ -249,6 +249,11 @@ def _cuenta_nueva_sin_verificar(fila: PasarelaCheckout) -> Account | None:
     return None if cuenta.email_verified else cuenta
 
 
+def _saldo_pendiente(fila: PasarelaCheckout) -> dict:
+    """RF5b: si el pago saldó una deuda, la web no espera un informe."""
+    return {"saldo_pendiente": True} if fila.saldo_deuda else {}
+
+
 def _codigo_reciente(email: str, destino: str) -> bool:
     return CodigoAcceso.objects.filter(
         email=normalizar(email), destino=destino, usado_en__isnull=True,
@@ -310,7 +315,7 @@ def canjear(checkout_id: str, nonce: str) -> dict:
             fila.save(update_fields=["canjeado_at"])
             return {
                 "estado": "sesion", "token": create_session(cuenta),
-                "destino": destino, "account_id": cuenta.pk,
+                "destino": destino, "account_id": cuenta.pk, **_saldo_pendiente(fila),
             }
         # Mail que ya tenía cuenta, o cuenta nueva que dejó de serlo (ver
         # `_cuenta_nueva_sin_verificar`): NUNCA sesión (RF11). Se le manda el código.
@@ -336,4 +341,7 @@ def canjear(checkout_id: str, nonce: str) -> dict:
             # Mismo criterio que `PedirCodigoView` (Ruling 13): un mail que no
             # salió no cuenta para el cupo de la hora.
             CodigoAcceso.objects.filter(pk=codigo.pk).update(envios=F("envios") - 1)
-    return {"estado": "codigo", "email": enmascarar(email), "destino": destino}
+    return {
+        "estado": "codigo", "email": enmascarar(email), "destino": destino,
+        **_saldo_pendiente(fila),
+    }

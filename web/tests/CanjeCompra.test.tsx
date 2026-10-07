@@ -104,6 +104,42 @@ describe("CanjeCompra", () => {
     expect(replace).toHaveBeenCalledWith("/es/cuenta");
   });
 
+  it("RF5b sesion: si el pago saldó una deuda, lo dice en vez de ir a esperar el informe", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      reply(200, { estado: "sesion", destino: CARTA, account_id: 7, saldo_pendiente: true }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderCanje();
+    await correr(3);
+
+    expect(screen.getByText(dict.compra.saldoPendiente)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: dict.compra.irACuenta })).toHaveAttribute(
+      "href",
+      "/es/cuenta",
+    );
+    expect(replace).not.toHaveBeenCalled();
+    // La sesión ya está puesta: el header la tiene que ver.
+    expect(refresh).toHaveBeenCalled();
+    expect(identificar).toHaveBeenCalledWith(7);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("RF5b codigo: lo dice junto al formulario del código", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        reply(200, { estado: "codigo", email: "g***@example.com", destino: CARTA, saldo_pendiente: true }),
+      ),
+    );
+
+    renderCanje();
+    await correr(3);
+
+    expect(screen.getByText(dict.compra.saldoPendiente)).toBeInTheDocument();
+    expect(screen.getByLabelText(dict.auth.codigoLabel)).toBeInTheDocument();
+  });
+
   it("codigo: muestra el mail enmascarado y el texto de soporte", async () => {
     const fetchMock = vi
       .fn()

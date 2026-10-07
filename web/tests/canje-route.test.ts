@@ -114,6 +114,23 @@ describe("POST /api/compra/canjear", () => {
     expect(store.has(SESSION_COOKIE)).toBe(false);
   });
 
+  it("RF5b: reenvía saldo_pendiente en sesion y en codigo", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({ estado: "sesion", token: "secreto", destino: CARTA, account_id: 7, saldo_pendiente: true }),
+    );
+    const sesion = await (await POST(req({ checkout_id: CHECKOUT }))).json();
+    expect(sesion).toEqual({ estado: "sesion", destino: CARTA, account_id: 7, saldo_pendiente: true });
+
+    store.set(COOKIE, { value: "el-nonce" });
+    fetchMock.mockResolvedValueOnce(
+      json({ estado: "codigo", email: "g***@example.com", destino: CARTA, saldo_pendiente: true }),
+    );
+    const codigo = await (await POST(req({ checkout_id: CHECKOUT }))).json();
+    expect(codigo).toEqual({
+      estado: "codigo", email: "g***@example.com", destino: CARTA, saldo_pendiente: true,
+    });
+  });
+
   it("pendiente: pendiente, y la cookie sigue para el próximo intento", async () => {
     fetchMock.mockResolvedValue(json({ estado: "pendiente" }));
 

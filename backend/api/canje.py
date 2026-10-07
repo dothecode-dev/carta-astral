@@ -120,7 +120,7 @@ def _aplicar_otorgamiento(acc, account, prod, codigo_otorgado: str, otorgado: in
 def aplicar_compra(
     account, codigo_producto, monto_centavos, external_id,
     chart=None, chart_id=None, descuento_centavos=0, origen="compra",
-    precio_centavos=None, sujeto=None,
+    precio_centavos=None, sujeto=None, al_saldar_deuda=None,
 ) -> bool:
     """Traduce un pago a derechos, con lo que el producto declara en el catálogo.
 
@@ -134,6 +134,11 @@ def aplicar_compra(
     `precio_centavos` es el precio congelado al abrir el checkout: si viene,
     manda sobre el catálogo actual, que pudo cambiar mientras la sesión
     seguía abierta. `None` en las filas viejas y en los caminos sin pasarela.
+
+    `al_saldar_deuda`, si viene, corre DENTRO del átomo cuando la unidad
+    comprada salda una deuda en vez de canjearse (RF5b): lo que registre queda
+    en el mismo commit que el otorgamiento, así un reintento —que sale por el
+    duplicado sin llegar acá— lo encuentra ya puesto.
     """
     prod = producto(codigo_producto)
     precio = prod.precio_centavos if precio_centavos is None else precio_centavos
@@ -201,10 +206,14 @@ def aplicar_compra(
                 # La unidad comprada saldó una deuda (un reembolso de algo ya
                 # usado): no queda derecho que canjear. Revertir todo dejaba el
                 # webhook en 5xx tres días y el pago sin acreditar (RF5b).
-                logger.warning(
+                # `error` y no `warning`: alguien pagó y no recibe el informe
+                # que compró; que Sentry avise (sin PII: id externo y pk).
+                logger.error(
                     "compra %s: la unidad saldó deuda de acc=%s; no se canjea",
                     external_id, account.pk,
                 )
+                if al_saldar_deuda is not None:
+                    al_saldar_deuda()
     return True
 
 

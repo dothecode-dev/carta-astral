@@ -20,6 +20,8 @@ import { identificar } from "@/lib/telemetry";
 //   dice y le muestra acá mismo el formulario de mail + código (ver abajo).
 // - `pendiente`: el webhook todavía no acreditó. Se vuelve a preguntar.
 // - `invalido`: no hay canje posible. Se lo manda a su cuenta.
+// - `sesion` o `codigo` con `saldo_pendiente` (RF5b): el pago saldó una deuda
+//   de la cuenta y no arrancó informe. Se lo dice en vez de mandarlo a esperar.
 //
 // Sólo `pendiente` se vuelve a preguntar. Repetir el canje después de `codigo`
 // pediría otro mail; después de `sesion` o `invalido` ya no hay nada que
@@ -50,14 +52,15 @@ export const POLL_MS = 3000;
 export const POLL_TRIES = 40;
 
 type Respuesta =
-  | { estado: "sesion"; destino?: string; account_id?: number }
-  | { estado: "codigo"; email?: string; destino?: string }
+  | { estado: "sesion"; destino?: string; account_id?: number; saldo_pendiente?: boolean }
+  | { estado: "codigo"; email?: string; destino?: string; saldo_pendiente?: boolean }
   | { estado: "pendiente" }
   | { estado: "invalido" };
 
 type Vista =
   | { tipo: "esperando" }
-  | { tipo: "codigo"; email: string; destino: string | null }
+  | { tipo: "saldo" }
+  | { tipo: "codigo"; email: string; destino: string | null; saldoPendiente: boolean }
   | { tipo: "proceso" }
   | { tipo: "invalido" };
 
@@ -121,6 +124,15 @@ export function CanjeCompra({
           // cookie de sesión y el nonce se borró, así que otro canje daría
           // `invalido`. Descartarlo dejaría a quien pagó afuera.
           if (typeof datos.account_id === "number") identificar(datos.account_id);
+          if (datos.saldo_pendiente) {
+            // RF5b: el pago saldó una deuda y no hay informe que esperar en la
+            // carta. La sesión ya está puesta (el header la tiene que ver); se
+            // le dice qué pasó en vez de mandarlo a esperar. La corrida viva
+            // —la misma respuesta compartida— es la que pinta.
+            router.refresh();
+            if (!cancelado) setVista({ tipo: "saldo" });
+            return;
+          }
           // `replace`: volver atrás desde la carta no tiene que traer a esta
           // pantalla de paso. `refresh`: el header tiene que ver la sesión.
           router.replace(destinoLocal(datos.destino) ?? `/${locale}/cuenta`);
@@ -130,7 +142,12 @@ export function CanjeCompra({
         // El resto lo resuelve la corrida viva, que recibe la misma respuesta.
         if (cancelado) return;
         if (datos?.estado === "codigo") {
-          setVista({ tipo: "codigo", email: datos.email ?? "", destino: destinoLocal(datos.destino) });
+          setVista({
+            tipo: "codigo",
+            email: datos.email ?? "",
+            destino: destinoLocal(datos.destino),
+            saldoPendiente: datos.saldo_pendiente === true,
+          });
           return;
         }
         if (datos?.estado === "invalido") {
@@ -158,6 +175,7 @@ export function CanjeCompra({
             {dict.compra.canjeCodigoTitle.replace("{email}", vista.email)}
           </h1>
           <p className="waitingBody">{dict.compra.canjeCodigoBody}</p>
+          {vista.saldoPendiente && <p className="waitingBody">{dict.compra.saldoPendiente}</p>}
           <EntrarPorMail
             locale={locale}
             next={vista.destino}
@@ -180,6 +198,19 @@ export function CanjeCompra({
             }}
           />
           <p className="fieldNote">{dict.compra.canjeSoporte.replace("{numero}", abreviar(checkoutId))}</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (vista.tipo === "saldo") {
+    return (
+      <section className="waiting">
+        <div className="waitingCopy">
+          <h1 className="display waitingTitle">{dict.compra.saldoPendiente}</h1>
+          <Link className="btn btnPrimary" href={`/${locale}/cuenta`}>
+            {dict.compra.irACuenta}
+          </Link>
         </div>
       </section>
     );

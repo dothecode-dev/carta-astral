@@ -532,6 +532,12 @@ class PasarelaCheckout(models.Model):
     nonce_hash = models.CharField(max_length=64, blank=True, default="")
     cuenta_nueva = models.BooleanField(default=False)
     canjeado_at = models.DateTimeField(null=True, blank=True)
+    # RF5b: la unidad comprada saldó una deuda de la cuenta y no quedó derecho
+    # con qué escribir el informe. Lo pone el webhook en el mismo átomo que el
+    # otorgamiento (con o sin cuenta al abrir); el estado del checkout y el
+    # canje anónimo lo devuelven para que la web no espere un informe que no
+    # va a arrancar.
+    saldo_deuda = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

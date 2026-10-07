@@ -65,6 +65,29 @@ describe("CompraEspera", () => {
     expect(replace).toHaveBeenCalledWith(`/es/carta/${CARTA}`);
   });
 
+  it("RF5b: si el pago saldó una deuda, lo dice y no manda a esperar el informe", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        reply(200, {
+          estado: "acreditado",
+          destino: { tipo: "carta", id: CARTA },
+          saldo_pendiente: true,
+        }),
+      ),
+    );
+
+    renderEspera();
+    await correr();
+
+    expect(screen.getByText(dict.compra.saldoPendiente)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: dict.compra.irACuenta })).toHaveAttribute(
+      "href",
+      "/es/cuenta",
+    );
+    expect(replace).not.toHaveBeenCalled();
+  });
+
   it("con un pack, lleva a la cuenta", async () => {
     vi.stubGlobal(
       "fetch",
