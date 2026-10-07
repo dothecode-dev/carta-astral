@@ -21,3 +21,13 @@ def _precio_de_prueba(request, monkeypatch):
         catalogo.CATALOGO, "informe_natal",
         dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=PRECIO_DE_PRUEBA),
     )
+
+
+@pytest.fixture
+def cupon_100():
+    """Un regalo del 100 % del informe natal, de un solo uso."""
+    from api.models import Cupon
+
+    return Cupon.objects.create(
+        codigo="REGALO", porcentaje=100, productos=["informe_natal"], usos_maximos=1,
+    )

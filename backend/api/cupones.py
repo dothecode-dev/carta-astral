@@ -146,6 +146,14 @@ def cambiar_activo(cupon, activo: bool) -> None:
     cupon.save(update_fields=["activo"])
 
 
+def precio_y_descuento(codigo_producto: str, cupon) -> tuple[int, int]:
+    """`(precio de lista, descuento)` que se congelan en la fila del checkout:
+    es contra esto que el webhook valida lo que Stripe cobró."""
+    precio = producto(codigo_producto).precio_centavos
+    descuento = precio_final(precio, cupon.porcentaje)[1] if cupon is not None else 0
+    return precio, descuento
+
+
 def precio_final(precio_centavos: int, porcentaje: int) -> tuple[int, int]:
     """`(final, descuento)` en centavos, exactos, para un porcentaje entero.
 

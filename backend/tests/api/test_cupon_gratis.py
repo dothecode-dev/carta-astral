@@ -28,11 +28,6 @@ def _configurado(settings, monkeypatch):
 
 
 @pytest.fixture
-def regalo():
-    return Cupon.objects.create(codigo="REGALO", porcentaje=100, productos=["informe_natal"], usos_maximos=1)
-
-
-@pytest.fixture
 def avisos(monkeypatch):
     llamadas = {"mail": [], "evento": [], "informe": []}
     monkeypatch.setattr(notificaciones, "notificar", lambda acc, ev, ctx, lang: llamadas["mail"].append((ev, ctx, lang)))
@@ -42,7 +37,7 @@ def avisos(monkeypatch):
     return llamadas
 
 
-def test_otorga_y_acredita_al_instante_sin_stripe(account_client, regalo, avisos):
+def test_otorga_y_acredita_al_instante_sin_stripe(account_client, cupon_100, avisos):
     r = account_client.post(URL, {"producto": "informe_natal", "cupon": "regalo", "locale": "pt"})
 
     assert r.status_code == 200, r.content
@@ -50,16 +45,16 @@ def test_otorga_y_acredita_al_instante_sin_stripe(account_client, regalo, avisos
     assert url.startswith("/pt/compra?checkout_id=cupon_")
     fila = PasarelaCheckout.objects.get(checkout_id=url.split("checkout_id=")[1])
     assert fila.acreditado_at is not None
-    assert fila.cupon == regalo and fila.descuento_centavos == 2900
+    assert fila.cupon == cupon_100 and fila.descuento_centavos == 2900
     assert Derecho.objects.get(account=account_client.account, codigo_producto="informe_natal").cantidad_restante == 4
     mov = Movimiento.objects.get(external_id=f"cupon:{fila.checkout_id}")
     assert mov.origen == "cupon"
-    uso = CuponUso.objects.get(cupon=regalo)
+    uso = CuponUso.objects.get(cupon=cupon_100)
     assert (uso.account, uso.monto_pagado_centavos, uso.descuento_centavos) == (account_client.account, 0, 2900)
     assert uso.external_id == f"cupon:{fila.checkout_id}"
 
 
-def test_la_pagina_de_retorno_lo_ve_acreditado(account_client, regalo, avisos):
+def test_la_pagina_de_retorno_lo_ve_acreditado(account_client, cupon_100, avisos):
     url = account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO"}).json()["url"]
     checkout_id = url.split("checkout_id=")[1]
 
@@ -69,7 +64,7 @@ def test_la_pagina_de_retorno_lo_ve_acreditado(account_client, regalo, avisos):
     assert r.json()["estado"] == "acreditado"
 
 
-def test_avisa_mide_y_arranca_el_informe_como_un_pago(account_client, regalo, avisos, make_chart):
+def test_avisa_mide_y_arranca_el_informe_como_un_pago(account_client, cupon_100, avisos, make_chart):
     carta = make_chart(account=account_client.account)
 
     account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO", "chart_id": str(carta.uuid), "locale": "en"})
@@ -82,7 +77,7 @@ def test_avisa_mide_y_arranca_el_informe_como_un_pago(account_client, regalo, av
     assert fila.chart == carta
 
 
-def test_dos_pedidos_seguidos_otorgan_una_sola_vez(account_client, regalo, avisos):
+def test_dos_pedidos_seguidos_otorgan_una_sola_vez(account_client, cupon_100, avisos):
     account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO"})
     r = account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO"})
 
@@ -91,7 +86,7 @@ def test_dos_pedidos_seguidos_otorgan_una_sola_vez(account_client, regalo, aviso
     assert CuponUso.objects.count() == 1
 
 
-def test_el_segundo_en_llegar_ve_agotado(account_client, make_account, regalo, avisos):
+def test_el_segundo_en_llegar_ve_agotado(account_client, make_account, cupon_100, avisos):
     from api.auth import create_session
     from rest_framework.test import APIClient
 
@@ -104,7 +99,7 @@ def test_el_segundo_en_llegar_ve_agotado(account_client, make_account, regalo, a
     assert (r.status_code, r.json()["motivo"]) == (400, "agotado")
 
 
-def test_en_mantenimiento_no_se_canjea(account_client, regalo, avisos, monkeypatch):
+def test_en_mantenimiento_no_se_canjea(account_client, cupon_100, avisos, monkeypatch):
     monkeypatch.setattr(mantenimiento, "activo", lambda: True)
     r = account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO"})
     assert r.status_code == 503
@@ -112,7 +107,7 @@ def test_en_mantenimiento_no_se_canjea(account_client, regalo, avisos, monkeypat
 
 
 @pytest.mark.parametrize("campo", ["deuda", "flagged"])
-def test_una_cuenta_con_deuda_o_marcada_no_canjea_un_regalo(account_client, regalo, avisos, campo):
+def test_una_cuenta_con_deuda_o_marcada_no_canjea_un_regalo(account_client, cupon_100, avisos, campo):
     acc = account_client.account
     setattr(acc, campo, 1 if campo == "deuda" else True)
     acc.save()
@@ -128,13 +123,13 @@ def test_un_cupon_invalido_responde_400_con_motivo(account_client, avisos):
     assert (r.status_code, r.json()["motivo"]) == (400, "invalido")
 
 
-def test_el_id_sintetico_no_parece_de_stripe(account_client, regalo, avisos):
+def test_el_id_sintetico_no_parece_de_stripe(account_client, cupon_100, avisos):
     url = account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO"}).json()["url"]
     assert "checkout_id=cupon_" in url and "cs_" not in url
 
 
 def test_un_regalo_sigue_valiendo_cero_aunque_el_precio_cambie(
-    account_client, regalo, avisos, monkeypatch,
+    account_client, cupon_100, avisos, monkeypatch,
 ):
     """El regalo descuenta la lista de ESE momento. Si la fila no la guarda,
     un cambio de precio posterior lo muestra como un monto negativo."""

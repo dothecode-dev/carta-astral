@@ -11,17 +11,50 @@ webhook lo vuelve a validar contra la orden antes de otorgar nada.
 import logging
 
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from api import analitica, catalogo, compra_service, cupones, mantenimiento, notificaciones, stripe_client
+from core.exceptions import CoreError
+
+from api import analitica, catalogo, compra_anonima, compra_service, cupones, mantenimiento, notificaciones, stripe_client
 from api.auth import AccountTokenAuthentication
-from api.permissions import HasAccount
+from api.chart_service import calcular
 from api.models import Chart, PasarelaCheckout
+from api.permissions import HasAccount
 
 logger = logging.getLogger(__name__)
+
+
+def _idioma(request) -> str:
+    """El idioma que navega la persona, por lista blanca: viene del navegador
+    y termina en una URL y en la base, así que no se guarda tal cual."""
+    pedido = request.data.get("locale") or stripe_client.LOCALE_POR_DEFECTO
+    return pedido if pedido in stripe_client.LOCALES else stripe_client.LOCALE_POR_DEFECTO
+
+
+def _respuesta_de_stripe(exc, codigo) -> Response:
+    """Qué le decimos a quien compra cuando `crear_checkout` falla."""
+    if isinstance(exc, stripe_client.StripeNoConfigurado):
+        # Falta la clave o el precio en Stripe: problema de configuración
+        # nuestro, no de quien compra.
+        logger.exception("checkout sin configurar para %r", codigo)
+        return Response(
+            {"error": "el cobro no está disponible"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if isinstance(exc, stripe_client.CuponRechazado):
+        # Ya lo logueó `crear_checkout` con el código. Para quien compra es
+        # «se agotó»: la alternativa —abrirle el pago a precio de lista—
+        # sería cobrarle de más a alguien que creía tener descuento.
+        return Response(
+            {"error": "el cupón no sirve", "motivo": "agotado"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    logger.exception("stripe no pudo abrir el checkout de %r", codigo)
+    return Response({"error": "no pudimos abrir el pago"}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 class CheckoutView(APIView):
@@ -65,10 +98,7 @@ class CheckoutView(APIView):
         # qué idioma se escribe el informe cuando el webhook lo arranque. Se valida contra la lista
         # blanca acá —no se concatena ni se guarda tal cual— porque viene del
         # navegador y termina en una URL y en la base.
-        pedido = request.data.get("locale") or stripe_client.LOCALE_POR_DEFECTO
-        idioma = (
-            pedido if pedido in stripe_client.LOCALES else stripe_client.LOCALE_POR_DEFECTO
-        )
+        idioma = _idioma(request)
 
         cupon = None
         codigo_cupon = request.data.get("cupon")
@@ -93,36 +123,14 @@ class CheckoutView(APIView):
             # armado, no una falla nuestra.
             logger.warning("checkout rechazado para %r: %s", codigo, exc)
             return Response({"error": "producto inválido"}, status=status.HTTP_400_BAD_REQUEST)
-        except stripe_client.StripeNoConfigurado:
-            # Falta la clave o el precio en Stripe: problema de configuración
-            # nuestro, no de quien compra.
-            logger.exception("checkout sin configurar para %r", codigo)
-            return Response(
-                {"error": "el cobro no está disponible"},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except stripe_client.CuponRechazado:
-            # Ya lo logueó `crear_checkout` con el código. Para quien compra es
-            # «se agotó»: la alternativa —abrirle el pago a precio de lista—
-            # sería cobrarle de más a alguien que creía tener descuento.
-            return Response(
-                {"error": "el cupón no sirve", "motivo": "agotado"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except stripe_client.StripeError:
-            logger.exception("stripe no pudo abrir el checkout de %r", codigo)
-            return Response(
-                {"error": "no pudimos abrir el pago"}, status=status.HTTP_502_BAD_GATEWAY
-            )
+        except (stripe_client.StripeNoConfigurado, stripe_client.StripeError) as exc:
+            return _respuesta_de_stripe(exc, codigo)
 
         # Después del éxito y no antes: una fila huérfana dejaría que el webhook
         # de otra orden resolviera contra ella. El descuento queda congelado
         # acá, y el precio también: es contra ESTO que el webhook valida lo que
         # Stripe cobró, aunque el catálogo cambie mientras la sesión sigue viva.
-        precio = catalogo.producto(codigo).precio_centavos
-        descuento = 0
-        if cupon is not None:
-            _, descuento = cupones.precio_final(precio, cupon.porcentaje)
+        precio, descuento = cupones.precio_y_descuento(codigo, cupon)
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
             chart=carta, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
@@ -163,6 +171,62 @@ class CheckoutView(APIView):
         )
         compra_service.arrancar_informe(cuenta, fila)
         return Response({"url": f"/{idioma}/compra?checkout_id={fila.checkout_id}"})
+
+
+class CheckoutAnonimoView(APIView):
+    """`POST /api/checkout/anonimo/`: abre el pago del informe natal sin cuenta.
+
+    Pagar es entrar: la cuenta se crea (o se encuentra) en el webhook, por el
+    mail del pago. Acá se guarda la carta, se abre Stripe y se devuelve un
+    nonce que la web guarda en una cookie propia de ESE checkout; el
+    `checkout_id` solo no alcanza para entrar después.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "checkout_anonimo"
+
+    def post(self, request):
+        if mantenimiento.activo():
+            return Response(
+                {"error": "estamos actualizando el sitio, probá en unos minutos"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        idioma = _idioma(request)
+        # Misma validación que la vista previa (`calcular`), ANTES de crear
+        # nada. Sin `exc_info` ni payload en el log: es la fecha de nacimiento
+        # de alguien que todavía no aceptó nada.
+        try:
+            calcular(request.data)
+        except (KeyError, ValueError, CoreError) as exc:
+            logger.warning("checkout anónimo rechazado: %s", type(exc).__name__)
+            return Response(
+                {"error": str(exc), "motivo": "datos_invalidos"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            fila, nonce = compra_anonima.abrir(request.data, idioma, request.data.get("cupon"))
+        except compra_anonima.NoDisponible:
+            logger.error("checkout anónimo sin TOMBSTONE_HMAC_KEY: no se abre")
+            return Response(
+                {"error": "el cobro no está disponible"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except compra_anonima.CuponNoAdmitido:
+            return Response(
+                {"error": "el cupón no sirve sin cuenta", "motivo": "requiere_cuenta"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except cupones.CuponInvalido as exc:
+            logger.info("cupón rechazado en checkout anónimo: %s", exc.motivo)
+            return Response(
+                {"error": "el cupón no sirve", "motivo": cupones.motivo_publico(exc.motivo)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except (stripe_client.StripeNoConfigurado, stripe_client.StripeError) as exc:
+            return _respuesta_de_stripe(exc, compra_anonima.PRODUCTO)
+        return Response({"url": fila.url, "checkout_id": fila.checkout_id, "nonce": nonce})
 
 
 class CheckoutEstadoView(APIView):

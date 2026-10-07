@@ -388,6 +388,9 @@ REST_FRAMEWORK = {
         # del 100 % este POST entrega un producto de US$ 29: sin techo, es un
         # bucle. Generoso: nadie compra sesenta veces en un día.
         "checkout": os.environ.get("CHECKOUT_RATE", "60/day"),
+        # Público, por IP, y cada pedido crea una carta y una sesión de Stripe
+        # sin cuenta a la que atribuirlas: más estricto que el de `preview`.
+        "checkout_anonimo": os.environ.get("CHECKOUT_ANONIMO_RATE", "10/hour"),
     },
 }
 

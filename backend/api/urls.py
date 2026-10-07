@@ -1,4 +1,4 @@
-from api.checkout import CheckoutEstadoView, CheckoutView
+from api.checkout import CheckoutAnonimoView, CheckoutEstadoView, CheckoutView
 from api.mantenimiento import EstadoView
 from api.catalogo_api import CatalogoView
 from api.cupones_api import CuponPublicoView
@@ -28,6 +28,7 @@ from api.webhooks import RevenueCatWebhookView
 urlpatterns = [
     path("account/", AccountView.as_view()),
     path("checkout/", CheckoutView.as_view()),
+    path("checkout/anonimo/", CheckoutAnonimoView.as_view()),
     # Estado de una compra: lo consulta la página de retorno de Stripe.
     path("checkout/<str:checkout_id>/", CheckoutEstadoView.as_view()),
     # Con barra final: la pasarela no sigue redirects y APPEND_SLASH daría 301,

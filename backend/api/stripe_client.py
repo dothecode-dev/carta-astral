@@ -174,6 +174,7 @@ def _validar_success_url(url: str) -> None:
 
 def crear_checkout(
     account, codigo_producto: str, chart=None, locale: str = LOCALE_POR_DEFECTO, cupon=None,
+    terminos: bool = False,
 ) -> tuple[str, str]:
     """Abre una sesión de pago y devuelve `(session_id, url)`.
 
@@ -188,6 +189,10 @@ def crear_checkout(
     La `metadata` viaja como respaldo. La relación que manda es
     `PasarelaCheckout`, porque además de la cuenta guarda la carta y el idioma,
     que Stripe no conoce.
+
+    `account=None` es la compra sin cuenta: la metadata no lleva `account_id`
+    (la cuenta, si hay que crearla, sale del mail del pago). `terminos=True`
+    pone la casilla obligatoria de aceptar los términos en el checkout.
     """
     prod = producto(codigo_producto)  # KeyError si no existe: lo dice el catálogo
     if prod.precio_centavos == 0:
@@ -201,13 +206,16 @@ def crear_checkout(
 
     price_id = _price_de(codigo_producto)
     idioma = locale if locale in LOCALES else LOCALE_POR_DEFECTO
-    metadata = {"account_id": str(account.pk)}
+    metadata = {"account_id": str(account.pk)} if account is not None else {}
     if chart is not None:
         metadata["chart_id"] = str(chart.pk)
 
     extra: dict = {}
     if cupon is not None:
         extra["discounts"] = [{"promotion_code": cupon.stripe_promotion_code_id}]
+
+    if terminos:
+        extra["consent_collection"] = {"terms_of_service": "required"}
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
     try:
