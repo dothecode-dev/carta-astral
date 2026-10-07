@@ -555,3 +555,40 @@ def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
         svc.completar_generacion(interpretacion_en, chart, account)
 
     assert _derechos_de_cobro(account) == antes  # nunca se cobró: no hay nada que devolver
+
+
+# Las secciones ya escritas, con texto: la web las muestra mientras el resto
+# se genera (06-10-2026). Seis minutos de lectura en vez de seis de espera.
+
+
+def test_las_secciones_escritas_llegan_con_su_texto(client_autenticado, chart, interpretacion):
+    from api.models import InterpretationSection
+
+    interpretacion.tier = "largo"
+    interpretacion.save()
+    InterpretationSection.objects.create(
+        interpretation=interpretacion, slug="firma", orden=0, texto="## Tu firma\n\nHola.",
+    )
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/secciones/?lang=es&tier=largo")
+    assert r.status_code == 200, r.data
+    assert r.data["completa"] is False
+    assert r.data["total"] == 8
+    assert [s["slug"] for s in r.data["secciones"]] == ["firma"]
+    assert r.data["secciones"][0]["texto"].startswith("## Tu firma")
+    assert r.data["secciones"][0]["titulo"]
+
+
+def test_las_secciones_sin_interpretacion_son_cero(client_autenticado, chart):
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/secciones/?lang=es&tier=largo")
+    assert r.status_code == 200
+    assert r.data == {"completa": False, "total": 8, "secciones": []}
+
+
+def test_las_secciones_sin_tier_es_400(client_autenticado, chart):
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/secciones/?lang=es")
+    assert r.status_code == 400
+
+
+def test_las_secciones_de_otra_cuenta_es_404(account_client, chart):
+    r = account_client.get(f"/api/charts/{chart.uuid}/interpretation/secciones/?lang=es&tier=largo")
+    assert r.status_code == 404

@@ -474,6 +474,41 @@ class InterpretationEstadoView(APIView):
         )
 
 
+class InterpretationSeccionesView(APIView):
+    """Las secciones ya escritas del informe, con texto. La web las muestra
+    mientras el resto se genera: seis minutos de lectura en vez de seis
+    minutos mirando una animación. Misma validación que `estado`."""
+
+    authentication_classes = [AccountTokenAuthentication]
+    permission_classes = [HasAccount]
+
+    def get(self, request, uuid):
+        lang = request.query_params.get("lang", "es")
+        if lang not in _INTERPRETATION_LANGS:
+            return Response(
+                {"error": f"lang debe ser uno de {_INTERPRETATION_LANGS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tier = request.query_params.get("tier")
+        if tier not in _TIERS:
+            return Response(
+                {"error": f"tier debe ser uno de {_TIERS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        total = len(informe_service.secciones_aplicables(chart, tier))
+        interpretacion = Interpretation.objects.filter(
+            chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
+        ).first()
+        if interpretacion is None:
+            return Response({"completa": False, "total": total, "secciones": []})
+        return Response({
+            "completa": interpretacion.completa,
+            "total": total,
+            "secciones": informe_service.secciones_escritas(interpretacion, chart),
+        })
+
+
 class IndiceInformeView(APIView):
     """El índice del informe completo (RF3): títulos de sus secciones y, si ya
     hay algo generado, el arranque de cada una. Se puede pedir sin haber

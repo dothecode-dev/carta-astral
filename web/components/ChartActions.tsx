@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
+import { Reading } from "@/components/Reading";
 import { SolarSystem } from "@/components/SolarSystem";
 import { conPrecio } from "@/lib/catalogo";
 import { cantidad, puede, type Derecho } from "@/lib/derechos";
@@ -38,7 +39,9 @@ const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 type Tier = "corto" | "largo";
 
-type Estado = { completa: boolean; hechas: number; total: number };
+/** Una sección ya escrita, tal como la devuelve `interpretation/secciones`. */
+type SeccionEscrita = { slug: string; titulo: string; texto: string };
+type Secciones = { completa: boolean; total: number; secciones: SeccionEscrita[] };
 
 /** Por qué el backend no arrancó la lectura que se le pidió. */
 type MotivoRechazo = EventoProps["interpretacion_rechazada"]["motivo"];
@@ -278,6 +281,9 @@ export function ChartActions({
   /** Si el bloque de acciones está a la vista. `null` = no se sabe (antes del
    *  primer callback, o sin IntersectionObserver): en ese caso no hay barra. */
   const [bloqueVisible, setBloqueVisible] = useState<boolean | null>(null);
+  /** Las secciones que ya llegaron mientras el informe se escribe: se leen en
+   *  vez de mirar una animación seis minutos. */
+  const [escritas, setEscritas] = useState<SeccionEscrita[]>([]);
 
   /**
    * Si `tier` ya está completo en algún OTRO idioma de esta carta. El
@@ -309,19 +315,26 @@ export function ChartActions({
         await sleep(POLL_MS);
         try {
           const res = await fetch(
-            `/api/charts/${chartId}/interpretation/estado?lang=${locale}&tier=${tier}`,
+            `/api/charts/${chartId}/interpretation/secciones?lang=${locale}&tier=${tier}`,
           );
+          if (res.status === 404) {
+            // La carta ya no es de esta sesión (cambió de cuenta con la
+            // pestaña abierta). Seguir sondeando es girar para siempre.
+            setError(dict.chart.sesionCambio);
+            return false;
+          }
           if (!res.ok) continue;
-          const estado = (await res.json()) as Estado;
-          setProgreso({ hechas: estado.hechas, total: estado.total });
-          if (estado.completa) return true;
+          const cuerpo = (await res.json()) as Secciones;
+          setProgreso({ hechas: cuerpo.secciones.length, total: cuerpo.total });
+          setEscritas(cuerpo.secciones);
+          if (cuerpo.completa) return true;
         } catch (err) {
           console.error(`sondeo del informe ${chartId}: falló la consulta`, err);
         }
       }
       return false;
     },
-    [chartId, locale],
+    [chartId, locale, dict.chart.sesionCambio],
   );
 
   /** Espera el resto de `tier` y, si termina, trae la lectura a la página. */
@@ -329,7 +342,8 @@ export function ChartActions({
     async (contarEvento: boolean, tier: Tier) => {
       if (!(await waitForReading(tier))) {
         setBusy(false);
-        setError(dict.chart.failed);
+        // Si el sondeo ya explicó por qué cortó (un 404), no se pisa.
+        setError((previo) => previo ?? dict.chart.failed);
         return;
       }
 
@@ -462,6 +476,7 @@ export function ChartActions({
     // nunca apretó el botón — y son dos problemas distintos.
     track("interpretacion_pedida", { tier });
     setProgreso(null);
+    setEscritas([]);
     setBusy(true);
     setTierEnCurso(tier);
     setError(null);
@@ -617,17 +632,27 @@ export function ChartActions({
   if (busy || refrescando) {
     return (
       <section className="waiting">
-        <SolarSystem size={280} speed={2.5} />
+        {/* Con secciones ya escritas, se leen; la animación es sólo para el
+            arranque, cuando todavía no hay nada que leer. */}
+        {escritas.length > 0 ? (
+          <div className="reading waitingReading">
+            {escritas.map((s) => (
+              <Reading key={s.slug} texto={s.texto} />
+            ))}
+          </div>
+        ) : (
+          <SolarSystem size={280} speed={2.5} />
+        )}
         <div className="waitingCopy">
-          <h2 className="display waitingTitle">{dict.chart.waitTitle}</h2>
+          {escritas.length === 0 && <h2 className="display waitingTitle">{dict.chart.waitTitle}</h2>}
           <p className="waitingBody">
             {progreso
               ? // HALLAZGO 4: `hechas` son las secciones YA terminadas, no la
                 // que está en curso — con 0 hechas ya se está escribiendo la
                 // sección 1, no la "0". `min` cubre el instante en que
                 // `hechas` llega a `total` pero `completa` todavía no se leyó.
-                dict.chart.waitProgress
-                  .replace("{hechas}", String(Math.min(progreso.hechas + 1, progreso.total)))
+                dict.chart.waitEscribiendo
+                  .replace("{n}", String(Math.min(progreso.hechas + 1, progreso.total)))
                   .replace("{total}", String(progreso.total))
               : // Antes del primer sondeo (`progreso` todavía null, los primeros
                 // ~5 segundos de cualquier generación) no hay otra pista de qué

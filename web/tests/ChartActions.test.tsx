@@ -66,11 +66,20 @@ const reply = (status: number, body: unknown = {}) => ({
   json: async () => body,
 });
 
-/** Respuesta del sondeo de `interpretation/estado`. */
+/** Respuesta del sondeo de `interpretation/secciones`: tantas secciones
+ *  escritas como `hechas`, con un texto mínimo cada una. */
 const estado = (completa: boolean, hechas: number, total: number) => ({
   ok: true,
   status: 200,
-  json: async () => ({ completa, hechas, total }),
+  json: async () => ({
+    completa,
+    total,
+    secciones: Array.from({ length: hechas }, (_, i) => ({
+      slug: `s${i + 1}`,
+      titulo: `Sección ${i + 1}`,
+      texto: `## Sección ${i + 1}\n\nTexto de la sección ${i + 1}.`,
+    })),
+  }),
 });
 
 beforeEach(() => {
@@ -1170,5 +1179,62 @@ describe("ChartActions: barra fija", () => {
     vi.stubGlobal("IntersectionObserver", undefined);
     renderActions({ paidCredits: 0 });
     expect(screen.queryByTestId("accion-fija")).toBeNull();
+  });
+});
+
+describe("ChartActions: leer mientras se escribe", () => {
+  it("muestra las secciones que ya están y cuántas faltan", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          completa: false,
+          total: 8,
+          secciones: [{ slug: "firma", titulo: "Tu firma", texto: "## Tu firma\n\nPrimer párrafo." }],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions({ paidCredits: 1 });
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
+    await correr(POLL_MS);
+    expect(screen.getByText("Primer párrafo.")).toBeInTheDocument();
+    expect(
+      screen.getByText(dict.chart.waitEscribiendo.replace("{n}", "2").replace("{total}", "8")),
+    ).toBeInTheDocument();
+  });
+
+  it("una sección sin títulos se muestra igual, como párrafos", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply(202))
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          completa: false,
+          total: 8,
+          secciones: [{ slug: "firma", titulo: "Tu firma", texto: "Texto plano, sin encabezado.\n\nSegundo párrafo." }],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions({ paidCredits: 1 });
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
+    await correr(POLL_MS);
+    expect(screen.getByText("Texto plano, sin encabezado.")).toBeInTheDocument();
+    expect(screen.getByText("Segundo párrafo.")).toBeInTheDocument();
+  });
+
+  it("un 404 del sondeo corta la espera y explica", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(reply(202)).mockResolvedValue(reply(404));
+    vi.stubGlobal("fetch", fetchMock);
+    renderActions({ paidCredits: 1 });
+    await clickBoton(dict.chart.interpretCompletoConDerecho);
+    await correr(POLL_MS);
+    expect(screen.getByRole("alert")).toHaveTextContent(dict.chart.sesionCambio);
+    // El POST y un solo sondeo: después del 404 no se insiste.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

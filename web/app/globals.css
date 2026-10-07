@@ -845,6 +845,13 @@ a {
   }
 }
 
+/* Las secciones ya escritas, leídas durante la espera: a la izquierda y con
+   la medida de la lectura, no centradas como la copia de la animación. */
+.waitingReading {
+  width: min(100%, 62ch);
+  text-align: left;
+}
+
 .waitingCopy {
   display: flex;
   flex-direction: column;

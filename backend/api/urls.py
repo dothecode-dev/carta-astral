@@ -17,7 +17,7 @@ from api.views import (
     GeocodeView,
     GoogleAuthView,
     IndiceInformeView,
-    InterpretationEstadoView,
+    InterpretationEstadoView, InterpretationSeccionesView,
     InterpretationView,
 )
 from api.pdf import ChartPdfView
@@ -45,6 +45,7 @@ urlpatterns = [
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
     path("charts/<uuid:uuid>/interpretation/estado/", InterpretationEstadoView.as_view()),
+    path("charts/<uuid:uuid>/interpretation/secciones/", InterpretationSeccionesView.as_view()),
     path("charts/<uuid:uuid>/informe/indice/", IndiceInformeView.as_view()),
     path("charts/<uuid:uuid>/pdf/", ChartPdfView.as_view()),
     path("geocode/", GeocodeView.as_view()),

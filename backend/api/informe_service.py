@@ -190,6 +190,23 @@ def indice_informe(chart, lang: str) -> list[dict]:
     ]
 
 
+def secciones_escritas(interpretacion, chart) -> list[dict]:
+    """Las secciones que ya están, con su texto entero, para leerlas mientras
+    se escriben las demás. Son las mismas filas que después forman `text`.
+
+    Recibe `chart` en vez de leer `interpretacion.chart`: esa columna se va en
+    el deploy 2 del sujeto genérico y acá no hace falta sumar otra lectura.
+    """
+    titulos = {
+        s.slug: s.titulo[interpretacion.lang]
+        for s in secciones_aplicables(chart, interpretacion.tier)
+    }
+    return [
+        {"slug": s.slug, "titulo": titulos.get(s.slug, s.slug), "texto": s.texto}
+        for s in interpretacion.secciones.all()
+    ]
+
+
 def generar_informe(interpretacion, client, token: str) -> bool:
     """Genera las secciones que falten. Reanudable: llamarla dos veces sobre un
     informe a medio hacer completa el resto sin repetir lo ya escrito.
