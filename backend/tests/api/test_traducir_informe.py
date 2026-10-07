@@ -9,6 +9,17 @@ from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES
 
 pytestmark = pytest.mark.django_db
 
+TOKEN = "tok-test"
+
+
+@pytest.fixture(autouse=True)
+def _lock_vigente(monkeypatch):
+    """Estos tests llaman a `traducir_informe` directo, sin el lock que toma
+    `completar_generacion`: sin esto el `renovar_lock` real devuelve False y
+    la traducción abortaría tras la primera sección por una razón ajena a lo
+    que se prueba. Los tests de renovación lo pisan con su propio doble."""
+    monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: True)
+
 # SQLite serializa la base entera y no ejercita una carrera real entre
 # conexiones: un "pasa" ahí sería falso verde. Mismo criterio que
 # tests/api/test_ledger_concurrencia.py.
@@ -84,7 +95,7 @@ def test_traduce_seccion_por_seccion_y_no_de_una(interpretacion):
     _crear_secciones(interpretacion)
 
     cliente = ClienteFalso()
-    informe_service.traducir_informe(interpretacion, "en", cliente)
+    informe_service.traducir_informe(interpretacion, "en", cliente, TOKEN)
 
     assert len(cliente.llamadas) == 8
     destino = Interpretation.objects.get(
@@ -121,7 +132,7 @@ def test_traduce_al_tier_correcto_cuando_hay_dos_productos_en_la_carta(chart, ac
         interpretation=corto_es, slug=SECCION_BREVE.slug, orden=0, texto="texto " * 200,
     )
 
-    informe_service.traducir_informe(corto_es, "en", ClienteFalso())
+    informe_service.traducir_informe(corto_es, "en", ClienteFalso(), TOKEN)
 
     corto_en = Interpretation.objects.get(
         chart=chart, lang="en", tier="corto", prompt_version=PROMPT_VERSION,
@@ -143,14 +154,14 @@ def test_no_debita_ni_devuelve_creditos(interpretacion, monkeypatch):
     monkeypatch.setattr(canje, "devolver", _explota)
     _crear_secciones(interpretacion)
 
-    informe_service.traducir_informe(interpretacion, "en", ClienteFalso())
+    informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), TOKEN)
 
 
 def test_si_falla_a_mitad_conserva_lo_traducido_y_no_marca_completa(interpretacion):
     _crear_secciones(interpretacion)
 
     with pytest.raises(RuntimeError):
-        informe_service.traducir_informe(interpretacion, "en", ClienteFalso(falla_en=5))
+        informe_service.traducir_informe(interpretacion, "en", ClienteFalso(falla_en=5), TOKEN)
 
     destino = Interpretation.objects.get(
         chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
@@ -163,10 +174,10 @@ def test_al_reanudar_no_vuelve_a_traducir_lo_ya_hecho(interpretacion):
     _crear_secciones(interpretacion)
 
     with pytest.raises(RuntimeError):
-        informe_service.traducir_informe(interpretacion, "en", ClienteFalso(falla_en=5))
+        informe_service.traducir_informe(interpretacion, "en", ClienteFalso(falla_en=5), TOKEN)
 
     segundo = ClienteFalso()
-    informe_service.traducir_informe(interpretacion, "en", segundo)
+    informe_service.traducir_informe(interpretacion, "en", segundo, TOKEN)
 
     # Cuatro ya estaban traducidas: sólo se piden las cuatro que faltan.
     assert len(segundo.llamadas) == 4
@@ -180,9 +191,9 @@ def test_al_reanudar_no_vuelve_a_traducir_lo_ya_hecho(interpretacion):
 def test_traducir_dos_veces_no_duplica_secciones(interpretacion):
     _crear_secciones(interpretacion)
 
-    informe_service.traducir_informe(interpretacion, "en", ClienteFalso())
+    informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), TOKEN)
     segundo = ClienteFalso()
-    informe_service.traducir_informe(interpretacion, "en", segundo)
+    informe_service.traducir_informe(interpretacion, "en", segundo, TOKEN)
 
     assert len(segundo.llamadas) == 0
     destino = Interpretation.objects.get(
@@ -217,7 +228,7 @@ def test_destino_hereda_el_estado_incompleto_del_origen(interpretacion):
     )
     assert interpretacion.completa is False
 
-    informe_service.traducir_informe(interpretacion, "en", ClienteFalso())
+    informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), TOKEN)
 
     destino = Interpretation.objects.get(
         chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
@@ -272,7 +283,7 @@ def test_dos_traducciones_concurrentes_de_la_misma_carta_no_duplican_ni_explotan
         )
 
     resultados, errores = _en_hilos(
-        lambda _i: informe_service.traducir_informe(origen, "en", ClienteFalso()), 2,
+        lambda _i: informe_service.traducir_informe(origen, "en", ClienteFalso(), TOKEN), 2,
     )
 
     assert not errores, f"una traducción concurrente terminó en excepción: {errores}"
@@ -282,3 +293,37 @@ def test_dos_traducciones_concurrentes_de_la_misma_carta_no_duplican_ni_explotan
     slugs = list(destino.secciones.values_list("slug", flat=True))
     assert len(slugs) == 8
     assert len(set(slugs)) == 8  # ninguna sección duplicada por slug
+
+
+# --- Fix round 2: la traducción renueva el lock como la generación ---
+
+
+def test_renueva_el_lock_despues_de_cada_seccion_traducida(interpretacion, monkeypatch):
+    _crear_secciones(interpretacion)
+    llamadas = []
+
+    def _renovar(chart, tier, token):
+        llamadas.append((chart.id, tier, token))
+        return True
+
+    monkeypatch.setattr(informe_service, "renovar_lock", _renovar)
+    terminado = informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), "tok-x")
+
+    assert terminado is True
+    assert llamadas == [(interpretacion.chart_id, interpretacion.tier, "tok-x")] * 8
+
+
+def test_si_pierde_el_lock_a_mitad_de_la_traduccion_aborta_sin_completar(interpretacion, monkeypatch):
+    _crear_secciones(interpretacion)
+    monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: False)
+    cliente = ClienteFalso()
+
+    terminado = informe_service.traducir_informe(interpretacion, "en", cliente, "tok-x")
+
+    destino = Interpretation.objects.get(
+        chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
+    )
+    assert terminado is False
+    assert len(cliente.llamadas) == 1
+    assert destino.secciones.count() == 1
+    assert destino.completa is False

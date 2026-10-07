@@ -352,7 +352,7 @@ def generar_informe(interpretacion, client, token: str) -> bool:
     return True
 
 
-def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
+def traducir_informe(origen: Interpretation, destino_lang: str, client, token: str) -> bool:
     """Traduce a `destino_lang` un informe ya generado (o a medio generar),
     sección por sección. Gratis para quien lo pide (RF8): el crédito se cobró
     una vez, en el primer idioma; esta función no debita ni devuelve nada del
@@ -395,12 +395,25 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
     esta función le escribiría las secciones traducidas del `origen` encima
     de esa fila ajena, corrompiendo el informe pagado con el contenido de la
     lectura breve (o viceversa).
+
+    `token` es el del lock que tomó `completar_generacion`, y el retorno sigue
+    el contrato de `generar_informe` (fix round 2): `False` sólo cuando abortó
+    de forma limpia porque perdió el lock con trabajo pendiente; `True` cuando
+    terminó de intentar (incluido un destino que ya estaba completo y no se
+    toca).
     """
     destino, _ = Interpretation.objects.get_or_create(
         chart=origen.chart, lang=destino_lang, prompt_version=origen.prompt_version,
         tier=origen.tier,
         defaults={"text": "", "account": origen.account, "trato": origen.trato, "traducido_de": origen},
     )
+    # Fix round 2: un destino que en la base ya está completo se entregó y no
+    # se toca, sea o no traducción de este origen. Sin esto, quien llegara con
+    # una foto vieja (el cron, con su lista armada antes de que otro hilo lo
+    # terminara) descartaba las secciones de un informe ya entregado, y si la
+    # re-traducción fallaba a mitad quedaba `completa=True` e incompleto.
+    if destino.completa:
+        return True
     # La traducción es del informe de origen y habla igual que él (RF5). El
     # destino puede existir ya: lo crea `iniciar_generacion` (con el trato
     # ACTUAL de la carta) y quizá ya tiene secciones escritas de cero por un
@@ -416,9 +429,8 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
             destino.trato = origen.trato
             destino.save(update_fields=["traducido_de", "trato"])
     hechas = set(destino.secciones.values_list("slug", flat=True))
-    for seccion in origen.secciones.all():
-        if seccion.slug in hechas:
-            continue
+    pendientes = [s for s in origen.secciones.all() if s.slug not in hechas]
+    for indice, seccion in enumerate(pendientes):
         texto = translate_interpretation(
             seccion.texto, destino_lang, client, trato=origen.trato,
         )
@@ -440,8 +452,21 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client) -> None:
                 "ya la había persistido otra llamada; se descarta la traducción repetida",
                 seccion.slug, destino.pk, destino_lang,
             )
+        # Fix round 2: mismo patrón que `generar_informe` — ocho traducciones
+        # seguidas pueden superar `LOCK_TTL`, así que el lock se renueva tras
+        # cada sección y, si se perdió con trabajo pendiente, se aborta sin
+        # marcar nada: otro proceso lo tiene y va a terminar este informe.
+        lock_renovado = renovar_lock(origen.chart, origen.tier, token)
+        if not lock_renovado and indice < len(pendientes) - 1:
+            logger.warning(
+                "se perdió el lock de la traducción (interpretation=%s, lang=%s) a "
+                "mitad; otro proceso lo tomó, se aborta",
+                destino.pk, destino_lang,
+            )
+            return False
 
     with transaction.atomic():
         destino.text = "\n\n".join(s.texto for s in destino.secciones.all())
         destino.completa = origen.completa
         destino.save(update_fields=["text", "completa"])
+    return True

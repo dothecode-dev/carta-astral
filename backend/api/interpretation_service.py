@@ -553,6 +553,13 @@ def completar_generacion(interpretacion: Interpretation, objetivo, account) -> N
     # after `got_lock=True` puede tirar el lock a la basura— es real y
     # existía en producción también, no sólo en el test.
     try:
+        # Fix round 2: `interpretacion` puede ser una foto vieja —el cron arma
+        # su lista de candidatas al arrancar y llega a cada una minutos
+        # después—. Con el lock ya tomado, se relee de la base: si otro hilo la
+        # terminó mientras tanto, ya se entregó y no hay nada que hacer.
+        interpretacion.refresh_from_db()
+        if interpretacion.completa:
+            return
         sibling = _sibling_completo(sujeto, interpretacion.lang, interpretacion.tier)
 
         # Un intento más de terminar este informe, cuente como generación o
@@ -568,7 +575,9 @@ def completar_generacion(interpretacion: Interpretation, objetivo, account) -> N
                 # es gratis (RF8, ya lo decidió `iniciar_generacion` no
                 # cobrando) y evita pagarle al modelo ocho secciones que ya
                 # existen en otro idioma.
-                informe_service.traducir_informe(sibling, interpretacion.lang, _build_client())
+                lock_perdido = not informe_service.traducir_informe(
+                    sibling, interpretacion.lang, _build_client(), token,
+                )
             else:
                 # Fix wave final / Important: `generar_informe` devuelve
                 # `False` cuando abortó de forma LIMPIA porque perdió el

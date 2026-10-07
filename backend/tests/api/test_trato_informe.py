@@ -15,6 +15,17 @@ from interpret.prompts import PROMPT_VERSION, SECCIONES
 
 pytestmark = pytest.mark.django_db
 
+TOKEN = "tok-test"
+
+
+@pytest.fixture(autouse=True)
+def _lock_vigente(monkeypatch):
+    """Estos tests llaman a `traducir_informe` directo, sin el lock que toma
+    `completar_generacion`: sin esto el `renovar_lock` real devuelve False y
+    la traducción abortaría tras la primera sección por una razón ajena a lo
+    que se prueba. Los tests de renovación lo pisan con su propio doble."""
+    monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: True)
+
 
 @pytest.fixture(autouse=True)
 def _cache_limpio():
@@ -134,7 +145,7 @@ def test_la_traduccion_nace_con_el_trato_del_origen(make_chart, cuenta, llamadas
         )
 
     _cambiar_trato(carta, "masculino")
-    informe_service.traducir_informe(origen, "pt", object())
+    informe_service.traducir_informe(origen, "pt", object(), TOKEN)
 
     destino = Interpretation.objects.get(chart=carta, lang="pt", tier="largo")
     assert destino.trato == "femenino"
@@ -157,7 +168,7 @@ def test_el_destino_ya_existente_con_otro_trato_se_alinea_con_el_origen(make_cha
         account=cuenta, trato="masculino",
     )
 
-    informe_service.traducir_informe(origen, "pt", object())
+    informe_service.traducir_informe(origen, "pt", object(), TOKEN)
 
     destino.refresh_from_db()
     assert destino.trato == "femenino"
@@ -203,7 +214,7 @@ def test_un_destino_con_secciones_de_cero_se_retraduce_entero(make_chart, cuenta
             interpretation=destino, slug=seccion.slug, orden=orden, texto="escrita de cero",
         )
 
-    informe_service.traducir_informe(origen, "pt", object())
+    informe_service.traducir_informe(origen, "pt", object(), TOKEN)
 
     destino.refresh_from_db()
     assert destino.trato == "femenino"
@@ -226,7 +237,7 @@ def test_reintento_de_una_traduccion_a_medias_no_retraduce_lo_hecho(make_chart, 
 
     monkeypatch.setattr(informe_service, "translate_interpretation", _falla_en_la_cuarta)
     with pytest.raises(RuntimeError):
-        informe_service.traducir_informe(origen, "pt", object())
+        informe_service.traducir_informe(origen, "pt", object(), TOKEN)
     destino = Interpretation.objects.get(chart=carta, lang="pt", tier="largo")
     assert destino.secciones.count() == 3
 
@@ -235,7 +246,7 @@ def test_reintento_de_una_traduccion_a_medias_no_retraduce_lo_hecho(make_chart, 
         return "traducido"
 
     monkeypatch.setattr(informe_service, "translate_interpretation", _bien)
-    informe_service.traducir_informe(origen, "pt", object())
+    informe_service.traducir_informe(origen, "pt", object(), TOKEN)
 
     destino.refresh_from_db()
     assert destino.secciones.count() == len(SECCIONES)
@@ -256,3 +267,81 @@ def test_completar_generacion_retraduce_el_destino_escrito_de_cero(make_chart, c
     pt.refresh_from_db()
     assert pt.completa is True
     assert {s.texto for s in pt.secciones.all()} == {"traducido"}
+
+
+# --- Fix round 2: un informe ya entregado no se re-traduce por una foto vieja ---
+
+
+def test_completar_generacion_con_foto_vieja_no_toca_un_informe_ya_entregado(make_chart, cuenta, llamadas):
+    """El cron arma su lista con «pt» todavía `completa=False`; mientras tanto
+    un hilo de usuario lo termina de cero y «es» se completa traduciéndose de
+    él. Cuando el cron llega a su foto vieja de «pt», no puede tratarlo como
+    pendiente: re-traducirlo desde «es» borraba las secciones de un informe
+    ya entregado."""
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    pt = Interpretation.objects.create(
+        chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        account=cuenta, completa=True, trato="femenino",
+    )
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=pt, slug=seccion.slug, orden=orden, texto=f"pt {seccion.slug}",
+        )
+    es = _origen_completo(carta, cuenta, trato="femenino")
+    es.traducido_de = pt
+    es.save(update_fields=["traducido_de"])
+    antes = sorted(pt.secciones.values_list("id", "slug", "texto"))
+
+    foto_vieja = Interpretation.objects.get(pk=pt.pk)
+    foto_vieja.completa = False  # lo que el cron tenía en memoria
+
+    svc.completar_generacion(foto_vieja, carta, cuenta)
+
+    pt.refresh_from_db()
+    assert pt.completa is True
+    assert pt.traducido_de_id is None
+    assert sorted(pt.secciones.values_list("id", "slug", "texto")) == antes
+    assert llamadas == {"seccion": [], "breve": [], "traduccion": []}
+
+
+def test_traducir_informe_no_toca_un_destino_ya_completo(make_chart, cuenta, llamadas):
+    """Defensa propia de `traducir_informe`: un destino que en la base ya está
+    completo no se descarta ni se re-traduce, aunque no sea traducción de
+    este origen."""
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    origen = _origen_completo(carta, cuenta, trato="femenino")
+    destino = Interpretation.objects.create(
+        chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        account=cuenta, completa=True, trato="masculino", text="entregado",
+    )
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=destino, slug=seccion.slug, orden=orden, texto="escrita de cero",
+        )
+    antes = sorted(destino.secciones.values_list("id", "slug", "texto"))
+
+    informe_service.traducir_informe(origen, "pt", object(), TOKEN)
+
+    destino.refresh_from_db()
+    assert destino.completa is True
+    assert destino.traducido_de_id is None
+    assert destino.trato == "masculino"
+    assert destino.text == "entregado"
+    assert sorted(destino.secciones.values_list("id", "slug", "texto")) == antes
+    assert llamadas["traduccion"] == []
+
+
+def test_perder_el_lock_al_traducir_no_gasta_un_intento(make_chart, cuenta, llamadas, monkeypatch):
+    """Mismo contrato que la generación: abortar la traducción porque otro
+    proceso tomó el lock no es un intento fallido."""
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    _origen_completo(carta, cuenta, trato="femenino")
+    pt = svc.iniciar_generacion(carta, "pt", cuenta, tier="largo")
+    monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: False)
+
+    svc.completar_generacion(pt, carta, cuenta)
+
+    pt.refresh_from_db()
+    assert pt.completa is False
+    assert pt.intentos == 0
+    assert len(llamadas["traduccion"]) == 1
