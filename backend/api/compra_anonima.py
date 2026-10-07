@@ -11,9 +11,11 @@ import secrets
 from django.db import transaction
 
 from api import cupones, stripe_client
+from api.accounts import resolver_cuenta
 from api.chart_service import create_chart
-from api.identity import hash_token, tombstone_hmac_configurada
-from api.models import PasarelaCheckout
+from api.identity import hash_token, normalizar, tombstone_hmac_configurada
+from api.models import Account, Chart, PasarelaCheckout, Sujeto
+from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
 PRODUCTO = "informe_natal"
@@ -61,3 +63,61 @@ def abrir(datos: dict, locale: str, codigo_cupon: str | None):
             precio_centavos=precio, anonimo=True, nonce_hash=hash_token(nonce),
         )
     return fila, nonce
+
+
+def enmascarar(email: str) -> str:
+    """`n***@mail.com`: lo justo para reconocerlo en un log sin guardarlo entero."""
+    local, _, dominio = email.partition("@")
+    return f"{local[:1]}***@{dominio}" if dominio else "***"
+
+
+def adjudicar(checkout_id: str, email: str) -> Account | None:
+    """La cuenta de una compra anónima pagada, por el mail del pago (RF5).
+
+    Con `select_for_update` sobre la fila: dos entregas del mismo evento (o
+    `completed` + `async_payment_succeeded`) se serializan acá y la segunda
+    encuentra la cuenta ya puesta. Un mail existente —verificado o no— es
+    esa cuenta y NUNCA se marca `cuenta_nueva`: es lo que impide entrar a una
+    cuenta ajena pagando con su mail (RF11).
+
+    `cuenta_nueva` sale de quien CREÓ la cuenta (`resolver_cuenta`), no de que
+    el lookup por mail no haya encontrado nada: una `ProviderIdentity(email,
+    sub)` previa de una cuenta con otro mail, o dos compras distintas con el
+    mismo mail nuevo a la vez (cada una con el lock de SU fila; la carrera la
+    decide la unicidad de la identidad), devuelven una cuenta que esta compra
+    no creó.
+
+    `None` si la fila no existe o no es anónima. Idempotente: si la fila ya
+    tiene cuenta, la devuelve sin tocar nada.
+    """
+    email = normalizar(email)
+    with transaction.atomic():
+        fila = PasarelaCheckout.objects.select_for_update().filter(checkout_id=checkout_id).first()
+        if fila is None or not fila.anonimo:
+            return None
+        if fila.account_id is not None:
+            return fila.account
+        # La más antigua si hay varias (cuentas duplicadas de antes de C3).
+        existente = Account.objects.filter(email__iexact=email).order_by("pk").first()
+        if existente is not None:
+            cuenta, nueva = existente, False
+        else:
+            # El mismo camino que el alta por mail de hoy: identidad
+            # `(email, <mail normalizado>)` y regalo de bienvenida descontado
+            # por el tombstone. Sin verificar: nadie probó todavía que el mail
+            # sea de quien pagó; lo verifica entrar con el código (RF12).
+            cuenta, nueva = resolver_cuenta(VerifiedIdentity(
+                provider="email", sub=email, email=email, email_verified=False,
+            ))
+        fila.account, fila.cuenta_nueva = cuenta, nueva
+        fila.save(update_fields=["account", "cuenta_nueva"])
+        if fila.chart_id is not None:
+            Chart.objects.filter(pk=fila.chart_id, account__isnull=True).update(account=cuenta)
+            Sujeto.objects.filter(
+                natal_de_id=fila.chart_id, account__isnull=True,
+            ).update(account=cuenta)
+    logger.info(
+        "compra anónima %s adjudicada a la cuenta %s (nueva=%s, mail=%s)",
+        checkout_id, cuenta.pk, nueva, enmascarar(email),
+    )
+    return cuenta

@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 
 from django.db import IntegrityError, models
 
-from api import analitica, catalogo, notificaciones
+from api import analitica, catalogo, compra_anonima, notificaciones
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
 from api.models import Account, CuponUso, PasarelaCheckout
@@ -131,6 +131,27 @@ def _resolver_cuenta_y_fila(sesion: dict):
     return None, fila
 
 
+class SesionAnonimaSinEmail(Exception):
+    """Una compra sin cuenta pagada sin mail: no hay a quién acreditarla."""
+
+
+def _adjudicar_si_es_anonima(session_id: str, sesion: dict) -> None:
+    """Le pone cuenta a una compra abierta sin cuenta, por el mail del pago
+    (RF5), ANTES de todo lo que registra la compra contra la cuenta: el
+    canje, el uso del cupón y la telemetría salen todos con ésta."""
+    fila = PasarelaCheckout.objects.filter(checkout_id=session_id).only("anonimo", "account_id").first()
+    if fila is None or not fila.anonimo or fila.account_id is not None:
+        return
+    email = ((sesion.get("customer_details") or {}).get("email") or "").strip()
+    if not email:
+        # Stripe siempre pide el mail (verificado en sandbox con Managed
+        # Payments, 07-10-2026). Si falta es transitorio o un cambio de
+        # Stripe: se pide el reintento en vez de perder la compra (RF7). La
+        # vista lo loguea con nivel error y responde 5xx.
+        raise SesionAnonimaSinEmail(f"sesión anónima {session_id} pagada sin email")
+    compra_anonima.adjudicar(session_id, email)
+
+
 def _precio_de(sesion: dict) -> str:
     items = ((sesion.get("line_items") or {}).get("data")) or []
     if not items:
@@ -156,6 +177,8 @@ def _acreditar(session_id: str) -> None:
             session_id, sesion.get("payment_status"),
         )
         return
+
+    _adjudicar_si_es_anonima(session_id, sesion)
 
     cuenta, fila = _resolver_cuenta_y_fila(sesion)
     if cuenta is None:

@@ -50,9 +50,21 @@ def otorgar_bienvenida(account, cantidad: int) -> None:
 
 
 def resolve_account(vid: VerifiedIdentity) -> Account:
+    return resolver_cuenta(vid)[0]
+
+
+def resolver_cuenta(vid: VerifiedIdentity) -> tuple[Account, bool]:
+    """`resolve_account`, diciendo además si la cuenta la creó ESTA llamada.
+
+    Lo necesita la compra anónima (spec «pagar es entrar», RF5/RF11): sólo una
+    cuenta creada por la compra deja entrar al navegador que pagó. Que no la
+    haya encontrado un lookup previo no alcanza para decirlo —la identidad
+    puede existir ya, o crearse en paralelo y ganar la carrera del `INSERT`—:
+    el único que sabe si creó es el que creó.
+    """
     existing = ProviderIdentity.objects.filter(provider=vid.provider, sub=vid.sub).first()
     if existing is not None:
-        return existing.account
+        return existing.account, False
 
     if vid.email and vid.email_verified:
         normalizado = normalizar(vid.email)
@@ -87,13 +99,13 @@ def resolve_account(vid: VerifiedIdentity) -> Account:
                 logger.info("race linking %s sub to account; re-reading", vid.provider)
                 return ProviderIdentity.objects.get(
                     provider=vid.provider, sub=vid.sub,
-                ).account
-            return account
+                ).account, False
+            return account, False
 
     return _create_account(vid)
 
 
-def _create_account(vid: VerifiedIdentity) -> Account:
+def _create_account(vid: VerifiedIdentity) -> tuple[Account, bool]:
     tomb = SubTombstone.objects.filter(sub_hash=sub_hash(vid.provider, vid.sub)).first()
     consumed = tomb.free_credits_consumed if tomb else 0
     free = max(0, settings.INSTALL_FREE_CREDITS - consumed)
@@ -125,5 +137,5 @@ def _create_account(vid: VerifiedIdentity) -> Account:
         logger.info("race creating %s sub; re-reading existing account", vid.provider)
         return ProviderIdentity.objects.get(
             provider=vid.provider, sub=vid.sub,
-        ).account
-    return account
+        ).account, False
+    return account, True
