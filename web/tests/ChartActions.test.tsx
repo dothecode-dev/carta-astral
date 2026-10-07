@@ -743,6 +743,20 @@ describe("volver a la carta después de cerrar la pestaña", () => {
     expect(screen.getByText(/secci[óo]n 4 de 8/i)).toBeInTheDocument();
   });
 
+  it("en la breve no dice que se puede cerrar la ventana", async () => {
+    // «Podés cerrar esta ventana… te espera en tu cuenta» es para los seis
+    // minutos del informe. La breve tarda medio minuto y nadie avisa por mail
+    // que está lista: invitar a irse ahí es perder a la persona.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(reply(202)).mockResolvedValue(estado(false, 0, 1)));
+    renderActions({ paidCredits: 0 });
+
+    await clickBoton(dict.chart.interpretBrevePrincipal);
+    await correr(POLL_MS);
+
+    expect(screen.getByText(dict.chart.waitTitle)).toBeInTheDocument(); // está esperando
+    expect(screen.queryByText(dict.chart.waitColor)).toBeNull();
+  });
+
   it("enlaza a los términos, donde se cuenta cómo se escribe la lectura", () => {
     // El pie de la lectura ya no anuncia que la escribe una IA: eso quedó en
     // los Términos de uso, que lo dicen con todas las letras ("genera lecturas

@@ -671,7 +671,10 @@ export function ChartActions({
           </p>
           {/* Aparte del párrafo de arriba, que a los ~5 segundos pasa a ser el
               progreso: esta frase acompaña los seis minutos enteros. */}
-          <p className="waitingColor">{dict.chart.waitColor}</p>
+          {/* Sólo en el informe: «podés cerrar, te espera en tu cuenta» es para
+              seis minutos. La breve tarda medio minuto y nadie avisa por mail
+              que está lista: invitar a irse ahí es perder a la persona. */}
+          {tierEnCurso !== "corto" && <p className="waitingColor">{dict.chart.waitColor}</p>}
         </div>
       </section>
     );
