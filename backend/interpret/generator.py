@@ -172,14 +172,15 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     content = f"{pedido}\n\n{cuerpo}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
-    if nota := instruccion(trato, lang):
-        content += f"\n\n{nota}"
     if reparto:
         # Quién explica qué: lo que impide que la misma oposición se explique
         # en cuatro secciones (interpret/reparto.py, spec 2026-10-07).
         content += f"\n\n{reparto}"
     if previo:
         content += _CONTEXTO_PREVIO[lang].format(previo=previo)
+    # Al final, por recencia: en una sección larga lo último es lo que más pesa.
+    if nota := instruccion(trato, lang):
+        content += f"\n\n{nota}"
 
     # SYSTEM_PROMPTS_SECCION, no SYSTEM_PROMPTS: éste no fija un largo (lo fija
     # el pedido, que varía por sección) y aclara que es una sección de un

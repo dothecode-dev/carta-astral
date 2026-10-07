@@ -31,8 +31,17 @@ def test_sin_elegir_es_neutro(lang):
     assert instruccion("", lang) == instruccion("neutro", lang) != ""
 
 
-def test_valor_desconocido_es_neutro():
-    assert instruccion("otro", "es") == instruccion("neutro", "es")
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_valor_desconocido_es_neutro(lang):
+    assert instruccion("otro", lang) == instruccion("neutro", lang)
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_el_system_de_la_seccion_no_cambia_con_el_trato(monkeypatch, lang):
+    vistos = _espiar(monkeypatch)
+    generator.build_seccion({"time_known": True}, SECCIONES[0], lang, "", None, trato="femenino")
+    generator.build_seccion({"time_known": True}, SECCIONES[0], lang, "", None)
+    assert vistos[0][0] == vistos[1][0]
 
 
 def test_la_breve_lleva_el_trato_en_el_contenido_y_el_system_no_cambia(monkeypatch):
@@ -51,15 +60,16 @@ def test_la_seccion_lleva_el_trato(monkeypatch):
     assert instruccion("masculino", "pt") in vistos[0][1]
 
 
-def test_la_instruccion_de_la_seccion_va_antes_del_reparto_y_del_previo(monkeypatch):
+def test_la_instruccion_de_la_seccion_va_al_final_despues_de_reparto_y_previo(monkeypatch):
     vistos = _espiar(monkeypatch)
     generator.build_seccion(
         {"time_known": False}, SECCIONES[0], "es", "LO PREVIO", None, reparto="EL REPARTO", trato="femenino"
     )
     content = vistos[0][1]
-    pos = content.index(instruccion("femenino", "es"))
-    assert content.index(generator._DEGRADED_NOTES["es"]) < pos < content.index("EL REPARTO")
-    assert pos < content.index("LO PREVIO")
+    nota = instruccion("femenino", "es")
+    assert content.endswith(nota)
+    assert content.index("EL REPARTO") < content.index("LO PREVIO") < content.index(nota)
+    assert content.index(generator._DEGRADED_NOTES["es"]) < content.index("EL REPARTO")
 
 
 def test_la_traduccion_lleva_el_trato_del_destino_en_el_system(monkeypatch):
