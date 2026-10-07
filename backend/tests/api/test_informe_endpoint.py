@@ -578,10 +578,23 @@ def test_las_secciones_escritas_llegan_con_su_texto(client_autenticado, chart, i
     assert r.data["secciones"][0]["titulo"]
 
 
+def test_las_secciones_escritas_traen_el_aviso_de_entretenimiento(client_autenticado, chart, interpretacion):
+    # El aviso lo agrega el sistema, no el modelo: quien lee mientras se
+    # escribe tiene que verlo igual que en la lectura terminada.
+    from api.interpretation_service import DISCLAIMERS
+
+    interpretacion.tier = "largo"
+    interpretacion.save()
+    r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/secciones/?lang=es&tier=largo")
+    assert r.data["disclaimer"] == DISCLAIMERS["es"]
+
+
 def test_las_secciones_sin_interpretacion_son_cero(client_autenticado, chart):
     r = client_autenticado.get(f"/api/charts/{chart.uuid}/interpretation/secciones/?lang=es&tier=largo")
     assert r.status_code == 200
-    assert r.data == {"completa": False, "total": 8, "secciones": []}
+    from api.interpretation_service import DISCLAIMERS
+
+    assert r.data == {"completa": False, "total": 8, "secciones": [], "disclaimer": DISCLAIMERS["es"]}
 
 
 def test_las_secciones_sin_tier_es_400(client_autenticado, chart):

@@ -1238,6 +1238,7 @@ describe("ChartActions: leer mientras se escribe", () => {
           completa: false,
           total: 8,
           secciones: [{ slug: "firma", titulo: "Tu firma", texto: "## Tu firma\n\nPrimer párrafo." }],
+          disclaimer: "Aviso de entretenimiento.",
         }),
       });
     vi.stubGlobal("fetch", fetchMock);
@@ -1245,6 +1246,8 @@ describe("ChartActions: leer mientras se escribe", () => {
     await clickBoton(dict.chart.interpretCompletoConDerecho);
     await correr(POLL_MS);
     expect(screen.getByText("Primer párrafo.")).toBeInTheDocument();
+    // El aviso viaja con las secciones: leer mientras se escribe no lo saltea.
+    expect(screen.getByText("Aviso de entretenimiento.")).toBeInTheDocument();
     expect(
       screen.getByText(dict.chart.waitEscribiendo.replace("{n}", "2").replace("{total}", "8")),
     ).toBeInTheDocument();

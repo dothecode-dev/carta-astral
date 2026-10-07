@@ -501,11 +501,17 @@ class InterpretationSeccionesView(APIView):
             chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
         if interpretacion is None:
-            return Response({"completa": False, "total": total, "secciones": []})
+            return Response(
+                {"completa": False, "total": total, "secciones": [], "disclaimer": DISCLAIMERS[lang]}
+            )
         return Response({
             "completa": interpretacion.completa,
             "total": total,
             "secciones": informe_service.secciones_escritas(interpretacion, chart),
+            # El aviso lo agrega el sistema, no el modelo (los prompts le piden
+            # que no lo escriba): quien lee mientras se escribe lo ve igual que
+            # en la lectura terminada.
+            "disclaimer": DISCLAIMERS[lang],
         })
 
 

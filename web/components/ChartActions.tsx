@@ -41,7 +41,7 @@ type Tier = "corto" | "largo";
 
 /** Una sección ya escrita, tal como la devuelve `interpretation/secciones`. */
 type SeccionEscrita = { slug: string; titulo: string; texto: string };
-type Secciones = { completa: boolean; total: number; secciones: SeccionEscrita[] };
+type Secciones = { completa: boolean; total: number; secciones: SeccionEscrita[]; disclaimer?: string };
 
 /** Por qué el backend no arrancó la lectura que se le pidió. */
 type MotivoRechazo = EventoProps["interpretacion_rechazada"]["motivo"];
@@ -284,6 +284,7 @@ export function ChartActions({
   /** Las secciones que ya llegaron mientras el informe se escribe: se leen en
    *  vez de mirar una animación seis minutos. */
   const [escritas, setEscritas] = useState<SeccionEscrita[]>([]);
+  const [avisoEscritas, setAvisoEscritas] = useState("");
 
   /**
    * Si `tier` ya está completo en algún OTRO idioma de esta carta. El
@@ -327,6 +328,7 @@ export function ChartActions({
           const cuerpo = (await res.json()) as Secciones;
           setProgreso({ hechas: cuerpo.secciones.length, total: cuerpo.total });
           setEscritas(cuerpo.secciones);
+          setAvisoEscritas(cuerpo.disclaimer ?? "");
           if (cuerpo.completa) return true;
         } catch (err) {
           console.error(`sondeo del informe ${chartId}: falló la consulta`, err);
@@ -645,6 +647,7 @@ export function ChartActions({
             {escritas.map((s) => (
               <Reading key={s.slug} texto={s.texto} />
             ))}
+            {avisoEscritas && <p className="disclaimer">{avisoEscritas}</p>}
           </div>
         ) : (
           <SolarSystem size={280} speed={2.5} />
