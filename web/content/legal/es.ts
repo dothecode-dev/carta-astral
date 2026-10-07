@@ -17,9 +17,10 @@ export const legalEs: LegalContent = {
       {
         kind: "ul",
         items: [
-          "**Cuenta:** al entrar con Google o Apple recibimos tu identificador del proveedor y tu email. No vemos ni guardamos tu contraseña.",
+          "**Cuenta:** al entrar con Google recibimos tu identificador de Google y tu email; con el código por mail, tu email. No vemos ni guardamos tu contraseña.",
           "**Datos de nacimiento:** los que cargás para calcular una carta — nombre (opcional), fecha, hora y lugar de nacimiento.",
           "**Compras:** el cobro lo procesa **Stripe**, que actúa como vendedor registrado. No vemos ni guardamos los datos de tu tarjeta: de Stripe recibimos la confirmación del pago y el identificador de la compra, para darte acceso a lo que compraste.",
+          "**Comprar sin cuenta:** si abrís el pago del informe sin haber entrado, guardamos los datos de esa carta para poder entregarte el informe cuando se confirme el pago. Si el pago no se completa, la carta se borra cuando vence (a la hora de abrirlo). El email lo cargás en **Stripe**, que nos lo pasa al confirmar el pago: lo usamos para crear tu cuenta, o para acreditar la compra en la que ya tenías con ese email, y para mandarte el código de acceso.",
         ],
       },
       { kind: "h2", text: "Para qué los usamos" },

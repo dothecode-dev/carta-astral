@@ -26,6 +26,7 @@ const REQUIRED = {
     ["no constituye consejo", "disclaimer de que la lectura no es asesoramiento"],
     ["vendedor registrado", "quién factura y cobra el impuesto frente al comprador"],
     ["Reembolsos", "Stripe puede reembolsar por su cuenta: la política tiene que estar escrita"],
+    ["sin cuenta", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
   ],
   "en.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
@@ -39,6 +40,7 @@ const REQUIRED = {
     ["not medical, legal, financial or professional advice", "disclaimer de asesoramiento"],
     ["merchant of record", "quién factura y cobra el impuesto frente al comprador"],
     ["Refunds", "Stripe puede reembolsar por su cuenta: la política tiene que estar escrita"],
+    ["without an account", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
   ],
   "pt.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
@@ -52,6 +54,7 @@ const REQUIRED = {
     ["não constitui aconselhamento", "disclaimer de asesoramiento"],
     ["vendedora registrada", "quién factura y cobra el impuesto frente al comprador"],
     ["Reembolsos", "a Stripe pode reembolsar por conta própria: a política tem que estar escrita"],
+    ["sem conta", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
   ],
 };
 

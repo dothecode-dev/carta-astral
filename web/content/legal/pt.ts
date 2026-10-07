@@ -16,9 +16,10 @@ export const legalPt: LegalContent = {
       {
         kind: "ul",
         items: [
-          "**Conta:** ao entrar com Google recebemos seu identificador do provedor e seu email. Nunca vemos nem guardamos sua senha.",
+          "**Conta:** ao entrar com Google recebemos seu identificador do Google e seu email; com o código por email, seu email. Nunca vemos nem guardamos sua senha.",
           "**Dados de nascimento:** os que você informa para calcular um mapa — nome (opcional), data, hora e lugar de nascimento.",
           "**Compras:** o pagamento é processado pela **Stripe**, que atua como vendedora registrada. Não vemos nem guardamos os dados do seu cartão: da Stripe recebemos a confirmação do pagamento e o identificador da compra, para liberar o que você comprou.",
+          "**Comprar sem conta:** se você abrir o pagamento do relatório sem ter entrado, guardamos os dados desse mapa para poder entregar o relatório quando o pagamento for confirmado. Se o pagamento não for concluído, o mapa é apagado quando o checkout expira (uma hora depois de aberto). Você informa seu e-mail no **Stripe**, que nos repassa quando o pagamento é confirmado: usamos esse e-mail para criar sua conta, ou para creditar a compra na conta que você já tinha com ele, e para enviar o código de acesso.",
         ],
       },
       { kind: "h2", text: "Para que usamos" },

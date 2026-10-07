@@ -16,9 +16,10 @@ export const legalEn: LegalContent = {
       {
         kind: "ul",
         items: [
-          "**Account:** when you sign in with Google we receive your provider identifier and your email. We never see or store your password.",
+          "**Account:** when you sign in with Google we receive your Google identifier and your email; with the email code, your email. We never see or store your password.",
           "**Birth data:** what you enter to compute a chart — name (optional), date, time and place of birth.",
           "**Purchases:** payments are processed by **Stripe**, acting as merchant of record. We never see or store your card details: from Stripe we receive the payment confirmation and the purchase identifier, so we can give you access to what you bought.",
+          "**Buying without an account:** if you open the payment for the report without signing in, we store that chart's data so we can deliver the report once the payment is confirmed. If the payment isn't completed, the chart is deleted when the checkout expires (one hour after opening it). You enter your email in **Stripe**, which passes it to us when the payment is confirmed: we use it to create your account, or to credit the purchase to the account you already had with that email, and to send you the access code.",
         ],
       },
       { kind: "h2", text: "How we use it" },
