@@ -648,6 +648,7 @@ export type Dict = {
      *  `CompraEspera` y `CanjeCompra` cuando el backend devuelve
      *  `saldo_pendiente`. */
     saldoPendiente: string;
+    saldoPendienteCuerpo: string;
   };
   share: {
     /** Rótulo de la portada del documento y título de la tabla de posiciones. */
@@ -922,6 +923,8 @@ const es: Dict = {
     canjeInvalidoTitle: "No pudimos abrir esta compra desde acá",
     canjeInvalidoBody: "Si pagaste, lo que compraste te espera en tu cuenta: entrá con el mail que usaste al pagar.",
     saldoPendiente: "Este pago saldó un saldo pendiente de tu cuenta.",
+    saldoPendienteCuerpo:
+      "Tenías un saldo pendiente de una compra anterior que se reembolsó y ya habías usado; este pago lo cubrió, así que no se escribió un informe nuevo. Si creés que es un error, escribinos a info@astraguia.com.",
   },
   share: {
     chartEyebrow: "Carta natal",
@@ -1311,6 +1314,8 @@ const en: Dict = {
     canjeInvalidoTitle: "We couldn't open this purchase from here",
     canjeInvalidoBody: "If you paid, what you bought is waiting in your account: sign in with the email you used to pay.",
     saldoPendiente: "This payment settled a pending balance on your account.",
+    saldoPendienteCuerpo:
+      "You had a pending balance from an earlier purchase that was refunded after you had already used it; this payment covered it, so no new report was written. If you think this is a mistake, write to us at info@astraguia.com.",
   },
   share: {
     chartEyebrow: "Natal chart",
@@ -1700,6 +1705,8 @@ const pt: Dict = {
     canjeInvalidoTitle: "Não conseguimos abrir esta compra daqui",
     canjeInvalidoBody: "Se você pagou, o que comprou está esperando na sua conta: entre com o e-mail que usou para pagar.",
     saldoPendiente: "Este pagamento quitou um saldo pendente da sua conta.",
+    saldoPendienteCuerpo:
+      "Você tinha um saldo pendente de uma compra anterior que foi reembolsada e que você já tinha usado; este pagamento o cobriu, então nenhum relatório novo foi escrito. Se você acha que é um erro, escreva para info@astraguia.com.",
   },
   share: {
     chartEyebrow: "Mapa natal",

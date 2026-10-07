@@ -104,6 +104,7 @@ export function CompraEspera({
       <section className="waiting">
         <div className="waitingCopy">
           <h1 className="display waitingTitle">{dict.compra.saldoPendiente}</h1>
+          <p className="waitingBody">{dict.compra.saldoPendienteCuerpo}</p>
           <Link className="btn btnPrimary" href={`/${locale}/cuenta`}>
             {dict.compra.irACuenta}
           </Link>

@@ -114,6 +114,7 @@ describe("CanjeCompra", () => {
     await correr(3);
 
     expect(screen.getByText(dict.compra.saldoPendiente)).toBeInTheDocument();
+    expect(screen.getByText("Tenías un saldo pendiente de una compra anterior que se reembolsó y ya habías usado; este pago lo cubrió, así que no se escribió un informe nuevo. Si creés que es un error, escribinos a info@astraguia.com.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: dict.compra.irACuenta })).toHaveAttribute(
       "href",
       "/es/cuenta",
