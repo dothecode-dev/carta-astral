@@ -90,3 +90,11 @@ def test_la_vista_previa_trae_la_firma():
     r = APIClient().post(URL, PAYLOAD, format="json")
     assert [linea["cuerpo"] for linea in r.data["firma"]] == ["Sun", "Moon", "Ascendant"]
     assert r.data["firma"][0]["frases"]["es"]
+
+
+def test_campo_faltante_dice_cual_falta_sin_repr_de_la_excepcion():
+    """Un `KeyError` pelado se serializaba como `"'date'"`: el repr de Python."""
+    sin_fecha = {k: v for k, v in PAYLOAD.items() if k != "date"}
+    r = APIClient().post(URL, sin_fecha, format="json")
+    assert r.status_code == 400
+    assert r.data["error"] == "falta el campo date"

@@ -18,7 +18,7 @@ from api.auth import (
     create_session,
 )
 from api.deletion import delete_account, delete_charts
-from api.chart_service import CartaCalculada, calcular, create_chart
+from api.chart_service import CartaCalculada, calcular, create_chart, mensaje_de_datos_invalidos
 from api.canje import SinDerecho, derechos_de
 from api.exceptions import CapReached, GenerationInProgress
 from api.firma_frases import firma
@@ -263,7 +263,9 @@ class ChartPreviewView(APIView):
             # las variables locales del marco, y acá adentro está la fecha de
             # nacimiento de una persona que ni siquiera tiene cuenta.
             logger.warning("preview rechazado: %s", type(exc).__name__)
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": mensaje_de_datos_invalidos(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
         return Response(_preview_repr(carta))
 
 

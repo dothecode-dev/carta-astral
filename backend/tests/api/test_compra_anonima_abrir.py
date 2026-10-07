@@ -179,3 +179,10 @@ def test_mantenimiento_gana_a_los_datos_invalidos(client, stripe_responde, monke
 def test_sin_tombstone_gana_a_los_datos_invalidos(client, stripe_responde, monkeypatch):
     monkeypatch.setattr("api.compra_anonima.tombstone_hmac_configurada", lambda: False)
     assert _post(client, {**DATOS, "date": "no-es-fecha"}).status_code == 503
+
+
+def test_campo_faltante_dice_cual_falta_sin_repr_de_la_excepcion(client, stripe_responde):
+    """Un `KeyError` pelado se serializaba como `"'date'"`: el repr de Python."""
+    r = _post(client, {k: v for k, v in DATOS.items() if k != "date"})
+    assert r.status_code == 400
+    assert r.json() == {"error": "falta el campo date", "motivo": "datos_invalidos"}

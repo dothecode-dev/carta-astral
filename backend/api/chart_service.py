@@ -31,6 +31,17 @@ class CartaCalculada:
     place_label: str
 
 
+def mensaje_de_datos_invalidos(exc: Exception) -> str:
+    """El texto del 400 cuando `calcular` rechaza el pedido.
+
+    Un `KeyError` pelado se serializaba como su repr (`"'date'"`); acá dice
+    qué campo falta. `ValueError` y `CoreError` ya traen un mensaje legible.
+    """
+    if isinstance(exc, KeyError) and exc.args:
+        return f"falta el campo {exc.args[0]}"
+    return str(exc)
+
+
 def calcular(payload: dict) -> CartaCalculada:
     """Efemérides puras: no toca la base ni necesita cuenta.
 
