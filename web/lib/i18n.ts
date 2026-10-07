@@ -602,6 +602,8 @@ export type Dict = {
     /** RF12: aviso previo, antes de gastar el derecho, si la carta no tiene hora. */
     noTimeWarning: string;
     reading: string;
+    /** «{cuerpo} en {signo}»: el título de cada línea de la firma. */
+    firmaEn: string;
     /** Encabezado del pie que muestra qué trae el informe completo (Task 15). */
     resumenTitulo: string;
     /** Cuánto falta de cada sección todavía sin comprar. Lleva `{n}`: palabras. */
@@ -861,6 +863,7 @@ const es: Dict = {
     waitColor: "Podés cerrar esta ventana. Acá no hay cartas prearmadas: cada sección se escribe para esta carta y sólo para ésta, y por eso puede demorar hasta seis minutos. Cuando esté, te espera en tu cuenta.",
     noTimeWarning: "Esta carta quedó sin hora de nacimiento: el informe sale con siete secciones, sin la de casas.",
     reading: "Tu lectura",
+    firmaEn: "{cuerpo} en {signo}",
     resumenTitulo: "Esto trae el informe completo",
     resumenRestante: "+{n} palabras",
     resumenCta: "Comprá el informe completo para leerlas todas.",
@@ -1228,6 +1231,7 @@ const en: Dict = {
     waitColor: "You can close this window. There are no pre-written charts here: every section is written for this chart and no other, which is why it can take up to six minutes. When it's ready, it will be waiting in your account.",
     noTimeWarning: "This chart has no birth time: the report comes out with seven sections, without the houses one.",
     reading: "Your reading",
+    firmaEn: "{cuerpo} in {signo}",
     resumenTitulo: "What the full report includes",
     resumenRestante: "+{n} words",
     resumenCta: "Buy the full report to read them all.",
@@ -1595,6 +1599,7 @@ const pt: Dict = {
     waitColor: "Você pode fechar esta janela. Aqui não há mapas prontos: cada seção é escrita para este mapa e só para ele, e por isso pode levar até seis minutos. Quando estiver pronto, espera na sua conta.",
     noTimeWarning: "Este mapa ficou sem hora de nascimento: o relatório sai com sete seções, sem a de casas.",
     reading: "Sua leitura",
+    firmaEn: "{cuerpo} em {signo}",
     resumenTitulo: "O que o relatório completo traz",
     resumenRestante: "+{n} palavras",
     resumenCta: "Compre o relatório completo para ler tudo.",

@@ -1,3 +1,4 @@
+import type { Locale } from "@/lib/i18n";
 import type { WheelInput } from "astra-wheel";
 
 import type { SampleChart } from "@/content/sample-chart";
@@ -13,7 +14,15 @@ import type { SampleChart } from "@/content/sample-chart";
  * `id` ni interpretaciones —no existe como fila—, pero se dibuja igual: la
  * rueda y las tablas sólo miran `data`. Tipar por lo que se usa es lo que
  * permite reusar los mismos componentes sin inventarle un id falso. */
-export type CartaDibujable = Pick<ApiChart, "data">;
+export type CartaDibujable = Pick<ApiChart, "data" | "firma">;
+
+/** Una línea de la firma: Sol, Luna o Ascendente, su signo (abreviatura del
+ *  motor) y la frase fija en los tres idiomas. La escribe el backend. */
+export type FirmaLinea = {
+  cuerpo: "Sun" | "Moon" | "Ascendant";
+  signo: string;
+  frases: Record<Locale, string>;
+};
 
 export type ApiChart = {
   id: string;
@@ -27,6 +36,8 @@ export type ApiChart = {
    *  proceso murió NO aparece acá, para que la pantalla no espere para
    *  siempre por un informe que nadie va a terminar. */
   en_curso: Record<string, ("corto" | "largo")[]>;
+  /** Opcional: los fixtures de tests no la traen; el backend siempre sí. */
+  firma?: FirmaLinea[];
   birth: {
     name: string | null;
     date: string;

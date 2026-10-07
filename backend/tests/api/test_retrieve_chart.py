@@ -93,3 +93,16 @@ def test_chart_repr_no_lista_interpretacion_en_curso(account_client):
     )
     detail = account_client.get(f"/api/charts/{chart.uuid}/")
     assert detail.json()["interpretation_langs"] == []
+
+
+def test_chart_repr_includes_firma(account_client):
+    resp = account_client.post("/api/charts/", {
+        "name": "Ceci", "date": "1976-05-31", "time": "19:30",
+        "time_known": True, "lat": -34.516, "lng": -58.5,
+    }, format="json")
+    assert resp.status_code == 201
+    firma = resp.json()["firma"]
+    assert [linea["cuerpo"] for linea in firma] == ["Sun", "Moon", "Ascendant"]
+    assert set(firma[0]["frases"]) == {"es", "en", "pt"}
+    detalle = account_client.get(f"/api/charts/{resp.json()['id']}/")
+    assert detalle.json()["firma"] == firma

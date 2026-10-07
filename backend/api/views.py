@@ -21,6 +21,7 @@ from api.deletion import delete_account, delete_charts
 from api.chart_service import CartaCalculada, calcular, create_chart
 from api.canje import SinDerecho, derechos_de
 from api.exceptions import CapReached, GenerationInProgress
+from api.firma_frases import firma
 from api.interpretation_service import DISCLAIMERS
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 from api import apple
@@ -145,6 +146,7 @@ def _chart_repr(chart: Chart) -> dict:
         "house_system": chart.house_system,
         "zodiac": chart.zodiac,
         "data": chart.data,
+        "firma": firma(chart.data),
         "engine_version": chart.engine_version,
         "interpretation_langs": langs,
         "interpretations": tiers_por_lang,
@@ -205,10 +207,14 @@ def _preview_repr(carta: CartaCalculada) -> dict:
     este caso del de una carta propia recién creada.
     """
     bi = carta.birth_input
+    data = serialize_chart_data(carta.data)
     return {
         "house_system": carta.data.house_system,
         "zodiac": carta.data.zodiac,
-        "data": serialize_chart_data(carta.data),
+        "data": data,
+        # Sol, Luna y Ascendente en palabras: lo único de la carta que entiende
+        # quien no sabe leer glifos. Texto fijo, sin costo de modelo.
+        "firma": firma(data),
         "engine_version": engine_version(),
         "interpretation_langs": [],
         "interpretations": {},

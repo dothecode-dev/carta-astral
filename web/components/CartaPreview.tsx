@@ -3,6 +3,7 @@
 import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartBody } from "@/components/ChartBody";
 import { ChartTables } from "@/components/ChartTables";
+import { Firma } from "@/components/Firma";
 import type { CartaDibujable } from "@/lib/chart";
 import type { Dict, Locale } from "@/lib/i18n";
 
@@ -32,6 +33,7 @@ export function CartaPreview({
       <header className="previewHead">
         <h2 className="display previewTitle">{t.previewTitle}</h2>
         <p className="previewLede">{t.previewLede}</p>
+        <Firma firma={carta.firma} dict={dict} locale={locale} />
       </header>
 
       <ChartBody chart={carta} dict={dict} locale={locale} />

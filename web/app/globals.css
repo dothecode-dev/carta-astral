@@ -1909,6 +1909,34 @@ a {
   font-weight: 400;
 }
 
+/* La firma: Sol, Luna y Ascendente en palabras, con una frase cada uno. Es
+   la primera lectura de la carta, y la única gratis para quien no entró. */
+.firma {
+  display: grid;
+  gap: 0.9rem 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  margin: 0.5rem 0 0;
+  max-width: var(--measure);
+}
+
+.firmaLinea {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.firmaTitulo {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.firmaFrase {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
 /* La carta se lee como el PDF: primero la rueda, grande y centrada, y debajo
    las tablas. La rueda es lo que la persona vino a ver; ponerla en una columna
    al costado la volvia una ilustracion al lado del texto. */

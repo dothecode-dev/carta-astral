@@ -82,3 +82,11 @@ def test_hay_techo_por_ip(monkeypatch):
     c = APIClient()
     assert c.post(URL, PAYLOAD, format="json").status_code == 200
     assert c.post(URL, PAYLOAD, format="json").status_code == 429
+
+
+def test_la_vista_previa_trae_la_firma():
+    """Sol, Luna y Ascendente en palabras: lo único de la carta que entiende
+    quien no sabe leer glifos, y va también para quien no tiene cuenta."""
+    r = APIClient().post(URL, PAYLOAD, format="json")
+    assert [linea["cuerpo"] for linea in r.data["firma"]] == ["Sun", "Moon", "Ascendant"]
+    assert r.data["firma"][0]["frases"]["es"]

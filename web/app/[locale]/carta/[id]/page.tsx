@@ -7,6 +7,7 @@ import { ChartShare } from "@/components/ChartShare";
 import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartBody } from "@/components/ChartBody";
 import { ChartTables } from "@/components/ChartTables";
+import { Firma } from "@/components/Firma";
 import { Identificar } from "@/components/Identificar";
 import { Nav } from "@/components/Nav";
 import { Reading } from "@/components/Reading";
@@ -137,6 +138,7 @@ export default async function ChartPage({
             </span>
             <span>{chart.birth.place_label}</span>
           </div>
+          <Firma firma={chart.firma} dict={dict} locale={locale} />
           {chart.data.flags.bodies_missing && (
             <p className="fieldNote">{dict.chart.incomplete}</p>
           )}
