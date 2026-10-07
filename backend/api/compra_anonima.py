@@ -27,6 +27,13 @@ class NoDisponible(Exception):
     """Falta configuración que el webhook va a necesitar: mejor no cobrar."""
 
 
+def comprobar_disponible() -> None:
+    """Primer chequeo de toda apertura: la vista lo corre ANTES de validar
+    nada, para que el 503 le gane al 400 (RF4)."""
+    if not tombstone_hmac_configurada():
+        raise NoDisponible("TOMBSTONE_HMAC_KEY")
+
+
 def abrir(datos: dict, locale: str, codigo_cupon: str | None):
     """Crea la carta sin dueño, abre la sesión de Stripe y guarda la fila.
 
@@ -35,8 +42,7 @@ def abrir(datos: dict, locale: str, codigo_cupon: str | None):
     en el mismo átomo para que un fallo de Stripe no deje una carta sin dueño;
     una sesión de Stripe huérfana (si la base falla después) vence sola a la hora.
     """
-    if not tombstone_hmac_configurada():
-        raise NoDisponible("TOMBSTONE_HMAC_KEY")
+    comprobar_disponible()
     cupon = None
     if codigo_cupon:
         cupon = cupones.validar(codigo_cupon, PRODUCTO, account=None)

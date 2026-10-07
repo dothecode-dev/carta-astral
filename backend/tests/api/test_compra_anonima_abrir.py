@@ -153,3 +153,24 @@ def test_la_tasa_del_throttle_esta_configurada():
     from django.conf import settings
 
     assert "checkout_anonimo" in settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+
+
+def test_producto_fuera_del_catalogo_es_503_y_no_deja_carta(client, monkeypatch):
+    """El producto es fijo: que `crear_checkout` no lo conozca es nuestra
+    configuración, no un pedido mal armado."""
+    def no_existe(*a, **k):
+        raise KeyError("informe_natal")
+
+    monkeypatch.setattr(stripe_client, "crear_checkout", no_existe)
+    assert _post(client).status_code == 503
+    assert not Chart.objects.exists() and not PasarelaCheckout.objects.exists()
+
+
+def test_mantenimiento_gana_a_los_datos_invalidos(client, stripe_responde, monkeypatch):
+    monkeypatch.setattr(mantenimiento, "activo", lambda: True)
+    assert _post(client, {**DATOS, "date": "no-es-fecha"}).status_code == 503
+
+
+def test_sin_tombstone_gana_a_los_datos_invalidos(client, stripe_responde, monkeypatch):
+    monkeypatch.setattr("api.compra_anonima.tombstone_hmac_configurada", lambda: False)
+    assert _post(client, {**DATOS, "date": "no-es-fecha"}).status_code == 503

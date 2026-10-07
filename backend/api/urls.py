@@ -1,4 +1,5 @@
-from api.checkout import CheckoutAnonimoView, CheckoutEstadoView, CheckoutView
+from api.checkout import CheckoutEstadoView, CheckoutView
+from api.compra_anonima_api import CheckoutAnonimoView
 from api.mantenimiento import EstadoView
 from api.catalogo_api import CatalogoView
 from api.cupones_api import CuponPublicoView
