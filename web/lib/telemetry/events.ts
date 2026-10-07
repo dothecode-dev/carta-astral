@@ -99,6 +99,12 @@ export type EventoProps = {
     breve: "disponible" | "agotada" | "no_se_ofrece";
     completo: "comprar" | "leer" | "no_se_ofrece";
   };
+  /** Llegó al FINAL de una sección del informe largo. No al título: pasar
+   *  por un título haciendo scroll no es leer. `segundos` es el tiempo entre
+   *  que el título entró en pantalla y llegó al final; el umbral de «leída»
+   *  se decide al analizar, no acá (spec 2026-10-07, RF12). Una vez por
+   *  sección por vista de página. Sin `IntersectionObserver` no se emite. */
+  seccion_informe_leida: { slug: string; orden: number; segundos: number };
   carta_descargada: { formato: "pdf" | "imagen" };
   /** Apretó Comprar y se lo mandó a Stripe. La otra mitad del embudo de pago
    *  —que la plata haya entrado— la emite el backend desde el webhook

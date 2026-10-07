@@ -1248,6 +1248,9 @@ describe("ChartActions: leer mientras se escribe", () => {
     expect(screen.getByText("Primer párrafo.")).toBeInTheDocument();
     // El aviso viaja con las secciones: leer mientras se escribe no lo saltea.
     expect(screen.getByText("Aviso de entretenimiento.")).toBeInTheDocument();
+    // La espera muestra cada sección con su título, pero sin índice (RF11).
+    expect(screen.getByRole("heading", { name: "Tu firma", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation")).toBeNull();
     expect(
       screen.getByText(dict.chart.waitEscribiendo.replace("{n}", "2").replace("{total}", "8")),
     ).toBeInTheDocument();

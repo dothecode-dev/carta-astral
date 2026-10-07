@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
-import { Reading } from "@/components/Reading";
+import { InformeSecciones, type SeccionEscrita } from "@/components/InformeSecciones";
 import { SolarSystem } from "@/components/SolarSystem";
 import { conPrecio } from "@/lib/catalogo";
 import { cantidad, puede, type Derecho } from "@/lib/derechos";
@@ -39,8 +39,6 @@ const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 type Tier = "corto" | "largo";
 
-/** Una sección ya escrita, tal como la devuelve `interpretation/secciones`. */
-type SeccionEscrita = { slug: string; titulo: string; texto: string };
 type Secciones = { completa: boolean; total: number; secciones: SeccionEscrita[]; disclaimer?: string };
 
 /** Por qué el backend no arrancó la lectura que se le pidió. */
@@ -644,9 +642,7 @@ export function ChartActions({
             arranque, cuando todavía no hay nada que leer. */}
         {escritas.length > 0 ? (
           <div className="reading waitingReading">
-            {escritas.map((s) => (
-              <Reading key={s.slug} texto={s.texto} />
-            ))}
+            <InformeSecciones secciones={escritas} indice={false} />
             {avisoEscritas && <p className="disclaimer">{avisoEscritas}</p>}
           </div>
         ) : (

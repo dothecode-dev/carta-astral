@@ -8,6 +8,7 @@ import { ChartBody } from "@/components/ChartBody";
 import { DatosCarta } from "@/components/DatosCarta";
 import { Firma } from "@/components/Firma";
 import { Identificar } from "@/components/Identificar";
+import { InformeSecciones, type SeccionEscrita } from "@/components/InformeSecciones";
 import { Nav } from "@/components/Nav";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
@@ -59,7 +60,7 @@ export default async function ChartPage({
   // no la breve. El GET no genera ni cobra: cuando ninguna existe devuelve
   // 404 y la página muestra los botones.
   const tiersAqui = chart.interpretations[locale] ?? [];
-  let reading: { text: string; disclaimer: string } | null = null;
+  let reading: { text: string; disclaimer: string; secciones?: SeccionEscrita[] } | null = null;
   if (tiersAqui.length > 0) {
     const tier = tiersAqui.includes("largo") ? "largo" : "corto";
     try {
@@ -168,7 +169,11 @@ export default async function ChartPage({
         {reading && (
           <section className="reading">
             <p className="eyebrow">{dict.chart.reading}</p>
-            <Reading texto={reading.text} />
+            {reading.secciones && reading.secciones.length > 0 ? (
+              <InformeSecciones secciones={reading.secciones} indice etiquetaIndice={dict.chart.indiceInforme} />
+            ) : (
+              <Reading texto={reading.text} />
+            )}
             <p className="disclaimer">{reading.disclaimer}</p>
           </section>
         )}

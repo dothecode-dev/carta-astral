@@ -3282,3 +3282,9 @@ body:has(.consentBar) .accionFija {
     grid-template-columns: 1fr;
   }
 }
+
+/* El informe largo: índice arriba y una sección por título (spec 2026-10-07). */
+.informeIndice ol { margin: 0 0 2rem; padding-left: 1.25rem; }
+.informeIndice li { margin: 0.25rem 0; }
+/* El salto del índice no queda tapado por la barra de navegación fija. */
+.informeSeccion h2 { scroll-margin-top: 5rem; }

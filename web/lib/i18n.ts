@@ -590,6 +590,7 @@ export type Dict = {
     /** Con `{n}` y `{total}`: qué sección se está escribiendo ahora. Acompaña
      *  a las secciones ya escritas, que se leen mientras tanto. */
     waitEscribiendo: string;
+    indiceInforme: string;
     /** El sondeo recibió 404: la carta ya no es de esta sesión (cambió de
      *  cuenta con la pestaña abierta). Seguir sondeando es girar para siempre. */
     sesionCambio: string;
@@ -867,6 +868,7 @@ const es: Dict = {
     waitBody: "Estamos escribiendo tu informe, en ocho secciones. Cada una se piensa aparte, con tu carta entera delante: por eso demora unos seis minutos.",
     waitBodyBreve: "Estamos escribiendo tu lectura breve. Demora medio minuto.",
     waitEscribiendo: "Escribiendo la sección {n} de {total}…",
+    indiceInforme: "En este informe",
     sesionCambio: "Esta carta ya no está en tu sesión. Volvé a entrar o abrila desde tu cuenta.",
     waitColor: "Podés cerrar esta ventana. Acá no hay cartas prearmadas: cada sección se escribe para esta carta y sólo para ésta, y por eso puede demorar hasta seis minutos. Cuando esté, te espera en tu cuenta.",
     noTimeWarning: "Esta carta quedó sin hora de nacimiento: el informe sale con siete secciones, sin la de casas.",
@@ -1237,6 +1239,7 @@ const en: Dict = {
     waitBody: "We're writing your report, in eight sections. Each one is thought through on its own, with your whole chart in view — that's why it takes about six minutes.",
     waitBodyBreve: "We're writing your short reading. It takes half a minute.",
     waitEscribiendo: "Writing section {n} of {total}…",
+    indiceInforme: "In this report",
     sesionCambio: "This chart is no longer in your session. Sign in again or open it from your account.",
     waitColor: "You can close this window. There are no pre-written charts here: every section is written for this chart and no other, which is why it can take up to six minutes. When it's ready, it will be waiting in your account.",
     noTimeWarning: "This chart has no birth time: the report comes out with seven sections, without the houses one.",
@@ -1607,6 +1610,7 @@ const pt: Dict = {
     waitBody: "Estamos escrevendo seu relatório, em oito seções. Cada uma é pensada em separado, com o seu mapa inteiro à frente: por isso leva uns seis minutos.",
     waitBodyBreve: "Estamos escrevendo sua leitura breve. Leva meio minuto.",
     waitEscribiendo: "Escrevendo a seção {n} de {total}…",
+    indiceInforme: "Neste relatório",
     sesionCambio: "Este mapa não está mais na sua sessão. Entre de novo ou abra-o pela sua conta.",
     waitColor: "Você pode fechar esta janela. Aqui não há mapas prontos: cada seção é escrita para este mapa e só para ele, e por isso pode levar até seis minutos. Quando estiver pronto, espera na sua conta.",
     noTimeWarning: "Este mapa ficou sem hora de nascimento: o relatório sai com sete seções, sem a de casas.",
