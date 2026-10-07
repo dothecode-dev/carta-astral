@@ -294,3 +294,33 @@ def test_al_reanudar_el_contexto_previo_viaja_desde_la_base_no_desde_memoria(int
     enviado = cliente.llamadas[0]["messages"][0]["content"]
     assert "MARCA-FIRMA-7b2c" in enviado
     assert "MARCA-MENTE-91af" in enviado
+
+
+def test_cada_seccion_recibe_su_parte_del_reparto(interpretacion):
+    """Spec 2026-10-07 RF6: «mente» usa la oposición Luna–Mercurio que explica
+    «tensiones» (viene después) y la síntesis no explica nada propio."""
+    from tests.interpret.test_reparto import CARTA
+
+    interpretacion.chart.data = CARTA
+    interpretacion.chart.save()
+    cliente = ClienteFalso()
+    informe_service.generar_informe(interpretacion, cliente, TOKEN)
+    pedidos = [ll["messages"][0]["content"] for ll in cliente.llamadas]
+    assert "lo vas a ver en «Tensiones y aprendizajes»" in pedidos[1]
+    assert "TE TOCA EXPLICAR" not in pedidos[-1]
+    assert "como viste en «Tensiones y aprendizajes»" in pedidos[-1]
+
+
+def test_sin_hora_el_reparto_no_inventa_casas_ni_cumulos(interpretacion):
+    from tests.interpret.test_reparto import CARTA_SIN_HORA
+
+    interpretacion.chart.data = CARTA_SIN_HORA
+    interpretacion.chart.save()
+    cliente = ClienteFalso()
+    informe_service.generar_informe(interpretacion, cliente, TOKEN)
+    pedidos = "\n".join(ll["messages"][0]["content"] for ll in cliente.llamadas)
+    assert "cúmulo" not in pedidos
+    # El foco de «trabajo» nombra el Medio Cielo; lo que no puede aparecer es
+    # el MC como tema del reparto.
+    assert "Medio Cielo: su signo" not in pedidos
+    assert "Ascendente: su signo" not in pedidos

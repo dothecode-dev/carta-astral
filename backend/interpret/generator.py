@@ -141,11 +141,15 @@ _CONTEXTO_PREVIO = {
 }
 
 
-def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, client) -> str:
+def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, client, reparto: str = "") -> str:
     """Genera una sección del informe. `previo` es el resumen de lo ya
     escrito en secciones anteriores: es lo único que impide que, por ejemplo,
     la sección de tensiones repita lo que ya dijo la de la firma. Vacío
     (`""`) para la primera sección.
+
+    `reparto` es el bloque de `interpret.reparto.bloque`: qué temas explica
+    esta sección y cuáles sólo usa porque los explica otra. Vacío para la
+    breve y para una carta sin temas.
 
     Usa _stream_text igual que build_interpretation: las secciones piden
     `SECCION_TOKENS_POR_PALABRA` tokens por palabra objetivo (una sección de
@@ -161,6 +165,10 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     content = f"{pedido}\n\n{cuerpo}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
+    if reparto:
+        # Quién explica qué: lo que impide que la misma oposición se explique
+        # en cuatro secciones (interpret/reparto.py, spec 2026-10-07).
+        content += f"\n\n{reparto}"
     if previo:
         content += _CONTEXTO_PREVIO[lang].format(previo=previo)
 

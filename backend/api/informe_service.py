@@ -15,6 +15,8 @@ from api.interpretation_service import renovar_lock
 from api.models import Interpretation, InterpretationSection
 from interpret.generator import build_interpretation, build_seccion, translate_interpretation
 from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO, Seccion
+from interpret.reparto import bloque as bloque_de_reparto
+from interpret.reparto import parte_de
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +271,8 @@ def generar_informe(interpretacion, client, token: str) -> bool:
     """
     aplicables = secciones_aplicables(interpretacion.chart, interpretacion.tier)
     orden_por_slug = {seccion.slug: indice for indice, seccion in enumerate(aplicables)}
+    slugs = [seccion.slug for seccion in aplicables]
+    titulos = {seccion.slug: seccion.titulo[interpretacion.lang] for seccion in aplicables}
 
     pendientes = secciones_pendientes(interpretacion)
     for indice, seccion in enumerate(pendientes):
@@ -287,6 +291,11 @@ def generar_informe(interpretacion, client, token: str) -> bool:
                 interpretacion.lang,
                 resumen_previo(interpretacion),
                 client,
+                reparto=bloque_de_reparto(
+                    parte_de(interpretacion.chart.data, seccion.slug, slugs),
+                    interpretacion.lang,
+                    titulos,
+                ),
             )
         InterpretationSection.objects.create(
             interpretation=interpretacion,

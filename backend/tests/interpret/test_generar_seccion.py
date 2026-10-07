@@ -185,3 +185,16 @@ def test_el_techo_de_tokens_deja_crecer_la_seccion_mas_alla_del_tope_pedido():
     c = ClienteFalso()
     build_seccion({"planets": []}, SECCIONES[4], "es", "", c)  # tensiones: 1000
     assert c.llamadas[0]["max_tokens"] == 1000 * SECCION_TOKENS_POR_PALABRA
+
+
+def test_el_reparto_viaja_en_el_pedido():
+    c = ClienteFalso()
+    build_seccion({"planets": []}, SECCIONES[1], "es", "", c, reparto="TE TOCA EXPLICAR:\n- Mercurio")
+    enviado = c.llamadas[0]["messages"][0]["content"]
+    assert "TE TOCA EXPLICAR:\n- Mercurio" in enviado
+
+
+def test_sin_reparto_no_se_agrega_nada():
+    c = ClienteFalso()
+    build_seccion({"planets": []}, SECCIONES[1], "es", "", c)
+    assert "TE TOCA EXPLICAR" not in c.llamadas[0]["messages"][0]["content"]
