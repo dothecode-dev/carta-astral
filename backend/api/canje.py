@@ -194,8 +194,23 @@ def aplicar_compra(
         # existe, el otorgamiento ya ocurrió y el canje se omite igual.
         suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
         if objetivo is not None and suelto and prod.capacidades:
-            canjear(account, prod.capacidades[0], objetivo)
+            acc = Account.objects.get(pk=account.pk)
+            if acc.deuda == 0 and _saldo(acc, prod.otorga[0][0]) > 0:
+                canjear(account, prod.capacidades[0], objetivo)
+            else:
+                # La unidad comprada saldó una deuda (un reembolso de algo ya
+                # usado): no queda derecho que canjear. Revertir todo dejaba el
+                # webhook en 5xx tres días y el pago sin acreditar (RF5b).
+                logger.warning(
+                    "compra %s: la unidad saldó deuda de acc=%s; no se canjea",
+                    external_id, account.pk,
+                )
     return True
+
+
+def _saldo(account, codigo_producto: str) -> int:
+    d = Derecho.objects.filter(account=account, codigo_producto=codigo_producto).first()
+    return (d.cantidad_restante or 0) if d is not None else 0
 
 
 def canjear(account, capacidad: str, objetivo, build=None):

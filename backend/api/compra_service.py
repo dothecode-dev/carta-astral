@@ -15,6 +15,7 @@ sin castigar el endpoint, así que allá conviene el 5xx.
 import logging
 
 from api import catalogo, interpretation_service, mantenimiento
+from api.canje import SinDerecho
 from interpret.prompts import TIER_LARGO
 
 logger = logging.getLogger(__name__)
@@ -47,9 +48,20 @@ def arrancar_informe(cuenta, fila) -> None:
     if not (suelto and prod.capacidades):
         return
 
-    interpretacion = interpretation_service.iniciar_generacion(
-        fila.chart, fila.locale, cuenta, TIER_LARGO,
-    )
+    try:
+        interpretacion = interpretation_service.iniciar_generacion(
+            fila.chart, fila.locale, cuenta, TIER_LARGO,
+        )
+    except SinDerecho:
+        # La unidad comprada saldó una deuda de la cuenta y no quedó derecho
+        # con qué escribir el informe (RF5b; ver `aplicar_compra`). La compra ya
+        # está acreditada: reintentar no lo arregla y un 5xx dejaría el pago en
+        # reintento tres días.
+        logger.warning(
+            "compra %s acreditada sin derecho para el informe (deuda saldada): no se escribe",
+            fila.checkout_id,
+        )
+        return
     if mantenimiento.activo():
         # Hay un deploy en curso: la fila queda creada —incompleta— y no se
         # lanza el hilo, que moriría con el contenedor viejo a mitad de camino.
