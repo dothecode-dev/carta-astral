@@ -35,3 +35,11 @@ describe("la barra fija de la carta", () => {
     expect(css).toMatch(/body:has\(\.consentBar\)\s+\.accionFija\s*\{[^}]*display:\s*none/);
   });
 });
+
+describe("la vista previa de la carta", () => {
+  it("el lede va al ancho de la cabecera, como el párrafo de arriba y la firma", () => {
+    // Con `max-width: 60ch` «naciste» saltaba de línea mientras la firma, justo
+    // debajo, ocupaba todo el ancho: dos medidas distintas en el mismo bloque.
+    expect(css).not.toMatch(/\.previewLede\s*\{[^}]*max-width/);
+  });
+});

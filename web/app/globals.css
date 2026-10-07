@@ -1038,10 +1038,12 @@ body:has(.consentBar) .accionFija {
   font-size: var(--step-3);
 }
 
+/* Sin medida propia: va al ancho de la cabecera, como el párrafo de arriba
+   («Poné tu fecha…») y la firma que viene debajo. Con 60ch la última palabra
+   saltaba de línea entre dos bloques que ocupaban todo el ancho. */
 .previewLede {
   margin: 0;
   color: var(--ink-soft);
-  max-width: 60ch;
 }
 
 /* La invitación a leer: centrada y con aire, para que no se lea como un pie de
@@ -1947,7 +1949,6 @@ body:has(.consentBar) .accionFija {
   gap: 0.9rem 2rem;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   margin: 0.5rem 0 0;
-  max-width: var(--measure);
 }
 
 .firmaLinea {
