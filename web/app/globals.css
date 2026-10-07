@@ -3283,8 +3283,22 @@ body:has(.consentBar) .accionFija {
   }
 }
 
-/* El informe largo: índice arriba y una sección por título (spec 2026-10-07). */
-.informeIndice ol { margin: 0 0 2rem; padding-left: 1.25rem; }
+/* El informe largo: índice arriba y una sección por título (spec 2026-10-07).
+   `.reading` espacia sus bloques con un `gap` porque son hijos directos suyos;
+   al envolverlos en una sección ese gap se pierde (se vio en producción el
+   07-10: párrafos pegados y el título de la sección siguiente sin aire), así que
+   la sección y el contenedor de secciones repiten la columna con su gap. */
+.informeSecciones {
+  display: flex;
+  flex-direction: column;
+  gap: 3.5rem;
+}
+.informeSeccion {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+.informeIndice ol { margin: 0; padding-left: 1.25rem; }
 .informeIndice li { margin: 0.25rem 0; }
 /* El salto del índice no queda tapado por la barra de navegación fija. */
 .informeSeccion h2 { scroll-margin-top: 5rem; }
