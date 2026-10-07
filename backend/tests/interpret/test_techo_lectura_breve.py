@@ -90,3 +90,15 @@ def test_el_ratio_no_baja_de_lo_que_se_midio_en_produccion():
         "el peor ratio medido en producción es 5,6 tokens por palabra: por "
         "debajo de 6 no queda margen y el corte por max_tokens es terminal"
     )
+
+
+def test_la_breve_es_un_teaser_y_pide_lo_mismo_en_el_system_y_en_la_seccion():
+    """Decisión del 06-10-2026: la lectura breve gratis pasa de ~600 palabras
+    a 300, un adelanto de la calidad del texto y no media lectura. El largo
+    vive en dos lugares —el rango del system y `SECCION_BREVE.palabras`, que
+    alimenta el índice y el progreso— y tienen que decir lo mismo."""
+    from interpret.prompts import SECCION_BREVE
+
+    for lang, prompt in SYSTEM_PROMPTS.items():
+        assert _maximo_de_palabras(prompt) == SECCION_BREVE.palabras, lang
+    assert SECCION_BREVE.palabras <= 300

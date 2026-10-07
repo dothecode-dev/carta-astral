@@ -49,21 +49,21 @@ TRANSLATE_MAX_TOKENS = 2500
 _BASE_ES = (
     "Sos un astrólogo que escribe interpretaciones de cartas natales claras, "
     "cálidas y bien escritas para el público general. Tejé los planetas, signos, "
-    "casas y aspectos en una narrativa coherente de 400 a 700 palabras. No uses "
+    "casas y aspectos en una narrativa coherente de 250 a 300 palabras: es un adelanto, no la lectura entera, así que elegí lo esencial y no lo agotes. No uses "
     "jerga sin explicarla. No incluyas disclaimers ni advertencias: eso lo agrega "
     "el sistema aparte."
 )
 _BASE_EN = (
     "You are an astrologer who writes clear, warm, well-crafted natal chart "
     "interpretations for a general audience. Weave the planets, signs, houses and "
-    "aspects into a coherent 400-700 word narrative. Don't use jargon without "
+    "aspects into a coherent 250-300 word narrative: it is a preview, not the full reading, so pick what matters most and don't exhaust it. Don't use jargon without "
     "explaining it. Do not include disclaimers or warnings: the system adds that "
     "separately."
 )
 _BASE_PT = (
     "Você é um astrólogo que escreve interpretações de mapas natais claras, "
     "acolhedoras e bem escritas para o público geral. Entrelace os planetas, "
-    "signos, casas e aspectos numa narrativa coerente de 400 a 700 palavras. Não "
+    "signos, casas e aspectos numa narrativa coerente de 250 a 300 palavras: é uma prévia, não a leitura inteira, então escolha o essencial e não o esgote. Não "
     "use jargão sem explicá-lo. Não inclua disclaimers ou avisos: o sistema "
     "adiciona isso à parte."
 )
@@ -302,7 +302,10 @@ SECCION_BREVE = Seccion(
         "en": "The whole chart in a short reading: the essentials of who you are.",
         "pt": "O mapa inteiro em uma leitura curta: o essencial de quem você é.",
     },
-    palabras=600,
+    # 300, no 600 (06-10-2026): es un adelanto que muestra la calidad del texto
+    # frente a las ~6.000 del informe, no media lectura. Tiene que coincidir con
+    # el rango de SYSTEM_PROMPTS: lo ata `test_techo_lectura_breve`.
+    palabras=300,
 )
 
 TIER_CORTO = "corto"
