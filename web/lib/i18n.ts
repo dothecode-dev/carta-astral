@@ -565,6 +565,8 @@ export type Dict = {
      *  mayúscula se leía como título y nadie lo tocaba. `verAspectos` lleva `{n}`. */
     verCasas: string;
     verAspectos: string;
+    /** El desplegable que guarda posiciones, casas y aspectos, al final. */
+    verDatos: string;
     aspects: string;
     axisNames: { AC: string; MC: string };
     aspectColumns: { pair: string; aspect: string; orb: string };
@@ -853,6 +855,7 @@ const es: Dict = {
     houses: "Casas",
     verCasas: "Ver las casas",
     verAspectos: "Ver los {n} aspectos",
+    verDatos: "Ver los datos de la carta",
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Medio Cielo" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
@@ -1222,6 +1225,7 @@ const en: Dict = {
     houses: "Houses",
     verCasas: "Show the houses",
     verAspectos: "Show all {n} aspects",
+    verDatos: "Show the chart data",
     aspects: "Aspects",
     axisNames: { AC: "Ascendant", MC: "Midheaven" },
     aspectColumns: { pair: "Between", aspect: "Aspect", orb: "Orb" },
@@ -1591,6 +1595,7 @@ const pt: Dict = {
     houses: "Casas",
     verCasas: "Ver as casas",
     verAspectos: "Ver os {n} aspectos",
+    verDatos: "Ver os dados do mapa",
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Meio do Céu" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },

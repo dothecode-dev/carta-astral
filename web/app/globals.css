@@ -930,6 +930,20 @@ a {
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
 }
 
+/* Los datos de la carta, plegados al final: un solo desplegable que guarda la
+   tabla de posiciones, las casas y la matriz de aspectos. */
+.datosCarta {
+  border-top: 1px solid var(--hairline);
+  padding-top: clamp(1.5rem, 4vw, 2rem);
+}
+
+.datosCartaCuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding-top: 1.5rem;
+}
+
 .chartShareBlock {
   display: flex;
   flex-direction: column;

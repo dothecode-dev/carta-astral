@@ -4,9 +4,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { ChartActions } from "@/components/ChartActions";
 import { ChartShare } from "@/components/ChartShare";
-import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartBody } from "@/components/ChartBody";
-import { ChartTables } from "@/components/ChartTables";
+import { DatosCarta } from "@/components/DatosCarta";
 import { Firma } from "@/components/Firma";
 import { Identificar } from "@/components/Identificar";
 import { Nav } from "@/components/Nav";
@@ -144,7 +143,7 @@ export default async function ChartPage({
           )}
         </section>
 
-        <ChartBody chart={chart} dict={dict} locale={locale} />
+        <ChartBody chart={chart} dict={dict} locale={locale} soloRueda />
 
         {/* Los botones van acá SIEMPRE, tenga lectura o no: es lo único que
             hay para hacer en esta página.
@@ -166,26 +165,6 @@ export default async function ChartPage({
             abajo, primero hay que sacar esa medición del componente. */}
         {acciones}
 
-        <ChartTables chart={chart} dict={dict} locale={locale} />
-
-        {chart.data.aspects.length > 0 && (
-          <AspectMatrix
-            bodies={chart.data.placements.map((p) => p.name)}
-            aspects={chart.data.aspects.map((a) => ({
-              a: a.p1,
-              b: a.p2,
-              type: a.aspect,
-              orb: a.orbit,
-            }))}
-            locale={locale}
-            titulo={dict.chart.aspects}
-            orbeLabel={dict.chart.aspectColumns.orb}
-            glosarioTitulo={dict.chart.aspectGlossary}
-            glosarioCuenta={dict.chart.aspectGlossaryCount}
-            verAspectos={dict.chart.verAspectos}
-          />
-        )}
-
         {reading && (
           <section className="reading">
             <p className="eyebrow">{dict.chart.reading}</p>
@@ -193,6 +172,11 @@ export default async function ChartPage({
             <p className="disclaimer">{reading.disclaimer}</p>
           </section>
         )}
+
+        {/* Los datos de astrólogo —posiciones, casas, aspectos— plegados y
+            después de la lectura: hasta el 06-10 iban antes, y entre la rueda
+            y el texto había cuatro pantallas de tablas y una matriz de glifos. */}
+        <DatosCarta chart={chart} dict={dict} locale={locale} />
 
         <ResumenCompleto secciones={secciones} dict={dict} />
 

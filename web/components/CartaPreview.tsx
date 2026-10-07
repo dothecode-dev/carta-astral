@@ -1,8 +1,7 @@
 "use client";
 
-import { AspectMatrix } from "@/components/AspectMatrix";
 import { ChartBody } from "@/components/ChartBody";
-import { ChartTables } from "@/components/ChartTables";
+import { DatosCarta } from "@/components/DatosCarta";
 import { Firma } from "@/components/Firma";
 import type { CartaDibujable } from "@/lib/chart";
 import type { Dict, Locale } from "@/lib/i18n";
@@ -36,11 +35,10 @@ export function CartaPreview({
         <Firma firma={carta.firma} dict={dict} locale={locale} />
       </header>
 
-      <ChartBody chart={carta} dict={dict} locale={locale} />
+      <ChartBody chart={carta} dict={dict} locale={locale} soloRueda />
 
-      {/* La invitación va ACÁ, no al final: abajo quedan las casas y la matriz
-          de aspectos, que en un teléfono son decenas de filas, y el momento de
-          decidir es cuando acaba de ver su rueda. */}
+      {/* La invitación va ACÁ, apenas vio su rueda, que es el momento de
+          decidir. Los datos quedan plegados debajo. */}
       <div className="previewCta">
         <button type="button" className="btn btnPrimary" onClick={onPedirLectura}>
           {t.previewCta}
@@ -48,25 +46,7 @@ export function CartaPreview({
         <p className="fieldNote">{t.previewNote}</p>
       </div>
 
-      <ChartTables chart={carta} dict={dict} locale={locale} />
-
-      {carta.data.aspects.length > 0 && (
-        <AspectMatrix
-          bodies={carta.data.placements.map((p) => p.name)}
-          aspects={carta.data.aspects.map((a) => ({
-            a: a.p1,
-            b: a.p2,
-            type: a.aspect,
-            orb: a.orbit,
-          }))}
-          locale={locale}
-          titulo={dict.chart.aspects}
-          orbeLabel={dict.chart.aspectColumns.orb}
-          glosarioTitulo={dict.chart.aspectGlossary}
-          glosarioCuenta={dict.chart.aspectGlossaryCount}
-          verAspectos={dict.chart.verAspectos}
-        />
-      )}
+      <DatosCarta chart={carta} dict={dict} locale={locale} />
 
       <footer className="previewPie">
         <p className="fieldNote">{t.previewPrivacidad}</p>
