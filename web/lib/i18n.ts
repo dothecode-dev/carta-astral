@@ -631,6 +631,23 @@ export type Dict = {
     sinDatoTitle: string;
     sinDatoBody: string;
     irACuenta: string;
+    /** La vuelta del pago sin cuenta (`CanjeCompra`), cuando la cuenta ya
+     *  existía: se le mandó un código. `{email}` llega enmascarado. */
+    canjeCodigoTitle: string;
+    canjeCodigoBody: string;
+    canjeEntrar: string;
+    /** Por si el mail no es suyo (RF12). `{numero}` es el final del
+     *  `checkout_id`, para que soporte encuentre la compra. */
+    canjeSoporte: string;
+    /** El pago sigue sin confirmarse a los 2 minutos (pago asincrónico). */
+    canjeProcesoTitle: string;
+    canjeProcesoBody: string;
+    /** El canje ya no vale (ya se usó, pasó un día, otro navegador). */
+    canjeInvalidoTitle: string;
+    canjeInvalidoBody: string;
+    /** RF5b: el pago sólo saldó una deuda y no arrancó informe. TODAVÍA NO SE
+     *  MUESTRA en ningún lado: el backend no le dice a la web cuándo pasa. */
+    saldoPendiente: string;
   };
   share: {
     /** Rótulo de la portada del documento y título de la tabla de posiciones. */
@@ -886,6 +903,15 @@ const es: Dict = {
     sinDatoTitle: "Gracias por tu compra",
     sinDatoBody: "Lo que compraste te espera en tu cuenta.",
     irACuenta: "Ir a mi cuenta",
+    canjeCodigoTitle: "Te mandamos un código a {email}",
+    canjeCodigoBody: "Ya tenías una cuenta con ese mail. Entrá con el mail y el código para ver lo que compraste.",
+    canjeEntrar: "Entrar con el código",
+    canjeSoporte: "¿No es tu mail? Escribinos a info@astraguia.com con el número de compra {numero}.",
+    canjeProcesoTitle: "Tu pago está en proceso",
+    canjeProcesoBody: "Te avisamos por mail en cuanto se confirme. No hace falta que pagues de nuevo.",
+    canjeInvalidoTitle: "No pudimos abrir esta compra desde acá",
+    canjeInvalidoBody: "Si pagaste, lo que compraste te espera en tu cuenta: entrá con el mail que usaste al pagar.",
+    saldoPendiente: "Este pago saldó un saldo pendiente de tu cuenta.",
   },
   share: {
     chartEyebrow: "Carta natal",
@@ -1257,6 +1283,15 @@ const en: Dict = {
     sinDatoTitle: "Thank you for your purchase",
     sinDatoBody: "What you bought is waiting in your account.",
     irACuenta: "Go to my account",
+    canjeCodigoTitle: "We sent a code to {email}",
+    canjeCodigoBody: "You already had an account with that email. Sign in with the email and the code to see what you bought.",
+    canjeEntrar: "Sign in with the code",
+    canjeSoporte: "Not your email? Write to us at info@astraguia.com with the purchase number {numero}.",
+    canjeProcesoTitle: "Your payment is being processed",
+    canjeProcesoBody: "We'll email you as soon as it's confirmed. There's no need to pay again.",
+    canjeInvalidoTitle: "We couldn't open this purchase from here",
+    canjeInvalidoBody: "If you paid, what you bought is waiting in your account: sign in with the email you used to pay.",
+    saldoPendiente: "This payment settled a pending balance on your account.",
   },
   share: {
     chartEyebrow: "Natal chart",
@@ -1628,6 +1663,15 @@ const pt: Dict = {
     sinDatoTitle: "Obrigado pela sua compra",
     sinDatoBody: "O que você comprou espera na sua conta.",
     irACuenta: "Ir para minha conta",
+    canjeCodigoTitle: "Enviamos um código para {email}",
+    canjeCodigoBody: "Você já tinha uma conta com esse e-mail. Entre com o e-mail e o código para ver o que comprou.",
+    canjeEntrar: "Entrar com o código",
+    canjeSoporte: "Não é o seu e-mail? Escreva para info@astraguia.com com o número da compra {numero}.",
+    canjeProcesoTitle: "Seu pagamento está em processamento",
+    canjeProcesoBody: "Avisamos por e-mail assim que for confirmado. Não precisa pagar de novo.",
+    canjeInvalidoTitle: "Não conseguimos abrir esta compra daqui",
+    canjeInvalidoBody: "Se você pagou, o que comprou está esperando na sua conta: entre com o e-mail que usou para pagar.",
+    saldoPendiente: "Este pagamento quitou um saldo pendente da sua conta.",
   },
   share: {
     chartEyebrow: "Mapa natal",

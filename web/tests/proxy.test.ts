@@ -182,3 +182,39 @@ describe("la raíz elige idioma", () => {
     expect((await proxy(pedir("/es/cuenta", "pt-BR"))).status).toBe(200);
   });
 });
+
+// RF14b: quien pagó durante un deploy vuelve de Stripe a `/compra` con el
+// cartel puesto. Esa pantalla, su sondeo (`/api/compra`) y el canje
+// (`/api/compra/canjear`) no pueden quedar frente a un 503: el pago ya entró.
+describe("con mantenimiento, la vuelta del pago sigue respondiendo", () => {
+  const cerrado = () =>
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: true })));
+
+  it.each(["/es/compra", "/en/compra", "/pt/compra"])("%s pasa", async (ruta) => {
+    cerrado();
+    const proxy = await cargarProxy();
+
+    expect((await proxy(pedir(ruta))).status).not.toBe(503);
+  });
+
+  it.each(["/es/compras", "/es/compra/otra", "/fr/compra", "/compra"])(
+    "%s no es la vuelta del pago: cartel",
+    async (ruta) => {
+      cerrado();
+      const proxy = await cargarProxy();
+
+      expect((await proxy(pedir(ruta))).status).toBe(503);
+    },
+  );
+
+  it("las rutas del sondeo y del canje ni pasan por el proxy", async () => {
+    const { config } = await import("@/proxy");
+    const [matcher] = config.matcher;
+    const coincide = (ruta: string) => new RegExp(`^${matcher}$`).test(ruta);
+
+    expect(coincide("/es/cuenta")).toBe(true);
+    expect(coincide("/api/compra")).toBe(false);
+    expect(coincide("/api/compra/canjear")).toBe(false);
+    expect(coincide("/api/checkout/anonimo")).toBe(false);
+  });
+});

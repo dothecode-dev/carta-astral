@@ -47,6 +47,12 @@ async function enMantenimiento(): Promise<boolean> {
   return valor;
 }
 
+/** `/{locale}/compra` exacto: la página adonde Stripe devuelve a quien pagó. */
+function esVueltaDelPago(pathname: string): boolean {
+  const [vacio, locale, ruta, ...resto] = pathname.split("/");
+  return vacio === "" && (LOCALES as readonly string[]).includes(locale) && ruta === "compra" && resto.length === 0;
+}
+
 function idiomaDe(pathname: string): Locale {
   const primero = pathname.split("/")[1];
   return (LOCALES as readonly string[]).includes(primero) ? (primero as Locale) : DEFAULT_LOCALE;
@@ -100,6 +106,13 @@ export async function proxy(request: NextRequest) {
   // que el liveness dependa de una sola línea de regex es demasiado frágil
   // para lo que cuesta equivocarse.
   if (request.nextUrl.pathname === "/healthz") return NextResponse.next();
+
+  // La vuelta del pago tampoco se corta (RF14b de «pagar es entrar»): quien
+  // pagó durante un deploy vuelve de Stripe acá, con la plata ya cobrada, y
+  // un 503 lo dejaría sin saber si compró ni cómo entrar. El sondeo y el canje
+  // de esa pantalla viven en `/api`, que el matcher ya deja afuera; el
+  // backend, por su lado, sigue acreditando y canjeando con el cartel puesto.
+  if (esVueltaDelPago(request.nextUrl.pathname)) return NextResponse.next();
 
   if (!(await enMantenimiento())) {
     // La raíz no tiene página propia: manda al idioma que pide el navegador.

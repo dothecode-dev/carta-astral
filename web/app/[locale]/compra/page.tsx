@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { CanjeCompra } from "@/components/CanjeCompra";
 import { CompraEspera } from "@/components/CompraEspera";
 import { Footer } from "@/components/Footer";
 import { Nav } from "@/components/Nav";
+import { nombre } from "@/lib/compraCookie";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSessionToken } from "@/lib/session";
 
@@ -35,11 +38,7 @@ export default async function CompraPage({
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  // Quien volvió de pagar en otro navegador no tiene sesión acá: que entre, y
-  // lo comprado lo espera en su cuenta.
-  if (!(await getSessionToken())) redirect(`/${locale}/entrar`);
 
-  const dict = getDict(locale);
   // Los dos nombres: la variable `STRIPE_SUCCESS_URL` la escribe una persona
   // en el panel de deploy, y la documentación de Stripe usa `session_id` en
   // todos sus ejemplos. El 04-09-2026 el staging tenía justamente ese, y quien
@@ -48,6 +47,32 @@ export default async function CompraPage({
   // copie el ejemplo de Stripe, una compra.
   const sp = await searchParams;
   const checkoutId = sp.checkout_id ?? sp.session_id;
+
+  // Primero la cookie del nonce de ESTE checkout (RF14): si está, este
+  // navegador es el que abrió un pago sin cuenta, y el canje decide —con o sin
+  // sesión, y aunque la sesión abierta sea de otra cuenta: la compra es de
+  // quien pagó—. Se mira sólo si existe; el valor lo lee la ruta del canje,
+  // nunca esta página.
+  const cookieCompra = nombre(checkoutId);
+  if (cookieCompra && typeof checkoutId === "string" && (await cookies()).has(cookieCompra)) {
+    const dict = getDict(locale);
+    const signedIn = (await getSessionToken()) !== null;
+    return (
+      <>
+        <Nav locale={locale} dict={dict} path="/compra" signedIn={signedIn} />
+        <main className="docFrame">
+          <CanjeCompra locale={locale} checkoutId={checkoutId} dict={dict} />
+        </main>
+        <Footer locale={locale} dict={dict} />
+      </>
+    );
+  }
+
+  // Quien volvió de pagar en otro navegador no tiene sesión acá: que entre, y
+  // lo comprado lo espera en su cuenta.
+  if (!(await getSessionToken())) redirect(`/${locale}/entrar`);
+
+  const dict = getDict(locale);
 
   return (
     <>

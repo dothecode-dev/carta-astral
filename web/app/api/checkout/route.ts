@@ -1,22 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { ApiError, callApi } from "@/lib/session";
+import { ApiError, callApi, motivoDe } from "@/lib/session";
 
 // Abre el pago del producto elegido. Del navegador viaja QUÉ se compra y, si se
 // compra desde una carta, cuál — nunca el precio: eso lo pone el catálogo del
 // backend y lo vuelve a validar el webhook contra la sesión de Stripe.
 
 export const dynamic = "force-dynamic";
-
-function motivoDe(error: unknown): string | null {
-  if (!(error instanceof ApiError)) return null;
-  try {
-    const cuerpo = JSON.parse(error.body) as { motivo?: unknown };
-    return typeof cuerpo.motivo === "string" && /^[a-z_]{1,40}$/.test(cuerpo.motivo) ? cuerpo.motivo : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(request: Request) {
   let cuerpo: { producto?: string; chart_id?: string; locale?: string; cupon?: string } = {};

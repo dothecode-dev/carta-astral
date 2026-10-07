@@ -151,6 +151,21 @@ export class ApiError extends Error {
 }
 
 /**
+ * El `motivo` que trae el cuerpo de un 400 del backend (`agotado`,
+ * `requiere_cuenta`…), si tiene forma de motivo. Es lo único de ese cuerpo
+ * que una ruta reenvía al navegador: la pantalla lo traduce.
+ */
+export function motivoDe(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  try {
+    const cuerpo = JSON.parse(error.body) as { motivo?: unknown };
+    return typeof cuerpo.motivo === "string" && /^[a-z_]{1,40}$/.test(cuerpo.motivo) ? cuerpo.motivo : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Llama al backend con la sesión de quien está navegando.
  *
  * El identificador de cuenta sale siempre del token, nunca de algo que mande el
