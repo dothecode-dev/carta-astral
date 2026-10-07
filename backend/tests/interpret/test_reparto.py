@@ -174,3 +174,70 @@ def test_es_determinista():
 
 def test_data_vacia_no_rompe():
     assert temas({}) == []
+
+
+from interpret.reparto import Parte, bloque, parte_de  # noqa: E402
+
+ORDEN = ["firma", "mente", "afectos", "trabajo", "tensiones", "lentos", "casas", "sintesis"]
+TITULOS_ES = {
+    "firma": "Tu firma", "mente": "Cómo pensás y te comunicás", "afectos": "Afectos y vínculos",
+    "trabajo": "Trabajo, dinero y vocación", "tensiones": "Tensiones y aprendizajes",
+    "lentos": "Los planetas lentos", "casas": "Dónde se juega tu vida", "sintesis": "Síntesis",
+}
+
+
+def test_mente_usa_luna_mercurio_que_explica_tensiones_despues():
+    p = parte_de(CARTA, "mente", ORDEN)
+    ajenos = {t.clave: antes for t, antes in p.ajenos}
+    assert ajenos["aspecto:Moon|opposition|Mercury"] is False  # tensiones va después
+    assert "planeta:Mercury" in {t.clave for t in p.propios}
+
+
+def test_sintesis_no_tiene_propios_y_todo_le_viene_de_antes():
+    p = parte_de(CARTA, "sintesis", ORDEN)
+    assert p.propios == ()
+    assert p.ajenos and all(antes for _, antes in p.ajenos)
+
+
+def test_sin_hora_casas_no_aplica_y_nadie_le_asigna_nada():
+    slugs = [s for s in ORDEN if s != "casas"]
+    todos = [t for s in slugs for t in parte_de(CARTA_SIN_HORA, s, slugs).propios]
+    assert all(t.duena in slugs for t in todos)
+
+
+def test_un_tema_tiene_una_sola_duena():
+    vistos = [t.clave for s in ORDEN for t in parte_de(CARTA, s, ORDEN).propios]
+    assert len(vistos) == len(set(vistos))
+
+
+def test_bloque_nombra_lo_propio_y_lo_ajeno_con_el_verbo_correcto():
+    texto = bloque(parte_de(CARTA, "mente", ORDEN), "es", TITULOS_ES)
+    assert "TE TOCA EXPLICAR" in texto
+    assert "Mercurio" in texto
+    assert "Luna en oposición a Mercurio — lo vas a ver en «Tensiones y aprendizajes»" in texto
+    texto_sintesis = bloque(parte_de(CARTA, "sintesis", ORDEN), "es", TITULOS_ES)
+    assert "como viste en «Tensiones y aprendizajes»" in texto_sintesis
+    assert "TE TOCA EXPLICAR" not in texto_sintesis
+
+
+def test_bloque_del_cumulo():
+    texto = bloque(parte_de(CARTA, "trabajo", ORDEN), "es", TITULOS_ES)
+    assert "cúmulo en la casa X (Mercurio, Venus, Marte)" in texto
+
+
+def test_bloque_en_ingles_y_portugues():
+    titulos = {s: s for s in ORDEN}
+    en = bloque(parte_de(CARTA, "mente", ORDEN), "en", titulos)
+    pt = bloque(parte_de(CARTA, "mente", ORDEN), "pt", titulos)
+    assert "YOU EXPLAIN" in en and "Moon opposite Mercury — you'll see it in «tensiones»" in en
+    assert "VOCÊ EXPLICA" in pt and "Lua em oposição a Mercúrio — vai ver em «tensiones»" in pt
+
+
+def test_bloque_vacio_si_no_hay_nada():
+    assert bloque(Parte(propios=(), ajenos=()), "es", TITULOS_ES) == ""
+
+
+def test_el_bloque_es_identico_entre_reintentos():
+    a = bloque(parte_de(CARTA, "afectos", ORDEN), "es", TITULOS_ES)
+    invertida = {**CARTA, "aspects": list(reversed(CARTA["aspects"]))}
+    assert a == bloque(parte_de(invertida, "afectos", ORDEN), "es", TITULOS_ES)

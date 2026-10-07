@@ -118,3 +118,101 @@ def temas(chart_data: dict) -> list[Tema]:
         duena = "tensiones" if a["aspect"] in TENSOS else DUENA_PUNTO[_mas_personal(a["p1"], a["p2"])]
         salida.append(Tema("aspecto", duena, (a["p1"], a["p2"]), aspecto=a["aspect"]))
     return salida
+
+
+@dataclass(frozen=True)
+class Parte:
+    propios: tuple[Tema, ...]
+    # El bool es True si la dueña va ANTES en el informe («como viste en…»).
+    ajenos: tuple[tuple[Tema, bool], ...]
+
+
+def parte_de(chart_data: dict, slug: str, slugs: list[str]) -> Parte:
+    """Lo que `slug` explica y lo que sólo usa. `slugs` son las secciones
+    aplicables en orden; un tema cuya dueña no aplica se descarta."""
+    lista = [t for t in temas(chart_data) if t.duena in slugs]
+    if slug == "sintesis":
+        return Parte(propios=(), ajenos=tuple((t, True) for t in lista))
+    yo = slugs.index(slug)
+    propios = tuple(t for t in lista if t.duena == slug)
+    ajenos = tuple((t, slugs.index(t.duena) < yo) for t in lista if t.duena != slug)
+    return Parte(propios=propios, ajenos=ajenos)
+
+
+NOMBRES = {
+    "es": {"Sun": "Sol", "Moon": "Luna", "Mercury": "Mercurio", "Venus": "Venus", "Mars": "Marte",
+           "Jupiter": "Júpiter", "Saturn": "Saturno", "Uranus": "Urano", "Neptune": "Neptuno",
+           "Pluto": "Plutón", "Ascendant": "Ascendente", "Medium_Coeli": "Medio Cielo"},
+    "en": {"Sun": "Sun", "Moon": "Moon", "Mercury": "Mercury", "Venus": "Venus", "Mars": "Mars",
+           "Jupiter": "Jupiter", "Saturn": "Saturn", "Uranus": "Uranus", "Neptune": "Neptune",
+           "Pluto": "Pluto", "Ascendant": "Ascendant", "Medium_Coeli": "Midheaven"},
+    "pt": {"Sun": "Sol", "Moon": "Lua", "Mercury": "Mercúrio", "Venus": "Vênus", "Mars": "Marte",
+           "Jupiter": "Júpiter", "Saturn": "Saturno", "Uranus": "Urano", "Neptune": "Netuno",
+           "Pluto": "Plutão", "Ascendant": "Ascendente", "Medium_Coeli": "Meio do Céu"},
+}
+ASPECTOS = {
+    "es": {"conjunction": "en conjunción con", "opposition": "en oposición a", "square": "en cuadratura con",
+           "trine": "en trígono con", "sextile": "en sextil con"},
+    "en": {"conjunction": "conjunct", "opposition": "opposite", "square": "square",
+           "trine": "trine", "sextile": "sextile"},
+    "pt": {"conjunction": "em conjunção com", "opposition": "em oposição a", "square": "em quadratura com",
+           "trine": "em trígono com", "sextile": "em sextil com"},
+}
+ROMANOS = dict(zip(CASAS, ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"), strict=True))
+TEXTOS = {
+    "es": {
+        "planeta": "{p}: su signo y su casa",
+        "cumulo": "el cúmulo en la casa {casa} ({miembros})",
+        "propios": "TE TOCA EXPLICAR (sólo esta sección los explica a fondo):",
+        "ajenos": "LOS EXPLICA OTRA SECCIÓN: usalos desde tu tema en una o dos frases, "
+                  "sin volver a explicar qué son ni cómo funcionan:",
+        "antes": "como viste en «{t}»", "despues": "lo vas a ver en «{t}»",
+    },
+    "en": {
+        "planeta": "{p}: its sign and house",
+        "cumulo": "the cluster in house {casa} ({miembros})",
+        "propios": "YOU EXPLAIN (only this section explains these in depth):",
+        "ajenos": "ANOTHER SECTION EXPLAINS THESE: use them from your own angle in one or two "
+                  "sentences, without explaining again what they are or how they work:",
+        "antes": "as you saw in «{t}»", "despues": "you'll see it in «{t}»",
+    },
+    "pt": {
+        "planeta": "{p}: seu signo e sua casa",
+        "cumulo": "o acúmulo na casa {casa} ({miembros})",
+        "propios": "VOCÊ EXPLICA (só esta seção explica estes a fundo):",
+        "ajenos": "OUTRA SEÇÃO EXPLICA ESTES: use-os a partir do seu tema em uma ou duas frases, "
+                  "sem explicar de novo o que são nem como funcionam:",
+        "antes": "como viu em «{t}»", "despues": "vai ver em «{t}»",
+    },
+}
+
+
+def _nombre(t: Tema, lang: str) -> str:
+    n = NOMBRES[lang]
+    if t.tipo == "planeta":
+        return TEXTOS[lang]["planeta"].format(p=n[t.puntos[0]])
+    if t.tipo == "cumulo":
+        assert t.casa is not None
+        return TEXTOS[lang]["cumulo"].format(casa=ROMANOS[t.casa], miembros=", ".join(n[p] for p in t.puntos))
+    assert t.aspecto is not None
+    return f"{n[t.puntos[0]]} {ASPECTOS[lang][t.aspecto]} {n[t.puntos[1]]}"
+
+
+def bloque(parte: Parte, lang: str, titulos: dict[str, str]) -> str:
+    """El texto que se agrega al pedido de una sección: qué explica y qué sólo
+    usa. Vacío si no hay nada que decir."""
+    if not parte.propios and not parte.ajenos:
+        return ""
+    tx = TEXTOS[lang]
+    lineas: list[str] = []
+    if parte.propios:
+        lineas.append(tx["propios"])
+        lineas += [f"- {_nombre(t, lang)}" for t in parte.propios]
+    if parte.ajenos:
+        if lineas:
+            lineas.append("")
+        lineas.append(tx["ajenos"])
+        for t, antes in parte.ajenos:
+            donde = tx["antes" if antes else "despues"].format(t=titulos.get(t.duena, t.duena))
+            lineas.append(f"- {_nombre(t, lang)} — {donde}")
+    return "\n".join(lineas)
