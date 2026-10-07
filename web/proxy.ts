@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { API_URL } from "@/lib/config";
+import { API_URL, SITE_URL } from "@/lib/config";
 import { DEFAULT_LOCALE, LOCALES, negociarIdioma, type Locale } from "@/lib/i18n";
 
 // El cartel de mantenimiento, para desplegar sin cortar un informe por la mitad.
@@ -92,6 +92,18 @@ function pagina(locale: Locale): string {
 <body><main><h1>${title}</h1><p>${body}</p></main></body></html>`;
 }
 
+const HOST_WWW = "www.astraguia.com";
+
+/** Host público de la petición. Detrás de Traefik `request.url` y `nextUrl`
+ * apuntan al contenedor (`0.0.0.0:3000`), así que el host real sólo se lee de
+ * las cabeceras: `x-forwarded-host` primero, `host` si no. Sin puerto, en
+ * minúsculas. */
+function hostPublico(request: NextRequest): string {
+  const crudo = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
+  // Un proxy en cadena puede mandar "a, b": el primero es el que vio el cliente.
+  return crudo.split(",")[0].trim().toLowerCase().replace(/:\d+$/, "");
+}
+
 export async function proxy(request: NextRequest) {
   // El liveness pasa siempre, con cartel o sin cartel. Es lo que Coolify le
   // pregunta al contenedor recién arrancado para decidir si lo deja vivo, y
@@ -106,6 +118,23 @@ export async function proxy(request: NextRequest) {
   // que el liveness dependa de una sola línea de regex es demasiado frágil
   // para lo que cuesta equivocarse.
   if (request.nextUrl.pathname === "/healthz") return NextResponse.next();
+
+  // www -> dominio sin www, ANTES del mantenimiento: quien entra por www durante
+  // un deploy va al apex, que es el que muestra el cartel. Sin esto la cookie
+  // del nonce de una compra sin cuenta se escribía en www.astraguia.com, Stripe
+  // volvía a astraguia.com (success_url) y el comprador caía en /entrar habiendo
+  // pagado. Un solo host para cookies, canonical y sitemap.
+  //
+  // El Location se arma a mano y ABSOLUTO desde SITE_URL, nunca desde
+  // `request.url` / `nextUrl.origin` (en producción son los del contenedor).
+  // Sólo redirige el host exacto www.astraguia.com; apex, localhost, puertos de
+  // staging y el hostname interno de Docker pasan intactos. `/api` y los
+  // estáticos quedan afuera por el `matcher` (no se redirigen); las páginas sí,
+  // que es lo que alinea el host de la cookie.
+  if (hostPublico(request) === HOST_WWW && new URL(SITE_URL).hostname !== HOST_WWW) {
+    const { pathname, search } = request.nextUrl;
+    return NextResponse.redirect(`${SITE_URL.replace(/\/+$/, "")}${pathname}${search}`, 301);
+  }
 
   // La vuelta del pago tampoco se corta (RF14b de «pagar es entrar»): quien
   // pagó durante un deploy vuelve de Stripe acá, con la plata ya cobrada, y

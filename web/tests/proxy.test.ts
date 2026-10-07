@@ -16,10 +16,13 @@ const pedir = (
   pathname = "/es/carta/abc",
   acceptLanguage: string | null = null,
   origen = "https://astraguia.com",
+  extra: Record<string, string> = {},
 ) =>
   ({
     nextUrl: new URL(pathname, origen),
-    headers: { get: (nombre: string) => (nombre === "accept-language" ? acceptLanguage : null) },
+    headers: {
+      get: (nombre: string) => (nombre === "accept-language" ? acceptLanguage : (extra[nombre] ?? null)),
+    },
   }) as unknown as NextRequest;
 
 async function cargarProxy() {
@@ -216,5 +219,72 @@ describe("con mantenimiento, la vuelta del pago sigue respondiendo", () => {
     expect(coincide("/api/compra")).toBe(false);
     expect(coincide("/api/compra/canjear")).toBe(false);
     expect(coincide("/api/checkout/anonimo")).toBe(false);
+  });
+});
+
+// Detrás de Traefik `nextUrl` apunta al contenedor (`0.0.0.0:3000`): el host
+// público sólo se ve en `x-forwarded-host` / `host`. La cookie del nonce de una
+// compra sin cuenta se escribía en www y Stripe volvía al apex.
+describe("proxy: www redirige al dominio sin www", () => {
+  const interno = "https://0.0.0.0:3000";
+
+  it("www -> 301 absoluto al apex, con path y query", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: false })));
+    const proxy = await cargarProxy();
+
+    const res = await proxy(
+      pedir("/es/compra?checkout_id=cs_123&x=1", null, interno, { "x-forwarded-host": "www.astraguia.com" }),
+    );
+
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("https://astraguia.com/es/compra?checkout_id=cs_123&x=1");
+  });
+
+  it("x-forwarded-host manda sobre host", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: false })));
+    const proxy = await cargarProxy();
+
+    const res = await proxy(
+      pedir("/es/", null, interno, { "x-forwarded-host": "www.astraguia.com", host: "astraguia.com" }),
+    );
+    expect(res.status).toBe(301);
+
+    const res2 = await proxy(
+      pedir("/es/", null, interno, { "x-forwarded-host": "astraguia.com", host: "www.astraguia.com" }),
+    );
+    expect(res2.status).not.toBe(301);
+  });
+
+  it("sin x-forwarded-host usa host, ignorando mayúsculas y puerto", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: false })));
+    const proxy = await cargarProxy();
+
+    const res = await proxy(pedir("/en/precios", null, interno, { host: "WWW.AstraGuia.com:443" }));
+
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("https://astraguia.com/en/precios");
+  });
+
+  it.each(["astraguia.com", "localhost:3000", "staging.astraguia.com", "web-uuid:3000", "www.otro.com"])(
+    "%s pasa sin redirigir",
+    async (host) => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: false })));
+      const proxy = await cargarProxy();
+
+      const res = await proxy(pedir("/es/carta/abc", null, interno, { host }));
+
+      expect(res.status).not.toBe(301);
+      expect(res.headers.get("location")).toBeNull();
+    },
+  );
+
+  it("www en mantenimiento redirige (301), no devuelve 503", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responde({ mantenimiento: true })));
+    const proxy = await cargarProxy();
+
+    const res = await proxy(pedir("/es/", null, interno, { host: "www.astraguia.com" }));
+
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("https://astraguia.com/es/");
   });
 });
