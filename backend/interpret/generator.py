@@ -53,16 +53,21 @@ def _user_content(chart_data: dict, lang: str, trato: str = "") -> str:
     return content
 
 
-def _stream_text(client, model: str, system: list, user_content: str, max_tokens: int) -> str:
+def _stream_text(
+    client, model: str, system: list, user_content: str, max_tokens: int, thinking: dict | None = None
+) -> str:
     # Streaming interno (no al cliente): el read-timeout pasa a ser por-chunk, lo
     # que evita el corte único de una generación no-streaming larga. La respuesta
     # se devuelve completa igual vía get_final_message().
+    # `thinking` sólo viaja si se pidió: sin él, las llamadas quedan idénticas.
+    extra = {"thinking": thinking} if thinking is not None else {}
     try:
         with client.messages.stream(
             model=model,
             max_tokens=max_tokens,
             system=system,
             messages=[{"role": "user", "content": user_content}],
+            **extra,
         ) as stream:
             resp = stream.get_final_message()
     except anthropic.AnthropicError as exc:  # timeout, API, conexión, etc.
@@ -114,7 +119,7 @@ def translate_interpretation(text: str, target_lang: str, client, trato: str = "
     """Traduce una lectura ya generada. Modelo barato: el contenido ya está
     escrito, solo cambia el idioma."""
     system = [{"type": "text", "text": _TRANSLATE_SYSTEM.format(target=_TRANSLATE_TARGETS[target_lang])}]
-    modelo, techo = TRANSLATE_MODEL, TRANSLATE_MAX_TOKENS
+    modelo, techo, thinking = TRANSLATE_MODEL, TRANSLATE_MAX_TOKENS, None
     if nota := instruccion(trato, target_lang):
         # Segundo elemento del system y no parte del contenido: el contenido es
         # el texto a traducir, y una nota ahí podría traducirse y quedar pegada.
@@ -123,7 +128,13 @@ def translate_interpretation(text: str, target_lang: str, client, trato: str = "
         # («Áries o empurra») pese a la instrucción; Sonnet sí la respeta.
         if trato in ("", "neutro"):
             modelo, techo = MODEL, TRANSLATE_MAX_TOKENS_GENERACION
-    return _stream_text(client, modelo, system, text, techo)
+            # Sin `thinking`, Sonnet 5 razona de forma adaptativa: medido en
+            # staging, una sección de 895 palabras costó 7248 tokens de salida
+            # para ~2043 de texto. Traducir no necesita razonar.
+            thinking = {"type": "disabled"}
+    if thinking is None:
+        return _stream_text(client, modelo, system, text, techo)
+    return _stream_text(client, modelo, system, text, techo, thinking=thinking)
 
 
 # El tope duro que acompaña al objetivo, como fracción de éste. Un objetivo

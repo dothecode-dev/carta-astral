@@ -170,3 +170,32 @@ def test_el_modelo_es_sonnet_5():
     # ningún otro test lo note (los fakes no validan el nombre del modelo).
     from interpret.prompts import MODEL
     assert MODEL == "claude-sonnet-5"
+
+
+# --- thinking: la traducción con MODEL no razona; el resto no manda el parámetro ---
+
+def test_traduccion_neutra_con_el_modelo_de_generacion_desactiva_thinking():
+    from interpret.generator import translate_interpretation
+
+    client = FakeClient()
+    translate_interpretation("texto", "pt", client, trato="neutro")
+    assert client.calls[0]["model"] == MODEL
+    assert client.calls[0]["thinking"] == {"type": "disabled"}
+
+
+def test_traduccion_con_haiku_no_manda_thinking():
+    from interpret.generator import translate_interpretation
+
+    client = FakeClient()
+    translate_interpretation("texto", "pt", client, trato="femenino")
+    assert "thinking" not in client.calls[0]
+
+
+def test_la_generacion_no_manda_thinking():
+    from interpret.generator import build_seccion
+    from interpret.prompts import SECCIONES
+
+    client = FakeClient()
+    build_interpretation(CHART, "es", "v1", client)
+    build_seccion({"time_known": True}, SECCIONES[0], "es", "", client)
+    assert all("thinking" not in c for c in client.calls)

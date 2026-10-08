@@ -10,7 +10,7 @@ def _espiar(monkeypatch):
     monkeypatch.setattr(
         generator,
         "_stream_text",
-        lambda client, model, system, content, max_tokens: vistos.append((system, content)) or "ok",
+        lambda client, model, system, content, max_tokens, thinking=None: vistos.append((system, content)) or "ok",
     )
     return vistos
 
@@ -132,7 +132,7 @@ def test_la_traduccion_neutra_a_es_o_pt_usa_el_modelo_de_generacion(monkeypatch,
     monkeypatch.setattr(
         generator,
         "_stream_text",
-        lambda client, model, system, content, max_tokens: modelos.append(model) or "ok",
+        lambda client, model, system, content, max_tokens, thinking=None: modelos.append(model) or "ok",
     )
     generator.translate_interpretation("texto", lang, None, trato=trato)
     assert modelos == [esperado]
@@ -152,7 +152,7 @@ def test_el_techo_de_tokens_acompana_al_modelo_de_la_traduccion(monkeypatch, tra
     monkeypatch.setattr(
         generator,
         "_stream_text",
-        lambda client, model, system, content, max_tokens: techos.append(max_tokens) or "ok",
+        lambda client, model, system, content, max_tokens, thinking=None: techos.append(max_tokens) or "ok",
     )
     generator.translate_interpretation("texto", lang, None, trato=trato)
     assert techos == [esperado]

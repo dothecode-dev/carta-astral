@@ -54,6 +54,9 @@ TRANSLATE_MAX_TOKENS = 2500
 # 1961 como máximo, con las mismas palabras). Es más alto que el techo de
 # generación de la sección más larga (12000) porque el pt sale algo más largo
 # que el es.
+# Esa medida era con el razonamiento adaptativo de Sonnet 5 encendido; la
+# traducción ahora manda thinking disabled y, sin razonamiento, la sección más
+# larga traducida dio 2113 tokens. El techo se deja en 16000.
 TRANSLATE_MAX_TOKENS_GENERACION = 16000
 
 _BASE_ES = (
