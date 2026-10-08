@@ -702,3 +702,15 @@ def test_una_barra_invertida_en_el_corregido_no_se_interpreta():
     corregido = "la protectora\\1"  # una barra invertida literal
     cliente = ClienteFalso(_juez("el protector"), _reemplazos(("el protector", corregido)), _juez())
     assert revisar_trato(texto, "femenino", "es", cliente) == texto.replace("el protector", corregido)
+
+
+def test_los_espacios_alrededor_de_fragmentos_y_pares_se_recortan():
+    """Code review sobre 51eb89e: «el protector » nunca pasaba el límite de
+    palabra y se descartaba como ausente."""
+    texto = BASE + "Sos el protector de todos."
+    cliente = ClienteFalso(
+        _juez("el protector ", "   "),
+        _reemplazos((" el protector ", "la protectora "), ("  ", "algo")),
+        _juez(),
+    )
+    assert revisar_trato(texto, "femenino", "es", cliente) == texto.replace("el protector", "la protectora")

@@ -189,7 +189,9 @@ def _parsear_fragmentos(crudo: str) -> list[str]:
     fragmentos = datos.get("fragmentos") if isinstance(datos, dict) else None
     if not isinstance(fragmentos, list) or not all(isinstance(f, str) for f in fragmentos):
         raise ValueError("el juez no devolvió una lista de fragmentos")
-    return fragmentos
+    # Sin espacios alrededor: «el protector » nunca pasa el límite de palabra
+    # de `_patron` y se descartaría como ausente.
+    return [f.strip() for f in fragmentos if f.strip()]
 
 
 def _parsear_reemplazos(crudo: str) -> list[tuple[str, str]]:
@@ -204,7 +206,10 @@ def _parsear_reemplazos(crudo: str) -> list[tuple[str, str]]:
         corregido = par.get("corregido") if isinstance(par, dict) else None
         if not isinstance(original, str) or not isinstance(corregido, str):
             raise ValueError("un reemplazo no tiene original y corregido de texto")
-        resultado.append((original, corregido))
+        # Mismo recorte que los fragmentos del juez; un original vacío no
+        # apunta a nada y se descarta.
+        if original.strip():
+            resultado.append((original.strip(), corregido.strip()))
     return resultado
 
 
