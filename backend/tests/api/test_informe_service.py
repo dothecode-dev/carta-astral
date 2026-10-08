@@ -183,6 +183,15 @@ def test_la_breve_usa_el_system_del_informe_entero(monkeypatch):
     assert interp.completa is True
 
 
+def test_la_breve_pasa_una_sola_vez_por_el_juez(monkeypatch):
+    veces = []
+    monkeypatch.setattr(informe_service, "build_interpretation", lambda *a, **k: "breve")
+    monkeypatch.setattr(informe_service, "revisar_trato", lambda t, *a, **k: veces.append(t) or t)
+    interp = _interpretacion(tier="corto")
+    informe_service.generar_informe(interp, client=object(), token="tok")
+    assert veces == ["breve"]
+
+
 def test_sin_hora_de_nacimiento_se_omite_la_seccion_de_casas(interpretacion):
     interpretacion.chart.data["time_known"] = False
     interpretacion.chart.save()

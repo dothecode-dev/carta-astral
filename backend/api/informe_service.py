@@ -235,6 +235,14 @@ def secciones_escritas(interpretacion, chart) -> list[dict]:
     ]
 
 
+def escribir_breve(chart_data: dict, lang: str, trato: str, client) -> str:
+    """La lectura breve: un informe entero corto, revisado por el juez del
+    trato. La usan la breve con cuenta y la anónima (`api.lectura_anonima`):
+    las dos tienen que dar el mismo texto (spec 2026-10-08, RF2)."""
+    texto = build_interpretation(chart_data, lang, PROMPT_VERSION, client, trato=trato)
+    return revisar_trato(texto, trato, lang, client)
+
+
 def generar_informe(interpretacion, client, token: str) -> bool:
     """Genera las secciones que falten. Reanudable: llamarla dos veces sobre un
     informe a medio hacer completa el resto sin repetir lo ya escrito.
@@ -307,9 +315,9 @@ def generar_informe(interpretacion, client, token: str) -> bool:
             # SYSTEM_PROMPTS_SECCION le diría al modelo que está escribiendo
             # una parte de algo mayor y produciría un texto que remite a
             # secciones que nadie va a leer (ver interpret/prompts.py).
-            texto = build_interpretation(
-                interpretacion.chart.data, interpretacion.lang, PROMPT_VERSION, client,
-                trato=interpretacion.trato,
+            # `escribir_breve` ya la pasa por el juez del trato.
+            texto = escribir_breve(
+                interpretacion.chart.data, interpretacion.lang, interpretacion.trato, client,
             )
         else:
             texto = build_seccion(
@@ -325,10 +333,10 @@ def generar_informe(interpretacion, client, token: str) -> bool:
                 ),
                 trato=interpretacion.trato,
             )
-        # El modelo no cumple el trato al 100% (medido en staging el 08-10:
-        # «vos misma» en un informe neutro). Un juez lo revisa y, si hace
-        # falta, se repara; ante cualquier duda devuelve el texto tal cual.
-        texto = revisar_trato(texto, interpretacion.trato, interpretacion.lang, client)
+            # El modelo no cumple el trato al 100% (medido en staging el 08-10:
+            # «vos misma» en un informe neutro). Un juez lo revisa y, si hace
+            # falta, se repara; ante cualquier duda devuelve el texto tal cual.
+            texto = revisar_trato(texto, interpretacion.trato, interpretacion.lang, client)
         InterpretationSection.objects.create(
             interpretation=interpretacion,
             slug=seccion.slug,
