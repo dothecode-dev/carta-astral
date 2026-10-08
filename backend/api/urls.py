@@ -2,6 +2,7 @@ from api.checkout import CheckoutEstadoView, CheckoutView
 from api.compra_anonima_api import CheckoutAnonimoView, CheckoutCanjeView
 from api.mantenimiento import EstadoView
 from api.catalogo_api import CatalogoView
+from api.lectura_anonima_api import LecturaAnonimaView
 from api.cupones_api import CuponPublicoView
 from api.compras_api import ComprasView
 from api.webhooks_resend import ResendWebhookView
@@ -43,6 +44,7 @@ urlpatterns = [
     path("webhooks/resend/", ResendWebhookView.as_view()),
     path("charts/", ChartCollectionView.as_view()),
     path("charts/preview/", ChartPreviewView.as_view()),
+    path("lectura-anonima/", LecturaAnonimaView.as_view()),
     path("vinculo/", VinculoEstadoView.as_view()),
     path("vinculo/preview/", VinculoPreviewView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),

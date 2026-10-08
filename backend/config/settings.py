@@ -383,6 +383,9 @@ REST_FRAMEWORK = {
         # salen por un mismo NAT: generoso a propósito, porque lo que
         # frena es el abuso automatizado, no una oficina entera.
         "preview": os.environ.get("PREVIEW_RATE", "60/hour"),
+        # Lectura breve sin cuenta: cuenta SÓLO los pedidos que llegan a
+        # escribir (la vista llama al throttle a mano, ver lectura_anonima_api).
+        "lectura_anonima": os.environ.get("LECTURA_ANONIMA_RATE", "3/day"),
         "geocode": os.environ.get("GEOCODE_RATE", "240/hour"),
         # El PDF no cobra créditos, pero cada uno son ~300 ms de CPU en un worker
         # sincrónico de los tres: sin techo, un bucle de fetch deja el sitio sin
