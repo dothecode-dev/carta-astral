@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CartaPreview } from "@/components/CartaPreview";
 import { getDict, LOCALES } from "@/lib/i18n";
-import type { EstadoLectura } from "@/lib/useLecturaAnonima";
+import type { EstadoLectura } from "@/components/useLecturaAnonima";
 
 // El botón de pago de la vista previa es secundario: el principal sigue siendo
-// la lectura gratis, que va a /entrar. Y sin precio no hay botón: el precio
+// la lectura gratis, que se escribe ahí mismo, sin cuenta. Y sin precio no hay botón: el precio
 // sale del catálogo y no se inventa.
 
 const CARTA = {
@@ -92,7 +92,7 @@ describe("botón de compra de la vista previa", () => {
     pintar("es", { precio: null });
     expect(
       screen.getByText(
-        "Tus datos de nacimiento no se guardan: la lectura queda sólo en este navegador.",
+        "Tu carta y tu lectura quedan sólo en este navegador por 24 horas. No guardamos tus datos de nacimiento.",
       ),
     ).toBeTruthy();
   });

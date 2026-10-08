@@ -8,7 +8,7 @@ import { Firma } from "@/components/Firma";
 import { Reading } from "@/components/Reading";
 import type { CartaDibujable } from "@/lib/chart";
 import type { Dict, Locale } from "@/lib/i18n";
-import type { EstadoLectura } from "@/lib/useLecturaAnonima";
+import type { EstadoLectura } from "@/components/useLecturaAnonima";
 
 // Lo que ve quien calculó su carta sin tener cuenta. Es la carta entera —la
 // misma rueda y las mismas tablas que ve un usuario registrado—, porque la

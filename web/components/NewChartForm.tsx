@@ -10,9 +10,8 @@ import { PlaceField } from "@/components/PlaceField";
 import type { CartaDibujable } from "@/lib/chart";
 import { armarDatosCarta, errorDeFecha, TRATOS, type DatosCarta, type Trato } from "@/lib/datosCarta";
 import type { Dict, Locale } from "@/lib/i18n";
-import { SIGN_NAMES } from "@/lib/i18n";
 import { leerLectura, type LecturaGuardada } from "@/lib/lecturaLocal";
-import { useLecturaAnonima } from "@/lib/useLecturaAnonima";
+import { useLecturaAnonima } from "@/components/useLecturaAnonima";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
 // es el único que sabe de efemérides. Lo único que resuelve acá es que no se
@@ -46,15 +45,10 @@ function destinoDe(locale: Locale, id: string | undefined): string {
   return `/${locale}/carta/${id}`;
 }
 
-/** De quién es una lectura guardada, para el botón de «verla». La carta de la
- *  vista previa trae `birth` aunque el tipo `CartaDibujable` no lo declare; si
- *  tampoco hay fecha, el signo solar es lo último que identifica algo. */
-function quienDe(carta: CartaDibujable, locale: Locale): string {
-  const birth = (carta as { birth?: { name?: string | null; date?: string } }).birth;
-  if (birth?.name) return birth.name;
-  if (birth?.date) return birth.date;
-  const sol = carta.data?.placements?.find((p) => p.name === "Sun");
-  return sol ? (SIGN_NAMES[locale][Math.floor(sol.abs_pos / 30) % 12] ?? "") : "";
+/** De quién es una lectura guardada, para el botón de «verla»: el nombre que
+ *  puso o, si no puso, la fecha de nacimiento. */
+function quienDe(datos: DatosCarta): string {
+  return datos.name || datos.date;
 }
 
 async function motivoDe(res: Response): Promise<string | null> {
@@ -283,11 +277,14 @@ export function NewChartForm({
           type="button"
           className="btn btnGhost"
           onClick={() => {
+            // Sin esto el botón de comprar de la vista reabierta no tendría
+            // con qué abrir el checkout.
+            datos.current = guardada.datos;
             setPreview(guardada.carta);
             lectura.mostrar(guardada);
           }}
         >
-          {t.lecturaVerAnterior.replace("{quien}", quienDe(guardada.carta, locale))}
+          {t.lecturaVerAnterior.replace("{quien}", quienDe(guardada.datos))}
         </button>
       )}
 

@@ -67,6 +67,11 @@ async function completarYEnviar(fetchMock: ReturnType<typeof vi.fn>, respuesta: 
   });
 }
 
+const DATOS_GUARDADOS = {
+  name: "Ana", date: "1976-05-31", time: null, time_known: false,
+  lat: -32.94682, lng: -60.63932, place_label: "Rosario, Santa Fe, AR",
+};
+
 const CALCULADA = { ok: true, status: 200, json: async () => CARTA };
 
 describe("sin cuenta", () => {
@@ -118,7 +123,7 @@ describe("sin cuenta", () => {
 
   it("con una lectura guardada ofrece verla", async () => {
     localStorage.setItem("astra-lectura-anonima", JSON.stringify({
-      carta: CARTA, texto: "guardada", lang: "es", disclaimer: "", vence: Date.now() + 3600_000,
+      carta: CARTA, datos: DATOS_GUARDADOS, texto: "guardada", lang: "es", disclaimer: "", vence: Date.now() + 3600_000,
     }));
     render(<NewChartForm locale="es" dict={dict} />);
     await act(async () => {});
@@ -131,6 +136,31 @@ describe("sin cuenta", () => {
     await completarYEnviar(fetchMock, { ok: false, status: 429, json: async () => ({}) });
 
     expect(screen.getByRole("alert").textContent).toBe(t.failed);
+  });
+});
+
+describe("lectura guardada reabierta", () => {
+  it("el botón de comprar funciona: manda lo guardado al checkout anónimo", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    localStorage.clear();
+    localStorage.setItem("astra-lectura-anonima", JSON.stringify({
+      carta: CARTA, datos: DATOS_GUARDADOS, texto: "guardada", lang: "es", disclaimer: "", vence: Date.now() + 3600_000,
+    }));
+    render(<NewChartForm locale="es" dict={dict} precio="US$ 29" />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: /Ver tu lectura de Ana/ }));
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ url: "https://stripe.test/c" }) });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Leer el informe completo · US\$ 29/ }));
+    });
+    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    expect(url).toBe("/api/checkout/anonimo");
+    expect(JSON.parse(init.body)).toMatchObject({ ...DATOS_GUARDADOS, locale: "es" });
+    expect(assign).toHaveBeenCalledWith("https://stripe.test/c");
+    vi.unstubAllGlobals();
   });
 });
 

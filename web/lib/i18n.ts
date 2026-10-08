@@ -1010,7 +1010,7 @@ const es: Dict = {
     previewPrivacidad:
       "No guardamos nada de esto mientras sólo la mirás. Si la comprás o creás una cuenta, la carta queda guardada.",
     previewPrivacidadSinCompra:
-      "Tus datos de nacimiento no se guardan: la lectura queda sólo en este navegador.",
+      "Tu carta y tu lectura quedan sólo en este navegador por 24 horas. No guardamos tus datos de nacimiento.",
     previewRetomando: "Guardando tu carta…",
     lecturaEscribiendo: "Estamos escribiendo tu lectura…",
     lecturaOcupado: "Estamos escribiendo muchas lecturas, un momento…",
@@ -1420,7 +1420,7 @@ const en: Dict = {
     previewPrivacidad:
       "We don't store any of this while you're just looking at it. If you buy it or create an account, the chart is saved.",
     previewPrivacidadSinCompra:
-      "Your birth details aren't stored: the reading stays only in this browser.",
+      "Your chart and your reading stay only in this browser for 24 hours. We don't store your birth details.",
     previewRetomando: "Saving your chart…",
     lecturaEscribiendo: "We're writing your reading…",
     lecturaOcupado: "We're writing a lot of readings, one moment…",
@@ -1830,7 +1830,7 @@ const pt: Dict = {
     previewPrivacidad:
       "Não guardamos nada disso enquanto você só olha. Se você comprar ou criar uma conta, o mapa fica guardado.",
     previewPrivacidadSinCompra:
-      "Seus dados de nascimento não são guardados: a leitura fica só neste navegador.",
+      "Sua carta e sua leitura ficam só neste navegador por 24 horas. Não guardamos seus dados de nascimento.",
     previewRetomando: "Salvando seu mapa…",
     lecturaEscribiendo: "Estamos escrevendo sua leitura…",
     lecturaOcupado: "Estamos escrevendo muitas leituras, um momento…",
