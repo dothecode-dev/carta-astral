@@ -11,6 +11,16 @@ TOKEN = "tok-test"
 
 
 @pytest.fixture(autouse=True)
+def _sin_revision_del_trato(monkeypatch):
+    """La revisión del trato (interpret/revision_trato.py) suma llamadas al
+    mismo cliente falso, y estos tests cuentan llamadas para probar la
+    mecánica de generación (secciones, cortes, reanudación). La revisión
+    tiene sus propios tests (tests/interpret/test_revision_trato.py y
+    tests/api/test_trato_informe.py); acá es la identidad."""
+    monkeypatch.setattr(informe_service, "revisar_trato", lambda texto, trato, lang, client: texto)
+
+
+@pytest.fixture(autouse=True)
 def lock_tomado(chart):
     """Simula que ya se tomó el lock de esta carta con TOKEN, como hace
     `completar_generacion` antes de generar. Sin esto, el

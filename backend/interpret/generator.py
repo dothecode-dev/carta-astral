@@ -54,13 +54,23 @@ def _user_content(chart_data: dict, lang: str, trato: str = "") -> str:
 
 
 def _stream_text(
-    client, model: str, system: list, user_content: str, max_tokens: int, thinking: dict | None = None
+    client,
+    model: str,
+    system: list,
+    user_content: str,
+    max_tokens: int,
+    thinking: dict | None = None,
+    output_config: dict | None = None,
 ) -> str:
     # Streaming interno (no al cliente): el read-timeout pasa a ser por-chunk, lo
     # que evita el corte único de una generación no-streaming larga. La respuesta
     # se devuelve completa igual vía get_final_message().
     # `thinking` sólo viaja si se pidió: sin él, las llamadas quedan idénticas.
-    extra = {"thinking": thinking} if thinking is not None else {}
+    extra: dict = {"thinking": thinking} if thinking is not None else {}
+    # `output_config` igual: hoy sólo lo usa el juez del trato (salida JSON
+    # estructurada, interpret/revision_trato.py).
+    if output_config is not None:
+        extra["output_config"] = output_config
     try:
         with client.messages.stream(
             model=model,

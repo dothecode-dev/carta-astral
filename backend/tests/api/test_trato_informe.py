@@ -56,6 +56,9 @@ def llamadas(monkeypatch):
     monkeypatch.setattr(informe_service, "build_interpretation", _breve)
     monkeypatch.setattr(informe_service, "translate_interpretation", _traduccion)
     monkeypatch.setattr(svc, "_build_client", lambda: object())
+    # La revisión del trato llama al modelo: acá el cliente es `object()`.
+    # Identidad; los tests de la revisión la reemplazan con `revisiones`.
+    monkeypatch.setattr(informe_service, "revisar_trato", lambda texto, trato, lang, client: texto)
     return reg
 
 
@@ -468,3 +471,64 @@ def test_completar_generacion_usa_el_lock_real(make_chart, cuenta, llamadas, mon
     assert interp.secciones.count() == 2
     assert interp.intentos == 0
     assert cache.get(svc._lock_key(carta, "largo")) == "otro-proceso"
+
+
+# --- Juez + reparación del trato (interpret/revision_trato.py) ---
+
+
+@pytest.fixture
+def revisiones(monkeypatch):
+    """Falsea el revisor: registra (texto, trato, lang) y marca el texto, para
+    poder ver que lo que se guarda es lo revisado y no lo generado."""
+    reg = []
+
+    def _revisar(texto, trato, lang, client):
+        reg.append((texto, trato, lang))
+        return f"revisado: {texto}"
+
+    monkeypatch.setattr(informe_service, "revisar_trato", _revisar)
+    return reg
+
+
+def test_cada_seccion_generada_pasa_por_la_revision_y_se_guarda_la_revisada(
+    make_chart, cuenta, llamadas, revisiones,
+):
+    carta = _con_trato(make_chart, cuenta, "neutro")
+    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+
+    svc.completar_generacion(interp, carta, cuenta)
+
+    assert revisiones == [(f"texto de {s.slug}", "neutro", "es") for s in SECCIONES]
+    interp.refresh_from_db()
+    assert interp.completa is True
+    assert sorted(interp.secciones.values_list("texto", flat=True)) == sorted(
+        f"revisado: texto de {s.slug}" for s in SECCIONES
+    )
+
+
+def test_la_lectura_breve_pasa_por_la_revision(make_chart, cuenta, llamadas, revisiones):
+    carta = _con_trato(make_chart, cuenta, "masculino")
+    interp = svc.iniciar_generacion(carta, "pt", cuenta, tier="corto")
+
+    svc.completar_generacion(interp, carta, cuenta)
+
+    assert revisiones == [("lectura breve", "masculino", "pt")]
+    interp.refresh_from_db()
+    assert list(interp.secciones.values_list("texto", flat=True)) == ["revisado: lectura breve"]
+
+
+@pytest.mark.usefixtures("lock_vigente")
+def test_cada_seccion_traducida_pasa_por_la_revision_con_el_trato_y_el_idioma_del_destino(
+    make_chart, cuenta, llamadas, revisiones,
+):
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    origen = _origen_completo(carta, cuenta, trato="femenino")
+    # El destino nació con otro trato: la revisión tiene que usar el del
+    # destino ya alineado con el origen, no el de la carta.
+    _cambiar_trato(carta, "masculino")
+
+    informe_service.traducir_informe(origen, "pt", object(), TOKEN)
+
+    assert revisiones == [("traducido", "femenino", "pt")] * len(SECCIONES)
+    destino = Interpretation.objects.get(chart=carta, lang="pt", tier="largo")
+    assert set(destino.secciones.values_list("texto", flat=True)) == {"revisado: traducido"}

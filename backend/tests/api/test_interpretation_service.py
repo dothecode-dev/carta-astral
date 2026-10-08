@@ -12,6 +12,16 @@ from interpret.exceptions import InterpretationError
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def _sin_revision_del_trato(monkeypatch):
+    """La revisión del trato (interpret/revision_trato.py) suma llamadas al
+    mismo cliente falso, y estos tests cuentan llamadas para probar la
+    generación. La revisión tiene sus propios tests
+    (tests/interpret/test_revision_trato.py y tests/api/test_trato_informe.py);
+    acá es la identidad."""
+    monkeypatch.setattr(informe_service, "revisar_trato", lambda texto, trato, lang, client: texto)
+
+
 def _account(lecturas_breves=None, informes=0):
     """Una cuenta fondeada con derechos, que es lo único que se canjea.
 

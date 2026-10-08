@@ -18,6 +18,7 @@ from interpret.generator import build_interpretation, build_seccion, translate_i
 from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO, Seccion
 from interpret.reparto import bloque as bloque_de_reparto
 from interpret.reparto import parte_de
+from interpret.revision_trato import revisar_trato
 
 logger = logging.getLogger(__name__)
 
@@ -324,6 +325,10 @@ def generar_informe(interpretacion, client, token: str) -> bool:
                 ),
                 trato=interpretacion.trato,
             )
+        # El modelo no cumple el trato al 100% (medido en staging el 08-10:
+        # «vos misma» en un informe neutro). Un juez lo revisa y, si hace
+        # falta, se repara; ante cualquier duda devuelve el texto tal cual.
+        texto = revisar_trato(texto, interpretacion.trato, interpretacion.lang, client)
         InterpretationSection.objects.create(
             interpretation=interpretacion,
             slug=seccion.slug,
@@ -434,6 +439,9 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
         texto = translate_interpretation(
             seccion.texto, destino_lang, client, trato=origen.trato,
         )
+        # La traducción también puede escapar el género: se revisa con el
+        # trato y el idioma del destino (el trato ya quedó alineado arriba).
+        texto = revisar_trato(texto, destino.trato, destino_lang, client)
         try:
             with transaction.atomic():
                 InterpretationSection.objects.create(
