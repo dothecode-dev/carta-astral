@@ -107,3 +107,9 @@ def test_la_neutra_nombra_el_intensificador_para_prohibirlo(lang, prohibidas):
     texto = instruccion("neutro", lang)
     for forma in prohibidas:
         assert f"«{forma}»" in texto
+
+
+def test_la_neutra_pt_nombra_los_pronombres_obliquos_para_prohibirlos():
+    texto = instruccion("neutro", "pt")
+    assert "«o empurra»" in texto
+    assert "«consigo mesmo»" in texto
