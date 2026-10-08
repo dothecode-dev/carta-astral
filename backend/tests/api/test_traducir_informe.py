@@ -327,3 +327,13 @@ def test_si_pierde_el_lock_a_mitad_de_la_traduccion_aborta_sin_completar(interpr
     assert len(cliente.llamadas) == 1
     assert destino.secciones.count() == 1
     assert destino.completa is False
+
+
+def test_traducir_no_manda_el_mail_de_informe_listo(interpretacion, resend):
+    """La traducción es la misma persona pidiendo otro idioma, sin pago nuevo."""
+    interpretacion.account.email = "lectora@example.com"
+    interpretacion.account.save()
+    _crear_secciones(interpretacion)
+    informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), TOKEN)
+    assert Interpretation.objects.get(lang="en", tier=interpretacion.tier).completa
+    assert resend == []

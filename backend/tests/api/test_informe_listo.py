@@ -27,14 +27,27 @@ def test_la_breve_no_se_avisa(interpretacion_completa, resend):
     assert resend == []
 
 
-def test_si_resend_falla_no_rompe(interpretacion_completa, resend, monkeypatch):
+def test_si_resend_falla_no_rompe(interpretacion_completa, resend, monkeypatch, caplog):
     from api import notificaciones
 
     def rompe(*a, **k):
         raise RuntimeError("resend caído")
 
     monkeypatch.setattr(notificaciones, "_post_resend", rompe)
-    informe_service.avisar_informe_listo(interpretacion_completa)  # no lanza
+    texto_antes = interpretacion_completa.text
+    with caplog.at_level("ERROR", logger="api.notificaciones"):
+        informe_service.avisar_informe_listo(interpretacion_completa)  # no lanza
+
+    # `notificar` loguea el fallo con traceback.
+    assert any(
+        r.name == "api.notificaciones" and r.levelname == "ERROR" and r.exc_info
+        for r in caplog.records
+    )
+    # Entrega at-most-once: queda marcada aunque Resend haya fallado.
+    interpretacion_completa.refresh_from_db()
+    assert interpretacion_completa.avisada_at is not None
+    assert interpretacion_completa.completa is True
+    assert interpretacion_completa.text == texto_antes
 
 
 def test_compra_acreditada_ya_no_promete_el_informe_disponible():

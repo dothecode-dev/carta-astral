@@ -248,7 +248,9 @@ def escribir_breve(chart_data: dict, lang: str, trato: str, client) -> str:
 def avisar_informe_listo(interpretacion: Interpretation) -> None:
     """Manda «tu informe está listo» una sola vez por informe (spec 2026-10-08,
     RF23). El UPDATE condicional decide quién avisa si el hilo y el cron
-    terminan a la vez; `notificar` ya traga y loguea los fallos de Resend."""
+    terminan a la vez; `notificar` ya traga y loguea los fallos de Resend.
+    La entrega es at-most-once a propósito: `avisada_at` se marca antes de
+    mandar, así que un crash o un fallo de Resend no se reintenta."""
     if interpretacion.tier != TIER_LARGO or interpretacion.account_id is None:
         return
     marcadas = Interpretation.objects.filter(

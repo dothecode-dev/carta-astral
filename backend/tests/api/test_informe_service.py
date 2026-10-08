@@ -343,3 +343,24 @@ def test_sin_hora_el_reparto_no_inventa_casas_ni_cumulos(interpretacion):
     # el MC como tema del reparto.
     assert "Medio Cielo: su signo" not in pedidos
     assert "Ascendente: su signo" not in pedidos
+
+
+def _con_mail(interpretacion):
+    interpretacion.account.email = "lectora@example.com"
+    interpretacion.account.save()
+
+
+def test_terminar_el_informe_manda_un_solo_mail_de_informe_listo(interpretacion, resend):
+    """El cableado: `generar_informe` avisa al terminar (RF23)."""
+    _con_mail(interpretacion)
+    assert informe_service.generar_informe(interpretacion, ClienteFalso(), TOKEN) is True
+    assert len(resend) == 1
+    assert "listo" in str(resend[0]).lower()
+
+
+def test_dos_pasadas_sobre_el_mismo_informe_mandan_un_solo_mail(interpretacion, resend):
+    _con_mail(interpretacion)
+    informe_service.generar_informe(interpretacion, ClienteFalso(), TOKEN)
+    informe_service.generar_informe(interpretacion, ClienteFalso(), TOKEN)
+    informe_service.avisar_informe_listo(interpretacion)
+    assert len(resend) == 1
