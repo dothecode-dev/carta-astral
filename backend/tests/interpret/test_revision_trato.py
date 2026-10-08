@@ -252,8 +252,8 @@ def test_un_par_con_salto_de_linea_se_descarta():
         ("neutro", "gerar você mesmo o sacudón", True),
         ("neutro", "generar lo mismo de siempre", True),
         ("femenino", "generar vos mismo el sacudón", True),
-        ("femenino", "generar vos misma el sacudón ya", False),
-        ("masculino", "generar vos misma el sacudón ya", True),
+        ("femenino", "generar vos misma ese sacudón", False),
+        ("masculino", "generar vos misma ese sacudón", True),
         ("masculino", "generar vos mismo el sacudón", False),
         ("femenino", "gerar você mesmo o sacudón", True),
         ("masculino", "gerar você mesma o sacudón", True),
@@ -357,10 +357,11 @@ ARMADO_DENTRO = "cómo estás armado por dentro: la manera"
 def test_una_segunda_vuelta_corrige_lo_que_quedo(caplog):
     cliente = ClienteFalso(
         _juez(FRAG, ARMADO),
-        # Medido en staging: la primera reparación agregó palabras y dejó el género.
+        # Medido en staging: la primera reparación agregó palabras y dejó el
+        # género. Se rechaza, y la segunda vuelta lo corrige.
         _reemplazos((FRAG, FRAG_OK), (ARMADO, ARMADO_DENTRO)),
-        _juez(ARMADO_DENTRO),
-        _reemplazos((ARMADO_DENTRO, ARMADO_OK)),
+        _juez(ARMADO),
+        _reemplazos((ARMADO, ARMADO_OK)),
     )
     with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
         resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
@@ -421,3 +422,15 @@ def test_el_system_de_la_reparacion_explica_que_agregar_palabras_no_corrige():
     system = _system(cliente.llamadas[1])
     assert "estás hecho" in system and "te armaste" in system
     assert "barras" in system
+
+
+@pytest.mark.parametrize("trato", ["femenino", "masculino", "neutro"])
+def test_una_correccion_que_solo_agrega_palabras_se_rechaza(trato, caplog):
+    """Medido en staging: «cómo estás armado: la manera» → «cómo estás armado
+    por dentro: la manera». Contiene al original entero: no corrigió nada."""
+    cliente = ClienteFalso(_juez(ARMADO), _reemplazos((ARMADO, ARMADO_DENTRO)))
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO, trato, "es", cliente) == TEXTO
+    resumen = [r.getMessage() for r in caplog.records if "listados=" in r.getMessage()][0]
+    assert "solo_agrego_palabras=1" in resumen
+    assert len(cliente.llamadas) == 2  # nada aplicado: no hay segunda vuelta

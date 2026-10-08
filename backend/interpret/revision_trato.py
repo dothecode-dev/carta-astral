@@ -210,6 +210,19 @@ def _marca_inclusiva(original: str, corregido: str) -> bool:
     return any(p.lower() not in previas for p in _PALABRA_EN_X.findall(corregido))
 
 
+_TOKEN = re.compile(r"\w+|[^\w\s]")
+
+
+def _solo_agrega_palabras(original: str, corregido: str) -> bool:
+    """El corregido contiene al original entero, palabra por palabra y en
+    orden, con palabras agregadas en el medio o alrededor: la forma con
+    género sigue ahí. Por palabras y no por substring porque el caso medido
+    en staging intercala: «cómo estás armado: la manera» → «cómo estás armado
+    por dentro: la manera» no contiene al original como substring."""
+    restantes = iter(_TOKEN.findall(corregido.lower()))
+    return all(token in restantes for token in _TOKEN.findall(original.lower()))
+
+
 def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[str], clave: str) -> str | None:
     """Por qué un par no se aplica, o None si se aplica. Los motivos son
     claves fijas: van al log como contadores, nunca el texto."""
@@ -231,6 +244,9 @@ def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[
         return "marca_inclusiva"
     if _FORMAS_PROHIBIDAS[clave].search(corregido):
         return "forma_prohibida"
+    # Al final: si además trae una forma prohibida, ese motivo es más preciso.
+    if _solo_agrega_palabras(original, corregido):
+        return "solo_agrego_palabras"
     return None
 
 
