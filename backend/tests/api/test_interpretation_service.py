@@ -413,3 +413,24 @@ def test_el_cap_diario_solo_frena_lo_regalado(make_account, make_chart, settings
     carta = make_chart(account=cuenta)
 
     _generar(carta, "es", cuenta, tier="largo")  # no levanta CapReached
+
+
+def test_un_error_inesperado_al_canjear_devuelve_el_cupo_y_no_deja_la_fila(make_account, make_chart, monkeypatch):
+    """Cualquier excepción de `canjear` revierte su transacción (no se cobró
+    nada): el lugar del cupo vuelve, y la `Interpretation` vacía se borra para
+    que el reintento cobre en vez de encontrarla con `created=False`."""
+    from django.utils import timezone
+
+    from api.models import CupoDiario
+
+    cuenta = make_account(lecturas_breves=1, informes=0)
+    carta = make_chart(account=cuenta)
+
+    def rompe(*a, **kw):
+        raise RuntimeError("la base se cayó a mitad del canje")
+
+    monkeypatch.setattr(svc, "canjear", rompe)
+    with pytest.raises(RuntimeError):
+        svc.iniciar_generacion(carta, "es", cuenta, tier="corto")
+    assert CupoDiario.objects.get(fecha=timezone.now().date(), ambito="cuenta").usados == 0
+    assert not Interpretation.objects.filter(chart=carta).exists()

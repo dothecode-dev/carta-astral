@@ -18,7 +18,8 @@ from django.core.cache import cache
 from django.db import connections
 
 from api import cupo_diario, notificaciones
-from api.canje import SinDerecho, canjear, devolver
+from api.canje import SinDerecho as SinDerecho  # re-exportado: lo importan tests
+from api.canje import canjear, devolver
 from api.catalogo import codigos_otorgados_por
 from api.exceptions import CapReached, GenerationInProgress
 from api.models import Chart, Interpretation, Movimiento, Sujeto
@@ -435,7 +436,12 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
 
     try:
         canjear(account, capacidad, sujeto, build=lambda: interpretacion)
-    except SinDerecho:
+    except BaseException:
+        # No sólo `SinDerecho`: cualquier excepción de `canjear` sale de su
+        # `atomic()` y revierte el canje, así que no se cobró nada. El lugar
+        # del cupo vuelve, y la fila vacía se borra por lo mismo que con
+        # `SinDerecho`: si quedara, el reintento la encontraría con
+        # `created=False` y no cobraría.
         interpretacion.delete()
         if fecha_cupo is not None:
             cupo_diario.devolver(cupo_diario.CUENTA, fecha_cupo)
