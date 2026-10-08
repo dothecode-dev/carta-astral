@@ -11,7 +11,9 @@ import logging
 import unicodedata
 
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
+from api import notificaciones
 from api.interpretation_service import renovar_lock
 from api.models import Interpretation, InterpretationSection
 from interpret.generator import build_interpretation, build_seccion, translate_interpretation
@@ -243,6 +245,23 @@ def escribir_breve(chart_data: dict, lang: str, trato: str, client) -> str:
     return revisar_trato(texto, trato, lang, client)
 
 
+def avisar_informe_listo(interpretacion: Interpretation) -> None:
+    """Manda «tu informe está listo» una sola vez por informe (spec 2026-10-08,
+    RF23). El UPDATE condicional decide quién avisa si el hilo y el cron
+    terminan a la vez; `notificar` ya traga y loguea los fallos de Resend."""
+    if interpretacion.tier != TIER_LARGO or interpretacion.account_id is None:
+        return
+    marcadas = Interpretation.objects.filter(
+        pk=interpretacion.pk, avisada_at__isnull=True,
+    ).update(avisada_at=timezone.now())
+    if marcadas != 1:
+        return
+    notificaciones.notificar(
+        interpretacion.account, "informe_listo",
+        {"chart": str(interpretacion.chart.uuid)}, lang=interpretacion.lang,
+    )
+
+
 def generar_informe(interpretacion, client, token: str) -> bool:
     """Genera las secciones que falten. Reanudable: llamarla dos veces sobre un
     informe a medio hacer completa el resto sin repetir lo ya escrito.
@@ -362,6 +381,7 @@ def generar_informe(interpretacion, client, token: str) -> bool:
         )
         interpretacion.completa = True
         interpretacion.save(update_fields=["text", "completa"])
+    avisar_informe_listo(interpretacion)
     return True
 
 

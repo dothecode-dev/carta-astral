@@ -153,6 +153,9 @@ class Interpretation(models.Model):
     # política es devolver el crédito y borrar la fila: no se entrega un
     # informe a medias por lo que costó el completo.
     intentos = models.PositiveSmallIntegerField(default=0)
+    # Cuándo salió el mail de «tu informe está listo». Marcarlo con un UPDATE
+    # condicional es lo que hace que el hilo y el cron no avisen dos veces.
+    avisada_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ("chart", "lang", "prompt_version", "tier")

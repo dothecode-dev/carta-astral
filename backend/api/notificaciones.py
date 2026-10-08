@@ -28,7 +28,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-EVENTOS = ("informe_no_entregado", "compra_acreditada")
+EVENTOS = ("informe_no_entregado", "compra_acreditada", "informe_listo")
 
 _API = "https://api.resend.com/emails"
 
@@ -42,19 +42,39 @@ _TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 _TEXTOS = {
     "compra_acreditada": {
         "es": (
-            "Tu compra está lista",
-            "<p>Recibimos tu pago y ya tenés el informe disponible en tu cuenta.</p>"
+            "Recibimos tu pago",
+            "<p>Recibimos tu pago y ya estamos escribiendo tu informe. Tarda unos minutos: "
+            "te mandamos otro mail cuando esté listo.</p>"
             '<p><a href="{url}">Ver mi cuenta</a></p>',
         ),
         "en": (
-            "Your purchase is ready",
-            "<p>We received your payment and your report is now available in your account.</p>"
+            "We received your payment",
+            "<p>We received your payment and we're writing your report. It takes a few minutes: "
+            "we'll email you again when it's ready.</p>"
             '<p><a href="{url}">Go to my account</a></p>',
         ),
         "pt": (
-            "Sua compra está pronta",
-            "<p>Recebemos seu pagamento e o relatório já está disponível na sua conta.</p>"
+            "Recebemos seu pagamento",
+            "<p>Recebemos seu pagamento e já estamos escrevendo seu relatório. Leva alguns minutos: "
+            "mandamos outro e-mail quando estiver pronto.</p>"
             '<p><a href="{url}">Ver minha conta</a></p>',
+        ),
+    },
+    "informe_listo": {
+        "es": (
+            "Tu informe está listo",
+            "<p>Terminamos de escribir tu informe. Ya podés leerlo y bajarlo en PDF.</p>"
+            '<p><a href="{url}">Leer mi informe</a></p>',
+        ),
+        "en": (
+            "Your report is ready",
+            "<p>We've finished writing your report. You can read it and download the PDF now.</p>"
+            '<p><a href="{url}">Read my report</a></p>',
+        ),
+        "pt": (
+            "Seu relatório está pronto",
+            "<p>Terminamos de escrever seu relatório. Você já pode lê-lo e baixar o PDF.</p>"
+            '<p><a href="{url}">Ler meu relatório</a></p>',
         ),
     },
     "informe_no_entregado": {
