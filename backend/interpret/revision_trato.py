@@ -26,6 +26,7 @@ informe pago.
 No importa django ni api (contrato de `lint-imports`).
 """
 
+import difflib
 import json
 import logging
 import re
@@ -49,6 +50,19 @@ JUEZ_MAX_TOKENS = 1000
 # segunda vuelta mira el texto ya reparado. Más no: cada vuelta son dos
 # llamadas, y lo que dos no corrigen se queda como estaba.
 MAX_VUELTAS = 2
+
+# Un fragmento del juez con más palabras que esto no se repara. Medido en
+# staging (8ef370d): el juez listó casi un párrafo y la reparación lo
+# reescribió entero, despersonalizado («Vivís entre esas dos» → «Hay un vivir
+# entre esas dos»). Un escape de género es una o dos palabras; 12 deja
+# contexto para que sea único y corta los fragmentos-párrafo.
+MAX_PALABRAS_FRAGMENTO = 12
+
+# Cuántas palabras puede cambiar un par (borradas + agregadas + reemplazadas,
+# cada reemplazo contado por el lado más largo). «vos misma» → «por tu
+# cuenta» son 3; «estás armado» → «te armaste», 2. Más de 4 ya es reescribir,
+# no corregir un género.
+MAX_PALABRAS_CAMBIADAS = 4
 
 # La reparación devuelve sólo pares cortos (un fragmento de pocas palabras y
 # su corrección), no el texto: 2000 alcanza para decenas de pares, más de los
@@ -122,6 +136,11 @@ _SYSTEM_REPARACION = (
     "por dentro» no sirve (agrega palabras y deja el género), «estás armado» → «estás hecho» "
     "tampoco (sigue con género); «estás armado» → «te armaste» o «tu forma de ser» sí sirve. "
     "Nunca uses barras («confundido/a»), «x», «@» ni «e» como terminación inclusiva.\n\n"
+    "Mantené la segunda persona: el texto le habla a quien lee, y cada «te», «tu», «vos», "
+    "«você» o verbo en voseo del original tiene que seguir estando. Cambiá la menor cantidad "
+    "de palabras posible, idealmente sólo la que marca género. Nunca reescribas con "
+    "construcciones impersonales: «Vivís entre esas dos» → «hay un vivir entre esas dos» o "
+    "«naciste con» → «hubo un nacer con» están mal.\n\n"
     "Respondé sólo con un JSON "
     'de la forma {{"reemplazos": [{{"original": "...", "corregido": "..."}}]}}.\n\n'
     "Cómo reformular:\n{guia}"
@@ -210,6 +229,40 @@ def _marca_inclusiva(original: str, corregido: str) -> bool:
     return any(p.lower() not in previas for p in _PALABRA_EN_X.findall(corregido))
 
 
+# Marcas de segunda persona. Una corrección que tiene menos que el original
+# despersonalizó («que no te pida endurecerte» → «que no pida endurecerse»,
+# «tu camino» → «el camino», medido en staging). El voseo se aproxima con
+# palabras de 4 letras o más terminadas en -ás/-és/-ís («vivís», «podés»,
+# «estás»): cae también algún «además», «después» o «país», pero como se
+# comparan cuentas del mismo fragmento antes y después, una palabra que no
+# cambió suma igual de los dos lados. Los enclíticos («endurecerte») no se
+# cuentan.
+_SEGUNDA_PERSONA = {
+    "es": frozenset({"te", "tu", "tus", "vos", "ti", "contigo", "tuyo", "tuya", "tuyos", "tuyas"}),
+    "pt": frozenset({"você", "te", "seu", "sua", "seus", "suas", "si", "contigo"}),
+}
+_VOSEO = re.compile(r"^\w{2,}(ás|és|ís)$")
+_PALABRA = re.compile(r"\w+")
+
+
+def _marcas_segunda_persona(texto: str, lang: str) -> int:
+    pronombres = _SEGUNDA_PERSONA[lang]
+    marcas = 0
+    for palabra in _PALABRA.findall(texto.lower()):
+        if palabra in pronombres or (lang == "es" and _VOSEO.match(palabra)):
+            marcas += 1
+    return marcas
+
+
+def _palabras_cambiadas(original: str, corregido: str) -> int:
+    a, b = original.split(), corregido.split()
+    cambiadas = 0
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if op != "equal":
+            cambiadas += max(i2 - i1, j2 - j1)
+    return cambiadas
+
+
 _TOKEN = re.compile(r"\w+|[^\w\s]")
 
 
@@ -223,7 +276,9 @@ def _solo_agrega_palabras(original: str, corregido: str) -> bool:
     return all(token in restantes for token in _TOKEN.findall(original.lower()))
 
 
-def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[str], clave: str) -> str | None:
+def _motivo_de_rechazo(
+    original: str, corregido: str, texto: str, listados: set[str], clave: str, lang: str
+) -> str | None:
     """Por qué un par no se aplica, o None si se aplica. Los motivos son
     claves fijas: van al log como contadores, nunca el texto."""
     if original not in listados:
@@ -249,6 +304,10 @@ def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[
         return "marca_inclusiva"
     if _FORMAS_PROHIBIDAS[clave].search(corregido):
         return "forma_prohibida"
+    if _marcas_segunda_persona(corregido, lang) < _marcas_segunda_persona(original, lang):
+        return "despersonaliza"
+    if _palabras_cambiadas(original, corregido) > MAX_PALABRAS_CAMBIADAS:
+        return "cambio_grande"
     # Al final: si además trae una forma prohibida, ese motivo es más preciso.
     if _solo_agrega_palabras(original, corregido):
         return "solo_agrego_palabras"
@@ -304,14 +363,17 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
     # aparece más de una vez («seguro» en «es seguro que Saturno» y en «estás
     # seguro») no se puede reparar con garantías: `replace(..., 1)` y el
     # contexto toman la primera aparición, que puede ser la que estaba bien.
+    # Y uno de más de `MAX_PALABRAS_FRAGMENTO` palabras invita a reescribir.
     unicos = list(dict.fromkeys(f for f in fragmentos if f))
-    ausentes = sum(1 for f in unicos if texto.count(f) == 0)
-    no_unicos = sum(1 for f in unicos if texto.count(f) > 1)
-    presentes = [f for f in unicos if texto.count(f) == 1]
-    if ausentes or no_unicos:
+    largos = [f for f in unicos if len(f.split()) > MAX_PALABRAS_FRAGMENTO]
+    cortos = [f for f in unicos if len(f.split()) <= MAX_PALABRAS_FRAGMENTO]
+    ausentes = sum(1 for f in cortos if texto.count(f) == 0)
+    no_unicos = sum(1 for f in cortos if texto.count(f) > 1)
+    presentes = [f for f in cortos if texto.count(f) == 1]
+    if largos or ausentes or no_unicos:
         logger.info(
-            "revisión del trato: fragmentos del juez descartados: vuelta=%s ausente=%s no_unico=%s",
-            vuelta, ausentes, no_unicos,
+            "revisión del trato: fragmentos del juez descartados: vuelta=%s largo=%s ausente=%s no_unico=%s",
+            vuelta, len(largos), ausentes, no_unicos,
         )
     if not presentes:
         return texto, 0
@@ -347,7 +409,7 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
     aplicados = 0
     resultado = texto
     for original, corregido in pares:
-        if motivo := _motivo_de_rechazo(original, corregido, resultado, listados, clave):
+        if motivo := _motivo_de_rechazo(original, corregido, resultado, listados, clave, lang):
             rechazos[motivo] += 1
             continue
         resultado = resultado.replace(original, corregido, 1)

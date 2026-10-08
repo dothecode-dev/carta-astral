@@ -460,15 +460,112 @@ def test_un_fragmento_repetido_se_descarta_y_el_unico_se_repara():
 def test_en_la_segunda_vuelta_un_original_que_paso_a_aparecer_dos_veces_se_rechaza(caplog):
     """Un corregido ya aplicado puede contener el texto de otro fragmento:
     después de aplicarlo, ese original aparece dos veces y no se toca."""
-    armado_con_conf = "cómo te armaste al sentirte confundida ante: la manera"
+    conf = "confundida ante"
+    armado_con_conf = "cómo te confundida ante: la manera"
     cliente = ClienteFalso(
         _juez(FRAG),
         _reemplazos((FRAG, FRAG_OK)),
-        _juez(ARMADO, CONF),
-        _reemplazos((ARMADO, armado_con_conf), (CONF, CONF_OK)),
+        _juez(ARMADO, conf),
+        _reemplazos((ARMADO, armado_con_conf), (conf, "con confusión ante")),
     )
     with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
         resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
     assert resultado == TEXTO.replace(FRAG, FRAG_OK).replace(ARMADO, armado_con_conf)
     vuelta2 = [r.getMessage() for r in caplog.records if "vuelta=2 listados=" in r.getMessage()][0]
     assert "aplicados=1" in vuelta2 and "no_unico=1" in vuelta2
+
+
+
+# --- la reparación no puede reescribir ni despersonalizar (prueba real, 8ef370d) ---
+
+VIVIS = "Vivís entre esas dos fuerzas, y naciste con una enorme sensibilidad"
+TEXTO_VIVIS = TEXTO + "\n\n" + VIVIS + " que no te pida endurecerte en tu camino."
+
+
+def _resumen(caplog):
+    return [r.getMessage() for r in caplog.records if "listados=" in r.getMessage()][0]
+
+
+def test_el_caso_vivis_entre_esas_dos_se_rechaza(caplog):
+    """Medido en staging: la reparación lo despersonalizó."""
+    cliente = ClienteFalso(
+        _juez(VIVIS),
+        _reemplazos((VIVIS, "Hay un vivir entre esas dos fuerzas, y hubo un nacer con una enorme sensibilidad")),
+    )
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO_VIVIS, "neutro", "es", cliente) == TEXTO_VIVIS
+    resumen = _resumen(caplog)
+    assert "despersonaliza=1" in resumen or "cambio_grande=1" in resumen
+
+
+@pytest.mark.parametrize(
+    ("original", "corregido"),
+    [
+        ("que no te pida endurecerte", "que no pida endurecerse"),
+        ("endurecerte en tu camino", "endurecerte en el camino"),
+    ],
+)
+def test_sacar_la_segunda_persona_se_rechaza_por_despersonalizar(original, corregido, caplog):
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)))
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO_VIVIS, "neutro", "es", cliente) == TEXTO_VIVIS
+    assert "despersonaliza=1" in _resumen(caplog)
+
+
+def test_un_cambio_de_mas_de_cuatro_palabras_se_rechaza(caplog):
+    corregido = "generar por tu propia cuenta y sin esperar a nadie el sacudón"
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, corregido)))
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
+    assert "cambio_grande=1" in _resumen(caplog)
+
+
+def test_un_fragmento_de_veinte_palabras_se_descarta_por_largo(caplog):
+    largo = (
+        "Marte en Aries te da un empuje que no espera permiso. Cuando algo "
+        "se estanca, podés generar vos misma el"
+    )
+    assert len(largo.split()) == 20 and TEXTO.count(largo) == 1
+    cliente = ClienteFalso(_juez(largo))
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
+    assert len(cliente.llamadas) == 1  # no se pide reparar
+    assert any("largo=1" in r.getMessage() for r in caplog.records)
+
+
+def test_vos_misma_el_sacudon_por_tu_cuenta_se_aplica():
+    original, corregido = "vos misma el sacudón", "por tu cuenta el sacudón"
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
+    assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO.replace(original, corregido)
+
+
+def test_contigo_a_con_vos_se_aplica():
+    """«con vos» tiene tantas marcas de segunda persona como «contigo»."""
+    texto = TEXTO + "\n\nNadie es tan exigente contigo misma como vos."
+    original, corregido = "exigente contigo misma", "exigente con vos"
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
+    assert revisar_trato(texto, "neutro", "es", cliente) == texto.replace(original, corregido)
+
+
+@pytest.mark.parametrize(
+    ("original", "corregido", "lang", "rechazado"),
+    [
+        ("você mesma decide", "você decide", "pt", False),
+        ("isso a torna sozinha", "isso torna", "pt", False),  # no había marca
+        ("seu caminho sozinha", "o caminho", "pt", True),
+        ("contigo mesma", "com você", "pt", False),
+    ],
+)
+def test_marcas_de_segunda_persona_en_portugues(original, corregido, lang, rechazado):
+    texto = TEXTO + "\n\n" + original + "."
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
+    esperado = texto if rechazado else texto.replace(original, corregido)
+    assert revisar_trato(texto, "neutro", lang, cliente) == esperado
+
+
+def test_el_system_de_la_reparacion_pide_segunda_persona_y_pocas_palabras():
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG)))
+    revisar_trato(TEXTO, "neutro", "es", cliente)
+    system = _system(cliente.llamadas[1])
+    assert "segunda persona" in system
+    assert "hay un vivir" in system and "hubo un nacer" in system
