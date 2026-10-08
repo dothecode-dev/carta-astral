@@ -2,7 +2,7 @@
 
 `request.data.get(...)` revienta con `AttributeError` si el cuerpo es `[]`,
 `null`, `3` o `"x"`: JSON válido, pero no un diccionario. El arreglo es un
-único parser (`api.parsers.JSONObjetoParser`) y no un chequeo por vista; estos
+único parser (`config.parsers.JSONObjetoParser`) y no un chequeo por vista; estos
 tests recorren todas las rutas de escritura que leen `request.data` para que
 una vista nueva no pueda reintroducir el 500.
 
@@ -102,7 +102,7 @@ def test_el_400_dice_por_que():
 # --- El parser solo ---------------------------------------------------------
 
 def _parsear(texto):
-    from api.parsers import JSONObjetoParser
+    from config.parsers import JSONObjetoParser
 
     return JSONObjetoParser().parse(
         io.BytesIO(texto.encode()), "application/json", {}

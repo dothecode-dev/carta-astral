@@ -348,7 +348,7 @@ REST_FRAMEWORK = {
     # rechaza (400) un cuerpo que no es un objeto: `[]`, `null` o `3` dejaban
     # `request.data.get(...)` reventando con 500.
     "DEFAULT_PARSER_CLASSES": [
-        "api.parsers.JSONObjetoParser",
+        "config.parsers.JSONObjetoParser",
         "rest_framework.parsers.FormParser",
         "rest_framework.parsers.MultiPartParser",
     ],
