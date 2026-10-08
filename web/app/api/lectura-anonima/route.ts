@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { conQuery } from "@/lib/consultaBackend";
 import { LECTURA_COOKIE, opcionesLectura } from "@/lib/lecturaCookie";
 import { ApiError, callApi, motivoDe } from "@/lib/session";
 
@@ -66,6 +67,34 @@ export async function GET() {
       return NextResponse.json({ motivo: "nada" }, { status: 404 });
     }
     console.error("lectura anónima: el GET al backend falló");
+    return NextResponse.json({ motivo: "error" }, { status: 502 });
+  }
+}
+
+// El mismo formato que valida el backend: el pedido viaja en la URL, así que
+// nada que no sea un uuid llega a armarla.
+const PEDIDO = /^[0-9a-f-]{36}$/;
+
+/** El acuse (spec §11 v3): la web ya guardó la lectura de este pedido y el
+ *  backend la puede borrar. La cookie queda: es la que recuerda que este
+ *  navegador ya usó su lectura gratis. */
+export async function DELETE(request: Request) {
+  const pedido = new URL(request.url).searchParams.get("pedido") ?? "";
+  if (!PEDIDO.test(pedido)) return NextResponse.json({ motivo: "datos" }, { status: 400 });
+  const t = await token();
+  if (!t) return NextResponse.json({ motivo: "nada" }, { status: 404 });
+  try {
+    await callApi(conQuery("/api/lectura-anonima/", { pedido }), {
+      method: "DELETE",
+      auth: false,
+      headers: cabeceras(t),
+    });
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return NextResponse.json({ motivo: "nada" }, { status: 404 });
+    }
+    console.error(`lectura anónima: el acuse al backend falló (${error instanceof ApiError ? error.status : "sin respuesta"})`);
     return NextResponse.json({ motivo: "error" }, { status: 502 });
   }
 }

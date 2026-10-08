@@ -210,6 +210,27 @@ describe("sin cuenta", () => {
     expect(screen.getByText("la lectura de Ana")).toBeInTheDocument();
   });
 
+  // §11 v3: una recarga a mitad de la espera no pierde la lectura gratis.
+  it("con un pedido en curso guardado, al montar retoma de fondo y ofrece verla al llegar", async () => {
+    const P = "00000000-0000-4000-8000-0000000000aa";
+    localStorage.setItem("astra-lectura-pedido", JSON.stringify({
+      pedido: P, carta: CARTA, datos: DATOS_GUARDADOS, vence: Date.now() + 60_000,
+    }));
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando", pedido: P }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ estado: "lista", texto: "de Ana", lang: "es", disclaimer: "", pedido: P }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    render(<NewChartForm locale="es" dict={dict} />);
+    expect(screen.queryByRole("button", { name: t.lecturaVerAnterior.replace("{quien}", "Ana") })).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    // Nunca pinta: sigue el formulario, ahora con el botón para verla.
+    expect(screen.getByLabelText(t.date)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: t.lecturaVerAnterior.replace("{quien}", "Ana") }));
+    expect(screen.getByText("de Ana")).toBeTruthy();
+    expect(fetchMock.mock.calls.at(-1)).toEqual([`/api/lectura-anonima?pedido=${P}`, { method: "DELETE" }]);
+    expect(localStorage.getItem("astra-lectura-pedido")).toBeNull();
+  });
+
   it("después de leerla, al volver ofrece verla otra vez", async () => {
     render(<NewChartForm locale="es" dict={dict} />);
     fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Ana" } });
@@ -266,6 +287,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
     track.mockClear();
     assign.mockClear();
     sessionStorage.clear();
+    localStorage.clear();
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("location", { ...window.location, assign });
@@ -391,6 +413,7 @@ describe("con sesión, al montar", () => {
     push.mockClear();
     replace.mockClear();
     sessionStorage.clear();
+    localStorage.clear();
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });

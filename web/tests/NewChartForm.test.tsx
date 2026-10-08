@@ -53,6 +53,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   replace.mockClear();
   refresh.mockClear();
+  localStorage.clear();
   render(<NewChartForm locale="es" dict={dict} signedIn />);
 });
 

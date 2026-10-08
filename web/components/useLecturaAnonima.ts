@@ -5,7 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CartaDibujable } from "@/lib/chart";
 import type { DatosCarta } from "@/lib/datosCarta";
 import type { Locale } from "@/lib/i18n";
-import { guardarLectura, type LecturaGuardada } from "@/lib/lecturaLocal";
+import {
+  borrarPedido,
+  guardarLectura,
+  guardarPedido,
+  leerPedido,
+  type LecturaGuardada,
+} from "@/lib/lecturaLocal";
 import { track } from "@/lib/telemetry";
 
 // El pedido de la lectura breve sin cuenta y la espera (spec 2026-10-08,
@@ -44,9 +50,24 @@ type Pedido = {
   id: string;
   cuerpo: object;
   carta: CartaDibujable;
-  lang: Locale;
+  /** Falta en el pedido retomado al montar: ése sólo consulta, no se reenvía. */
+  lang?: Locale;
   timer: ReturnType<typeof setTimeout> | null;
 };
+
+/** El acuse (§11 v3): la lectura ya está guardada en este navegador y el
+ *  backend la puede borrar. Si falla da igual —el vencimiento de 15 min la
+ *  borra igual—, así que no se reintenta ni se avisa; el pedido en curso se
+ *  borra en los dos casos. Si la pestaña se cierra antes, al volver se retoma,
+ *  el GET la vuelve a dar y se guarda y acusa de nuevo. */
+async function acusar(pedido: string): Promise<void> {
+  try {
+    await fetch(`/api/lectura-anonima?${new URLSearchParams({ pedido })}`, { method: "DELETE" });
+  } catch {
+    // Ignorado a propósito: ver arriba.
+  }
+  borrarPedido(pedido);
+}
 
 export function useLecturaAnonima() {
   const [estado, setEstado] = useState<EstadoLectura>({ tipo: "nada" });
@@ -83,11 +104,15 @@ export function useLecturaAnonima() {
 
   const deFrente = (p: Pedido) => vivo.current && actual.current === p;
 
-  const terminar = useCallback((p: Pedido) => {
+  /** Corta el pedido. Salvo que lo pida quien llega con la lista (que lo
+   *  borra después del acuse), también lo saca del storage: ya no hay nada que
+   *  retomar. Sólo si el guardado es ÉSTE: el de otra carta sigue. */
+  const terminar = useCallback((p: Pedido, conservarEnCurso = false) => {
     if (p.timer) clearTimeout(p.timer);
     p.timer = null;
     vivos.current.delete(p);
     if (actual.current === p) actual.current = null;
+    if (!conservarEnCurso) borrarPedido(p.id);
   }, []);
 
   /** Termina el pedido; si sigue de frente, además muestra cómo terminó. */
@@ -136,8 +161,9 @@ export function useLecturaAnonima() {
           if (r.ok && cuerpo.estado === "lista" && cuerpo.texto && cuerpo.lang) {
             const lista = { texto: cuerpo.texto, lang: cuerpo.lang, disclaimer: cuerpo.disclaimer ?? "" };
             const pinta = deFrente(p);
-            terminar(p);
+            terminar(p, true);
             guardarLectura({ carta: p.carta, datos: p.cuerpo as DatosCarta, ...lista });
+            void acusar(p.id);
             track("lectura_anonima_generada", {});
             setGuardadas((n) => n + 1);
             if (pinta) setEstado({ tipo: "lista", ...lista });
@@ -224,6 +250,12 @@ export function useLecturaAnonima() {
       const p: Pedido = { id, cuerpo, carta, lang, timer: null };
       actual.current = p;
       vivos.current.add(p);
+      // Para retomarlo si se recarga. No pisa el de OTRA carta que siga en
+      // curso de fondo: éste, de todos modos, el backend lo rechazaría.
+      const enCurso = leerPedido();
+      if (!enCurso || enCurso.pedido === id) {
+        guardarPedido({ pedido: id, carta, datos: cuerpo as DatosCarta });
+      }
       track("lectura_anonima_pedida", {});
       return enviar(p, 0);
     },
@@ -234,6 +266,21 @@ export function useLecturaAnonima() {
     consultarRef.current = consultar;
     pedirRef.current = enviar;
   }, [consultar, enviar]);
+
+  // Al montar, un pedido en curso guardado (una recarga, otra pestaña) se
+  // retoma DE FONDO: nunca pinta, y si llega la lista la guarda con su carta,
+  // la acusa y suma a `guardadas` para que aparezca «Ver tu lectura de …».
+  // Sin guardia de una sola corrida a propósito: el desmontaje de React en
+  // desarrollo vacía `vivos` y corta sus timers, y el segundo montaje lo
+  // vuelve a retomar; dos ciclos no quedan nunca.
+  useEffect(() => {
+    const enCurso = leerPedido();
+    if (!enCurso) return;
+    for (const v of vivos.current) if (v.id === enCurso.pedido) return;
+    const p: Pedido = { id: enCurso.pedido, cuerpo: enCurso.datos, carta: enCurso.carta, timer: null };
+    vivos.current.add(p);
+    consultar(p, 0, Math.min(enCurso.vence, Date.now() + CORTE_MS), true);
+  }, [consultar]);
 
   /** Lo que estaba de frente pasa a fondo: deja de pintar, pero si ya se está
    *  escribiendo, termina y se guarda con su carta. */

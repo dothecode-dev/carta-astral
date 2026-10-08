@@ -74,6 +74,9 @@ beforeEach(() => {
   push.mockClear();
   replace.mockClear();
   sessionStorage.clear();
+  // Pedir la lectura deja un pedido en curso en localStorage, y el hook lo
+  // retoma al montar (§11 v3): sin limpiarlo, el test siguiente consulta.
+  localStorage.clear();
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });

@@ -16,6 +16,10 @@ const res = (status: number, body: unknown) =>
 const P1 = "00000000-0000-4000-8000-000000000001";
 const P2 = "00000000-0000-4000-8000-000000000002";
 const guardada = () => JSON.parse(localStorage.getItem("astra-lectura-anonima") ?? "null");
+const pendiente = () => JSON.parse(localStorage.getItem("astra-lectura-pedido") ?? "null");
+const gets = (f: ReturnType<typeof vi.fn>) => f.mock.calls.filter((c) => !c[1]?.method).length;
+const acuses = (f: ReturnType<typeof vi.fn>) =>
+  f.mock.calls.filter((c) => c[1]?.method === "DELETE").map((c) => c[0]);
 const posts = (f: ReturnType<typeof vi.fn>) =>
   f.mock.calls.filter((c) => c[1]?.method === "POST").map((c) => JSON.parse(c[1].body));
 
@@ -165,8 +169,9 @@ describe("useLecturaAnonima", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(result.current.estado).toEqual({ tipo: "nada" });
     expect(guardada()).toMatchObject({ texto: "de A", datos: { date: "A" }, carta: { firma: {} } });
-    // Un solo sondeo: se detiene al recibirla.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Un solo sondeo: se detiene al recibirla. (El POST, el GET y el acuse.)
+    expect(gets(fetchMock)).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(result.current.guardadas).toBe(1);
   });
 
@@ -297,5 +302,146 @@ describe("useLecturaAnonima", () => {
     // Ni un segundo POST: con otro id, el backend lo tomaría por otra carta.
     expect(posts(fetchMock)).toHaveLength(1);
     expect(result.current.estado).toEqual({ tipo: "esperando", ocupado: false });
+  });
+
+  // §11 v3: entrega en dos tiempos y pedido en curso persistido.
+  describe("acuse y pedido en curso", () => {
+    const LISTA_P1 = { estado: "lista", texto: "t", lang: "es", disclaimer: "d", pedido: P1 };
+    const PEND = { pedido: P1, carta: { firma: {} }, datos: { date: "A" } };
+
+    it("al pedir guarda el pedido en curso con su carta y sus datos", async () => {
+      fetchMock.mockReturnValueOnce(res(202, { estado: "generando" }));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      expect(pendiente()).toMatchObject(PEND);
+      expect(typeof pendiente().vence).toBe("number");
+    });
+
+    it("con la lista: la guarda, después acusa con su pedido y borra el pedido en curso", async () => {
+      fetchMock
+        .mockReturnValueOnce(res(202, { estado: "generando" }))
+        .mockReturnValueOnce(res(200, LISTA_P1))
+        .mockReturnValueOnce(Promise.resolve(new Response(null, { status: 204 })));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(guardada()).toMatchObject({ texto: "t" });
+      expect(acuses(fetchMock)).toEqual([`/api/lectura-anonima?pedido=${P1}`]);
+      // El acuse va DESPUÉS del GET que la trajo (y del guardado).
+      expect(fetchMock.mock.calls.at(-1)![1]).toMatchObject({ method: "DELETE" });
+      expect(pendiente()).toBeNull();
+    });
+
+    it("si el acuse falla, la lectura queda igual y el pedido en curso se borra", async () => {
+      fetchMock
+        .mockReturnValueOnce(res(202, { estado: "generando" }))
+        .mockReturnValueOnce(res(200, LISTA_P1))
+        .mockImplementationOnce(() => Promise.reject(new TypeError("red")));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(result.current.estado).toEqual({ tipo: "lista", texto: "t", lang: "es", disclaimer: "d" });
+      expect(guardada()).toMatchObject({ texto: "t" });
+      expect(pendiente()).toBeNull();
+    });
+
+    it.each([
+      ["una fallida", [res(202, { estado: "generando" }), res(200, { estado: "fallida", pedido: P1 })], 1000],
+      ["un 409", [res(409, { motivo: "usado" })], 0],
+      ["una lista de otro pedido", [res(202, { estado: "generando" }), res(200, { ...LISTA_P1, pedido: P2 })], 1000],
+    ])("%s borra el pedido en curso", async (_n, respuestas, avance) => {
+      for (const r of respuestas) fetchMock.mockReturnValueOnce(r);
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(avance); });
+      expect(pendiente()).toBeNull();
+      expect(acuses(fetchMock)).toEqual([]);
+    });
+
+    it("el corte borra el pedido en curso", async () => {
+      fetchMock.mockReturnValueOnce(res(202, { estado: "generando" }));
+      fetchMock.mockImplementation(() => res(200, { estado: "generando", pedido: P1 }));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({}, CARTA, "es"); });
+      expect(pendiente()).not.toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(301_000); });
+      expect(pendiente()).toBeNull();
+    });
+
+    it("al montar con un pedido en curso, retoma de fondo: guarda con SU carta, acusa y no pinta", async () => {
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, vence: Date.now() + 60_000 }));
+      fetchMock
+        .mockReturnValueOnce(res(200, { estado: "generando", pedido: P1 }))
+        .mockReturnValueOnce(res(200, LISTA_P1))
+        .mockReturnValueOnce(Promise.resolve(new Response(null, { status: 204 })));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(gets(fetchMock)).toBe(1);
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+      expect(result.current.estado).toEqual({ tipo: "nada" });
+      expect(guardada()).toMatchObject({ texto: "t", datos: { date: "A" }, carta: { firma: {} } });
+      expect(result.current.guardadas).toBe(1);
+      expect(acuses(fetchMock)).toEqual([`/api/lectura-anonima?pedido=${P1}`]);
+      expect(pendiente()).toBeNull();
+      expect(posts(fetchMock)).toEqual([]);
+    });
+
+    it("al montar con un pedido en curso que terminó fallida, lo borra sin pintar ni guardar", async () => {
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, vence: Date.now() + 60_000 }));
+      fetchMock.mockReturnValueOnce(res(200, { estado: "fallida", pedido: P1 }));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(result.current.estado).toEqual({ tipo: "nada" });
+      expect(guardada()).toBeNull();
+      expect(pendiente()).toBeNull();
+    });
+
+    it("al montar con un pedido en curso, el corte es su vencimiento si llega antes", async () => {
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, vence: Date.now() + 10_000 }));
+      fetchMock.mockImplementation(() => res(200, { estado: "generando", pedido: P1 }));
+      renderHook(() => useLecturaAnonima());
+      await act(async () => { await vi.advanceTimersByTimeAsync(11_000); });
+      expect(pendiente()).toBeNull();
+      const n = gets(fetchMock);
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(gets(fetchMock)).toBe(n);
+    });
+
+    it("al montar con un pedido vencido no consulta nada", async () => {
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, vence: Date.now() - 1 }));
+      renderHook(() => useLecturaAnonima());
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("desmontar corta la espera retomada", async () => {
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, vence: Date.now() + 60_000 }));
+      fetchMock.mockImplementation(() => res(200, { estado: "generando", pedido: P1 }));
+      const { unmount } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      unmount();
+      const n = fetchMock.mock.calls.length;
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(fetchMock.mock.calls.length).toBe(n);
+    });
+
+    it("la espera retomada no bloquea pedir de frente otra carta", async () => {
+      // El retomado no pasa por `randomUUID`: se le da un id que el mock no repite.
+      const P9 = "00000000-0000-4000-8000-000000000009";
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, pedido: P9, vence: Date.now() + 60_000 }));
+      fetchMock.mockImplementation((url: string, init?: { method?: string }) =>
+        init?.method === "POST" ? res(409, { motivo: "usado" }) : res(200, { estado: "generando", pedido: P9 }),
+      );
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await act(async () => { await result.current.pedir({ date: "B" }, CARTA_B, "es"); });
+      expect(result.current.estado).toEqual({ tipo: "usada" });
+      // El 409 de B no pisa ni borra el pedido en curso de A, que sigue de fondo.
+      expect(posts(fetchMock).map((b) => b.pedido)).toEqual([P1]);
+      expect(pendiente()).toMatchObject({ pedido: P9 });
+      const n = gets(fetchMock);
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+      expect(gets(fetchMock)).toBeGreaterThan(n);
+    });
   });
 });
