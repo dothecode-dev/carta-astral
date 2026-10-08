@@ -12,10 +12,12 @@ intentos — si el comando borrara una fila recién vencida, le sacaría su
 aporte a esa suma antes de que la ventana la descarte sola. El doble de
 margen (2 horas) es barato y deja tranquilo ese cálculo.
 """
+import datetime as dt
 import io
 
 import pytest
 from django.core.management import call_command
+from django.db import connection
 from django.utils import timezone
 
 from api.models import CodigoAcceso
@@ -80,3 +82,30 @@ def test_reporta_cuantas_filas_borro():
     out = io.StringIO()
     call_command("purgar_codigos_acceso", stdout=out)
     assert "2" in out.getvalue()
+
+
+def _fila_cache(clave, expira):
+    with connection.cursor() as c:
+        c.execute(
+            "INSERT INTO django_cache (cache_key, value, expires) VALUES (%s, %s, %s)",
+            [clave, "x", expira],
+        )
+
+
+def _claves_cache():
+    with connection.cursor() as c:
+        c.execute("SELECT cache_key FROM django_cache")
+        return {r[0] for r in c.fetchall()}
+
+
+def test_borra_las_filas_vencidas_de_la_cache(db_cache):
+    ahora = timezone.now()
+    _fila_cache(":1:vieja", ahora - dt.timedelta(minutes=1))
+    _fila_cache(":1:viva", ahora + dt.timedelta(hours=1))
+    call_command("purgar_codigos_acceso")
+    assert _claves_cache() == {":1:viva"}
+
+
+def test_sin_cache_de_base_no_hace_nada(settings):
+    settings.CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+    call_command("purgar_codigos_acceso")  # no revienta

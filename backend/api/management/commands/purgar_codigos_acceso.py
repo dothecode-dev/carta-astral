@@ -16,20 +16,45 @@ borran filas ya VENCIDAS o ya USADAS: una fila vigente nunca se toca, sin
 importar su edad (hoy `CODIGO_TTL_MINUTOS` es 10, así que ninguna vigente
 llega a las 2 horas, pero el filtro queda explícito por si ese valor cambia).
 
+También borra las filas vencidas de la caché de la base: `DatabaseCache` sólo
+las elimina al releerlas o al podar, así que sin esto se acumulan (y con ellas
+datos que la política de privacidad promete no retener).
+
 Corre como Scheduled Task de Coolify, igual que `reanudar_informes` e
 `informe_diario` (ver CLAUDE.md): no hay nada en el repo que la programe.
 """
+from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 
 from api.models import CodigoAcceso
 
 RETENCION_HORAS = 2
+_DB_CACHE = "django.core.cache.backends.db.DatabaseCache"
+
+
+def _purgar_cache_vencida(ahora) -> int:
+    """Borra las filas vencidas de la caché de la base. `DatabaseCache` sólo
+    las borra al releerlas o al podar; esto es lo que hace cierta la promesa
+    de retención de la política de privacidad."""
+    conf = settings.CACHES.get("default", {})
+    if conf.get("BACKEND") != _DB_CACHE:
+        return 0
+    # El nombre sale de la configuración, no del usuario, y va quoteado; el
+    # valor va parametrizado.
+    tabla = connection.ops.quote_name(conf["LOCATION"])
+    with connection.cursor() as cursor:
+        cursor.execute(f"DELETE FROM {tabla} WHERE expires < %s", [ahora])
+        return cursor.rowcount
 
 
 class Command(BaseCommand):
-    help = "Borra códigos de acceso vencidos o usados con más de 2 horas de antigüedad."
+    help = (
+        "Borra códigos de acceso vencidos o usados con más de 2 horas de antigüedad "
+        "y las entradas vencidas de la caché de la base."
+    )
 
     def handle(self, *args, **opts):
         ahora = timezone.now()
@@ -39,3 +64,5 @@ class Command(BaseCommand):
             creado_en__lt=limite,
         ).delete()
         self.stdout.write(self.style.SUCCESS(f"{borrados} códigos de acceso borrados"))
+        vencidas = _purgar_cache_vencida(ahora)
+        self.stdout.write(self.style.SUCCESS(f"{vencidas} entradas vencidas de la caché borradas"))

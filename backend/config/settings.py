@@ -20,6 +20,7 @@ from pathlib import Path
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
+from config import caches as _caches
 from config.observabilidad import init_sentry
 
 
@@ -518,25 +519,7 @@ VINCULO_PREVIEW_ENABLED = os.environ.get("VINCULO_PREVIEW_ENABLED", "0") == "1"
 # acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache
 # (USE_DB_CACHE=1 + `manage.py createcachetable`). LocMem en prod NO limita:
 # cada worker tiene su propio contador y los muros de costo no funcionan.
-if os.environ.get("USE_DB_CACHE"):
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-            "LOCATION": "django_cache",
-        }
-    }
-elif not DEBUG:
-    # Fail-fast, no degradación silenciosa: con LocMem cada worker de gunicorn
-    # tiene SU PROPIO contador, así que el tope global de gasto, el throttle y
-    # el lock de interpretación dejan de limitar sin que nada avise. Es un
-    # agujero de costo, y prefiere no arrancar antes que arrancar sin muros.
-    raise ImproperlyConfigured(
-        "En producción hace falta caché compartida: seteá USE_DB_CACHE=1 "
-        "(y corré `manage.py createcachetable`). Con LocMem el cap de costo, "
-        "el throttle y el lock de interpretación no limitan nada."
-    )
-else:
-    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+CACHES = _caches.armar(usar_db=bool(os.environ.get("USE_DB_CACHE")), debug=DEBUG)
 
 
 # Password validation
