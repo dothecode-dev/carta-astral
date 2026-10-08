@@ -30,7 +30,9 @@ TEXTO = (
     "sin convertirte en especialista de una sola cosa. Leés, preguntás, "
     "conectás ideas que nadie había juntado, y en esa mezcla aparece lo más "
     "tuyo: la capacidad de traducir lo complejo en algo que se entiende. "
-    "Trabajar así no tiene por qué ser una pelea constante contra vos."
+    "Trabajar así no tiene por qué ser una pelea constante contra vos.\n\n"
+    "A veces vas a sentirte confundida ante tanto estímulo, y vas a preguntarte "
+    "cómo estás armado: la manera en que reaccionás dice mucho."
 )
 FRAG = "generar vos misma el sacudón"
 FRAG_OK = "generar por tu cuenta el sacudón"
@@ -81,6 +83,8 @@ class ClienteFalso:
 
         def stream(self, **kwargs):
             self.outer.llamadas.append(kwargs)
+            if not self.outer._respuestas:
+                raise AssertionError("llamada al modelo que el test no esperaba")
             r = self.outer._respuestas.pop(0)
             return _StreamCtx(r if isinstance(r, (BaseException, _Resp)) else _Resp(r))
 
@@ -123,7 +127,7 @@ def test_juez_sin_fragmentos_no_repara():
 
 
 def test_reemplaza_el_fragmento_y_nada_mas(caplog):
-    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)))
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)), _juez())
     with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
         resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
     assert resultado == REPARADO
@@ -138,7 +142,7 @@ def test_reemplaza_el_fragmento_y_nada_mas(caplog):
 
 
 def test_la_reparacion_recibe_los_fragmentos_con_contexto_y_no_el_texto_entero():
-    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)))
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)), _juez())
     revisar_trato(TEXTO, "neutro", "es", cliente)
     reparacion = cliente.llamadas[1]
     contenido = reparacion["messages"][0]["content"]
@@ -152,7 +156,7 @@ def test_la_reparacion_recibe_los_fragmentos_con_contexto_y_no_el_texto_entero()
 
 
 def test_juez_con_bloque_json_tambien_se_entiende():
-    cliente = ClienteFalso(f"```json\n{_juez(FRAG)}\n```", _reemplazos((FRAG, FRAG_OK)))
+    cliente = ClienteFalso(f"```json\n{_juez(FRAG)}\n```", _reemplazos((FRAG, FRAG_OK)), _juez())
     assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
 
 
@@ -165,9 +169,9 @@ def test_fragmentos_que_no_estan_en_el_texto_se_descartan():
 
 @pytest.mark.parametrize("lang", ["es", "pt"])
 def test_las_dos_llamadas_van_sin_razonamiento_y_con_el_modelo_de_generacion(lang):
-    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)))
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)), _juez())
     revisar_trato(TEXTO, "femenino", lang, cliente)
-    assert len(cliente.llamadas) == 2
+    assert len(cliente.llamadas) == 3  # juez, reparación, juez de la segunda vuelta
     for llamada in cliente.llamadas:
         assert llamada["model"] == MODEL
         assert llamada["thinking"] == {"type": "disabled"}
@@ -212,6 +216,7 @@ def test_un_par_que_introduce_vos_mismo_se_rechaza_y_el_otro_se_aplica(caplog):
     cliente = ClienteFalso(
         _juez(FRAG, contra),
         _reemplazos((FRAG, FRAG_OK), (contra, "una pelea constante contra vos mismo")),
+        _juez(),
     )
     with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
         assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
@@ -221,7 +226,7 @@ def test_un_par_que_introduce_vos_mismo_se_rechaza_y_el_otro_se_aplica(caplog):
 
 def test_un_par_cuyo_original_no_listo_el_juez_se_descarta(caplog):
     otro = "Mercurio en Géminis"
-    cliente = ClienteFalso(_juez(FRAG), _reemplazos((otro, "Mercurio en Cáncer"), (FRAG, FRAG_OK)))
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((otro, "Mercurio en Cáncer"), (FRAG, FRAG_OK)), _juez())
     with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
         assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
     resumen = [r.getMessage() for r in caplog.records if "listados=" in r.getMessage()][0]
@@ -255,7 +260,7 @@ def test_un_par_con_salto_de_linea_se_descarta():
     ],
 )
 def test_formas_prohibidas_segun_el_trato(trato, corregido, rechazado):
-    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, corregido)))
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, corregido)), _juez())
     resultado = revisar_trato(TEXTO, trato, "es", cliente)
     assert resultado == (TEXTO if rechazado else TEXTO.replace(FRAG, corregido))
 
@@ -311,3 +316,108 @@ def test_error_del_llm_en_la_reparacion_devuelve_el_original_y_loguea(caplog):
     with caplog.at_level(logging.WARNING, logger="interpret.revision_trato"):
         assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
     assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
+# --- marcas inclusivas: rechazadas en todos los tratos ---
+
+
+@pytest.mark.parametrize("trato", ["femenino", "masculino", "neutro"])
+@pytest.mark.parametrize(
+    ("original", "corregido"),
+    [
+        ("sentirte confundida", "sentirte confundido/a"),
+        ("sentirte confundida", "sentirte confundid@"),
+        ("sentirte confundida", "sentirte confundidx"),
+        ("sentirte confundida", "sentirlo con todxs"),
+    ],
+)
+def test_marcas_inclusivas_se_rechazan(trato, original, corregido):
+    """Medido en staging: «sentirte confundida» → «sentirte confundido/a»."""
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)))
+    assert revisar_trato(TEXTO, trato, "es", cliente) == TEXTO
+
+
+def test_una_palabra_en_x_que_ya_estaba_en_el_original_no_se_rechaza():
+    texto = TEXTO.replace("estímulo", "estímulo del relax")
+    original = "del relax, y vas a preguntarte"
+    corregido = "del relax, y te vas a preguntar"
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
+    assert revisar_trato(texto, "neutro", "es", cliente) == texto.replace(original, corregido)
+
+
+# --- segunda vuelta acotada ---
+
+CONF = "sentirte confundida ante"
+CONF_OK = "sentir confusión ante"
+ARMADO = "cómo estás armado: la manera"
+ARMADO_OK = "cómo te armaste: la manera"
+ARMADO_DENTRO = "cómo estás armado por dentro: la manera"
+
+
+def test_una_segunda_vuelta_corrige_lo_que_quedo(caplog):
+    cliente = ClienteFalso(
+        _juez(FRAG, ARMADO),
+        # Medido en staging: la primera reparación agregó palabras y dejó el género.
+        _reemplazos((FRAG, FRAG_OK), (ARMADO, ARMADO_DENTRO)),
+        _juez(ARMADO_DENTRO),
+        _reemplazos((ARMADO_DENTRO, ARMADO_OK)),
+    )
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
+    assert resultado == TEXTO.replace(FRAG, FRAG_OK).replace(ARMADO, ARMADO_OK)
+    assert len(cliente.llamadas) == 4
+    vueltas = [r.getMessage() for r in caplog.records if "listados=" in r.getMessage()]
+    assert "vuelta=1" in vueltas[0] and "vuelta=2" in vueltas[1]
+
+
+def test_la_segunda_reparacion_tampoco_toca_nada_fuera_de_los_fragmentos():
+    cliente = ClienteFalso(
+        _juez(FRAG),
+        _reemplazos((FRAG, FRAG_OK)),
+        _juez(CONF),
+        _reemplazos((CONF, CONF_OK), ("Marte en Aries", "Marte en Tauro")),
+    )
+    resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
+    assert resultado == TEXTO.replace(FRAG, FRAG_OK).replace(CONF, CONF_OK)
+
+
+def test_se_corta_despues_de_dos_vueltas():
+    """Aunque en la segunda vuelta se aplique algo, no hay un tercer juez:
+    el cliente falso levanta si se le pide una llamada de más."""
+    cliente = ClienteFalso(
+        _juez(FRAG),
+        _reemplazos((FRAG, FRAG_OK)),
+        _juez(CONF),
+        _reemplazos((CONF, CONF_OK)),
+    )
+    resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
+    assert resultado == TEXTO.replace(FRAG, FRAG_OK).replace(CONF, CONF_OK)
+    assert len(cliente.llamadas) == 4
+
+
+def test_sin_pares_aplicados_no_hay_segunda_vuelta():
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG)))
+    assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
+    assert len(cliente.llamadas) == 2
+
+
+def test_segundo_juez_vacio_no_repara_mas():
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)), _juez())
+    assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
+    assert len(cliente.llamadas) == 3
+
+
+def test_si_la_segunda_vuelta_falla_queda_lo_de_la_primera(caplog):
+    error = anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com"))
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)), error)
+    with caplog.at_level(logging.WARNING, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
+def test_el_system_de_la_reparacion_explica_que_agregar_palabras_no_corrige():
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG)))
+    revisar_trato(TEXTO, "neutro", "es", cliente)
+    system = _system(cliente.llamadas[1])
+    assert "estás hecho" in system and "te armaste" in system
+    assert "barras" in system

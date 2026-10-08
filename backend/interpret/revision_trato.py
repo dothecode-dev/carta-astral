@@ -44,6 +44,12 @@ _IDIOMAS_CON_GENERO = ("es", "pt")
 # El juez sólo devuelve una lista corta de fragmentos.
 JUEZ_MAX_TOKENS = 1000
 
+# Vueltas de juez + reparación por sección. Medido en staging: una reparación
+# a veces deja el género («estás armado» → «estás armado por dentro»); una
+# segunda vuelta mira el texto ya reparado. Más no: cada vuelta son dos
+# llamadas, y lo que dos no corrigen se queda como estaba.
+MAX_VUELTAS = 2
+
 # La reparación devuelve sólo pares cortos (un fragmento de pocas palabras y
 # su corrección), no el texto: 2000 alcanza para decenas de pares, más de los
 # que el juez lista en una sección.
@@ -110,7 +116,13 @@ _SYSTEM_REPARACION = (
     "alrededor para que sepas a quién se refiere. Para cada fragmento devolvé un par: "
     "«original», el fragmento copiado EXACTAMENTE como te lo pasé, y «corregido», el mismo "
     "fragmento reformulado lo mínimo para que quede {trato}. Corregí sólo lo que está dentro "
-    "del fragmento; el contexto es para entender, no para cambiar. Respondé sólo con un JSON "
+    "del fragmento; el contexto es para entender, no para cambiar.\n\n"
+    "Corregir significa reformular para que la palabra con género DESAPAREZCA o cambie: "
+    "agregar palabras alrededor no corrige nada. Por ejemplo, «estás armado» → «estás armado "
+    "por dentro» no sirve (agrega palabras y deja el género), «estás armado» → «estás hecho» "
+    "tampoco (sigue con género); «estás armado» → «te armaste» o «tu forma de ser» sí sirve. "
+    "Nunca uses barras («confundido/a»), «x», «@» ni «e» como terminación inclusiva.\n\n"
+    "Respondé sólo con un JSON "
     'de la forma {{"reemplazos": [{{"original": "...", "corregido": "..."}}]}}.\n\n'
     "Cómo reformular:\n{guia}"
 )
@@ -184,6 +196,20 @@ def _con_contexto(texto: str, fragmento: str) -> str:
     return f"- fragmento: «{fragmento}»\n  contexto: «…{antes}[[{fragmento}]]{despues}…»"
 
 
+# Marcas «inclusivas» que nunca van en el informe, en ningún trato: barra entre
+# letras («confundido/a», medido en staging), arroba, o una palabra terminada
+# en x/xs («todxs») que no estaba ya en el original («relax» sí puede estar).
+_BARRA_ENTRE_LETRAS = re.compile(r"[^\W\d_]/[^\W\d_]")
+_PALABRA_EN_X = re.compile(r"\b\w+xs?\b", re.IGNORECASE)
+
+
+def _marca_inclusiva(original: str, corregido: str) -> bool:
+    if "@" in corregido or _BARRA_ENTRE_LETRAS.search(corregido):
+        return True
+    previas = {p.lower() for p in _PALABRA_EN_X.findall(original)}
+    return any(p.lower() not in previas for p in _PALABRA_EN_X.findall(corregido))
+
+
 def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[str], clave: str) -> str | None:
     """Por qué un par no se aplica, o None si se aplica. Los motivos son
     claves fijas: van al log como contadores, nunca el texto."""
@@ -201,6 +227,8 @@ def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[
         # de línea cruza párrafos o un título, y corregirlo podría tocar la
         # estructura markdown (lo que antes cuidaba el chequeo de encabezados).
         return "salto_de_linea"
+    if _marca_inclusiva(original, corregido):
+        return "marca_inclusiva"
     if _FORMAS_PROHIBIDAS[clave].search(corregido):
         return "forma_prohibida"
     return None
@@ -208,12 +236,27 @@ def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[
 
 def revisar_trato(texto: str, trato: str, lang: str, client) -> str:
     """Devuelve `texto` con el trato corregido, o `texto` tal cual si no hay
-    nada que corregir o si la revisión no se puede hacer con garantías."""
+    nada que corregir o si la revisión no se puede hacer con garantías.
+
+    Hasta `MAX_VUELTAS` vueltas de juez + reparación: la segunda sólo corre
+    si la primera aplicó algo, y el juez mira el texto ya reparado. Una
+    vuelta que falla deja el texto como estaba al empezarla (la primera, ya
+    verificada par por par, se conserva)."""
     if lang not in _IDIOMAS_CON_GENERO:
         return texto
     clave = _clave(trato)
-    descripcion = describir_trato(trato)
+    resultado = texto
+    for vuelta in range(1, MAX_VUELTAS + 1):
+        resultado, aplicados = _vuelta(resultado, clave, lang, client, vuelta)
+        if not aplicados:
+            break
+    return resultado
 
+
+def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str, int]:
+    """Un juez y, si lista algo, una reparación. Devuelve el texto (reparado
+    o tal cual) y cuántos pares se aplicaron."""
+    descripcion = describir_trato(clave)
     system_juez = [{"type": "text", "text": _SYSTEM_JUEZ.format(trato=descripcion, que_listar=_QUE_LISTAR[clave])}]
     try:
         crudo = _stream_text(
@@ -223,25 +266,28 @@ def revisar_trato(texto: str, trato: str, lang: str, client) -> str:
         )
         fragmentos = _parsear_fragmentos(crudo)
     except InterpretationError as exc:
-        logger.warning("revisión del trato: falló el juez, se deja el texto: trato=%s lang=%s error=%s", clave, lang, exc)
-        return texto
+        logger.warning(
+            "revisión del trato: falló el juez, se deja el texto: vuelta=%s trato=%s lang=%s error=%s",
+            vuelta, clave, lang, exc,
+        )
+        return texto, 0
     except ValueError as exc:  # json.JSONDecodeError es ValueError
         logger.warning(
-            "revisión del trato: el juez no devolvió JSON válido, se deja el texto: trato=%s lang=%s error=%s",
-            clave, lang, exc,
+            "revisión del trato: el juez no devolvió JSON válido, se deja el texto: vuelta=%s trato=%s lang=%s error=%s",
+            vuelta, clave, lang, exc,
         )
-        return texto
+        return texto, 0
 
     # Un fragmento que no está en el texto es una invención del juez: no hay
     # nada que reparar ahí y pedirlo sólo invita a la reparación a tocar otra cosa.
     presentes = [f for f in dict.fromkeys(fragmentos) if f and f in texto]
     if len(presentes) < len(fragmentos):
         logger.info(
-            "revisión del trato: el juez listó fragmentos que no están en el texto: descartados=%s",
-            len(fragmentos) - len(presentes),
+            "revisión del trato: el juez listó fragmentos que no están en el texto: vuelta=%s descartados=%s",
+            vuelta, len(fragmentos) - len(presentes),
         )
     if not presentes:
-        return texto
+        return texto, 0
 
     system_reparacion = [{
         "type": "text",
@@ -257,17 +303,17 @@ def revisar_trato(texto: str, trato: str, lang: str, client) -> str:
         pares = _parsear_reemplazos(crudo)
     except InterpretationError as exc:
         logger.warning(
-            "revisión del trato: falló la reparación, se deja el texto: trato=%s lang=%s fragmentos=%s error=%s",
-            clave, lang, len(presentes), exc,
+            "revisión del trato: falló la reparación, se deja el texto: vuelta=%s trato=%s lang=%s fragmentos=%s error=%s",
+            vuelta, clave, lang, len(presentes), exc,
         )
-        return texto
+        return texto, 0
     except ValueError as exc:  # json.JSONDecodeError es ValueError
         logger.warning(
             "revisión del trato: la reparación no devolvió JSON válido, se deja el texto: "
-            "trato=%s lang=%s fragmentos=%s error=%s",
-            clave, lang, len(presentes), exc,
+            "vuelta=%s trato=%s lang=%s fragmentos=%s error=%s",
+            vuelta, clave, lang, len(presentes), exc,
         )
-        return texto
+        return texto, 0
 
     listados = set(presentes)
     rechazos: Counter[str] = Counter()
@@ -285,7 +331,7 @@ def revisar_trato(texto: str, trato: str, lang: str, client) -> str:
     nivel = logging.WARNING if rechazos else logging.INFO
     logger.log(
         nivel,
-        "revisión del trato: listados=%s aplicados=%s rechazados=%s %s trato=%s lang=%s",
-        len(presentes), aplicados, sum(rechazos.values()), detalle, clave, lang,
+        "revisión del trato: vuelta=%s listados=%s aplicados=%s rechazados=%s %s trato=%s lang=%s",
+        vuelta, len(presentes), aplicados, sum(rechazos.values()), detalle, clave, lang,
     )
-    return resultado
+    return resultado, aplicados
