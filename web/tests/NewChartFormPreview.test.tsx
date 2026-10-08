@@ -131,6 +131,83 @@ describe("sin cuenta", () => {
     expect(screen.getByText("guardada")).toBeInTheDocument();
   });
 
+  /** Un backend de lectura anónima con memoria: el primer pedido se escribe;
+   *  cualquier otro mientras tanto es «usado» (C1). `lista()` la termina. */
+  function backendDeLectura(fetchMock: ReturnType<typeof vi.fn>) {
+    let primero: string | null = null;
+    let lista = false;
+    fetchMock.mockImplementation((url: string, init?: { method?: string; body?: string }) => {
+      const r = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+      if (url !== "/api/lectura-anonima") return Promise.reject(new Error(`inesperado: ${url}`));
+      if (init?.method === "POST") {
+        const { pedido } = JSON.parse(init.body!) as { pedido: string };
+        primero ??= pedido;
+        return pedido === primero ? r(202, { estado: "generando" }) : r(409, { motivo: "usado" });
+      }
+      return lista
+        ? r(200, { estado: "lista", texto: "la lectura de Ana", lang: "es", disclaimer: "", pedido: primero })
+        : r(200, { estado: "generando", pedido: primero });
+    });
+    return { lista: () => { lista = true; } };
+  }
+
+  // C1 + I1 (final review): pide la de A, vuelve, corrige y pide la de B.
+  it("la lectura pedida para A nunca aparece ni se guarda como la de B, y queda guardada con A", async () => {
+    render(<NewChartForm locale="es" dict={dict} />);
+    fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Ana" } });
+    await completarYEnviar(fetchMock, CALCULADA);
+    const backend = backendDeLectura(fetchMock);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.navNew })); });
+
+    // Corrige la hora y recalcula: otra carta, en el mismo navegador.
+    fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Bea" } });
+    fireEvent.change(screen.getByLabelText(t.time), { target: { value: "19:30" } });
+    fetchMock.mockResolvedValueOnce(CALCULADA);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.submit })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
+    expect(screen.getByRole("status")).toHaveTextContent(t.lecturaUsada);
+
+    backend.lista();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(screen.queryByText("la lectura de Ana")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent(t.lecturaUsada);
+    const guardada = JSON.parse(localStorage.getItem("astra-lectura-anonima")!);
+    expect(guardada.texto).toBe("la lectura de Ana");
+    expect(guardada.datos).toMatchObject({ name: "Ana", time: null });
+
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.navNew })); });
+    expect(screen.getByRole("button", { name: "Ver tu lectura de Ana" })).toBeInTheDocument();
+  });
+
+  it("volver mientras se escribe: la guarda de fondo y ofrece verla sin recargar", async () => {
+    render(<NewChartForm locale="es" dict={dict} />);
+    fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Ana" } });
+    await completarYEnviar(fetchMock, CALCULADA);
+    const backend = backendDeLectura(fetchMock);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.navNew })); });
+    expect(screen.queryByRole("button", { name: /Ver tu lectura de/ })).toBeNull();
+
+    backend.lista();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    fireEvent.click(screen.getByRole("button", { name: "Ver tu lectura de Ana" }));
+    expect(screen.getByText("la lectura de Ana")).toBeInTheDocument();
+  });
+
+  it("después de leerla, al volver ofrece verla otra vez", async () => {
+    render(<NewChartForm locale="es" dict={dict} />);
+    fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Ana" } });
+    await completarYEnviar(fetchMock, CALCULADA);
+    const backend = backendDeLectura(fetchMock);
+    backend.lista();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(screen.getByText("la lectura de Ana")).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.navNew })); });
+    expect(screen.getByRole("button", { name: "Ver tu lectura de Ana" })).toBeInTheDocument();
+  });
+
   it("si el techo por IP corta, avisa en vez de quedarse mudo", async () => {
     render(<NewChartForm locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, { ok: false, status: 429, json: async () => ({}) });

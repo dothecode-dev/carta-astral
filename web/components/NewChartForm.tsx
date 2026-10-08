@@ -91,13 +91,16 @@ export function NewChartForm({
   const lectura = useLecturaAnonima();
   // La lectura breve guardada en este navegador (RF8). Se lee en un efecto:
   // `localStorage` no existe en el servidor y leerlo en el render rompería la
-  // hidratación.
+  // hidratación. Se relee cada vez que el hook guarda una —también la que
+  // termina de fondo después de que la persona volvió al formulario—, así
+  // «Ver tu lectura de …» aparece sin recargar.
   const [guardada, setGuardada] = useState<LecturaGuardada | null>(null);
+  const { guardadas } = lectura;
   useEffect(() => {
     if (signedIn) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setGuardada(leerLectura());
-  }, [signedIn]);
+  }, [signedIn, guardadas]);
 
   // Vuelve del login con una carta que ya vio: se la guardamos y la llevamos a
   // ella. El `sessionStorage` se limpia ANTES de crear nada —y hay un guard de
@@ -259,6 +262,7 @@ export function NewChartForm({
         onReintentar={pedirLectura}
         onVolver={() => {
           lectura.reiniciar();
+          if (!signedIn) setGuardada(leerLectura());
           setPreview(null);
           setErrorCompra(null);
         }}

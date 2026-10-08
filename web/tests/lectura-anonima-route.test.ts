@@ -28,6 +28,14 @@ describe("POST /api/lectura-anonima", () => {
     expect(res.headers.get("set-cookie")).toContain("astra_lectura=tok");
   });
 
+  it("reenvía el pedido del cuerpo al backend", async () => {
+    callApi.mockResolvedValue({ token: "tok", estado: "generando" });
+    await POST(pedido({ lang: "es", pedido: "00000000-0000-4000-8000-000000000001" }));
+    expect(JSON.parse(callApi.mock.calls[0][1].body)).toMatchObject({
+      pedido: "00000000-0000-4000-8000-000000000001",
+    });
+  });
+
   it("reenvía el token de la cookie en el header", async () => {
     cookieActual = "viejo";
     callApi.mockResolvedValue({ token: "viejo", estado: "generando" });
@@ -76,8 +84,9 @@ describe("GET /api/lectura-anonima", () => {
 
   it("con cookie devuelve lo del backend", async () => {
     cookieActual = "tok";
-    callApi.mockResolvedValue({ estado: "lista", texto: "t", lang: "es", disclaimer: "d" });
+    callApi.mockResolvedValue({ estado: "lista", texto: "t", lang: "es", disclaimer: "d", pedido: "p1" });
     const res = await GET();
-    expect(await res.json()).toEqual({ estado: "lista", texto: "t", lang: "es", disclaimer: "d" });
+    // El pedido vuelve tal cual: la web sólo acepta la lectura de SU pedido.
+    expect(await res.json()).toEqual({ estado: "lista", texto: "t", lang: "es", disclaimer: "d", pedido: "p1" });
   });
 });

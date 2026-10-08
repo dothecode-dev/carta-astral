@@ -33,131 +33,207 @@ const REINTENTOS_OCUPADO = 3;
 
 type Motivo = "modelo" | "ip" | "cupo" | "ocupado" | "mantenimiento" | "timeout";
 
+/** Un pedido de lectura, con TODO lo que necesita para terminar solo: la carta
+ *  y los datos con que se pidió quedan acá adentro, no en el estado de la
+ *  pantalla. Así, si la persona vuelve al formulario mientras se escribe, la
+ *  espera sigue «de fondo» y guarda la lectura con SU carta, no con la que esté
+ *  en pantalla en ese momento (final review I1). */
+type Pedido = {
+  /** El id que viaja al backend: sólo se acepta una lectura con este id (C1). */
+  id: string;
+  cuerpo: object;
+  carta: CartaDibujable;
+  lang: Locale;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
 export function useLecturaAnonima() {
   const [estado, setEstado] = useState<EstadoLectura>({ tipo: "nada" });
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cuántas lecturas se guardaron en este navegador desde que se montó: quien
+  // muestra «Ver tu lectura de …» la mira para releer el storage.
+  const [guardadas, setGuardadas] = useState(0);
   const vivo = useRef(true);
-  // Cada pedido nuevo, `reiniciar` y `mostrar` abren una generación: todo lo
-  // que quedó corriendo de la anterior (un timer, un `fetch` en vuelo) la
-  // compara al volver y se descarta. Sin esto, la lectura de una persona podía
-  // aparecer sobre la carta de otra, y dos ciclos de sondeo correr a la vez.
-  const gen = useRef(0);
+  // El pedido que PINTA la pantalla. Todo lo que vuelve (un timer, un `fetch`
+  // en vuelo) compara su pedido con éste: si ya no es el actual, sigue de
+  // fondo y no toca el estado. Sin esto, la lectura de una persona podía
+  // aparecer sobre la carta de otra.
+  const actual = useRef<Pedido | null>(null);
+  // Los pedidos con algo pendiente (de frente o de fondo), para cortarlos al
+  // desmontar.
+  const vivos = useRef(new Set<Pedido>());
   // Las dos funciones se llaman a sí mismas desde un timer: la referencia
   // evita que una `useCallback` se nombre dentro de su propia definición.
-  const consultarRef = useRef<(datos: object, carta: CartaDibujable, intento: number, inicio: number, g: number) => void>(() => {});
-  const pedirRef = useRef<(c: object, k: CartaDibujable, l: Locale, r: number, g: number) => Promise<void>>(
-    async () => {},
-  );
+  const consultarRef = useRef<(p: Pedido, intento: number, inicio: number) => void>(() => {});
+  const pedirRef = useRef<(p: Pedido, reintento: number) => Promise<void>>(async () => {});
 
   useEffect(() => {
     vivo.current = true;
+    const pendientes = vivos.current;
     return () => {
       vivo.current = false;
-      if (timer.current) clearTimeout(timer.current);
+      for (const p of pendientes) if (p.timer) clearTimeout(p.timer);
+      pendientes.clear();
     };
   }, []);
 
-  const fallar = useCallback((motivo: Motivo, siguiente: EstadoLectura = { tipo: "fallida" }) => {
-    track("lectura_anonima_fallida", { motivo });
-    setEstado(siguiente);
+  const deFrente = (p: Pedido) => vivo.current && actual.current === p;
+
+  const terminar = useCallback((p: Pedido) => {
+    if (p.timer) clearTimeout(p.timer);
+    p.timer = null;
+    vivos.current.delete(p);
+    if (actual.current === p) actual.current = null;
   }, []);
 
+  /** Termina el pedido; si sigue de frente, además muestra cómo terminó. */
+  const fallar = useCallback(
+    (p: Pedido, motivo: Motivo, siguiente: EstadoLectura = { tipo: "fallida" }) => {
+      const pinta = deFrente(p);
+      terminar(p);
+      track("lectura_anonima_fallida", { motivo });
+      if (pinta) setEstado(siguiente);
+    },
+    [terminar],
+  );
+
   const consultar = useCallback(
-    (datos: object, carta: CartaDibujable, intento: number, inicio: number, g: number) => {
+    (p: Pedido, intento: number, inicio: number) => {
       // La espera nunca pasa del corte: sin el tope, el último sondeo caía
       // hasta 4 s después de los 60 s y el aviso llegaba tarde.
       const espera = Math.min(
         ESPERAS_MS[intento] ?? ESPERA_MAX_MS,
         Math.max(0, inicio + CORTE_MS + 1 - Date.now()),
       );
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(async () => {
-        if (!vivo.current || g !== gen.current) return;
-        if (Date.now() - inicio > CORTE_MS) return fallar("timeout");
+      if (p.timer) clearTimeout(p.timer);
+      p.timer = setTimeout(async () => {
+        p.timer = null;
+        if (!vivo.current) return;
+        if (Date.now() - inicio > CORTE_MS) return fallar(p, "timeout");
         try {
           const r = await fetch("/api/lectura-anonima");
-          const cuerpo = (await r.json()) as { estado?: string; texto?: string; lang?: Locale; disclaimer?: string };
-          if (!vivo.current || g !== gen.current) return;
-          if (r.ok && cuerpo.estado === "lista" && cuerpo.texto && cuerpo.lang) {
-            const lista = { texto: cuerpo.texto, lang: cuerpo.lang, disclaimer: cuerpo.disclaimer ?? "" };
-            guardarLectura({ carta, datos: datos as DatosCarta, ...lista });
-            track("lectura_anonima_generada", {});
-            setEstado({ tipo: "lista", ...lista });
+          const cuerpo = (await r.json()) as {
+            estado?: string; texto?: string; lang?: Locale; disclaimer?: string; pedido?: string;
+          };
+          if (!vivo.current) return;
+          if (r.ok && cuerpo.pedido !== p.id) {
+            // Lo que hay en el servidor es de OTRO pedido (otra carta en este
+            // navegador): nunca se muestra ni se guarda como de ésta.
+            const pinta = deFrente(p);
+            terminar(p);
+            if (pinta) {
+              track("lectura_anonima_usada", {});
+              setEstado({ tipo: "usada" });
+            }
             return;
           }
-          if (r.ok && cuerpo.estado === "fallida") return fallar("modelo");
-          if (!r.ok) return fallar("modelo");
-          consultarRef.current(datos, carta, intento + 1, inicio, g);
+          if (r.ok && cuerpo.estado === "lista" && cuerpo.texto && cuerpo.lang) {
+            const lista = { texto: cuerpo.texto, lang: cuerpo.lang, disclaimer: cuerpo.disclaimer ?? "" };
+            const pinta = deFrente(p);
+            terminar(p);
+            guardarLectura({ carta: p.carta, datos: p.cuerpo as DatosCarta, ...lista });
+            track("lectura_anonima_generada", {});
+            setGuardadas((n) => n + 1);
+            if (pinta) setEstado({ tipo: "lista", ...lista });
+            return;
+          }
+          if (r.ok && cuerpo.estado === "fallida") return fallar(p, "modelo");
+          if (!r.ok) return fallar(p, "modelo");
+          consultarRef.current(p, intento + 1, inicio);
         } catch {
-          if (!vivo.current || g !== gen.current) return;
-          consultarRef.current(datos, carta, intento + 1, inicio, g);
+          if (!vivo.current) return;
+          consultarRef.current(p, intento + 1, inicio);
         }
       }, espera);
     },
-    [fallar],
+    [fallar, terminar],
   );
 
-  const pedir = useCallback(
-    async (cuerpo: object, carta: CartaDibujable, lang: Locale, reintento = 0, g?: number): Promise<void> => {
-      if (reintento === 0) {
-        gen.current += 1;
-        if (timer.current) clearTimeout(timer.current);
-        track("lectura_anonima_pedida", {});
-      }
-      const mia = g ?? gen.current;
-      setEstado({ tipo: "esperando", ocupado: reintento > 0 });
+  const enviar = useCallback(
+    async (p: Pedido, reintento: number): Promise<void> => {
+      if (deFrente(p)) setEstado({ tipo: "esperando", ocupado: reintento > 0 });
       let r: Response;
       try {
         r = await fetch("/api/lectura-anonima", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...cuerpo, lang }),
+          body: JSON.stringify({ ...p.cuerpo, lang: p.lang, pedido: p.id }),
         });
       } catch {
-        if (!vivo.current || mia !== gen.current) return;
-        return fallar("modelo");
+        if (!vivo.current) return;
+        return fallar(p, "modelo");
       }
-      if (!vivo.current || mia !== gen.current) return;
-      if (r.status === 202) return consultar(cuerpo, carta, 0, Date.now(), mia);
+      if (!vivo.current) return;
+      // Un 202 se espera igual aunque la persona ya haya vuelto atrás: la
+      // lectura gratis se está escribiendo y se guarda de fondo.
+      if (r.status === 202) return consultar(p, 0, Date.now());
       const { motivo } = (await r.json().catch(() => ({}))) as { motivo?: string };
-      if (!vivo.current || mia !== gen.current) return;
+      if (!vivo.current) return;
+      if (!deFrente(p)) {
+        // Volvió atrás antes de que se escribiera nada: no se gastó la lectura
+        // y no hay a quién avisarle.
+        terminar(p);
+        return;
+      }
       if (r.status === 409) {
+        terminar(p);
         track("lectura_anonima_usada", {});
         return setEstado({ tipo: "usada" });
       }
-      if (r.status === 429) return fallar("ip", { tipo: "sin_cupo" });
-      if (motivo === "cupo") return fallar("cupo", { tipo: "sin_cupo" });
-      if (motivo === "mantenimiento") return fallar("mantenimiento", { tipo: "mantenimiento" });
+      if (r.status === 429) return fallar(p, "ip", { tipo: "sin_cupo" });
+      if (motivo === "cupo") return fallar(p, "cupo", { tipo: "sin_cupo" });
+      if (motivo === "mantenimiento") return fallar(p, "mantenimiento", { tipo: "mantenimiento" });
       if (motivo === "ocupado") {
-        if (reintento >= REINTENTOS_OCUPADO) return fallar("ocupado");
+        if (reintento >= REINTENTOS_OCUPADO) return fallar(p, "ocupado");
         setEstado({ tipo: "esperando", ocupado: true });
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => {
-          if (vivo.current && mia === gen.current) void pedirRef.current(cuerpo, carta, lang, reintento + 1, mia);
+        if (p.timer) clearTimeout(p.timer);
+        p.timer = setTimeout(() => {
+          p.timer = null;
+          if (!vivo.current) return;
+          // Un «ocupado» no gastó nada: si ya volvió atrás, no se reintenta.
+          if (!deFrente(p)) return terminar(p);
+          void pedirRef.current(p, reintento + 1);
         }, REINTENTO_OCUPADO_MS);
         return;
       }
-      fallar("modelo");
+      fallar(p, "modelo");
     },
-    [consultar, fallar],
+    [consultar, fallar, terminar],
+  );
+
+  const pedir = useCallback(
+    async (cuerpo: object, carta: CartaDibujable, lang: Locale): Promise<void> => {
+      // Un pedido de frente sigue en curso (un doble clic): no se abre otro,
+      // que el backend rechazaría como de otra carta.
+      if (actual.current) return;
+      const p: Pedido = { id: crypto.randomUUID(), cuerpo, carta, lang, timer: null };
+      actual.current = p;
+      vivos.current.add(p);
+      track("lectura_anonima_pedida", {});
+      return enviar(p, 0);
+    },
+    [enviar],
   );
 
   useEffect(() => {
     consultarRef.current = consultar;
-    pedirRef.current = pedir;
-  }, [consultar, pedir]);
+    pedirRef.current = enviar;
+  }, [consultar, enviar]);
+
+  /** Lo que estaba de frente pasa a fondo: deja de pintar, pero si ya se está
+   *  escribiendo, termina y se guarda con su carta. */
+  const soltar = useCallback(() => {
+    actual.current = null;
+  }, []);
 
   const mostrar = useCallback((l: LecturaGuardada) => {
-    gen.current += 1;
-    if (timer.current) clearTimeout(timer.current);
+    soltar();
     setEstado({ tipo: "lista", texto: l.texto, lang: l.lang, disclaimer: l.disclaimer });
-  }, []);
+  }, [soltar]);
 
   const reiniciar = useCallback(() => {
-    gen.current += 1;
-    if (timer.current) clearTimeout(timer.current);
+    soltar();
     setEstado({ tipo: "nada" });
-  }, []);
+  }, [soltar]);
 
-  return { estado, pedir, mostrar, reiniciar };
+  return { estado, pedir, mostrar, reiniciar, guardadas };
 }
