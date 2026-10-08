@@ -1,8 +1,8 @@
 """La lectura breve sin cuenta (spec docs/2026-10-08-spec-lectura-anonima.md).
 
 Los datos de nacimiento NO se guardan: el hilo los recibe en memoria. En la
-caché queda `{estado, lang, iniciado, fecha_cupo[, texto]}` bajo el hash del
-token, 15 minutos como máximo, y el GET que entrega la lectura la borra.
+caché queda `{estado, lang, pedido, iniciado, fecha_cupo[, texto]}` bajo el
+hash del token, 15 minutos como máximo, y el GET que entrega la lectura la borra.
 Después vive sólo en el navegador. Una marca sin datos personales recuerda
 24 h que ese token ya usó su lectura gratis.
 
@@ -11,6 +11,12 @@ Orden de los chequeos de `pedir`, y por qué:
 El slot va antes de la IP para que un «ocupado» (que la web reintenta sola)
 no gaste el techo por IP; la IP va antes del cupo para no reservar un lugar
 que después hay que devolver.
+
+El `pedido` es un id que la web genera por cada vez que se aprieta «leer» (no
+es un dato personal). Con el mismo token, mientras una lectura se escribe, sólo
+el MISMO pedido recibe 202: otro pedido es otra carta —volvió atrás, corrigió
+la hora, o es otra persona en el mismo teléfono— y recibe 409. Sin esto la web
+recibía la lectura de la carta A y la mostraba y guardaba como la de B.
 """
 import datetime as dt
 import logging
@@ -108,18 +114,31 @@ def _soltar_slot(slot: int, h: str) -> None:
         cache.delete(_slot(slot))
 
 
+def _en_curso(entrada: dict | None, pedido: str) -> bool:
+    """True si ya se está escribiendo ESTE pedido (202 sin lanzar nada).
+    Si se está escribiendo otro, es otra carta: `Usado`."""
+    if entrada is None or entrada["estado"] != "generando" or _caida(entrada):
+        return False
+    if entrada.get("pedido") != pedido:
+        raise Usado()
+    return True
+
+
 def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
-          permitir: Callable[[], bool]) -> Pedido:
+          permitir: Callable[[], bool], *, pedido: str) -> Pedido:
     if mantenimiento.activo():
         raise Mantenimiento()
     token = token or secrets.token_urlsafe(32)
     h = hash_token(token)
     if cache.get(_marca(h)) is not None:
         raise Usado()
-    entrada = cache.get(_clave(h))
-    if entrada is not None and entrada["estado"] == "generando" and not _caida(entrada):
+    if _en_curso(cache.get(_clave(h)), pedido):
         return Pedido(token, "generando")
-    if not cache.add(_lock(h), 1, timeout=TTL_LOCK):
+    if not cache.add(_lock(h), pedido, timeout=TTL_LOCK):
+        # Otro POST del mismo token está adentro ahora mismo. Si es el mismo
+        # pedido (un reintento), espera su lectura; si es otro, es otra carta.
+        if cache.get(_lock(h)) != pedido:
+            raise Usado()
         return Pedido(token, "generando")
     try:
         # Se vuelve a leer ya con el lock: entre la lectura de arriba y el lock
@@ -127,7 +146,7 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
         if cache.get(_marca(h)) is not None:
             raise Usado()
         entrada = cache.get(_clave(h))
-        if entrada is not None and entrada["estado"] == "generando" and not _caida(entrada):
+        if _en_curso(entrada, pedido):
             return Pedido(token, "generando")
         slot = _tomar_slot(h)
         if slot is None:
@@ -152,11 +171,11 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
                 raise SinCupo()
             iniciado = time.time()
             cache.set(_clave(h), {
-                "estado": "generando", "lang": lang, "iniciado": iniciado,
-                "fecha_cupo": fecha.isoformat(),
+                "estado": "generando", "lang": lang, "pedido": pedido,
+                "iniciado": iniciado, "fecha_cupo": fecha.isoformat(),
             }, TTL_ENTRADA)
             logger.info("lectura anónima pedida (lang=%s)", lang)
-            _arrancar_en_hilo(h, chart_data, lang, trato, slot, fecha, iniciado)
+            _arrancar_en_hilo(h, chart_data, lang, trato, slot, fecha, iniciado, pedido)
         except BaseException:
             # Cualquier salida antes de que el hilo tenga el slot y el lugar
             # (los rechazos esperados incluidos) los suelta; si el hilo ya
@@ -171,16 +190,18 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
 
 
 def generar(h: str, chart_data: dict, lang: str, trato: str, slot: int,
-            fecha: dt.date, iniciado: float) -> None:
+            fecha: dt.date, iniciado: float, pedido: str) -> None:
     try:
         texto = informe_service.escribir_breve(chart_data, lang, trato, _build_client())
     except Exception:
         logger.exception("lectura anónima fallida (lang=%s)", lang)
         _devolver_una_vez(h, iniciado, fecha)
-        cache.set(_clave(h), {"estado": "fallida", "lang": lang}, TTL_ENTRADA)
+        cache.set(_clave(h), {"estado": "fallida", "lang": lang, "pedido": pedido}, TTL_ENTRADA)
     else:
-        cache.set(_clave(h), {"estado": "lista", "lang": lang, "texto": texto}, TTL_ENTRADA)
+        # La marca va ANTES que la lista: si no, un POST que cae entre las dos
+        # escrituras no ve marca ni `generando` y lanza otra lectura gratis.
         cache.set(_marca(h), 1, TTL_MARCA)
+        cache.set(_clave(h), {"estado": "lista", "lang": lang, "pedido": pedido, "texto": texto}, TTL_ENTRADA)
         logger.info("lectura anónima lista (lang=%s)", lang)
     finally:
         _soltar_slot(slot, h)
@@ -205,12 +226,14 @@ def estado(token: str) -> dict | None:
         return None
     if _caida(entrada):
         _devolver_una_vez(h, entrada["iniciado"], dt.date.fromisoformat(entrada["fecha_cupo"]))
-        cache.set(_clave(h), {"estado": "fallida", "lang": entrada["lang"]}, TTL_ENTRADA)
-        return {"estado": "fallida"}
+        cache.set(_clave(h), {
+            "estado": "fallida", "lang": entrada["lang"], "pedido": entrada.get("pedido"),
+        }, TTL_ENTRADA)
+        return {"estado": "fallida", "pedido": entrada.get("pedido")}
     if entrada["estado"] == "lista":
         cache.delete(_clave(h))
         return {
             "estado": "lista", "texto": entrada["texto"], "lang": entrada["lang"],
-            "disclaimer": DISCLAIMERS[entrada["lang"]],
+            "disclaimer": DISCLAIMERS[entrada["lang"]], "pedido": entrada.get("pedido"),
         }
-    return {"estado": entrada["estado"]}
+    return {"estado": entrada["estado"], "pedido": entrada.get("pedido")}

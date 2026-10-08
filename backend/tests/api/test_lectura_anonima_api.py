@@ -11,6 +11,8 @@ CARTA = {
     "name": "Ceci", "date": "1976-05-31", "time": "19:30", "time_known": True,
     "lat": -34.516, "lng": -58.5, "place_label": "Florida, Buenos Aires, AR",
 }
+PEDIDO = "11111111-1111-4111-8111-111111111111"
+OTRO = "22222222-2222-4222-8222-222222222222"
 
 
 @pytest.fixture(autouse=True)
@@ -28,7 +30,7 @@ def _base(settings, monkeypatch):
 
 def _post(c, token=None, **extra):
     headers = {"HTTP_X_LECTURA_TOKEN": token} if token else {}
-    return c.post(URL, {**CARTA, "lang": "es", **extra}, format="json", **headers)
+    return c.post(URL, {**CARTA, "lang": "es", "pedido": PEDIDO, **extra}, format="json", **headers)
 
 
 def test_post_202_y_get_lista():
@@ -39,6 +41,7 @@ def test_post_202_y_get_lista():
     g = c.get(URL, HTTP_X_LECTURA_TOKEN=token)
     assert g.status_code == 200 and g.json()["texto"] == "breve"
     assert g.json()["lang"] == "es" and g.json()["disclaimer"]
+    assert g.json()["pedido"] == PEDIDO
     assert c.get(URL, HTTP_X_LECTURA_TOKEN=token).status_code == 404
 
 
@@ -115,3 +118,24 @@ def test_el_get_no_cuenta_para_la_ip():
     for _ in range(10):
         c.get(URL, HTTP_X_LECTURA_TOKEN=token)
     assert _post(c).status_code == 202
+
+
+@pytest.mark.parametrize("valor", [None, "", 123, "no-es-un-uuid", "A" * 36, "1" * 37, ["x"]])
+def test_pedido_invalido_o_ausente_400(valor):
+    extra = {} if valor is None else {"pedido": valor}
+    datos = {**CARTA, "lang": "es", **extra}
+    r = APIClient().post(URL, datos, format="json")
+    assert r.status_code == 400 and r.json()["motivo"] == "datos"
+
+
+def test_otro_pedido_mientras_genera_409_y_el_mismo_202(monkeypatch):
+    lanzados = []
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: lanzados.append(a))
+    c = APIClient()
+    token = _post(c).json()["token"]
+    r = _post(c, token, pedido=OTRO)
+    assert r.status_code == 409 and r.json()["motivo"] == "usado"
+    assert _post(c, token).status_code == 202
+    assert len(lanzados) == 1
+    g = c.get(URL, HTTP_X_LECTURA_TOKEN=token)
+    assert g.json() == {"estado": "generando", "pedido": PEDIDO}

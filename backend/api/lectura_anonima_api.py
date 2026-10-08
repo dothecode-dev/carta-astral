@@ -5,6 +5,7 @@ consulta y los reintentos por «ocupado». Se llama a mano desde `pedir`, sólo
 cuando el pedido va a escribir (spec 2026-10-08, RF13).
 """
 import logging
+import re
 
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -19,6 +20,10 @@ from api.serializers import serialize_chart_data
 from core.exceptions import CoreError
 
 logger = logging.getLogger(__name__)
+
+# El id que la web genera por cada pedido (`crypto.randomUUID()`). Se valida
+# como un string corto y acotado porque se guarda tal cual en la caché.
+_PEDIDO = re.compile(r"[0-9a-f-]{36}")
 
 _RESPUESTAS = {
     lectura_anonima.Mantenimiento: (503, "mantenimiento", "estamos actualizando el sitio, probá en unos minutos"),
@@ -41,6 +46,9 @@ class LecturaAnonimaView(APIView):
         try:
             if not isinstance(lang, str) or lang not in DISCLAIMERS:
                 raise ValueError("lang inválido")
+            pedido_id = datos.get("pedido")
+            if not isinstance(pedido_id, str) or not _PEDIDO.fullmatch(pedido_id):
+                raise ValueError("pedido inválido")
             trato = validar_trato(datos.get("trato"))
             carta = calcular(datos)
         except (KeyError, ValueError, CoreError) as exc:
@@ -54,6 +62,7 @@ class LecturaAnonimaView(APIView):
             pedido = lectura_anonima.pedir(
                 serialize_chart_data(carta.data), lang, trato, token,
                 permitir=lambda: ScopedRateThrottle().allow_request(request, self),
+                pedido=pedido_id,
             )
         except tuple(_RESPUESTAS) as exc:
             codigo, motivo, texto = _RESPUESTAS[type(exc)]
