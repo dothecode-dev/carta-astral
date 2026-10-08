@@ -9,6 +9,7 @@ import {
   borrarPedido,
   guardarLectura,
   guardarPedido,
+  leerLectura,
   leerPedido,
   type LecturaGuardada,
 } from "@/lib/lecturaLocal";
@@ -162,7 +163,7 @@ export function useLecturaAnonima() {
             const lista = { texto: cuerpo.texto, lang: cuerpo.lang, disclaimer: cuerpo.disclaimer ?? "" };
             const pinta = deFrente(p);
             terminar(p, true);
-            guardarLectura({ carta: p.carta, datos: p.cuerpo as DatosCarta, ...lista });
+            guardarLectura({ carta: p.carta, datos: p.cuerpo as DatosCarta, pedido: p.id, ...lista });
             void acusar(p.id);
             track("lectura_anonima_generada", {});
             setGuardadas((n) => n + 1);
@@ -170,6 +171,19 @@ export function useLecturaAnonima() {
             return;
           }
           if (r.ok && cuerpo.estado === "fallida") return fallar(p, "modelo");
+          if (r.status === 404) {
+            // Otra pestaña que esperaba el MISMO pedido ya la guardó y la
+            // acusó, y el servidor la borró: está en el storage compartido.
+            // Se muestra ésa; ya la contó la otra, acá no se cuenta de nuevo.
+            const otra = leerLectura();
+            if (otra?.pedido === p.id) {
+              const pinta = deFrente(p);
+              terminar(p);
+              setGuardadas((n) => n + 1);
+              if (pinta) setEstado({ tipo: "lista", texto: otra.texto, lang: otra.lang, disclaimer: otra.disclaimer });
+              return;
+            }
+          }
           if (!r.ok) return fallar(p, "modelo");
           consultarRef.current(p, intento + 1, limite);
         } catch {
@@ -244,6 +258,16 @@ export function useLecturaAnonima() {
       // Un pedido de frente sigue en curso (un doble clic): no se abre otro,
       // que el backend rechazaría como de otra carta.
       if (actual.current) return;
+      // La MISMA carta ya se está escribiendo de fondo (tras «Nueva carta» o
+      // una recarga): se la vuelve a traer al frente. Un pedido nuevo el
+      // backend lo rechazaría como «usada» mientras la lectura sigue llegando.
+      const mismos = JSON.stringify(cuerpo);
+      for (const v of vivos.current) {
+        if (JSON.stringify(v.cuerpo) !== mismos) continue;
+        actual.current = v;
+        setEstado({ tipo: "esperando", ocupado: false });
+        return;
+      }
       const previo = reintentable.current;
       reintentable.current = null;
       const id = previo && previo.carta === carta ? previo.id : crypto.randomUUID();

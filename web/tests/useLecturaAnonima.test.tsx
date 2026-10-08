@@ -425,6 +425,82 @@ describe("useLecturaAnonima", () => {
       expect(fetchMock.mock.calls.length).toBe(n);
     });
 
+    it("otra pestaña ya la guardó y acusó: el 404 muestra la guardada, no «fallida»", async () => {
+      fetchMock
+        .mockReturnValueOnce(res(202, { estado: "generando" }))
+        .mockImplementationOnce(() => {
+          // Mientras esta pestaña espera, la otra guarda la lectura y la acusa.
+          localStorage.setItem("astra-lectura-anonima", JSON.stringify({
+            carta: { firma: {} }, datos: { date: "A" }, texto: "t", lang: "es", disclaimer: "d",
+            pedido: P1, vence: Date.now() + 60_000,
+          }));
+          return res(404, {});
+        });
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(result.current.estado).toEqual({ tipo: "lista", texto: "t", lang: "es", disclaimer: "d" });
+      expect(track.mock.calls.map((c) => c[0])).not.toContain("lectura_anonima_fallida");
+      // La contó la otra pestaña: acá no se cuenta dos veces.
+      expect(track.mock.calls.map((c) => c[0])).not.toContain("lectura_anonima_generada");
+    });
+
+    it("un 404 sin lectura guardada de ese pedido sigue siendo «fallida»", async () => {
+      localStorage.setItem("astra-lectura-anonima", JSON.stringify({
+        carta: { firma: {} }, datos: { date: "Z" }, texto: "vieja", lang: "es", disclaimer: "d",
+        pedido: P2, vence: Date.now() + 60_000,
+      }));
+      fetchMock
+        .mockReturnValueOnce(res(202, { estado: "generando" }))
+        .mockReturnValueOnce(res(404, {}));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(result.current.estado).toEqual({ tipo: "fallida" });
+    });
+
+    it("la lectura guardada lleva el id de su pedido", async () => {
+      fetchMock
+        .mockReturnValueOnce(res(202, { estado: "generando" }))
+        .mockReturnValueOnce(res(200, LISTA_P1));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(guardada()).toMatchObject({ pedido: P1 });
+    });
+
+    it("tras recargar, pedir la MISMA carta adopta la espera retomada en vez de dar «usada»", async () => {
+      const P9 = "00000000-0000-4000-8000-000000000009";
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, pedido: P9, vence: Date.now() + 60_000 }));
+      fetchMock
+        .mockReturnValueOnce(res(200, { estado: "generando", pedido: P9 }))
+        .mockReturnValueOnce(res(200, { estado: "generando", pedido: P9 }))
+        .mockReturnValueOnce(res(200, { ...LISTA_P1, pedido: P9 }));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      // Otra instancia de la carta (recalculada), con los mismos datos.
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA_B, "es"); });
+      expect(posts(fetchMock)).toEqual([]);
+      expect(result.current.estado).toEqual({ tipo: "esperando", ocupado: false });
+      // El retomado consulta a los 0, 2 y 4 s más.
+      await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+      expect(result.current.estado).toEqual({ tipo: "lista", texto: "t", lang: "es", disclaimer: "d" });
+      expect(gets(fetchMock)).toBe(3);
+    });
+
+    it("tras «Nueva carta», pedir la MISMA carta adopta la espera de fondo", async () => {
+      fetchMock
+        .mockReturnValueOnce(res(202, { estado: "generando" }))
+        .mockReturnValueOnce(res(200, LISTA_P1));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      act(() => { result.current.reiniciar(); });
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA_B, "es"); });
+      expect(posts(fetchMock)).toHaveLength(1);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(result.current.estado).toEqual({ tipo: "lista", texto: "t", lang: "es", disclaimer: "d" });
+    });
+
     it("la espera retomada no bloquea pedir de frente otra carta", async () => {
       // El retomado no pasa por `randomUUID`: se le da un id que el mock no repite.
       const P9 = "00000000-0000-4000-8000-000000000009";

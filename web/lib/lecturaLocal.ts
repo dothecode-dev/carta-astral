@@ -20,6 +20,9 @@ export type LecturaGuardada = {
   texto: string;
   lang: Locale;
   disclaimer: string;
+  /** El pedido que la trajo: otra pestaña que esperaba el mismo la reconoce
+   *  acá cuando el servidor ya la entregó. Falta en las guardadas antes. */
+  pedido?: string;
   vence: number;
 };
 
