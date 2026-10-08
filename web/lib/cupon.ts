@@ -1,4 +1,5 @@
 import type { ProductoCatalogo } from "./catalogo";
+import { conQuery } from "./consultaBackend";
 import { normalizarCupon } from "./cuponForma";
 import { callApi } from "./session";
 
@@ -37,9 +38,13 @@ export type CuponRespuesta =
   | { valido: false; motivo: string };
 
 export async function fetchCupon(codigo: string, producto?: string): Promise<CuponRespuesta | null> {
-  const query = producto ? `?producto=${encodeURIComponent(producto)}` : "";
+  // Va en el path del backend: sin forma de código no sale de la web (un
+  // `..` sobrevive a `encodeURIComponent` y sube un nivel).
+  const normal = normalizarCupon(codigo);
+  if (!normal) return null;
+  const path = `/api/cupones/${encodeURIComponent(normal)}/`;
   try {
-    return await callApi<CuponRespuesta>(`/api/cupones/${encodeURIComponent(codigo)}/${query}`, {
+    return await callApi<CuponRespuesta>(producto ? conQuery(path, { producto }) : path, {
       auth: false,
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

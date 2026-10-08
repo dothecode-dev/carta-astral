@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi } from "@/lib/session";
+import { conQuery, langYTier, parametrosInvalidos } from "@/lib/consultaBackend";
 import { noExiste, uuidValido } from "@/lib/uuid";
 
 // Las secciones del informe que ya están escritas, con su texto, para leerlas
@@ -17,15 +18,13 @@ export async function GET(
 ) {
   const { id } = await params;
   if (!uuidValido(id)) return noExiste();
-  const url = new URL(request.url);
-  const lang = url.searchParams.get("lang") ?? "es";
-  // Sin default (RF20): adivinar el tier es sondear el producto equivocado.
-  const tier = url.searchParams.get("tier");
+  // Sin default de tier (RF20): adivinarlo es sondear el producto
+  // equivocado. Fuera de la lista, 400 sin llamar al backend.
+  const query = langYTier(new URL(request.url));
+  if (!query) return parametrosInvalidos();
 
   try {
-    const data = await callApi(
-      `/api/charts/${id}/interpretation/secciones/?lang=${lang}&tier=${tier}`,
-    );
+    const data = await callApi(conQuery(`/api/charts/${id}/interpretation/secciones/`, query));
     return NextResponse.json(data);
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 502;

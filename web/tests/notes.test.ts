@@ -240,8 +240,11 @@ describe("fetchNote", () => {
 
     await fetchNote("es", "a b&c");
 
+    // `URLSearchParams` codifica el espacio como `+`: lo que importa es que el
+    // CMS reciba el slug entero como un solo valor, sin parámetros de más.
     const [url] = fetchMock.mock.calls[0];
-    expect(url).toContain("slug=a%20b%26c");
+    expect(new URL(String(url)).searchParams.get("slug")).toBe("a b&c");
+    expect(new URL(String(url)).searchParams.has("c")).toBe(false);
   });
 });
 

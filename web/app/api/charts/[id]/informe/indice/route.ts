@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi } from "@/lib/session";
+import { conQuery, langValido, parametrosInvalidos } from "@/lib/consultaBackend";
 import { noExiste, uuidValido } from "@/lib/uuid";
 
 // El índice del informe completo (RF3): título de cada sección y, si ya hay
@@ -16,11 +17,11 @@ export async function GET(
 ) {
   const { id } = await params;
   if (!uuidValido(id)) return noExiste();
-  const url = new URL(request.url);
-  const lang = url.searchParams.get("lang") ?? "es";
+  const lang = new URL(request.url).searchParams.get("lang") ?? "es";
+  if (!langValido(lang)) return parametrosInvalidos();
 
   try {
-    const data = await callApi(`/api/charts/${id}/informe/indice/?lang=${lang}`);
+    const data = await callApi(conQuery(`/api/charts/${id}/informe/indice/`, { lang }));
     return NextResponse.json(data);
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 502;

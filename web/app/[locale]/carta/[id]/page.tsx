@@ -14,6 +14,7 @@ import { TratoCarta } from "@/components/TratoCarta";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
 import { fetchCatalogo, precioDe } from "@/lib/catalogo";
+import { conQuery } from "@/lib/consultaBackend";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import type { Derecho } from "@/lib/derechos";
 import { INTL_LOCALE, type Locale, getDict, isLocale } from "@/lib/i18n";
@@ -69,7 +70,7 @@ export default async function ChartPage({
   if (tiersAqui.length > 0) {
     const tier = tiersAqui.includes("largo") ? "largo" : "corto";
     try {
-      reading = await callApi(`/api/charts/${id}/interpretation/?lang=${locale}&tier=${tier}`);
+      reading = await callApi(conQuery(`/api/charts/${id}/interpretation/`, { lang: locale, tier }));
     } catch {
       // Si falla, la carta se muestra igual y los botones vuelven a estar.
     }
@@ -83,7 +84,7 @@ export default async function ChartPage({
   let secciones: SeccionIndice[] = [];
   if (reading && !tiersAqui.includes("largo")) {
     try {
-      secciones = await callApi(`/api/charts/${id}/informe/indice/?lang=${locale}`);
+      secciones = await callApi(conQuery(`/api/charts/${id}/informe/indice/`, { lang: locale }));
     } catch {
       // Si falla, el pie simplemente no se muestra.
     }

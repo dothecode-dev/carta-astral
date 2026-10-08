@@ -245,7 +245,7 @@ describe("/api/charts/[id]/interpretation", () => {
   it("responde 404 mientras la lectura no existe", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
 
-    const res = await readingGet(new Request("http://x?lang=es"), params);
+    const res = await readingGet(new Request("http://x?lang=es&tier=largo"), params);
 
     expect(res.status).toBe(404);
   });

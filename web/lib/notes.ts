@@ -94,7 +94,9 @@ export function formatNoteDate(locale: Locale, fecha: string, month: "long" | "s
   }).format(new Date(fecha));
 }
 
-async function askCms(query: string): Promise<{ items: ApiNote[] }> {
+async function askCms(params: Record<string, string>): Promise<{ items: ApiNote[] }> {
+  // `URLSearchParams`, nunca concatenando: el slug viene de la URL.
+  const query = new URLSearchParams(params).toString();
   const res = await fetch(`${API_URL}/cms/api/v2/pages/?${query}`, {
     next: { revalidate: REVALIDATE_SECONDS },
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -126,18 +128,25 @@ function toSummary(note: ApiNote): NoteSummary {
 export async function fetchNotes(locale: Locale, limit = MAX_NOTES): Promise<NoteSummary[]> {
   // `type` limita a las notas y la API sólo devuelve páginas publicadas, así
   // que un borrador no se filtra acá.
-  const { items } = await askCms(
-    `type=cms.NotePage&locale=${locale}&fields=fecha,bajada,portada_tarjeta&order=-fecha&limit=${limit}`,
-  );
+  const { items } = await askCms({
+    type: "cms.NotePage",
+    locale,
+    fields: "fecha,bajada,portada_tarjeta",
+    order: "-fecha",
+    limit: String(limit),
+  });
   return items.map(toSummary);
 }
 
 /** Una nota por su slug, o `null` si ese idioma no la tiene. */
 export async function fetchNote(locale: Locale, slug: string): Promise<Note | null> {
-  const { items } = await askCms(
-    `type=cms.NotePage&locale=${locale}&slug=${encodeURIComponent(slug)}` +
-      `&fields=fecha,bajada,cuerpo,portada_cabecera&limit=1`,
-  );
+  const { items } = await askCms({
+    type: "cms.NotePage",
+    locale,
+    slug,
+    fields: "fecha,bajada,cuerpo,portada_cabecera",
+    limit: "1",
+  });
   const note = items[0];
   if (!note) return null;
   return {
@@ -160,7 +169,12 @@ export async function fetchNote(locale: Locale, slug: string): Promise<Note | nu
  * URL que todavía da 404 es peor que no declararla.
  */
 export async function fetchTranslations(id: number): Promise<NoteTranslation[]> {
-  const { items } = await askCms(`type=cms.NotePage&translation_of=${id}&fields=fecha&limit=20`);
+  const { items } = await askCms({
+    type: "cms.NotePage",
+    translation_of: String(id),
+    fields: "fecha",
+    limit: "20",
+  });
   return items
     .map((item) => ({ locale: item.meta.locale, slug: item.meta.slug }))
     .filter((t): t is NoteTranslation => !!t.locale && isLocale(t.locale));

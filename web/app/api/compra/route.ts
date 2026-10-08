@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { checkoutConsultable } from "@/lib/compraCookie";
 import { ApiError, callApi } from "@/lib/session";
 
 // En qué quedó una compra: lo sondea la página de retorno de Stripe mientras
@@ -20,9 +21,16 @@ export async function GET(request: Request) {
   if (!checkoutId) {
     return NextResponse.json({ error: "falta el checkout" }, { status: 400 });
   }
+  // Va en el path del backend: un `../` apuntaría a otro endpoint con la
+  // sesión de quien pregunta.
+  if (!checkoutConsultable(checkoutId)) {
+    return NextResponse.json({ error: "checkout inválido" }, { status: 400 });
+  }
 
   try {
-    return NextResponse.json(await callApi<Estado>(`/api/checkout/${checkoutId}/`));
+    return NextResponse.json(
+      await callApi<Estado>(`/api/checkout/${encodeURIComponent(checkoutId)}/`),
+    );
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 502;
     // 404 es "ese checkout no existe o es de otra cuenta": no hay nada que

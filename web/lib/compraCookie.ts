@@ -28,6 +28,17 @@ export function checkoutIdValido(checkoutId: unknown): checkoutId is string {
   return typeof checkoutId === "string" && CHECKOUT_ID.test(checkoutId);
 }
 
+/** El checkout de un cupón al 100 %: no pasa por Stripe y el backend le pone
+ *  `cupon_<uuid4.hex>` (`backend/api/cupones.py`). */
+const CHECKOUT_CUPON = /^cupon_[0-9a-f]{32}$/;
+
+/** ¿Es un id que `/api/checkout/<id>/` del backend puede tener? Los de Stripe
+ *  y los de un cupón gratis: los dos vuelven a `/compra?checkout_id=`. Va en
+ *  el path del backend, así que lo demás no sale de la web. */
+export function checkoutConsultable(checkoutId: unknown): checkoutId is string {
+  return checkoutIdValido(checkoutId) || (typeof checkoutId === "string" && CHECKOUT_CUPON.test(checkoutId));
+}
+
 /** El nombre de la cookie del nonce de ese checkout, o `null` si el id no
  *  tiene forma de checkout de Stripe. */
 export function nombre(checkoutId: unknown): string | null {

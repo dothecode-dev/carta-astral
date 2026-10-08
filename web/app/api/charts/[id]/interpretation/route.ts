@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi, callApiRaw } from "@/lib/session";
+import { conQuery, langYTier, parametrosInvalidos } from "@/lib/consultaBackend";
 import { noExiste, uuidValido } from "@/lib/uuid";
 
 // Genera la lectura de una carta. Es la única llamada de la web que gasta un
@@ -20,16 +21,14 @@ export async function GET(
 ) {
   const { id } = await params;
   if (!uuidValido(id)) return noExiste();
-  const url = new URL(request.url);
-  const lang = url.searchParams.get("lang") ?? "es";
-  // Sin default (RF20, mismo criterio que el POST y que `estado`): adivinar
-  // el tier es leer el producto equivocado.
-  const tier = url.searchParams.get("tier");
+  // Sin default de tier (RF20, mismo criterio que el POST y que `estado`):
+  // adivinarlo es leer el producto equivocado. Fuera de la lista, 400 sin
+  // llamar al backend (`lib/consultaBackend.ts`).
+  const query = langYTier(new URL(request.url));
+  if (!query) return parametrosInvalidos();
 
   try {
-    const data = await callApi(
-      `/api/charts/${id}/interpretation/?lang=${lang}&tier=${tier}`,
-    );
+    const data = await callApi(conQuery(`/api/charts/${id}/interpretation/`, query));
     return NextResponse.json(data);
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 502;
