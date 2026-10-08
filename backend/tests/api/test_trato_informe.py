@@ -18,12 +18,13 @@ pytestmark = pytest.mark.django_db
 TOKEN = "tok-test"
 
 
-@pytest.fixture(autouse=True)
-def _lock_vigente(monkeypatch):
-    """Estos tests llaman a `traducir_informe` directo, sin el lock que toma
-    `completar_generacion`: sin esto el `renovar_lock` real devuelve False y
-    la traducción abortaría tras la primera sección por una razón ajena a lo
-    que se prueba. Los tests de renovación lo pisan con su propio doble."""
+@pytest.fixture
+def lock_vigente(monkeypatch):
+    """Sólo para los tests que llaman a `traducir_informe` directo, sin el lock
+    que toma `completar_generacion`: sin esto el `renovar_lock` real devuelve
+    False y la traducción abortaría tras la primera sección por una razón
+    ajena a lo que se prueba. Los que pasan por `completar_generacion` NO lo
+    usan: corren con el lock real (`test_completar_generacion_usa_el_lock_real`)."""
     monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: True)
 
 
@@ -132,6 +133,7 @@ def test_el_cron_retoma_con_el_trato_del_informe_no_el_de_la_carta(make_chart, c
     assert llamadas["seccion"] == ["femenino"] * (len(SECCIONES) - 2)
 
 
+@pytest.mark.usefixtures("lock_vigente")
 def test_la_traduccion_nace_con_el_trato_del_origen(make_chart, cuenta, llamadas):
     """Review Focus 2."""
     carta = _con_trato(make_chart, cuenta, "femenino")
@@ -152,6 +154,7 @@ def test_la_traduccion_nace_con_el_trato_del_origen(make_chart, cuenta, llamadas
     assert llamadas["traduccion"] == ["femenino"] * len(SECCIONES)
 
 
+@pytest.mark.usefixtures("lock_vigente")
 def test_el_destino_ya_existente_con_otro_trato_se_alinea_con_el_origen(make_chart, cuenta, llamadas):
     """El camino del sibling: `iniciar_generacion` crea el destino con el
     trato ACTUAL de la carta, pero es una traducción del origen."""
@@ -199,6 +202,7 @@ def _origen_completo(carta, cuenta, trato="femenino"):
     return origen
 
 
+@pytest.mark.usefixtures("lock_vigente")
 def test_un_destino_con_secciones_de_cero_se_retraduce_entero(make_chart, cuenta, llamadas):
     """Un "pt" empezó de cero, escribió 3 secciones y falló; después apareció el
     "es" completo. Terminarlo traduciendo sólo lo que falta mezclaba textos
@@ -225,6 +229,7 @@ def test_un_destino_con_secciones_de_cero_se_retraduce_entero(make_chart, cuenta
     assert llamadas["traduccion"] == ["femenino"] * len(SECCIONES)
 
 
+@pytest.mark.usefixtures("lock_vigente")
 def test_reintento_de_una_traduccion_a_medias_no_retraduce_lo_hecho(make_chart, cuenta, monkeypatch, llamadas):
     carta = _con_trato(make_chart, cuenta, "femenino")
     origen = _origen_completo(carta, cuenta)
@@ -304,6 +309,7 @@ def test_completar_generacion_con_foto_vieja_no_toca_un_informe_ya_entregado(mak
     assert llamadas == {"seccion": [], "breve": [], "traduccion": []}
 
 
+@pytest.mark.usefixtures("lock_vigente")
 def test_traducir_informe_no_toca_un_destino_ya_completo(make_chart, cuenta, llamadas):
     """Defensa propia de `traducir_informe`: un destino que en la base ya está
     completo no se descarta ni se re-traduce, aunque no sea traducción de
@@ -437,3 +443,28 @@ def test_reintento_de_traduccion_sigue_desde_el_mismo_origen(make_chart, cuenta,
                     .values_list("id", "slug", "texto"))
     assert hechas == antes
     assert pt.intentos == 2
+
+
+def test_completar_generacion_usa_el_lock_real(make_chart, cuenta, llamadas, monkeypatch):
+    """Los tests de `completar_generacion` corren con el lock real: si otro
+    proceso se queda con él a mitad, la generación aborta sin gastar el
+    intento. Con `renovar_lock` stubbeado a True terminaba las ocho."""
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+    escritas = []
+
+    def _seccion(chart_data, seccion, lang, previo, client, reparto="", trato=""):
+        escritas.append(seccion.slug)
+        if len(escritas) == 2:
+            cache.set(svc._lock_key(carta, "largo"), "otro-proceso", timeout=600)
+        return f"texto de {seccion.slug}"
+
+    monkeypatch.setattr(informe_service, "build_seccion", _seccion)
+
+    svc.completar_generacion(interp, carta, cuenta)
+
+    interp.refresh_from_db()
+    assert interp.completa is False
+    assert interp.secciones.count() == 2
+    assert interp.intentos == 0
+    assert cache.get(svc._lock_key(carta, "largo")) == "otro-proceso"
