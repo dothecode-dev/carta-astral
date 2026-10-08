@@ -634,15 +634,6 @@ def test_una_frase_repetida_se_descarta_como_no_unico(caplog):
     assert any("no_unico=1" in r.getMessage() for r in caplog.records)
 
 
-def test_del_protector_queda_intacto():
-    """Code review sobre 19a0287: «el protector» → «la protectora» sin límite
-    dejaba «dla protectora»."""
-    texto = BASE + "Sos el protector de todos, y la fuerza del protector te guía."
-    cliente = ClienteFalso(_juez("el protector"))
-    assert revisar_trato(texto, "femenino", "es", cliente) == texto
-    assert len(cliente.llamadas) == 1  # aparece dos veces: no se pide reparar
-
-
 def test_una_palabra_suelta_repetida_se_sigue_descartando(caplog):
     texto = BASE + "Es seguro que Saturno ayuda, y vos estás seguro de eso."
     cliente = ClienteFalso(_juez("seguro"))
@@ -665,3 +656,49 @@ def test_terminaciones_an_in_ol_es_cuentan_como_genero(original, corregido, lang
     texto = BASE + original + " de verdad."
     cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
     assert revisar_trato(texto, "femenino", lang, cliente) == texto.replace(original, corregido)
+
+
+# --- palabras completas (code review sobre cf25337) ---
+
+
+@pytest.mark.parametrize(
+    ("texto_extra", "fragmento", "corregido", "lang"),
+    [
+        ("Sentís que la fuerza del protector te guía.", "el protector", "la protectora", "es"),
+        ("Isso agrada ao sonhador que há em você.", "o sonhador", "a sonhadora", "pt"),
+    ],
+)
+def test_un_fragmento_que_solo_aparece_dentro_de_otra_palabra_se_descarta(
+    texto_extra, fragmento, corregido, lang, caplog
+):
+    """Aparece UNA vez como subcadena, nunca como palabras completas: antes
+    pasaba el filtro y terminaba como «dla protectora» / «aa sonhadora»."""
+    texto = BASE + texto_extra
+    assert texto.count(fragmento) == 1
+    cliente = ClienteFalso(_juez(fragmento), _reemplazos((fragmento, corregido)), _juez())
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(texto, "femenino", lang, cliente) == texto
+    assert len(cliente.llamadas) == 1
+    assert any("ausente=1" in r.getMessage() for r in caplog.records)
+
+
+def test_un_fragmento_en_limite_de_palabra_se_sigue_aplicando():
+    texto = BASE + "Sos el protector de todos, y eso te define."
+    cliente = ClienteFalso(_juez("el protector"), _reemplazos(("el protector", "la protectora")), _juez())
+    assert revisar_trato(texto, "femenino", "es", cliente) == texto.replace("el protector", "la protectora")
+
+
+def test_el_conteo_de_unicidad_es_por_palabras_completas():
+    """«el protector» suelto una vez y dentro de «del protector» otra: como
+    palabras completas aparece una sola vez, y se corrige ésa."""
+    texto = BASE + "Sos el protector de todos, y la fuerza del protector te guía."
+    cliente = ClienteFalso(_juez("el protector"), _reemplazos(("el protector", "la protectora")), _juez())
+    esperado = BASE + "Sos la protectora de todos, y la fuerza del protector te guía."
+    assert revisar_trato(texto, "femenino", "es", cliente) == esperado
+
+
+def test_una_barra_invertida_en_el_corregido_no_se_interpreta():
+    texto = BASE + "Sos el protector de todos."
+    corregido = "la protectora\\1"  # una barra invertida literal
+    cliente = ClienteFalso(_juez("el protector"), _reemplazos(("el protector", corregido)), _juez())
+    assert revisar_trato(texto, "femenino", "es", cliente) == texto.replace("el protector", corregido)

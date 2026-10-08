@@ -13,7 +13,7 @@ devuelve el texto: la primera versión lo hacía y, medido en staging el
 08-10, reescribía fuera de los fragmentos («contra vos» → «contra vos
 mismo» en un párrafo que estaba bien) sin que ningún tope de proporción lo
 frenara, porque era una sola palabra. Ahora es el código el que aplica cada
-par con `str.replace(original, corregido, 1)`, y sólo si `original` es uno de
+par en su única aparición como palabras completas, y sólo si `original` es uno de
 los fragmentos del juez: fuera de ellos el texto queda byte-idéntico. Cada
 par pasa además por reglas deterministas (no idéntico, sin saltos de línea,
 sin una forma prohibida para el trato); el que no las cumple se descarta y
@@ -208,8 +208,29 @@ def _parsear_reemplazos(crudo: str) -> list[tuple[str, str]]:
     return resultado
 
 
+def _patron(fragmento: str) -> re.Pattern[str]:
+    """El fragmento como palabras completas. Buscar subcadenas encontraba «el
+    protector» dentro de «del protector» y lo dejaba como «dla protectora»
+    (code review sobre cf25337); igual «o sonhador» en «ao sonhador». Con
+    `re`, `\\w` ya es Unicode, así que «ó» o «ç» cuentan como letra."""
+    return re.compile(rf"(?<!\w){re.escape(fragmento)}(?!\w)")
+
+
+def _apariciones(texto: str, fragmento: str) -> int:
+    return len(_patron(fragmento).findall(texto))
+
+
+def _reemplazar(texto: str, original: str, corregido: str) -> str:
+    # Función de reemplazo y no el string: una barra invertida en `corregido`
+    # no se interpreta como referencia a un grupo.
+    return _patron(original).sub(lambda _: corregido, texto, count=1)
+
+
 def _con_contexto(texto: str, fragmento: str) -> str:
-    i = texto.index(fragmento)
+    coincidencia = _patron(fragmento).search(texto)
+    if coincidencia is None:  # no pasa: sólo se llama con fragmentos presentes
+        return f"- fragmento: «{fragmento}»"
+    i = coincidencia.start()
     antes = texto[max(0, i - _CONTEXTO_CARACTERES):i]
     despues = texto[i + len(fragmento):i + len(fragmento) + _CONTEXTO_CARACTERES]
     return f"- fragmento: «{fragmento}»\n  contexto: «…{antes}[[{fragmento}]]{despues}…»"
@@ -319,7 +340,7 @@ def _motivo_de_rechazo(
     claves fijas: van al log como contadores, nunca el texto."""
     if original not in listados:
         return "no_listado"
-    apariciones = texto.count(original)
+    apariciones = _apariciones(texto, original)
     if apariciones == 0:
         # Un par anterior ya lo tocó, o el modelo lo copió distinto.
         return "ausente"
@@ -409,9 +430,10 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
     unicos = list(dict.fromkeys(f for f in fragmentos if f))
     largos = [f for f in unicos if len(f.split()) > MAX_PALABRAS_FRAGMENTO]
     cortos = [f for f in unicos if len(f.split()) <= MAX_PALABRAS_FRAGMENTO]
-    ausentes = sum(1 for f in cortos if texto.count(f) == 0)
-    no_unicos = sum(1 for f in cortos if texto.count(f) > 1)
-    presentes = [f for f in cortos if texto.count(f) == 1]
+    cuentas = {f: _apariciones(texto, f) for f in cortos}
+    ausentes = sum(1 for f in cortos if cuentas[f] == 0)
+    no_unicos = sum(1 for f in cortos if cuentas[f] > 1)
+    presentes = [f for f in cortos if cuentas[f] == 1]
     if largos or ausentes or no_unicos:
         logger.info(
             "revisión del trato: fragmentos del juez descartados: vuelta=%s largo=%s ausente=%s no_unico=%s",
@@ -454,7 +476,7 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
         if motivo := _motivo_de_rechazo(original, corregido, resultado, listados, clave, lang):
             rechazos[motivo] += 1
             continue
-        resultado = resultado.replace(original, corregido, 1)
+        resultado = _reemplazar(resultado, original, corregido)
         listados.discard(original)  # un fragmento se corrige una sola vez
         aplicados += 1
 
