@@ -24,10 +24,6 @@ export type EventoProps = {
    *  por la home o por una nota y llegó a ver algo suyo sin registrarse: es el
    *  primer escalón del embudo que antes empezaba directamente en el login. */
   carta_calculada: { con_sesion: boolean };
-  /** Vio su rueda sin cuenta y apretó para leer la interpretación, o sea que
-   *  la puerta del registro aparece recién acá. La distancia entre este evento
-   *  y `login` es lo que mide cuánta gente se cae en esa puerta. */
-  lectura_pedida_sin_cuenta: Record<string, never>;
   /** Pidió la lectura breve sin cuenta desde la vista previa (spec 2026-10-08). */
   lectura_anonima_pedida: Record<string, never>;
   /** La lectura breve sin cuenta llegó a la pantalla. */

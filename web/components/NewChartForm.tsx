@@ -27,12 +27,6 @@ import { useLecturaAnonima } from "@/components/useLecturaAnonima";
 //   si el sitio servía. Ahora ve SU carta y la cuenta se pide para la lectura,
 //   que es lo que cuesta plata.
 
-/** Dónde espera la carta calculada mientras la persona pasa por el login.
- *
- * `sessionStorage` y no `localStorage`: son datos de nacimiento, y su vida
- * útil es exactamente la del viaje de ida y vuelta al login. Muere con la
- * pestaña aunque algo falle en el medio. */
-const PENDIENTE = "astra-carta-pendiente";
 const TRATO_CLAVE = {
   femenino: "tratoFemenino",
   masculino: "tratoMasculino",
@@ -84,7 +78,6 @@ export function NewChartForm({
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<CartaDibujable | null>(null);
-  const [retomando, setRetomando] = useState(false);
   const [comprando, setComprando] = useState(false);
   const [errorCompra, setErrorCompra] = useState<string | null>(null);
   const datos = useRef<DatosCarta | null>(null);
@@ -101,54 +94,6 @@ export function NewChartForm({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setGuardada(leerLectura());
   }, [signedIn, guardadas]);
-
-  // Vuelve del login con una carta que ya vio: se la guardamos y la llevamos a
-  // ella. El `sessionStorage` se limpia ANTES de crear nada —y hay un guard de
-  // una sola corrida— porque en desarrollo React monta dos veces y dos altas
-  // dejarían la carta duplicada en la cuenta.
-  const retomado = useRef(false);
-  useEffect(() => {
-    if (!signedIn || retomado.current) return;
-    retomado.current = true;
-
-    let guardado: string | null = null;
-    try {
-      guardado = sessionStorage.getItem(PENDIENTE);
-      sessionStorage.removeItem(PENDIENTE);
-    } catch {
-      // Storage bloqueado: no hay nada que retomar, se muestra el formulario.
-      return;
-    }
-    if (!guardado) return;
-
-    // El lint desaconseja `setState` síncrono dentro de un efecto, y con
-    // razón; acá es la excepción que la propia regla contempla: el dato vive
-    // en un sistema externo (`sessionStorage`) que no existe en el servidor.
-    // Leerlo durante el render haría que el primer render del cliente no
-    // coincida con el HTML del servidor —que muestra el formulario— y eso es
-    // un error de hidratación, peor que un render de más.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRetomando(true);
-    void (async () => {
-      try {
-        const res = await fetch("/api/charts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: guardado,
-        });
-        if (!res.ok) throw new Error(String(res.status));
-        track("carta_creada", { desde: "preview" });
-        const chart: { id?: string } = await res.json();
-        router.replace(destinoDe(locale, chart.id));
-        router.refresh();
-      } catch {
-        // El formulario sigue ahí y los datos están a un tipeo: mejor eso que
-        // una pantalla de error sin salida.
-        setRetomando(false);
-        setError(t.failed);
-      }
-    })();
-  }, [signedIn, locale, router, t.failed]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -241,14 +186,6 @@ export function NewChartForm({
       setComprando(false);
       setErrorCompra(dict.precios.fallo);
     }
-  }
-
-  if (retomando) {
-    return (
-      <p className="formLede" role="status">
-        {t.previewRetomando}
-      </p>
-    );
   }
 
   if (preview) {

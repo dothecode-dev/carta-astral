@@ -369,7 +369,7 @@ describe("con sesión (RF12b)", () => {
   });
 });
 
-describe("al volver del login", () => {
+describe("con sesión, al montar", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -384,21 +384,21 @@ describe("al volver del login", () => {
     vi.unstubAllGlobals();
   });
 
-  it("guarda la carta que ya había visto y la lleva a ella", async () => {
+  // El flujo de «carta pendiente» se quitó (W3): ya nadie escribe esa clave,
+  // y una vieja que quedara en la pestaña no debe crear nada en la cuenta.
+  it("una carta pendiente vieja en la pestaña no crea nada", async () => {
     sessionStorage.setItem(
       "astra-carta-pendiente",
       JSON.stringify({ date: "1976-05-31", lat: -32.9, lng: -60.6, time: null, time_known: false, name: null, place_label: "Rosario" }),
     );
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ id: "abc" }) });
 
     await act(async () => {
       render(<NewChartForm locale="es" dict={dict} signedIn />);
     });
 
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/charts");
-    expect(replace).toHaveBeenCalledWith("/es/carta/abc");
-    // Se limpia sí o sí: si quedara, volver a esta página crearía la carta de nuevo.
-    expect(sessionStorage.getItem("astra-carta-pendiente")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(t.date)).toBeTruthy();
   });
 
   it("sin nada pendiente muestra el formulario y no crea nada", async () => {

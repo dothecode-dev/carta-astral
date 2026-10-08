@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NewChartForm } from "@/components/NewChartForm";
@@ -221,8 +221,7 @@ describe("NewChartForm", () => {
 
 
 // Calcular una carta no gasta nada y no arranca nada: el destino es la carta
-// a secas, y ahí se elige qué leer. Vale también para la carta que se calculó
-// después de ir y volver por el login.
+// a secas, y ahí se elige qué leer.
 describe("NewChartForm manda a la carta", () => {
   it("la carta recién calculada, sin nada más en la URL", async () => {
     const fetchMock = vi.fn();
@@ -233,23 +232,5 @@ describe("NewChartForm manda a la carta", () => {
     await enviar();
 
     expect(replace).toHaveBeenCalledWith("/es/carta/abc-123");
-  });
-
-  it("sobrevive al ida y vuelta por el login", async () => {
-    cleanup();
-    // Lo que dejó guardado la vez anterior, antes de mandar a entrar.
-    window.sessionStorage.setItem("astra-carta-pendiente", JSON.stringify({
-      date: "1989-07-14", time: null, time_known: false, lat: ROSARIO.lat, lng: ROSARIO.lng,
-      tz_name: ROSARIO.tz_name, place_label: ROSARIO.place_query,
-    }));
-    const fetchMock = vi.fn().mockResolvedValueOnce(created("xyz"));
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<NewChartForm locale="es" dict={dict} signedIn />);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    expect(replace).toHaveBeenCalledWith("/es/carta/xyz");
   });
 });

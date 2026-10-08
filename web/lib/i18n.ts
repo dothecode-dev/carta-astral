@@ -724,7 +724,6 @@ export type Dict = {
     comprarRequiereCuenta: string;
     previewPrivacidad: string;
     previewPrivacidadSinCompra: string;
-    previewRetomando: string;
     /** La breve sin cuenta (spec 2026-10-08). `{idioma}` y `{quien}` se reemplazan. */
     lecturaEscribiendo: string;
     lecturaOcupado: string;
@@ -1011,7 +1010,6 @@ const es: Dict = {
       "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta. Si leés tu lectura gratis, tu carta y tu lectura quedan sólo en este navegador por 24 horas. Si comprás el informe, la carta queda guardada para entregártelo.",
     previewPrivacidadSinCompra:
       "Tu carta y tu lectura quedan sólo en este navegador por 24 horas. No guardamos tus datos de nacimiento.",
-    previewRetomando: "Guardando tu carta…",
     lecturaEscribiendo: "Estamos escribiendo tu lectura…",
     lecturaOcupado: "Estamos escribiendo muchas lecturas, un momento…",
     lecturaFallida: "No pudimos escribir tu lectura.",
@@ -1421,7 +1419,6 @@ const en: Dict = {
       "Your birth details aren't stored on our servers while you look at your chart. If you read your free reading, your chart and your reading stay only in this browser for 24 hours. If you buy the report, the chart is saved so we can deliver it.",
     previewPrivacidadSinCompra:
       "Your chart and your reading stay only in this browser for 24 hours. We don't store your birth details.",
-    previewRetomando: "Saving your chart…",
     lecturaEscribiendo: "We're writing your reading…",
     lecturaOcupado: "We're writing a lot of readings, one moment…",
     lecturaFallida: "We couldn't write your reading.",
@@ -1831,7 +1828,6 @@ const pt: Dict = {
       "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta. Se você ler sua leitura grátis, sua carta e sua leitura ficam só neste navegador por 24 horas. Se você comprar o relatório, a carta fica guardada para entregá-lo.",
     previewPrivacidadSinCompra:
       "Sua carta e sua leitura ficam só neste navegador por 24 horas. Não guardamos seus dados de nascimento.",
-    previewRetomando: "Salvando seu mapa…",
     lecturaEscribiendo: "Estamos escrevendo sua leitura…",
     lecturaOcupado: "Estamos escrevendo muitas leituras, um momento…",
     lecturaFallida: "Não conseguimos escrever sua leitura.",

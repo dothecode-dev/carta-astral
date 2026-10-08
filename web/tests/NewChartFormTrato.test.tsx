@@ -6,7 +6,7 @@ import { getDict } from "@/lib/i18n";
 
 // El trato (cómo quiere la persona que le hablemos) se elige al calcular y tiene
 // que llegar al backend por los tres caminos: crear con sesión, comprar sin
-// cuenta y volver del login con la carta guardada en `sessionStorage`.
+// cuenta y pedir la lectura breve sin cuenta.
 
 const replace = vi.fn();
 const refresh = vi.fn();
@@ -152,23 +152,6 @@ describe("el trato llega al backend", () => {
 
     const [url, init] = fetchMock.mock.calls.at(-1)!;
     expect(url).toBe("/api/lectura-anonima");
-    expect(JSON.parse(init.body)).toMatchObject({ trato: "neutro", date: "1976-05-31" });
-  });
-
-  it("al volver logueado del login, retoma lo guardado y el POST lleva el trato", async () => {
-    // Ya nadie escribe esta clave desde la vista previa (la lectura se hace
-    // sin cuenta), pero quien entra por /entrar por su cuenta puede traerla.
-    sessionStorage.setItem(
-      "astra-carta-pendiente",
-      JSON.stringify({ trato: "neutro", date: "1976-05-31" }),
-    );
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ id: "abc" }) });
-    await act(async () => {
-      render(<NewChartForm locale="es" dict={dict} signedIn />);
-    });
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/charts");
     expect(JSON.parse(init.body)).toMatchObject({ trato: "neutro", date: "1976-05-31" });
   });
 
