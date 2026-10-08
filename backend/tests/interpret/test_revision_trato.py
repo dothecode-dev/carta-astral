@@ -623,13 +623,24 @@ def test_correcciones_reales_con_determinante_o_sufijo_se_aplican(original, corr
     assert revisar_trato(texto, trato, lang, cliente) == texto.replace(original, corregido)
 
 
-def test_una_frase_repetida_de_dos_palabras_se_corrige_en_todas_sus_copias():
+def test_una_frase_repetida_se_descarta_como_no_unico(caplog):
+    """Revertido de 19a0287: reemplazar todas las copias cambia subcadenas y
+    copias que no se refieren a quien lee. Una frase repetida no se toca."""
     texto = BASE + "Hoy estás cansado de esperar, y mañana estás cansado de correr."
-    original, corregido = "estás cansado", "estás cansada"
-    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
-    resultado = revisar_trato(texto, "femenino", "es", cliente)
-    assert resultado == texto.replace(original, corregido)
-    assert resultado.count(corregido) == 2
+    cliente = ClienteFalso(_juez("estás cansado"))
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(texto, "femenino", "es", cliente) == texto
+    assert len(cliente.llamadas) == 1
+    assert any("no_unico=1" in r.getMessage() for r in caplog.records)
+
+
+def test_del_protector_queda_intacto():
+    """Code review sobre 19a0287: «el protector» → «la protectora» sin límite
+    dejaba «dla protectora»."""
+    texto = BASE + "Sos el protector de todos, y la fuerza del protector te guía."
+    cliente = ClienteFalso(_juez("el protector"))
+    assert revisar_trato(texto, "femenino", "es", cliente) == texto
+    assert len(cliente.llamadas) == 1  # aparece dos veces: no se pide reparar
 
 
 def test_una_palabra_suelta_repetida_se_sigue_descartando(caplog):
@@ -639,3 +650,18 @@ def test_una_palabra_suelta_repetida_se_sigue_descartando(caplog):
         assert revisar_trato(texto, "neutro", "es", cliente) == texto
     assert len(cliente.llamadas) == 1
     assert any("no_unico=1" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize(
+    ("original", "corregido", "lang"),
+    [
+        ("sos guardián", "sos guardiana", "es"),
+        ("sos bailarín", "sos bailarina", "es"),
+        ("sos español", "sos española", "es"),
+        ("você é português", "você é portuguesa", "pt"),
+    ],
+)
+def test_terminaciones_an_in_ol_es_cuentan_como_genero(original, corregido, lang):
+    texto = BASE + original + " de verdad."
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
+    assert revisar_trato(texto, "femenino", lang, cliente) == texto.replace(original, corregido)
