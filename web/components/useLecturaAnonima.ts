@@ -9,8 +9,9 @@ import { guardarLectura, type LecturaGuardada } from "@/lib/lecturaLocal";
 import { track } from "@/lib/telemetry";
 
 // El pedido de la lectura breve sin cuenta y la espera (spec 2026-10-08,
-// RF12, RF16). La consulta va con backoff y corta a los 60 s; un «ocupado»
-// se reintenta solo, sin que la persona haga nada.
+// RF12, RF16, y §11 v3). La consulta va con backoff y corta a los 5 min —una
+// red de seguridad: el fin normal lo decide el latido del backend—; un
+// «ocupado» se reintenta solo, sin que la persona haga nada.
 //
 // Vive en `components/` y no en `lib/` porque corre en el NAVEGADOR y le pega
 // a `/api/lectura-anonima`, la ruta de Next, no al backend: la guardia de
@@ -27,7 +28,7 @@ export type EstadoLectura =
 
 const ESPERAS_MS = [1000, 2000, 4000];
 const ESPERA_MAX_MS = 4000;
-const CORTE_MS = 60_000;
+const CORTE_MS = 300_000;
 const REINTENTO_OCUPADO_MS = 5000;
 const REINTENTOS_OCUPADO = 3;
 
@@ -61,9 +62,13 @@ export function useLecturaAnonima() {
   // Los pedidos con algo pendiente (de frente o de fondo), para cortarlos al
   // desmontar.
   const vivos = useRef(new Set<Pedido>());
+  // El último pedido de frente que terminó en «fallida» (modelo, corte u
+  // ocupado): «Probar de nuevo» con la MISMA carta lo reusa, así el backend
+  // sigue esperándolo, lo relanza o entrega la lista que ya tenga (§11, RF7).
+  const reintentable = useRef<{ id: string; carta: CartaDibujable } | null>(null);
   // Las dos funciones se llaman a sí mismas desde un timer: la referencia
   // evita que una `useCallback` se nombre dentro de su propia definición.
-  const consultarRef = useRef<(p: Pedido, intento: number, inicio: number) => void>(() => {});
+  const consultarRef = useRef<(p: Pedido, intento: number, limite: number) => void>(() => {});
   const pedirRef = useRef<(p: Pedido, reintento: number) => Promise<void>>(async () => {});
 
   useEffect(() => {
@@ -91,24 +96,26 @@ export function useLecturaAnonima() {
       const pinta = deFrente(p);
       terminar(p);
       track("lectura_anonima_fallida", { motivo });
+      if (pinta && siguiente.tipo === "fallida") reintentable.current = { id: p.id, carta: p.carta };
       if (pinta) setEstado(siguiente);
     },
     [terminar],
   );
 
   const consultar = useCallback(
-    (p: Pedido, intento: number, inicio: number) => {
+    (p: Pedido, intento: number, limite: number, ya = false) => {
       // La espera nunca pasa del corte: sin el tope, el último sondeo caía
-      // hasta 4 s después de los 60 s y el aviso llegaba tarde.
-      const espera = Math.min(
+      // hasta 4 s después del límite y el aviso llegaba tarde. `ya` es la
+      // lectura que el backend dice tener escrita: se busca sin esperar.
+      const espera = ya ? 0 : Math.min(
         ESPERAS_MS[intento] ?? ESPERA_MAX_MS,
-        Math.max(0, inicio + CORTE_MS + 1 - Date.now()),
+        Math.max(0, limite + 1 - Date.now()),
       );
       if (p.timer) clearTimeout(p.timer);
       p.timer = setTimeout(async () => {
         p.timer = null;
         if (!vivo.current) return;
-        if (Date.now() - inicio > CORTE_MS) return fallar(p, "timeout");
+        if (Date.now() > limite) return fallar(p, "timeout");
         try {
           const r = await fetch("/api/lectura-anonima");
           const cuerpo = (await r.json()) as {
@@ -138,10 +145,10 @@ export function useLecturaAnonima() {
           }
           if (r.ok && cuerpo.estado === "fallida") return fallar(p, "modelo");
           if (!r.ok) return fallar(p, "modelo");
-          consultarRef.current(p, intento + 1, inicio);
+          consultarRef.current(p, intento + 1, limite);
         } catch {
           if (!vivo.current) return;
-          consultarRef.current(p, intento + 1, inicio);
+          consultarRef.current(p, intento + 1, limite);
         }
       }, espera);
     },
@@ -165,7 +172,13 @@ export function useLecturaAnonima() {
       if (!vivo.current) return;
       // Un 202 se espera igual aunque la persona ya haya vuelto atrás: la
       // lectura gratis se está escribiendo y se guarda de fondo.
-      if (r.status === 202) return consultar(p, 0, Date.now());
+      // `lista` es la de ESTE pedido, escrita y sin acusar (§11, RF7): la
+      // entrega el GET.
+      if (r.status === 202) {
+        const { estado } = (await r.json().catch(() => ({}))) as { estado?: string };
+        if (!vivo.current) return;
+        return consultar(p, 0, Date.now() + CORTE_MS, estado === "lista");
+      }
       const { motivo } = (await r.json().catch(() => ({}))) as { motivo?: string };
       if (!vivo.current) return;
       if (!deFrente(p)) {
@@ -205,7 +218,10 @@ export function useLecturaAnonima() {
       // Un pedido de frente sigue en curso (un doble clic): no se abre otro,
       // que el backend rechazaría como de otra carta.
       if (actual.current) return;
-      const p: Pedido = { id: crypto.randomUUID(), cuerpo, carta, lang, timer: null };
+      const previo = reintentable.current;
+      reintentable.current = null;
+      const id = previo && previo.carta === carta ? previo.id : crypto.randomUUID();
+      const p: Pedido = { id, cuerpo, carta, lang, timer: null };
       actual.current = p;
       vivos.current.add(p);
       track("lectura_anonima_pedida", {});

@@ -80,14 +80,66 @@ describe("useLecturaAnonima", () => {
     expect(track).toHaveBeenCalledWith("lectura_anonima_fallida", { motivo: "ocupado" });
   });
 
-  it("a los 60 s sin lista corta como timeout", async () => {
+  // v3: el fin normal lo decide el backend (latido); el corte de la web es
+  // una red de seguridad de 5 min, no de 60 s.
+  it("a los 5 min sin lista corta como timeout, no antes", async () => {
     fetchMock.mockReturnValueOnce(res(202, { estado: "generando" }));
     fetchMock.mockImplementation(() => res(200, { estado: "generando", pedido: P1 }));
     const { result } = renderHook(() => useLecturaAnonima());
     await act(async () => { await result.current.pedir({}, CARTA, "es"); });
     await act(async () => { await vi.advanceTimersByTimeAsync(61_000); });
+    expect(result.current.estado).toEqual({ tipo: "esperando", ocupado: false });
+    await act(async () => { await vi.advanceTimersByTimeAsync(240_000); });
     expect(result.current.estado).toEqual({ tipo: "fallida" });
     expect(track).toHaveBeenCalledWith("lectura_anonima_fallida", { motivo: "timeout" });
+  });
+
+  it("«Probar de nuevo» tras una fallida, con la misma carta, reusa el pedido", async () => {
+    fetchMock
+      .mockReturnValueOnce(res(202, { estado: "generando" }))
+      .mockReturnValueOnce(res(200, { estado: "fallida", pedido: P1 }))
+      .mockReturnValueOnce(res(202, { estado: "generando" }));
+    const { result } = renderHook(() => useLecturaAnonima());
+    await act(async () => { await result.current.pedir({}, CARTA, "es"); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(result.current.estado).toEqual({ tipo: "fallida" });
+    await act(async () => { await result.current.pedir({}, CARTA, "es"); });
+    expect(posts(fetchMock).map((b) => b.pedido)).toEqual([P1, P1]);
+    expect(result.current.estado).toEqual({ tipo: "esperando", ocupado: false });
+  });
+
+  it("«Probar de nuevo» tras el corte, con la misma carta, reusa el pedido", async () => {
+    fetchMock.mockImplementation((url: string, init?: { method?: string }) =>
+      init?.method === "POST" ? res(202, { estado: "generando" }) : res(200, { estado: "generando", pedido: P1 }),
+    );
+    const { result } = renderHook(() => useLecturaAnonima());
+    await act(async () => { await result.current.pedir({}, CARTA, "es"); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(301_000); });
+    expect(result.current.estado).toEqual({ tipo: "fallida" });
+    await act(async () => { await result.current.pedir({}, CARTA, "es"); });
+    expect(posts(fetchMock).map((b) => b.pedido)).toEqual([P1, P1]);
+  });
+
+  it("tras una fallida, OTRA carta lleva un pedido nuevo", async () => {
+    fetchMock
+      .mockReturnValueOnce(res(202, { estado: "generando" }))
+      .mockReturnValueOnce(res(200, { estado: "fallida", pedido: P1 }))
+      .mockReturnValueOnce(res(202, { estado: "generando" }));
+    const { result } = renderHook(() => useLecturaAnonima());
+    await act(async () => { await result.current.pedir({}, CARTA, "es"); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    await act(async () => { await result.current.pedir({}, CARTA_B, "es"); });
+    expect(posts(fetchMock).map((b) => b.pedido)).toEqual([P1, P2]);
+  });
+
+  it("un 202 con estado lista (escrita y sin acusar) va derecho al GET", async () => {
+    fetchMock
+      .mockReturnValueOnce(res(202, { estado: "lista" }))
+      .mockImplementation(() => res(200, { estado: "lista", texto: "t", lang: "es", disclaimer: "d", pedido: P1 }));
+    const { result } = renderHook(() => useLecturaAnonima());
+    await act(async () => { await result.current.pedir({}, CARTA, "es"); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(result.current.estado).toEqual({ tipo: "lista", texto: "t", lang: "es", disclaimer: "d" });
   });
 
   it("fallida del backend", async () => {
@@ -167,13 +219,13 @@ describe("useLecturaAnonima", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("de fondo, el corte de 60 s termina sin pintar", async () => {
+  it("de fondo, el corte de 5 min termina sin pintar", async () => {
     fetchMock.mockReturnValueOnce(res(202, { estado: "generando" }));
     fetchMock.mockImplementation(() => res(200, { estado: "generando", pedido: P1 }));
     const { result } = renderHook(() => useLecturaAnonima());
     await act(async () => { await result.current.pedir({}, CARTA, "es"); });
     act(() => { result.current.reiniciar(); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(61_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(301_000); });
     expect(result.current.estado).toEqual({ tipo: "nada" });
     expect(track).toHaveBeenCalledWith("lectura_anonima_fallida", { motivo: "timeout" });
     const llamadas = fetchMock.mock.calls.length;

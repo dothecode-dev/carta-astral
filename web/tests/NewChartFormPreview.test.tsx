@@ -121,6 +121,21 @@ describe("sin cuenta", () => {
     expect(screen.getByRole("status")).toHaveTextContent(t.lecturaEscribiendo);
   });
 
+  it("«Probar de nuevo» tras una fallida reusa el pedido de esa carta", async () => {
+    render(<NewChartForm locale="es" dict={dict} />);
+    await completarYEnviar(fetchMock, CALCULADA);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando" }), { status: 202 }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
+    const pedido = JSON.parse(fetchMock.mock.calls.at(-1)![1].body).pedido;
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "fallida", pedido }), { status: 200 }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando" }), { status: 202 }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.lecturaReintentar })); });
+    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    expect(url).toBe("/api/lectura-anonima");
+    expect(JSON.parse(init.body).pedido).toBe(pedido);
+  });
+
   it("con una lectura guardada ofrece verla", async () => {
     localStorage.setItem("astra-lectura-anonima", JSON.stringify({
       carta: CARTA, datos: DATOS_GUARDADOS, texto: "guardada", lang: "es", disclaimer: "", vence: Date.now() + 3600_000,
