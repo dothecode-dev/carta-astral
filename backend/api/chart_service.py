@@ -50,15 +50,20 @@ def calcular(payload: dict) -> CartaCalculada:
     parsea y `CoreError` si el cálculo no se puede hacer; quien llama los
     traduce a 400.
     """
-    date = datetime.date.fromisoformat(payload["date"])
-    time_known = bool(payload.get("time_known", payload.get("time") is not None))
-    time = (
-        datetime.time.fromisoformat(payload["time"])
-        if time_known and payload.get("time")
-        else None
-    )
-    lat = float(payload["lat"])
-    lng = float(payload["lng"])
+    try:
+        date = datetime.date.fromisoformat(payload["date"])
+        time_known = bool(payload.get("time_known", payload.get("time") is not None))
+        time = (
+            datetime.time.fromisoformat(payload["time"])
+            if time_known and payload.get("time")
+            else None
+        )
+        lat = float(payload["lat"])
+        lng = float(payload["lng"])
+    except TypeError as exc:
+        # Un JSON con el tipo equivocado (`"date": 123`, `"lat": [1]`) llega
+        # hasta acá como TypeError; es un dato inválido, no un fallo nuestro.
+        raise ValueError("datos inválidos: tipo de campo incorrecto") from exc
 
     birth_input = BirthInput(
         name=payload.get("name"), date=date, time=time, time_known=time_known,

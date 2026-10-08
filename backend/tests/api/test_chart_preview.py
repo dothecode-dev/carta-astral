@@ -98,3 +98,9 @@ def test_campo_faltante_dice_cual_falta_sin_repr_de_la_excepcion():
     r = APIClient().post(URL, sin_fecha, format="json")
     assert r.status_code == 400
     assert r.data["error"] == "falta el campo date"
+
+
+@pytest.mark.parametrize("campo,valor", [("date", 123), ("lat", [1]), ("lng", {"a": 1}), ("time", 5)])
+def test_valores_de_tipo_equivocado_dan_400_no_500(campo, valor):
+    r = APIClient().post(URL, {**PAYLOAD, campo: valor}, format="json")
+    assert r.status_code == 400, r.data

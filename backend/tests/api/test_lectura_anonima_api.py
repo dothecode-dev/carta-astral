@@ -38,6 +38,7 @@ def test_post_202_y_get_lista():
     token = r.json()["token"]
     g = c.get(URL, HTTP_X_LECTURA_TOKEN=token)
     assert g.status_code == 200 and g.json()["texto"] == "breve"
+    assert g.json()["lang"] == "es" and g.json()["disclaimer"]
     assert c.get(URL, HTTP_X_LECTURA_TOKEN=token).status_code == 404
 
 
@@ -48,6 +49,17 @@ def test_datos_invalidos_400():
 
 def test_idioma_invalido_400():
     assert _post(APIClient(), lang="fr").status_code == 400
+
+
+@pytest.mark.parametrize("extra", [{"date": 123}, {"lat": [1]}, {"lang": []}, {"lang": {"a": 1}}])
+def test_valores_de_tipo_equivocado_400(extra):
+    r = _post(APIClient(), **extra)
+    assert r.status_code == 400 and r.json()["motivo"] == "datos"
+
+
+def test_cuerpo_que_no_es_objeto_400():
+    # Lo rechaza antes el parser del proyecto ({"detail": ...}, sin «motivo»).
+    assert APIClient().post(URL, [1, 2], format="json").status_code == 400
 
 
 def test_trato_invalido_400():

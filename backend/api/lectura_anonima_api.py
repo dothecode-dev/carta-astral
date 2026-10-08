@@ -39,7 +39,7 @@ class LecturaAnonimaView(APIView):
         datos = request.data if isinstance(request.data, dict) else {}
         lang = datos.get("lang")
         try:
-            if lang not in DISCLAIMERS:
+            if not isinstance(lang, str) or lang not in DISCLAIMERS:
                 raise ValueError("lang inválido")
             trato = validar_trato(datos.get("trato"))
             carta = calcular(datos)
