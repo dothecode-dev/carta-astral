@@ -15,6 +15,10 @@ _HouseLiteral = Literal[
 ]
 
 _HOUSE_CODE = {"Placidus": "P", "Whole Sign": "W", "Koch": "K", "Porphyry": "O", "Equal": "A"}
+# Lo que `build_chart` sabe calcular: quien valida un pedido lo chequea contra
+# esto en vez de copiar la lista.
+HOUSE_SYSTEMS = frozenset(_HOUSE_CODE)
+ZODIACS = frozenset({"Tropical", "Sidereal"})
 _PLANET_ATTRS = ["sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn",
                  "uranus", "neptune", "pluto", "chiron", "true_north_lunar_node",
                  "mean_lilith", "true_south_lunar_node"]

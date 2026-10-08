@@ -1,9 +1,10 @@
 import datetime
+import math
 from dataclasses import dataclass
 
 from django.db import transaction
 
-from core.ephemeris import build_chart
+from core.ephemeris import HOUSE_SYSTEMS, ZODIACS, build_chart
 from core.models import BirthInput, ChartData
 from core.timeconv import resolve_tz
 from interpret.trato import TRATOS
@@ -43,33 +44,71 @@ def mensaje_de_datos_invalidos(exc: Exception) -> str:
     return str(exc)
 
 
+MAX_TEXTO = 200  # `BirthData.name` y `place_label` son CharField(200)
+
+
+def _texto(payload: dict, campo: str, default: str | None) -> str | None:
+    valor = payload.get(campo, default)
+    if valor is None and default is None:
+        return None
+    if not isinstance(valor, str) or len(valor) > MAX_TEXTO:
+        raise ValueError(f"{campo} inválido")
+    return valor
+
+
+def _coordenada(payload: dict, campo: str, limite: float) -> float:
+    valor = payload[campo]
+    # `bool` es subclase de `int`: `true` no es una latitud.
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+        raise ValueError(f"{campo} inválido")
+    try:
+        numero = float(valor)
+    except OverflowError:  # un entero de 400 dígitos
+        raise ValueError(f"{campo} inválido") from None
+    if not math.isfinite(numero) or not -limite <= numero <= limite:
+        raise ValueError(f"{campo} fuera de rango")
+    return numero
+
+
+def _de_lista(payload: dict, campo: str, validos: frozenset[str], default: str) -> str:
+    valor = payload.get(campo, default)
+    if not isinstance(valor, str) or valor not in validos:
+        raise ValueError(f"{campo} inválido")
+    return valor
+
+
 def calcular(payload: dict) -> CartaCalculada:
     """Efemérides puras: no toca la base ni necesita cuenta.
 
-    Levanta `KeyError` si falta un campo obligatorio, `ValueError` si alguno no
-    parsea y `CoreError` si el cálculo no se puede hacer; quien llama los
-    traduce a 400.
+    Valida el payload ENTERO antes de calcular (spec §11): tipos, rangos de
+    lat/lng, `house_system`/`zodiac` de lo que `build_chart` soporta y largo
+    de los textos. Levanta `KeyError` si falta un campo obligatorio,
+    `ValueError` si alguno es inválido y `CoreError` si el cálculo no se
+    puede hacer; quien llama los traduce a 400. Un JSON con el tipo
+    equivocado (`"date": 123`, `"house_system": ["x"]`, `"lat": 1e400`)
+    llegaba hasta el motor como TypeError u OverflowError: un 500.
     """
-    try:
-        date = datetime.date.fromisoformat(payload["date"])
-        time_known = bool(payload.get("time_known", payload.get("time") is not None))
-        time = (
-            datetime.time.fromisoformat(payload["time"])
-            if time_known and payload.get("time")
-            else None
-        )
-        lat = float(payload["lat"])
-        lng = float(payload["lng"])
-    except TypeError as exc:
-        # Un JSON con el tipo equivocado (`"date": 123`, `"lat": [1]`) llega
-        # hasta acá como TypeError; es un dato inválido, no un fallo nuestro.
-        raise ValueError("datos inválidos: tipo de campo incorrecto") from exc
+    fecha = payload["date"]
+    if not isinstance(fecha, str):
+        raise ValueError("date inválida")
+    date = datetime.date.fromisoformat(fecha)
+    hora = payload.get("time")
+    if hora is not None and not isinstance(hora, str):
+        raise ValueError("time inválida")
+    time_known = payload.get("time_known", hora is not None)
+    if not isinstance(time_known, bool):
+        raise ValueError("time_known inválido")
+    time = datetime.time.fromisoformat(hora) if time_known and hora else None
+    lat = _coordenada(payload, "lat", 90)
+    lng = _coordenada(payload, "lng", 180)
+    house_system = _de_lista(payload, "house_system", HOUSE_SYSTEMS, "Placidus")
+    zodiac = _de_lista(payload, "zodiac", ZODIACS, "Tropical")
+    name = _texto(payload, "name", None)
+    place_label = _texto(payload, "place_label", "")
 
     birth_input = BirthInput(
-        name=payload.get("name"), date=date, time=time, time_known=time_known,
-        lat=lat, lng=lng,
-        house_system=payload.get("house_system", "Placidus"),
-        zodiac=payload.get("zodiac", "Tropical"),
+        name=name, date=date, time=time, time_known=time_known,
+        lat=lat, lng=lng, house_system=house_system, zodiac=zodiac,
     )
     chart_data = build_chart(birth_input)
 
@@ -82,7 +121,7 @@ def calcular(payload: dict) -> CartaCalculada:
             if chart_data.time_known
             else None
         ),
-        place_label=str(payload.get("place_label", ""))[:200],
+        place_label=place_label or "",
     )
 
 

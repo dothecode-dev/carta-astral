@@ -104,3 +104,54 @@ def test_campo_faltante_dice_cual_falta_sin_repr_de_la_excepcion():
 def test_valores_de_tipo_equivocado_dan_400_no_500(campo, valor):
     r = APIClient().post(URL, {**PAYLOAD, campo: valor}, format="json")
     assert r.status_code == 400, r.data
+
+
+# --- Validación del payload entero (spec §11): todo dato inválido es 400, nunca 500.
+
+
+def _crudo(**reemplazos):
+    """El cuerpo JSON escrito a mano: `1e400` no se puede producir con
+    `json.dumps` (saldría `Infinity`, que el parser ya rechaza)."""
+    import json
+
+    campos = {k: json.dumps(v) for k, v in PAYLOAD.items()}
+    campos.update(reemplazos)
+    return "{" + ",".join(f'"{k}": {v}' for k, v in campos.items()) + "}"
+
+
+@pytest.mark.parametrize("reemplazos", [
+    {"lat": "1e400"}, {"lng": "-1e400"}, {"lat": "1" + "0" * 400}, {"lng": "-" + "9" * 400},
+])
+def test_numeros_fuera_de_rango_flotante_dan_400(reemplazos):
+    r = APIClient().post(URL, _crudo(**reemplazos), content_type="application/json")
+    assert r.status_code == 400, r.data
+
+
+@pytest.mark.parametrize("campo,valor", [
+    ("lat", 90.5), ("lat", -91), ("lng", 180.01), ("lng", -181),
+    ("lat", True), ("lng", False), ("lat", "-34.5"), ("lat", None),
+    ("house_system", ["x"]), ("house_system", "Inventado"), ("house_system", None),
+    ("zodiac", "Chino"), ("zodiac", {"a": 1}),
+    ("time_known", "sí"), ("time_known", 1),
+    ("time", ["19:30"]), ("time", "no-es-hora"), ("date", None), ("date", ["1976-05-31"]),
+    ("name", ["Ceci"]), ("name", "x" * 201), ("place_label", 5), ("place_label", "x" * 201),
+])
+def test_cada_campo_invalido_da_400(campo, valor):
+    r = APIClient().post(URL, {**PAYLOAD, campo: valor}, format="json")
+    assert r.status_code == 400, r.data
+
+
+@pytest.mark.parametrize("extra", [
+    {"house_system": "Whole Sign"}, {"house_system": "Koch"}, {"house_system": "Porphyry"},
+    {"house_system": "Equal"}, {"zodiac": "Sidereal"}, {"name": None}, {"time": None, "time_known": False},
+    {"lat": -34, "lng": -58},  # enteros: también son números
+])
+def test_los_valores_soportados_siguen_andando(extra):
+    r = APIClient().post(URL, {**PAYLOAD, **extra}, format="json")
+    assert r.status_code == 200, r.data
+
+
+def test_sin_house_system_ni_zodiac_usa_los_de_siempre():
+    r = APIClient().post(URL, PAYLOAD, format="json")
+    assert r.status_code == 200
+    assert r.data["house_system"] == "Placidus" and r.data["zodiac"] == "Tropical"
