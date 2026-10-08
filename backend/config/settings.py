@@ -414,6 +414,12 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 # no los ~US$0,03 de la lectura vieja. Con el cap anterior de 500 el techo de
 # gasto diario en informes regalados pasaba de US$15 a más de US$200.
 INTERPRETATION_DAILY_CAP = int(os.environ.get("INTERPRETATION_DAILY_CAP", "40"))
+# Tope diario de lecturas breves SIN cuenta, separado del de cuentas: un abuso
+# anónimo no deja sin lectura a quien ya tiene cuenta (spec 2026-10-08, RF10).
+INTERPRETATION_ANON_DAILY_CAP = int(os.environ.get("INTERPRETATION_ANON_DAILY_CAP", "40"))
+# Cuántas breves anónimas se escriben a la vez como máximo: una ráfaga no le
+# quita a los informes pagos la capacidad de Anthropic ni los workers (RF12).
+LECTURA_ANONIMA_CONCURRENCIA = int(os.environ.get("LECTURA_ANONIMA_CONCURRENCIA", "3"))
 # Lecturas breves de regalo por cuenta nueva.
 #
 # Fueron tres hasta el 04-10-2026, para que alguien pudiera mostrárselo a otra
