@@ -122,9 +122,19 @@ def test_patch_con_trato_invalido_da_400_sin_cambio(cuenta, carta):
     assert carta.birth_data.trato == "femenino"
 
 
-@pytest.mark.parametrize("cuerpo", [{}, {"trato": None}, {"trato": ""}])
+def test_patch_sin_la_clave_trato_da_400_sin_cambio(cuenta, carta):
+    """Un PATCH sin la clave no dice nada sobre el trato: no puede borrarlo."""
+    _patch(_client(cuenta), carta, {"trato": "femenino"})
+    r = _patch(_client(cuenta), carta, {})
+    assert r.status_code == 400
+    assert r.json() == {"error": "trato inválido"}
+    carta.birth_data.refresh_from_db()
+    assert carta.birth_data.trato == "femenino"
+
+
+@pytest.mark.parametrize("cuerpo", [{"trato": None}, {"trato": ""}])
 def test_patch_sin_clave_o_null_es_sin_elegir(cuenta, carta, cuerpo):
-    """Sin la clave o con null = «sin elegir» (""), igual que `validar_trato`."""
+    """Con null o "" = «sin elegir» (""), igual que `validar_trato`."""
     _patch(_client(cuenta), carta, {"trato": "femenino"})
     r = _patch(_client(cuenta), carta, cuerpo)
     assert r.status_code == 200 and r.data["trato"] == ""

@@ -289,7 +289,7 @@ class ChartDetailView(APIView):
             uuid=uuid, account=request.user,
         )
         try:
-            chart_service.cambiar_trato(chart, request.data.get("trato"))
+            chart_service.cambiar_trato(chart, request.data)
         except chart_service.TratoInvalido:
             return Response({"error": "trato inválido"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(_chart_repr(chart))

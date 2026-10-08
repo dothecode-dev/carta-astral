@@ -95,10 +95,16 @@ def validar_trato(valor) -> str:
     return valor
 
 
-def cambiar_trato(chart: Chart, valor) -> None:
-    """Cambia el trato de la carta. Sólo afecta a los informes que se creen
-    después: una `Interpretation` ya creada conserva el suyo (RF3)."""
-    trato = validar_trato(valor)
+def cambiar_trato(chart: Chart, datos) -> None:
+    """Cambia el trato de la carta con el cuerpo de un PATCH. Sólo afecta a los
+    informes que se creen después: una `Interpretation` ya creada conserva el
+    suyo (RF3).
+
+    El cuerpo tiene que traer la clave `trato`: sin ella el PATCH no dice nada
+    sobre el trato y no puede borrarlo. `null` y `""` sí son «sin elegir»."""
+    if not hasattr(datos, "keys") or "trato" not in datos:
+        raise TratoInvalido("trato inválido")
+    trato = validar_trato(datos["trato"])
     birth = chart.birth_data
     birth.trato = trato
     birth.save(update_fields=["trato"])
