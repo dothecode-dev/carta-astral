@@ -344,6 +344,14 @@ DATABASES = {
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # Los tres parsers por defecto de DRF, con el JSON reemplazado por uno que
+    # rechaza (400) un cuerpo que no es un objeto: `[]`, `null` o `3` dejaban
+    # `request.data.get(...)` reventando con 500.
+    "DEFAULT_PARSER_CLASSES": [
+        "api.parsers.JSONObjetoParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
+    ],
     "DEFAULT_AUTHENTICATION_CLASSES": ["api.auth.AccountTokenAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["api.permissions.HasAccount"],
     # Sin esto, ScopedRateThrottle.get_ident() (con NUM_PROXIES=None, el default

@@ -18,6 +18,7 @@ import logging
 from django.conf import settings
 from django.utils.crypto import constant_time_compare
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -63,6 +64,11 @@ def _estructura(valor, profundidad: int = 2):
 
 
 class RevenueCatWebhookView(APIView):
+    # El parser JSON por defecto de la API (`JSONObjetoParser`) contesta 400 a un
+    # cuerpo que no es un objeto. Acá no: un webhook que no es 2xx se reintenta,
+    # y reintentar un cuerpo malformado no lo arregla; esta vista lo acusa con
+    # 200 "ignored" más abajo.
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
     authentication_classes = []
     permission_classes = [AllowAny]
 
