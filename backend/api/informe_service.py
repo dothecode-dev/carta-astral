@@ -258,9 +258,12 @@ def avisar_informe_listo(interpretacion: Interpretation) -> None:
     ).update(avisada_at=timezone.now())
     if marcadas != 1:
         return
+    # El informe vive en la página de la carta (web/app/[locale]/carta/[id],
+    # `id` = uuid), no en la cuenta: el mail lleva directo a leerlo.
+    uuid = str(interpretacion.chart.uuid)
     notificaciones.notificar(
         interpretacion.account, "informe_listo",
-        {"chart": str(interpretacion.chart.uuid)}, lang=interpretacion.lang,
+        {"chart": uuid, "ruta": f"/carta/{uuid}"}, lang=interpretacion.lang,
     )
 
 

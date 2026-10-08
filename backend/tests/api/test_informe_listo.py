@@ -69,3 +69,32 @@ def test_compra_acreditada_es_generica_e_informe_en_curso_promete_el_mail():
         _, en_curso = _TEXTOS["informe_en_curso"][lang]
         assert not any(p in generico for p in ("escribiendo", "writing", "escrevendo")), lang
         assert any(p in en_curso for p in ("escribiendo", "writing", "escrevendo")), lang
+
+
+def test_informe_listo_lleva_a_la_pagina_del_informe(interpretacion_completa, resend, settings):
+    """Spec §11, RF24 v3: el informe vive en la página de la carta
+    (`web/app/[locale]/carta/[id]`, `id` = uuid), no en la cuenta."""
+    settings.WEB_BASE_URL = "https://astraguia.com/"
+    interpretacion_completa.lang = "pt"
+    interpretacion_completa.save()
+    informe_service.avisar_informe_listo(interpretacion_completa)
+    html = resend[0]["json"]["html"]
+    uuid = interpretacion_completa.chart.uuid
+    assert f'href="https://astraguia.com/pt/carta/{uuid}"' in html
+
+
+def test_los_otros_avisos_siguen_llevando_a_la_cuenta(interpretacion_completa, resend, settings):
+    from api import notificaciones
+
+    settings.WEB_BASE_URL = "https://astraguia.com"
+    notificaciones.notificar(interpretacion_completa.account, "compra_acreditada", {"producto": "x"}, "es")
+    assert 'href="https://astraguia.com/es/cuenta"' in resend[0]["json"]["html"]
+
+
+@pytest.mark.parametrize("ruta", ["https://otro.example/x", "//otro.example/x", "carta/x", 5])
+def test_una_ruta_que_no_es_del_sitio_no_se_usa(interpretacion_completa, resend, settings, ruta):
+    from api import notificaciones
+
+    settings.WEB_BASE_URL = "https://astraguia.com"
+    notificaciones.notificar(interpretacion_completa.account, "informe_listo", {"ruta": ruta}, "es")
+    assert 'href="https://astraguia.com/es/cuenta"' in resend[0]["json"]["html"]

@@ -38,7 +38,8 @@ _API = "https://api.resend.com/emails"
 _TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
 # Mismo patrón que los DISCLAIMERS de `interpretation_service`: un dict por
-# idioma en el módulo. `{url}` es la cuenta de esa persona, en su idioma.
+# idioma en el módulo. `{url}` es la cuenta de esa persona, en su idioma, o la
+# `ruta` que traiga el contexto (`_ruta`).
 _TEXTOS = {
     # Genérico y siempre cierto: sale para cualquier compra acreditada que NO
     # dejó un informe escribiéndose (un pack, una que saldó deuda, una cuyo
@@ -234,13 +235,24 @@ def _enviar(account, evento, contexto, lang):
     if lang not in _TEXTOS[evento]:
         lang = _LANG_DEFAULT
     asunto, html = _TEXTOS[evento][lang]
-    url = f"{settings.WEB_BASE_URL.rstrip('/')}/{lang}/cuenta"
+    url = f"{settings.WEB_BASE_URL.rstrip('/')}/{lang}{_ruta(contexto)}"
 
     respuesta = _post_resend(account.email, asunto, html.format(url=url))
     logger.info(
         "aviso enviado",
         extra={"evento": evento, "account": account.pk, "resend_id": respuesta.json().get("id")},
     )
+
+
+def _ruta(contexto: dict) -> str:
+    """A dónde lleva el botón del mail, dentro del sitio y del idioma: la
+    `ruta` del contexto (p. ej. `/carta/<uuid>` para `informe_listo`) o la
+    cuenta. Sólo un path propio («/x», no «//host»): el link sale con
+    nuestra firma y no puede apuntar afuera."""
+    ruta = contexto.get("ruta")
+    if isinstance(ruta, str) and ruta.startswith("/") and not ruta.startswith("//"):
+        return ruta
+    return "/cuenta"
 
 
 def _post_resend(direccion: str, asunto: str, html: str) -> httpx.Response:
