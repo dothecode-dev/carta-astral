@@ -567,6 +567,10 @@ export type Dict = {
     verAspectos: string;
     /** El desplegable que guarda posiciones, casas y aspectos, al final. */
     verDatos: string;
+    /** Cambiar cómo le hablamos, desde la carta ya creada. */
+    tratoTitulo: string;
+    tratoAclaracion: string;
+    tratoError: string;
     aspects: string;
     axisNames: { AC: string; MC: string };
     aspectColumns: { pair: string; aspect: string; orb: string };
@@ -892,6 +896,9 @@ const es: Dict = {
     verCasas: "Ver las casas",
     verAspectos: "Ver los {n} aspectos",
     verDatos: "Ver los datos de la carta",
+    tratoTitulo: "Cómo te hablamos",
+    tratoAclaracion: "Vale para lo que se escriba o traduzca desde ahora; lo ya escrito queda como está.",
+    tratoError: "No pudimos guardarlo. Probá de nuevo.",
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Medio Cielo" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },
@@ -1289,6 +1296,9 @@ const en: Dict = {
     verCasas: "Show the houses",
     verAspectos: "Show all {n} aspects",
     verDatos: "Show the chart data",
+    tratoTitulo: "How we address you",
+    tratoAclaracion: "Applies to what we write or translate from now on; what's already written stays as it is.",
+    tratoError: "We couldn't save it. Please try again.",
     aspects: "Aspects",
     axisNames: { AC: "Ascendant", MC: "Midheaven" },
     aspectColumns: { pair: "Between", aspect: "Aspect", orb: "Orb" },
@@ -1357,7 +1367,7 @@ const en: Dict = {
     tratoFemenino: "Feminine",
     tratoMasculino: "Masculine",
     tratoNeutro: "No gender",
-    tratoVacio: "Optional",
+    tratoVacio: "Choose if you like",
     tratoNota: "Optional. Only affects how we write to you in Spanish and Portuguese.",
     date: "Date of birth",
     time: "Time",
@@ -1686,6 +1696,9 @@ const pt: Dict = {
     verCasas: "Ver as casas",
     verAspectos: "Ver os {n} aspectos",
     verDatos: "Ver os dados do mapa",
+    tratoTitulo: "Como falamos com você",
+    tratoAclaracion: "Vale para o que for escrito ou traduzido a partir de agora; o que já está escrito fica como está.",
+    tratoError: "Não conseguimos salvar. Tente de novo.",
     aspects: "Aspectos",
     axisNames: { AC: "Ascendente", MC: "Meio do Céu" },
     aspectColumns: { pair: "Entre", aspect: "Aspecto", orb: "Orbe" },

@@ -10,6 +10,7 @@ import { Firma } from "@/components/Firma";
 import { Identificar } from "@/components/Identificar";
 import { InformeSecciones, type SeccionEscrita } from "@/components/InformeSecciones";
 import { Nav } from "@/components/Nav";
+import { TratoCarta } from "@/components/TratoCarta";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
 import { fetchCatalogo, precioDe } from "@/lib/catalogo";
@@ -186,7 +187,9 @@ export default async function ChartPage({
         {/* Los datos de astrólogo —posiciones, casas, aspectos— plegados y
             después de la lectura: hasta el 06-10 iban antes, y entre la rueda
             y el texto había cuatro pantallas de tablas y una matriz de glifos. */}
-        <DatosCarta chart={chart} dict={dict} locale={locale} />
+        <DatosCarta chart={chart} dict={dict} locale={locale}>
+          <TratoCarta chartId={chart.id} trato={chart.trato ?? ""} dict={dict} />
+        </DatosCarta>
 
         <ResumenCompleto secciones={secciones} dict={dict} />
 

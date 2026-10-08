@@ -1,3 +1,4 @@
+import type { Trato } from "@/lib/datosCarta";
 import type { Locale } from "@/lib/i18n";
 import type { WheelInput } from "astra-wheel";
 
@@ -26,6 +27,8 @@ export type FirmaLinea = {
 
 export type ApiChart = {
   id: string;
+  /** Cómo quiere que le hablemos. El backend siempre lo manda; `""` = sin elegir. */
+  trato?: Trato;
   interpretation_langs: string[];
   /** Por idioma, qué tiers están completos. Sólo trae los idiomas con al
    *  menos uno listo: uno sin nada no aparece con lista vacía, no aparece —
