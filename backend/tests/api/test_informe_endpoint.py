@@ -405,12 +405,22 @@ def test_completar_generacion_traduce_el_segundo_idioma_en_vez_de_regenerar(
     llamadas_generar = []
     llamadas_traducir = []
     monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas_generar.append(1))
-    monkeypatch.setattr(informe_service, "traducir_informe", lambda *a, **kw: llamadas_traducir.append(1))
+    monkeypatch.setattr(
+        informe_service, "traducir_informe",
+        lambda *a, **kw: llamadas_traducir.append(1) or True,
+    )
 
     svc.generar_en_segundo_plano(chart, "en", account, tier="largo")
 
     assert llamadas_traducir == [1]
     assert llamadas_generar == []
+    # El doble devuelve lo que devuelve una traducción que terminó de
+    # intentar: el intento cuenta. Con `None` se leía como lock perdido y el
+    # test ejercitaba ese otro camino (el intento se descontaba).
+    from api.models import Interpretation
+
+    en = Interpretation.objects.get(chart=chart, lang="en", tier="largo")
+    assert en.intentos == 1
 
 
 # --- BUG de la revisión de seguridad: segundo idioma con el primero EN CURSO ---
