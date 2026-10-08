@@ -1,5 +1,6 @@
 import { normalizarCupon } from "./cupon";
 import { isLocale, type Locale } from "./i18n";
+import { uuidValido } from "./uuid";
 
 /**
  * A dónde volver después de entrar.
@@ -16,8 +17,6 @@ import { isLocale, type Locale } from "./i18n";
  * lo que no está en la lista no vuelve corregido, vuelve `null`.
  */
 const RUTAS = ["precios", "nueva", "cuenta"] as const;
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Forma de un código de producto en la URL: la misma regla que `/entrar`
  *  exige en su query `comprar` (Ruling 19 no la afloja, la reusa). Vive acá
@@ -43,7 +42,8 @@ export function destinoSeguro(next: unknown, locale: Locale): string | null {
   if (RUTAS.includes(resto as (typeof RUTAS)[number])) return next;
 
   const carta = resto.match(/^carta\/(.+)$/);
-  if (carta && UUID.test(carta[1])) return next;
+  // El mismo criterio que las rutas de la carta: las cartas son uuid4.
+  if (carta && uuidValido(carta[1])) return next;
 
   return null;
 }

@@ -19,13 +19,20 @@ describe("destinoSeguro", () => {
   });
 
   it("acepta una carta concreta, que lleva uuid", () => {
-    const uuid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+    const uuid = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
     expect(destinoSeguro(`/es/carta/${uuid}`, "es")).toBe(`/es/carta/${uuid}`);
   });
 
   it("rechaza un uuid que no lo es", () => {
     expect(destinoSeguro("/es/carta/../../evil", "es")).toBeNull();
     expect(destinoSeguro("/es/carta/1", "es")).toBeNull();
+  });
+
+  it("valida la carta con el mismo criterio que las rutas (`uuidValido`)", () => {
+    // Las cartas son uuid4 en minúsculas (`Chart.uuid`): un v1 o un uuid en
+    // mayúsculas no es ninguna carta del sitio.
+    expect(destinoSeguro("/es/carta/3f2504e0-4f89-11d3-9a0c-0305e82c3301", "es")).toBeNull();
+    expect(destinoSeguro("/es/carta/3F2504E0-4F89-41D3-9A0C-0305E82C3301", "es")).toBeNull();
   });
 
   it("rechaza cualquier cosa que salga del sitio", () => {
@@ -76,7 +83,7 @@ describe("destinoInternoSeguro", () => {
   });
 
   it("acepta una carta concreta, que lleva uuid", () => {
-    const uuid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+    const uuid = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
     expect(destinoInternoSeguro(`/es/carta/${uuid}`)).toBe(`/es/carta/${uuid}`);
   });
 
