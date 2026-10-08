@@ -550,3 +550,31 @@ def test_relanzar_la_caida_del_mismo_pedido_no_consume_la_ip(breve, monkeypatch)
     _entrada_caida(primero.token)
     la.pedir(DATOS, "es", "", primero.token, permitir, pedido=PEDIDO)
     assert contadas == [1] and _usados() == 1
+
+
+def test_pasado_el_maximo_el_latido_no_renueva_y_la_lectura_se_cae(breve, monkeypatch):
+    """Fix round 1: un stream que no termina nunca no puede quedarse con el
+    slot y el cupo para siempre. Pasados LECTURA_MAX_SEGUNDOS el latido deja
+    de renovar, y 90 s después la lectura está caída y su cupo vuelve una vez."""
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: None)
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    h = hash_token(pedido.token)
+    iniciado = cache.get(f"lectura_anonima:{h}")["iniciado"]
+    tocadas = []
+    monkeypatch.setattr(la.cache, "touch", lambda *a, **kw: tocadas.append(a))
+
+    monkeypatch.setattr(la, "_ahora", lambda: iniciado + la.LECTURA_MAX_SEGUNDOS - 10)
+    la._latir(h, 0, PEDIDO, iniciado)
+    assert len(tocadas) == 1
+    ultimo = cache.get(f"lectura_anonima:{h}")["ultimo_latido"]
+
+    monkeypatch.setattr(la, "_ahora", lambda: iniciado + la.LECTURA_MAX_SEGUNDOS + 1)
+    la._latir(h, 0, PEDIDO, iniciado)
+    assert len(tocadas) == 1
+    assert cache.get(f"lectura_anonima:{h}")["ultimo_latido"] == ultimo
+    assert la.estado(pedido.token)["estado"] == "generando"
+
+    monkeypatch.setattr(la, "_ahora", lambda: ultimo + la.CAIDA_SEGUNDOS + 1)
+    assert la.estado(pedido.token)["estado"] == "fallida"
+    assert la.estado(pedido.token)["estado"] == "fallida"
+    assert _usados() == 0

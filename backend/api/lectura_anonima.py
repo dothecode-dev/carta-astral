@@ -50,6 +50,11 @@ CAIDA_SEGUNDOS = 90
 # que CAIDA_SEGUNDOS: sin latido el slot vencía a mitad de escritura y el GET
 # daba por caída una lectura viva (spec §11, RF12/RF15 v3).
 LATIDO_SEGUNDOS = 30
+# Tope de vida de una generación: pasado esto el latido deja de renovar, así
+# que un stream que no termina nunca queda caído CAIDA_SEGUNDOS después y su
+# cupo vuelve (una vez, por `_devolver_una_vez`). Una lectura normal tarda
+# bastante menos.
+LECTURA_MAX_SEGUNDOS = 300
 
 
 def _ahora() -> float:
@@ -231,7 +236,12 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
 def _latir(h: str, slot: int, pedido: str, iniciado: float) -> None:
     """Renueva el slot (sólo si sigue siendo nuestro, como `_soltar_slot`) y
     anota el latido en la entrada sólo si sigue siendo ESTA generación: mismo
-    pedido, mismo `iniciado` y todavía `generando`."""
+    pedido, mismo `iniciado` y todavía `generando`. Pasados
+    LECTURA_MAX_SEGUNDOS desde el inicio no renueva nada: deja caer la
+    generación."""
+    if _ahora() - iniciado > LECTURA_MAX_SEGUNDOS:
+        logger.warning("lectura anónima: pasó el tope de %ss, el latido no renueva", LECTURA_MAX_SEGUNDOS)
+        return
     if cache.get(_slot(slot)) == h:
         cache.touch(_slot(slot), TTL_SLOT)
     entrada = cache.get(_clave(h))
