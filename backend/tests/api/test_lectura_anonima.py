@@ -102,7 +102,7 @@ def test_la_cache_no_guarda_datos_de_nacimiento(breve, monkeypatch):
     monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: None)  # queda en `generando`
     pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
     entrada = cache.get(f"lectura_anonima:{hash_token(pedido.token)}")
-    assert set(entrada) <= {"estado", "lang", "iniciado", "fecha_cupo", "texto", "pedido"}
+    assert set(entrada) <= {"estado", "lang", "iniciado", "fecha_cupo", "texto", "pedido", "ultimo_latido"}
 
 
 def test_con_la_lectura_lista_otro_pedido_da_usado(breve):
@@ -389,3 +389,104 @@ def test_la_marca_se_pone_antes_que_la_lista(breve, monkeypatch):
     monkeypatch.setattr(la.cache, "set", set_espia)
     la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
     assert orden == ["marca", "lista"]
+
+
+# --- Latido (spec §11, RF12/RF15 v3): mientras el hilo escribe renueva el slot
+# y la entrada; «caída» se mide desde el último latido, no desde el inicio.
+
+
+def _generando(token, **extra):
+    clave = f"lectura_anonima:{hash_token(token)}"
+    entrada = {**cache.get(clave), **extra}
+    cache.set(clave, entrada, 900)
+    return entrada
+
+
+def test_con_latido_reciente_no_esta_caida(breve, monkeypatch):
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: None)
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    ahora = time.time()
+    monkeypatch.setattr(la, "_ahora", lambda: ahora + 600)
+    _generando(pedido.token, iniciado=ahora - 600, ultimo_latido=ahora + 600 - 80)
+    assert la.estado(pedido.token)["estado"] == "generando"
+    _generando(pedido.token, ultimo_latido=ahora + 600 - 91)
+    assert la.estado(pedido.token)["estado"] == "fallida"
+    assert _usados() == 0
+
+
+def test_latir_renueva_el_slot_y_la_entrada_de_su_generacion(breve, monkeypatch):
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: None)
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    h = hash_token(pedido.token)
+    entrada = cache.get(f"lectura_anonima:{h}")
+    tocadas = []
+    reales = cache.touch
+    monkeypatch.setattr(la.cache, "touch", lambda k, t=None: tocadas.append((k, t)) or reales(k, t))
+    monkeypatch.setattr(la, "_ahora", lambda: 12345.0)
+    la._latir(h, 0, PEDIDO, entrada["iniciado"])
+    assert tocadas == [("lectura_anonima:slot:0", la.TTL_SLOT)]
+    assert cache.get(f"lectura_anonima:{h}")["ultimo_latido"] == 12345.0
+
+
+@pytest.mark.parametrize("cambio", [
+    {"pedido": OTRO}, {"estado": "fallida"}, {"iniciado": 1.0},
+])
+def test_latir_no_toca_una_entrada_ajena(breve, monkeypatch, cambio):
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: None)
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    h = hash_token(pedido.token)
+    iniciado = cache.get(f"lectura_anonima:{h}")["iniciado"]
+    antes = _generando(pedido.token, **cambio)
+    la._latir(h, 0, PEDIDO, iniciado)
+    assert cache.get(f"lectura_anonima:{h}") == antes
+
+
+def test_latir_no_renueva_un_slot_ajeno(breve, monkeypatch):
+    cache.set("lectura_anonima:slot:0", "otro", 90)
+    tocadas = []
+    monkeypatch.setattr(la.cache, "touch", lambda *a, **kw: tocadas.append(a))
+    la._latir("mio", 0, PEDIDO, 1.0)
+    assert tocadas == []
+
+
+def test_el_hilo_late_mientras_escribe_y_deja_de_latir_al_terminar(monkeypatch):
+    monkeypatch.setattr(la, "LATIDO_SEGUNDOS", 0.01)
+    latidos = []
+    reales = la._latir
+    monkeypatch.setattr(la, "_latir", lambda *a: latidos.append(a) or reales(*a))
+    vistos = []
+
+    def escribir(data, lang, trato, client):
+        fin = time.time() + 1
+        while time.time() < fin and not vistos:
+            if latidos:
+                vistos.append(1)
+            time.sleep(0.005)
+        return "breve"
+
+    monkeypatch.setattr(la.informe_service, "escribir_breve", escribir)
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    assert vistos == [1]
+    cantidad = len(latidos)
+    time.sleep(0.05)
+    assert len(latidos) == cantidad  # el latido se detuvo
+    assert la.estado(pedido.token)["estado"] == "lista"  # y no pisó la lista
+    assert cache.get("lectura_anonima:slot:0") is None
+
+
+def test_si_falla_la_escritura_el_latido_tambien_se_detiene(monkeypatch):
+    monkeypatch.setattr(la, "LATIDO_SEGUNDOS", 0.01)
+    latidos = []
+    monkeypatch.setattr(la, "_latir", lambda *a: latidos.append(a))
+
+    def rompe(*a):
+        time.sleep(0.05)
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(la.informe_service, "escribir_breve", rompe)
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    cantidad = len(latidos)
+    assert cantidad >= 1
+    time.sleep(0.05)
+    assert len(latidos) == cantidad
+    assert la.estado(pedido.token)["estado"] == "fallida"

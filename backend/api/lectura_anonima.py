@@ -25,7 +25,8 @@ import logging
 import secrets
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from django.conf import settings
@@ -43,6 +44,15 @@ TTL_MARCA = 24 * 60 * 60
 TTL_SLOT = 90
 TTL_LOCK = 30
 CAIDA_SEGUNDOS = 90
+# Mientras el hilo escribe, cada LATIDO_SEGUNDOS renueva su slot (TTL_SLOT) y
+# anota `ultimo_latido` en la entrada. Una lectura tarda más que TTL_SLOT y
+# que CAIDA_SEGUNDOS: sin latido el slot vencía a mitad de escritura y el GET
+# daba por caída una lectura viva (spec §11, RF12/RF15 v3).
+LATIDO_SEGUNDOS = 30
+
+
+def _ahora() -> float:
+    return time.time()
 
 
 class Mantenimiento(Exception):
@@ -92,7 +102,10 @@ def _devuelto(h: str, iniciado: float) -> str:
 
 
 def _caida(entrada: dict) -> bool:
-    return entrada["estado"] == "generando" and time.time() - entrada["iniciado"] > CAIDA_SEGUNDOS
+    """`generando` sin latido hace más de CAIDA_SEGUNDOS: el hilo murió."""
+    if entrada["estado"] != "generando":
+        return False
+    return _ahora() - entrada.get("ultimo_latido", entrada["iniciado"]) > CAIDA_SEGUNDOS
 
 
 def _devolver_una_vez(h: str, iniciado: float, fecha: dt.date) -> None:
@@ -182,7 +195,7 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
                     settings.INTERPRETATION_ANON_DAILY_CAP,
                 )
                 raise SinCupo()
-            iniciado = time.time()
+            iniciado = _ahora()
             cache.set(_clave(h), {
                 "estado": "generando", "lang": lang, "pedido": pedido,
                 "iniciado": iniciado, "fecha_cupo": fecha.isoformat(),
@@ -202,10 +215,51 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
     return Pedido(token, "generando")
 
 
+def _latir(h: str, slot: int, pedido: str, iniciado: float) -> None:
+    """Renueva el slot (sólo si sigue siendo nuestro, como `_soltar_slot`) y
+    anota el latido en la entrada sólo si sigue siendo ESTA generación: mismo
+    pedido, mismo `iniciado` y todavía `generando`."""
+    if cache.get(_slot(slot)) == h:
+        cache.touch(_slot(slot), TTL_SLOT)
+    entrada = cache.get(_clave(h))
+    if (
+        entrada is not None and entrada["estado"] == "generando"
+        and entrada.get("pedido") == pedido and entrada.get("iniciado") == iniciado
+    ):
+        cache.set(_clave(h), {**entrada, "ultimo_latido": _ahora()}, TTL_ENTRADA)
+
+
+@contextmanager
+def _latido(h: str, slot: int, pedido: str, iniciado: float) -> Iterator[None]:
+    """Late en otro hilo mientras dura el bloque. Al salir lo detiene y lo
+    ESPERA: un latido en vuelo leyendo `generando` no puede escribir después
+    de que `generar` escribió `lista` o `fallida`."""
+    parar = threading.Event()
+
+    def correr() -> None:
+        try:
+            while not parar.wait(LATIDO_SEGUNDOS):
+                try:
+                    _latir(h, slot, pedido, iniciado)
+                except Exception:
+                    logger.exception("lectura anónima: el latido falló")
+        finally:
+            connections.close_all()
+
+    hilo = threading.Thread(target=correr, daemon=True)
+    hilo.start()
+    try:
+        yield
+    finally:
+        parar.set()
+        hilo.join()
+
+
 def generar(h: str, chart_data: dict, lang: str, trato: str, slot: int,
             fecha: dt.date, iniciado: float, pedido: str) -> None:
     try:
-        texto = informe_service.escribir_breve(chart_data, lang, trato, _build_client())
+        with _latido(h, slot, pedido, iniciado):
+            texto = informe_service.escribir_breve(chart_data, lang, trato, _build_client())
     except Exception:
         logger.exception("lectura anónima fallida (lang=%s)", lang)
         _devolver_una_vez(h, iniciado, fecha)
