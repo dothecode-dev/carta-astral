@@ -732,3 +732,18 @@ class CupoDiario(models.Model):
 
     def __str__(self):
         return f"{self.fecha} {self.ambito}: {self.usados}"
+
+
+class EntradaCache(models.Model):
+    """La tabla de `DatabaseCache`, para que `purgar_codigos_acceso` borre lo
+    vencido por el ORM y no con SQL armado a mano. No gestionada: la crea y
+    la usa `createcachetable`/`DatabaseCache`, nunca una migración. La tabla
+    es la `LOCATION` que fija `config/caches.py` (un test lo ata)."""
+
+    cache_key = models.CharField(max_length=255, primary_key=True)
+    value = models.TextField()
+    expires = models.DateTimeField(db_index=True)
+
+    class Meta:
+        managed = False
+        db_table = "django_cache"

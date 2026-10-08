@@ -23,13 +23,16 @@ datos que la política de privacidad promete no retener).
 Corre como Scheduled Task de Coolify, igual que `reanudar_informes` e
 `informe_diario` (ver CLAUDE.md): no hay nada en el repo que la programe.
 """
+import logging
+
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 
-from api.models import CodigoAcceso
+from api.models import CodigoAcceso, EntradaCache
+
+logger = logging.getLogger(__name__)
 
 RETENCION_HORAS = 2
 _DB_CACHE = "django.core.cache.backends.db.DatabaseCache"
@@ -42,12 +45,18 @@ def _purgar_cache_vencida(ahora) -> int:
     conf = settings.CACHES.get("default", {})
     if conf.get("BACKEND") != _DB_CACHE:
         return 0
-    # El nombre sale de la configuración, no del usuario, y va quoteado; el
-    # valor va parametrizado.
-    tabla = connection.ops.quote_name(conf["LOCATION"])
-    with connection.cursor() as cursor:
-        cursor.execute(f"DELETE FROM {tabla} WHERE expires < %s", [ahora])
-        return cursor.rowcount
+    tabla = EntradaCache._meta.db_table
+    if conf.get("LOCATION") != tabla:
+        # `config/caches.py` fija la LOCATION y un test la ata al modelo:
+        # llegar acá es que alguien las separó. Mejor no borrar nada que
+        # borrar en la tabla equivocada.
+        logger.error(
+            "purga de caché salteada: LOCATION=%r no es la tabla del modelo (%r)",
+            conf.get("LOCATION"), tabla,
+        )
+        return 0
+    borradas, _ = EntradaCache.objects.filter(expires__lt=ahora).delete()
+    return borradas
 
 
 class Command(BaseCommand):

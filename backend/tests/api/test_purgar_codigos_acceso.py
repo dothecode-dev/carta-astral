@@ -17,7 +17,6 @@ import io
 
 import pytest
 from django.core.management import call_command
-from django.db import connection
 from django.utils import timezone
 
 from api.models import CodigoAcceso
@@ -85,17 +84,39 @@ def test_reporta_cuantas_filas_borro():
 
 
 def _fila_cache(clave, expira):
-    with connection.cursor() as c:
-        c.execute(
-            "INSERT INTO django_cache (cache_key, value, expires) VALUES (%s, %s, %s)",
-            [clave, "x", expira],
-        )
+    from api.models import EntradaCache
+
+    EntradaCache.objects.create(cache_key=clave, value="x", expires=expira)
 
 
 def _claves_cache():
-    with connection.cursor() as c:
-        c.execute("SELECT cache_key FROM django_cache")
-        return {r[0] for r in c.fetchall()}
+    from api.models import EntradaCache
+
+    return set(EntradaCache.objects.values_list("cache_key", flat=True))
+
+
+def test_el_modelo_apunta_a_la_tabla_de_la_cache_de_produccion():
+    """El modelo no gestionado fija la tabla; `config/caches.py` fija la
+    LOCATION. Si se separan, la purga borraría en otra tabla (o en ninguna)."""
+    from api.models import EntradaCache
+    from config import caches
+
+    assert EntradaCache._meta.managed is False
+    assert EntradaCache._meta.db_table == caches.armar(usar_db=True, debug=False)["default"]["LOCATION"]
+
+
+def test_una_location_distinta_no_borra_nada(db_cache, settings, caplog):
+    ahora = timezone.now()
+    _fila_cache(":1:vieja", ahora - dt.timedelta(minutes=1))
+    real = settings.CACHES
+    settings.CACHES = {"default": {**real["default"], "LOCATION": "otra_tabla"}}
+    try:
+        with caplog.at_level("ERROR"):
+            call_command("purgar_codigos_acceso")
+    finally:
+        settings.CACHES = real  # el teardown de `db_cache` limpia la tabla real
+    assert _claves_cache() == {":1:vieja"}
+    assert any("otra_tabla" in r.getMessage() for r in caplog.records)
 
 
 def test_borra_las_filas_vencidas_de_la_cache(db_cache):
