@@ -1033,7 +1033,7 @@ const es: Dict = {
       "Se puede calcular igual. Sin hora quedan las posiciones de los planetas por signo, que cambian lento, pero no hay Ascendente ni casas —dependen de la rotación de la Tierra, o sea de la hora— y la Luna queda aproximada, porque se mueve unos trece grados por día.",
     seoGratis: "Hasta dónde es gratis",
     seoGratisBody:
-      "Calcular la carta y leer la primera lectura breve es gratis y no pide cuenta. El informe completo es lo único que se paga.",
+      "La carta y la primera lectura breve son gratis y no piden cuenta. El informe completo es lo único que se paga.",
   },
   foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto" },
   consent: {
@@ -1442,7 +1442,7 @@ const en: Dict = {
       "It can still be calculated. Without a time you keep the planets' positions by sign, which change slowly, but there's no Ascendant and no houses — they depend on the Earth's rotation, that is, on the time — and the Moon is approximate, because it moves about thirteen degrees a day.",
     seoGratis: "How far it's free",
     seoGratisBody:
-      "Calculating the chart and reading the first short reading are free and need no account. Only the full report is paid.",
+      "The chart and your first short reading are free and need no account. Only the full report is paid.",
   },
   foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact" },
   consent: {
@@ -1851,7 +1851,7 @@ const pt: Dict = {
       "Dá para calcular do mesmo jeito. Sem hora ficam as posições dos planetas por signo, que mudam devagar, mas não há Ascendente nem casas — dependem da rotação da Terra, ou seja, da hora — e a Lua fica aproximada, porque se move uns treze graus por dia.",
     seoGratis: "Até onde é grátis",
     seoGratisBody:
-      "Calcular o mapa e ler a primeira leitura breve é grátis e não pede conta. Só o informe completo é pago.",
+      "O mapa e a primeira leitura breve são grátis e não pedem conta. Só o informe completo é pago.",
   },
   foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato" },
   consent: {

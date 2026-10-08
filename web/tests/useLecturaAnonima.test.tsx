@@ -130,9 +130,9 @@ describe("useLecturaAnonima", () => {
       .mockReturnValueOnce(res(200, { estado: "fallida", pedido: P1 }))
       .mockReturnValueOnce(res(202, { estado: "generando" }));
     const { result } = renderHook(() => useLecturaAnonima());
-    await act(async () => { await result.current.pedir({}, CARTA, "es"); });
+    await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    await act(async () => { await result.current.pedir({}, CARTA_B, "es"); });
+    await act(async () => { await result.current.pedir({ date: "B" }, CARTA_B, "es"); });
     expect(posts(fetchMock).map((b) => b.pedido)).toEqual([P1, P2]);
   });
 
@@ -471,7 +471,7 @@ describe("useLecturaAnonima", () => {
 
     it("tras recargar, pedir la MISMA carta adopta la espera retomada en vez de dar «usada»", async () => {
       const P9 = "00000000-0000-4000-8000-000000000009";
-      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, pedido: P9, vence: Date.now() + 60_000 }));
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, pedido: P9, lang: "es", vence: Date.now() + 60_000 }));
       fetchMock
         .mockReturnValueOnce(res(200, { estado: "generando", pedido: P9 }))
         .mockReturnValueOnce(res(200, { estado: "generando", pedido: P9 }))
@@ -499,6 +499,51 @@ describe("useLecturaAnonima", () => {
       expect(posts(fetchMock)).toHaveLength(1);
       await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
       expect(result.current.estado).toEqual({ tipo: "lista", texto: "t", lang: "es", disclaimer: "d" });
+    });
+
+    it("al pedir guarda el idioma con el pedido en curso", async () => {
+      fetchMock.mockReturnValueOnce(res(202, { estado: "generando" }));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "pt"); });
+      expect(pendiente()).toMatchObject({ lang: "pt" });
+    });
+
+    it("la misma carta en OTRO idioma no adopta la espera de fondo: pide aparte", async () => {
+      fetchMock
+        .mockReturnValueOnce(res(202, { estado: "generando" }))
+        .mockReturnValueOnce(res(409, { motivo: "usado" }));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA, "es"); });
+      act(() => { result.current.reiniciar(); });
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA_B, "en"); });
+      expect(posts(fetchMock)).toHaveLength(2);
+    });
+
+    it("adoptar no depende del orden de las claves de los datos", async () => {
+      fetchMock.mockReturnValueOnce(res(202, { estado: "generando" }));
+      const { result } = renderHook(() => useLecturaAnonima());
+      await act(async () => { await result.current.pedir({ date: "A", time: "1" }, CARTA, "es"); });
+      act(() => { result.current.reiniciar(); });
+      await act(async () => { await result.current.pedir({ time: "1", date: "A" }, CARTA_B, "es"); });
+      expect(posts(fetchMock)).toHaveLength(1);
+    });
+
+    it("tras adoptar y fallar, «Probar de nuevo» con la carta en pantalla reusa el pedido", async () => {
+      const P9 = "00000000-0000-4000-8000-000000000009";
+      localStorage.setItem("astra-lectura-pedido", JSON.stringify({ ...PEND, pedido: P9, lang: "es", vence: Date.now() + 60_000 }));
+      fetchMock
+        .mockReturnValueOnce(res(200, { estado: "fallida", pedido: P9 }).then(async (r) => {
+          await new Promise((ok) => setTimeout(ok, 10));
+          return r;
+        }))
+        .mockReturnValueOnce(res(202, { estado: "generando" }));
+      const { result } = renderHook(() => useLecturaAnonima());
+      // Adopta antes de que vuelva el primer sondeo.
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA_B, "es"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+      expect(result.current.estado).toEqual({ tipo: "fallida" });
+      await act(async () => { await result.current.pedir({ date: "A" }, CARTA_B, "es"); });
+      expect(posts(fetchMock).map((b) => b.pedido)).toEqual([P9]);
     });
 
     it("la espera retomada no bloquea pedir de frente otra carta", async () => {

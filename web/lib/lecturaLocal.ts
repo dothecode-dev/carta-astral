@@ -13,6 +13,7 @@ import { isLocale, type Locale } from "@/lib/i18n";
 // este navegador, 24 h, y nunca viaja al servidor para guardarse.
 const CLAVE = "astra-lectura-anonima";
 const VIDA_MS = 24 * 60 * 60 * 1000;
+const UUID = /^[0-9a-f-]{36}$/;
 
 export type LecturaGuardada = {
   carta: CartaDibujable;
@@ -48,7 +49,8 @@ function esValida(l: unknown): l is LecturaGuardada {
     typeof l.lang === "string" &&
     isLocale(l.lang) &&
     esObjeto(l.carta) &&
-    esObjeto(l.datos)
+    esObjeto(l.datos) &&
+    (l.pedido === undefined || (typeof l.pedido === "string" && UUID.test(l.pedido)))
   );
 }
 
@@ -74,12 +76,14 @@ export function leerLectura(ahora = Date.now()): LecturaGuardada | null {
 // (guardada y acusada), fallida o corte.
 const CLAVE_PEDIDO = "astra-lectura-pedido";
 const VIDA_PEDIDO_MS = 15 * 60 * 1000;
-const UUID = /^[0-9a-f-]{36}$/;
 
 export type PedidoEnCurso = {
   pedido: string;
   carta: CartaDibujable;
   datos: DatosCarta;
+  /** Con qué idioma se pidió: pedir la misma carta en otro idioma no la
+   *  adopta. Falta en los guardados antes. */
+  lang?: Locale;
   vence: number;
 };
 
@@ -98,7 +102,8 @@ function esPedidoValido(p: unknown): p is PedidoEnCurso {
     UUID.test(p.pedido) &&
     typeof p.vence === "number" &&
     esObjeto(p.carta) &&
-    esObjeto(p.datos)
+    esObjeto(p.datos) &&
+    (p.lang === undefined || (typeof p.lang === "string" && isLocale(p.lang)))
   );
 }
 

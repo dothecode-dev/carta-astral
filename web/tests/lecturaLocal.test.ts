@@ -39,6 +39,7 @@ describe("lecturaLocal", () => {
     ["sin carta", { ...L, carta: undefined }],
     ["idioma inválido", { ...L, lang: "fr" }],
     ["disclaimer que no es texto", { ...L, disclaimer: 3 }],
+    ["pedido que no es un uuid", { ...L, pedido: 7 }],
   ])("una entrada corrupta (%s) devuelve null y se borra", (_n, malo) => {
     localStorage.setItem("astra-lectura-anonima", JSON.stringify({ ...malo, vence: Date.now() + 1000 }));
     expect(leerLectura()).toBeNull();
@@ -91,6 +92,7 @@ describe("pedido en curso", () => {
     ["sin carta", { ...PEND, carta: undefined }],
     ["sin datos", { ...PEND, datos: undefined }],
     ["vence que no es número", { ...PEND, vence: "mañana" }],
+    ["idioma inválido", { ...PEND, lang: "fr" }],
   ])("una entrada corrupta (%s) devuelve null y se borra", (_n, malo) => {
     localStorage.setItem("astra-lectura-pedido", JSON.stringify({ vence: Date.now() + 1000, ...malo }));
     expect(leerPedido()).toBeNull();

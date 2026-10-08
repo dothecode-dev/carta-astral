@@ -51,10 +51,18 @@ type Pedido = {
   id: string;
   cuerpo: object;
   carta: CartaDibujable;
-  /** Falta en el pedido retomado al montar: ése sólo consulta, no se reenvía. */
+  /** Falta en un pedido retomado que se guardó antes de llevarlo. */
   lang?: Locale;
   timer: ReturnType<typeof setTimeout> | null;
 };
+
+/** Qué pedido es «el mismo»: los mismos datos en el mismo idioma. Las claves
+ *  se ordenan porque los datos llegan armados en momentos distintos (el
+ *  formulario, o el storage tras una recarga). */
+function firma(cuerpo: object, lang: Locale | undefined): string {
+  const o = cuerpo as Record<string, unknown>;
+  return JSON.stringify([lang ?? null, Object.keys(o).sort().map((k) => [k, o[k]])]);
+}
 
 /** El acuse (§11 v3): la lectura ya está guardada en este navegador y el
  *  backend la puede borrar. Si falla da igual —el vencimiento de 15 min la
@@ -87,7 +95,7 @@ export function useLecturaAnonima() {
   // El último pedido de frente que terminó en «fallida» (modelo, corte u
   // ocupado): «Probar de nuevo» con la MISMA carta lo reusa, así el backend
   // sigue esperándolo, lo relanza o entrega la lista que ya tenga (§11, RF7).
-  const reintentable = useRef<{ id: string; carta: CartaDibujable } | null>(null);
+  const reintentable = useRef<{ id: string; firma: string } | null>(null);
   // Las dos funciones se llaman a sí mismas desde un timer: la referencia
   // evita que una `useCallback` se nombre dentro de su propia definición.
   const consultarRef = useRef<(p: Pedido, intento: number, limite: number) => void>(() => {});
@@ -122,8 +130,25 @@ export function useLecturaAnonima() {
       const pinta = deFrente(p);
       terminar(p);
       track("lectura_anonima_fallida", { motivo });
-      if (pinta && siguiente.tipo === "fallida") reintentable.current = { id: p.id, carta: p.carta };
+      if (pinta && siguiente.tipo === "fallida") reintentable.current = { id: p.id, firma: firma(p.cuerpo, p.lang) };
       if (pinta) setEstado(siguiente);
+    },
+    [terminar],
+  );
+
+  /** La lectura de este pedido llegó. Si la trajo ESTA pestaña (`propia`),
+   *  se guarda, se acusa y se cuenta; si la guardó otra, sólo se muestra. */
+  const entregar = useCallback(
+    (p: Pedido, lista: { texto: string; lang: Locale; disclaimer: string }, propia: boolean) => {
+      const pinta = deFrente(p);
+      terminar(p, propia);
+      if (propia) {
+        guardarLectura({ carta: p.carta, datos: p.cuerpo as DatosCarta, pedido: p.id, ...lista });
+        void acusar(p.id);
+        track("lectura_anonima_generada", {});
+      }
+      setGuardadas((n) => n + 1);
+      if (pinta) setEstado({ tipo: "lista", ...lista });
     },
     [terminar],
   );
@@ -161,14 +186,7 @@ export function useLecturaAnonima() {
           }
           if (r.ok && cuerpo.estado === "lista" && cuerpo.texto && cuerpo.lang) {
             const lista = { texto: cuerpo.texto, lang: cuerpo.lang, disclaimer: cuerpo.disclaimer ?? "" };
-            const pinta = deFrente(p);
-            terminar(p, true);
-            guardarLectura({ carta: p.carta, datos: p.cuerpo as DatosCarta, pedido: p.id, ...lista });
-            void acusar(p.id);
-            track("lectura_anonima_generada", {});
-            setGuardadas((n) => n + 1);
-            if (pinta) setEstado({ tipo: "lista", ...lista });
-            return;
+            return entregar(p, lista, true);
           }
           if (r.ok && cuerpo.estado === "fallida") return fallar(p, "modelo");
           if (r.status === 404) {
@@ -177,11 +195,7 @@ export function useLecturaAnonima() {
             // Se muestra ésa; ya la contó la otra, acá no se cuenta de nuevo.
             const otra = leerLectura();
             if (otra?.pedido === p.id) {
-              const pinta = deFrente(p);
-              terminar(p);
-              setGuardadas((n) => n + 1);
-              if (pinta) setEstado({ tipo: "lista", texto: otra.texto, lang: otra.lang, disclaimer: otra.disclaimer });
-              return;
+              return entregar(p, { texto: otra.texto, lang: otra.lang, disclaimer: otra.disclaimer }, false);
             }
           }
           if (!r.ok) return fallar(p, "modelo");
@@ -192,7 +206,7 @@ export function useLecturaAnonima() {
         }
       }, espera);
     },
-    [fallar, terminar],
+    [entregar, fallar, terminar],
   );
 
   const enviar = useCallback(
@@ -261,16 +275,18 @@ export function useLecturaAnonima() {
       // La MISMA carta ya se está escribiendo de fondo (tras «Nueva carta» o
       // una recarga): se la vuelve a traer al frente. Un pedido nuevo el
       // backend lo rechazaría como «usada» mientras la lectura sigue llegando.
-      const mismos = JSON.stringify(cuerpo);
+      const mismo = firma(cuerpo, lang);
+      const previo = reintentable.current;
+      reintentable.current = null;
       for (const v of vivos.current) {
-        if (JSON.stringify(v.cuerpo) !== mismos) continue;
+        if (firma(v.cuerpo, v.lang) !== mismo) continue;
         actual.current = v;
         setEstado({ tipo: "esperando", ocupado: false });
         return;
       }
-      const previo = reintentable.current;
-      reintentable.current = null;
-      const id = previo && previo.carta === carta ? previo.id : crypto.randomUUID();
+      // Se compara por datos, no por la carta: tras una recarga o un pedido
+      // adoptado, la carta en pantalla es otra instancia de la misma.
+      const id = previo && previo.firma === mismo ? previo.id : crypto.randomUUID();
       const p: Pedido = { id, cuerpo, carta, lang, timer: null };
       actual.current = p;
       vivos.current.add(p);
@@ -278,7 +294,7 @@ export function useLecturaAnonima() {
       // curso de fondo: éste, de todos modos, el backend lo rechazaría.
       const enCurso = leerPedido();
       if (!enCurso || enCurso.pedido === id) {
-        guardarPedido({ pedido: id, carta, datos: cuerpo as DatosCarta });
+        guardarPedido({ pedido: id, carta, datos: cuerpo as DatosCarta, lang });
       }
       track("lectura_anonima_pedida", {});
       return enviar(p, 0);
@@ -301,7 +317,9 @@ export function useLecturaAnonima() {
     const enCurso = leerPedido();
     if (!enCurso) return;
     for (const v of vivos.current) if (v.id === enCurso.pedido) return;
-    const p: Pedido = { id: enCurso.pedido, cuerpo: enCurso.datos, carta: enCurso.carta, timer: null };
+    const p: Pedido = {
+      id: enCurso.pedido, cuerpo: enCurso.datos, carta: enCurso.carta, lang: enCurso.lang, timer: null,
+    };
     vivos.current.add(p);
     consultar(p, 0, Math.min(enCurso.vence, Date.now() + CORTE_MS), true);
   }, [consultar]);
