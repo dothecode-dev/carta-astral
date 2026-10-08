@@ -252,7 +252,7 @@ def test_un_par_con_salto_de_linea_se_descarta():
         ("neutro", "gerar você mesmo o sacudón", True),
         ("neutro", "generar lo mismo de siempre", True),
         ("femenino", "generar vos mismo el sacudón", True),
-        ("femenino", "generar vos misma ese sacudón", False),
+        ("femenino", "generar por tu cuenta el sacudón", False),
         ("masculino", "generar vos misma ese sacudón", True),
         ("masculino", "generar vos mismo el sacudón", False),
         ("femenino", "gerar você mesmo o sacudón", True),
@@ -338,9 +338,9 @@ def test_marcas_inclusivas_se_rechazan(trato, original, corregido):
 
 
 def test_una_palabra_en_x_que_ya_estaba_en_el_original_no_se_rechaza():
-    texto = TEXTO.replace("estímulo", "estímulo del relax")
-    original = "del relax, y vas a preguntarte"
-    corregido = "del relax, y te vas a preguntar"
+    texto = TEXTO + "\n\nNecesitás algo del relax para no sentirte sola."
+    original = "del relax para no sentirte sola"
+    corregido = "del relax para no sentirte sin compañía"
     cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
     assert revisar_trato(texto, "neutro", "es", cliente) == texto.replace(original, corregido)
 
@@ -569,3 +569,33 @@ def test_el_system_de_la_reparacion_pide_segunda_persona_y_pocas_palabras():
     system = _system(cliente.llamadas[1])
     assert "segunda persona" in system
     assert "hay un vivir" in system and "hubo un nacer" in system
+
+
+
+# --- un par tiene que cambiar una palabra con género (prueba real, 9a22a6e) ---
+
+
+@pytest.mark.parametrize(
+    ("original", "corregido", "lang", "aplicado"),
+    [
+        ("Vivís entre esas dos", "Transitás entre esas dos", "es", False),
+        ("permeabilidad hacia", "apertura hacia", "es", False),
+        # Cambian «naciste» y «con»: ninguna tiene género.
+        ("naciste con una enorme", "tenés una enorme", "es", False),
+        ("vos misma el sacudón", "por tu cuenta el sacudón", "es", True),
+        ("estás armado", "te armaste", "es", True),
+        ("para ser tomado en serio", "para que te tomen en serio", "es", True),
+        ("Áries o empurra", "Áries te empurra", "pt", True),
+    ],
+)
+def test_un_par_sin_palabra_con_genero_cambiada_se_rechaza(original, corregido, lang, aplicado, caplog):
+    texto = "## Tu motor\n\nUn párrafo que no tiene nada que corregir.\n\n" + original + "."
+    respuestas = [_juez(original), _reemplazos((original, corregido))] + ([_juez()] if aplicado else [])
+    cliente = ClienteFalso(*respuestas)
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        resultado = revisar_trato(texto, "neutro", lang, cliente)
+    if aplicado:
+        assert resultado == texto.replace(original, corregido)
+    else:
+        assert resultado == texto
+        assert "sin_genero=1" in _resumen(caplog)

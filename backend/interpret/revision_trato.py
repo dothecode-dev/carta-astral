@@ -254,13 +254,35 @@ def _marcas_segunda_persona(texto: str, lang: str) -> int:
     return marcas
 
 
-def _palabras_cambiadas(original: str, corregido: str) -> int:
+def _diferencias(original: str, corregido: str):
     a, b = original.split(), corregido.split()
-    cambiadas = 0
-    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
-        if op != "equal":
-            cambiadas += max(i2 - i1, j2 - j1)
-    return cambiadas
+    opcodes = difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
+    return a, [op for op in opcodes if op[0] != "equal"]
+
+
+def _palabras_cambiadas(original: str, corregido: str) -> int:
+    _, distintas = _diferencias(original, corregido)
+    return sum(max(i2 - i1, j2 - j1) for _, i1, i2, j1, j2 in distintas)
+
+
+# Terminación de género: -o, -a, -os, -as. Incluye los pronombres «o»/«a» del
+# portugués («Áries o empurra»). Aproximado: también cae «para», «hacia» o
+# «una»; alcanza porque la regla sólo descarta pares que NO tocan ninguna.
+_GENERO = re.compile(r"(o|a|os|as)$")
+_PUNTUACION_PEGADA = re.compile(r"^\W+|\W+$")
+
+
+def _cambia_palabra_con_genero(original: str, corregido: str) -> bool:
+    """Alguna de las palabras del ORIGINAL que la corrección borra o
+    reemplaza termina en género. Medido en staging (9a22a6e): el juez marcó
+    frases sin género y la reparación las retocó igual («Vivís» →
+    «Transitás», «permeabilidad» → «apertura», «naciste con» → «tenés»)."""
+    a, distintas = _diferencias(original, corregido)
+    for _, i1, i2, _, _ in distintas:
+        for palabra in a[i1:i2]:
+            if _GENERO.search(_PUNTUACION_PEGADA.sub("", palabra.lower())):
+                return True
+    return False
 
 
 _TOKEN = re.compile(r"\w+|[^\w\s]")
@@ -311,6 +333,8 @@ def _motivo_de_rechazo(
     # Al final: si además trae una forma prohibida, ese motivo es más preciso.
     if _solo_agrega_palabras(original, corregido):
         return "solo_agrego_palabras"
+    if not _cambia_palabra_con_genero(original, corregido):
+        return "sin_genero"
     return None
 
 
