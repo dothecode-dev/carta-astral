@@ -705,3 +705,27 @@ class CuponUso(models.Model):
 
     def __str__(self):
         return f"{self.cupon_id} → acc={self.account_id} ({self.codigo_producto})"
+
+
+class CupoDiario(models.Model):
+    """Cuántas generaciones gratis se reservaron en un día (UTC) por ámbito.
+
+    Existe porque `cache.incr` de `DatabaseCache` lee y después escribe: dos
+    pedidos simultáneos podían pasar el mismo lugar del tope de gasto. Acá
+    reservar es un `UPDATE ... WHERE usados < tope` y Postgres lo serializa
+    (spec 2026-10-08-lectura-anonima, RF10/RF11).
+    """
+
+    AMBITOS = (("anonimo", "anonimo"), ("cuenta", "cuenta"))
+
+    fecha = models.DateField()
+    ambito = models.CharField(max_length=10, choices=AMBITOS)
+    usados = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["fecha", "ambito"], name="uniq_cupo_por_dia_y_ambito"),
+        ]
+
+    def __str__(self):
+        return f"{self.fecha} {self.ambito}: {self.usados}"
