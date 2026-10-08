@@ -1,6 +1,6 @@
 import pytest
 
-from interpret import generator
+from interpret import generator, prompts
 from interpret.prompts import SECCIONES
 from interpret.trato import instruccion
 
@@ -136,3 +136,23 @@ def test_la_traduccion_neutra_a_es_o_pt_usa_el_modelo_de_generacion(monkeypatch,
     )
     generator.translate_interpretation("texto", lang, None, trato=trato)
     assert modelos == [esperado]
+
+
+@pytest.mark.parametrize(
+    "trato,lang,esperado",
+    [
+        ("neutro", "pt", prompts.TRANSLATE_MAX_TOKENS_GENERACION),
+        ("", "es", prompts.TRANSLATE_MAX_TOKENS_GENERACION),
+        ("femenino", "pt", prompts.TRANSLATE_MAX_TOKENS),
+        ("neutro", "en", prompts.TRANSLATE_MAX_TOKENS),
+    ],
+)
+def test_el_techo_de_tokens_acompana_al_modelo_de_la_traduccion(monkeypatch, trato, lang, esperado):
+    techos = []
+    monkeypatch.setattr(
+        generator,
+        "_stream_text",
+        lambda client, model, system, content, max_tokens: techos.append(max_tokens) or "ok",
+    )
+    generator.translate_interpretation("texto", lang, None, trato=trato)
+    assert techos == [esperado]

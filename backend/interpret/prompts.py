@@ -48,6 +48,13 @@ TRANSLATE_MODEL = "claude-haiku-4-5"
 # el factor nuevo (la observabilidad que agrega el HALLAZGO 1 es la fuente
 # para esa próxima decisión).
 TRANSLATE_MAX_TOKENS = 2500
+# Techo cuando traduce MODEL (Sonnet) en vez de Haiku (trato neutro a es/pt).
+# Medido en staging: con 2500 cortó por max_tokens; el tokenizador de Sonnet 5
+# cuenta mucho más (secciones de hasta 4341 tokens que Haiku tradujo completas en
+# 1961 como máximo, con las mismas palabras). Es más alto que el techo de
+# generación de la sección más larga (12000) porque el pt sale algo más largo
+# que el es.
+TRANSLATE_MAX_TOKENS_GENERACION = 16000
 
 _BASE_ES = (
     "Sos un astrólogo que escribe interpretaciones de cartas natales claras, "

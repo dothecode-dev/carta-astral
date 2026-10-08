@@ -17,6 +17,7 @@ from interpret.prompts import (
     SYSTEM_PROMPTS,
     SYSTEM_PROMPTS_SECCION,
     TRANSLATE_MAX_TOKENS,
+    TRANSLATE_MAX_TOKENS_GENERACION,
     TRANSLATE_MODEL,
     Seccion,
 )
@@ -113,7 +114,7 @@ def translate_interpretation(text: str, target_lang: str, client, trato: str = "
     """Traduce una lectura ya generada. Modelo barato: el contenido ya está
     escrito, solo cambia el idioma."""
     system = [{"type": "text", "text": _TRANSLATE_SYSTEM.format(target=_TRANSLATE_TARGETS[target_lang])}]
-    modelo = TRANSLATE_MODEL
+    modelo, techo = TRANSLATE_MODEL, TRANSLATE_MAX_TOKENS
     if nota := instruccion(trato, target_lang):
         # Segundo elemento del system y no parte del contenido: el contenido es
         # el texto a traducir, y una nota ahí podría traducirse y quedar pegada.
@@ -121,8 +122,8 @@ def translate_interpretation(text: str, target_lang: str, client, trato: str = "
         # Medido en staging: con trato neutro, Haiku pasó es->pt a «o»/«a» con género
         # («Áries o empurra») pese a la instrucción; Sonnet sí la respeta.
         if trato in ("", "neutro"):
-            modelo = MODEL
-    return _stream_text(client, modelo, system, text, TRANSLATE_MAX_TOKENS)
+            modelo, techo = MODEL, TRANSLATE_MAX_TOKENS_GENERACION
+    return _stream_text(client, modelo, system, text, techo)
 
 
 # El tope duro que acompaña al objetivo, como fracción de éste. Un objetivo
