@@ -434,3 +434,41 @@ def test_una_correccion_que_solo_agrega_palabras_se_rechaza(trato, caplog):
     resumen = [r.getMessage() for r in caplog.records if "listados=" in r.getMessage()][0]
     assert "solo_agrego_palabras=1" in resumen
     assert len(cliente.llamadas) == 2  # nada aplicado: no hay segunda vuelta
+
+
+# --- fragmentos que aparecen más de una vez (hallazgo de code review) ---
+
+
+def test_un_fragmento_repetido_no_se_repara(caplog):
+    """`replace(..., 1)` corrige la PRIMERA aparición: si «seguro» está en
+    «es seguro que Saturno» y en «estás seguro», tocaría la equivocada."""
+    texto = TEXTO + "\n\nEs seguro que Saturno ayuda, y vos estás seguro de eso."
+    cliente = ClienteFalso(_juez("seguro"))
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(texto, "neutro", "es", cliente) == texto
+    assert len(cliente.llamadas) == 1  # no se pide reparar nada
+    assert any("no_unico=1" in r.getMessage() for r in caplog.records)
+
+
+def test_un_fragmento_repetido_se_descarta_y_el_unico_se_repara():
+    texto = TEXTO + "\n\nEs seguro que Saturno ayuda, y vos estás seguro de eso."
+    cliente = ClienteFalso(_juez("seguro", FRAG), _reemplazos((FRAG, FRAG_OK)), _juez())
+    assert revisar_trato(texto, "neutro", "es", cliente) == texto.replace(FRAG, FRAG_OK)
+    assert "fragmento: «seguro»" not in cliente.llamadas[1]["messages"][0]["content"]
+
+
+def test_en_la_segunda_vuelta_un_original_que_paso_a_aparecer_dos_veces_se_rechaza(caplog):
+    """Un corregido ya aplicado puede contener el texto de otro fragmento:
+    después de aplicarlo, ese original aparece dos veces y no se toca."""
+    armado_con_conf = "cómo te armaste al sentirte confundida ante: la manera"
+    cliente = ClienteFalso(
+        _juez(FRAG),
+        _reemplazos((FRAG, FRAG_OK)),
+        _juez(ARMADO, CONF),
+        _reemplazos((ARMADO, armado_con_conf), (CONF, CONF_OK)),
+    )
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
+    assert resultado == TEXTO.replace(FRAG, FRAG_OK).replace(ARMADO, armado_con_conf)
+    vuelta2 = [r.getMessage() for r in caplog.records if "vuelta=2 listados=" in r.getMessage()][0]
+    assert "aplicados=1" in vuelta2 and "no_unico=1" in vuelta2

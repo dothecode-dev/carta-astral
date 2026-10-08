@@ -228,9 +228,14 @@ def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[
     claves fijas: van al log como contadores, nunca el texto."""
     if original not in listados:
         return "no_listado"
-    if original not in texto:
+    apariciones = texto.count(original)
+    if apariciones == 0:
         # Un par anterior ya lo tocó, o el modelo lo copió distinto.
         return "ausente"
+    if apariciones > 1:
+        # `replace(..., 1)` tocaría la primera aparición, que puede no ser la
+        # mal escrita; pasa si un corregido ya aplicado trae este texto.
+        return "no_unico"
     if corregido == original:
         return "identico"
     if not corregido.strip():
@@ -294,13 +299,19 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
         )
         return texto, 0
 
-    # Un fragmento que no está en el texto es una invención del juez: no hay
-    # nada que reparar ahí y pedirlo sólo invita a la reparación a tocar otra cosa.
-    presentes = [f for f in dict.fromkeys(fragmentos) if f and f in texto]
-    if len(presentes) < len(fragmentos):
+    # Sólo fragmentos que aparecen exactamente una vez. Uno que no está es una
+    # invención del juez: pedir repararlo invita a tocar otra cosa. Uno que
+    # aparece más de una vez («seguro» en «es seguro que Saturno» y en «estás
+    # seguro») no se puede reparar con garantías: `replace(..., 1)` y el
+    # contexto toman la primera aparición, que puede ser la que estaba bien.
+    unicos = list(dict.fromkeys(f for f in fragmentos if f))
+    ausentes = sum(1 for f in unicos if texto.count(f) == 0)
+    no_unicos = sum(1 for f in unicos if texto.count(f) > 1)
+    presentes = [f for f in unicos if texto.count(f) == 1]
+    if ausentes or no_unicos:
         logger.info(
-            "revisión del trato: el juez listó fragmentos que no están en el texto: vuelta=%s descartados=%s",
-            vuelta, len(fragmentos) - len(presentes),
+            "revisión del trato: fragmentos del juez descartados: vuelta=%s ausente=%s no_unico=%s",
+            vuelta, ausentes, no_unicos,
         )
     if not presentes:
         return texto, 0
