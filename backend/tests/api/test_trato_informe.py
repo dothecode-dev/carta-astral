@@ -374,3 +374,66 @@ def test_completar_generacion_relee_la_fila_antes_de_generar(make_chart, cuenta,
     assert es.text == "entregado"
     assert sorted(es.secciones.values_list("id", "slug", "texto")) == antes
     assert llamadas == {"seccion": [], "breve": [], "traduccion": []}
+
+
+# --- Fix final: un reintento de traducción sigue desde el mismo origen ---
+
+
+def _completo(carta, cuenta, lang, trato="femenino"):
+    interp = Interpretation.objects.create(
+        chart=carta, lang=lang, prompt_version=PROMPT_VERSION, tier="largo",
+        account=cuenta, completa=True, trato=trato,
+    )
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=interp, slug=seccion.slug, orden=orden, texto=f"{lang} {seccion.slug}",
+        )
+    return interp
+
+
+def test_reintento_de_traduccion_sigue_desde_el_mismo_origen(make_chart, cuenta, llamadas, monkeypatch):
+    """«pt» empezó a traducirse desde «en» y falló a mitad. Mientras tanto se
+    completó «es», que tiene un pk menor que «en». El reintento no puede
+    elegir «es» por `.first()`: descartaría las tres secciones ya traducidas
+    de «en» y gastaría el intento en rehacerlas."""
+    carta = _con_trato(make_chart, cuenta, "femenino")
+    es = Interpretation.objects.create(
+        chart=carta, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        account=cuenta, trato="femenino",
+    )
+    en = _completo(carta, cuenta, "en")
+    pt = Interpretation.objects.create(
+        chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        account=cuenta, trato="femenino", traducido_de=en, intentos=1,
+    )
+    for orden, seccion in enumerate(SECCIONES[:3]):
+        InterpretationSection.objects.create(
+            interpretation=pt, slug=seccion.slug, orden=orden, texto=f"pt desde en {seccion.slug}",
+        )
+    antes = sorted(pt.secciones.values_list("id", "slug", "texto"))
+    for orden, seccion in enumerate(SECCIONES):
+        InterpretationSection.objects.create(
+            interpretation=es, slug=seccion.slug, orden=orden, texto=f"es {seccion.slug}",
+        )
+    es.completa = True
+    es.save(update_fields=["completa"])
+    assert es.pk < en.pk  # el escenario: `.first()` elegiría «es»
+
+    origenes = []
+
+    def _traduccion(text, target_lang, client, trato=""):
+        origenes.append(text.split(" ", 1)[0])
+        return "traducido"
+
+    monkeypatch.setattr(informe_service, "translate_interpretation", _traduccion)
+
+    svc.completar_generacion(pt, carta, cuenta)
+
+    pt.refresh_from_db()
+    assert pt.completa is True
+    assert pt.traducido_de_id == en.pk
+    assert origenes == ["en"] * (len(SECCIONES) - 3)
+    hechas = sorted(pt.secciones.filter(slug__in=[s.slug for s in SECCIONES[:3]])
+                    .values_list("id", "slug", "texto"))
+    assert hechas == antes
+    assert pt.intentos == 2

@@ -229,6 +229,28 @@ def _sibling_completo(objetivo, lang: str, tier: str) -> Interpretation | None:
     )
 
 
+def _origen_de_la_traduccion(interpretacion: Interpretation) -> Interpretation | None:
+    """El origen del que ya se empezó a traducir esta fila, si todavía sirve.
+
+    Va antes de `_sibling_completo` al retomar: entre reintentos puede
+    completarse otro idioma, y `.first()` (orden por pk) podría elegirlo en
+    vez del origen con el que se empezó. `traducir_informe` descartaría
+    entonces las secciones ya traducidas —su `traducido_de` no es el nuevo
+    origen— y gastaría el intento en rehacerlas. Sólo sirve si sigue siendo un
+    sibling válido: completo, del mismo sujeto, tier y versión, otro idioma."""
+    origen_id = interpretacion.traducido_de_id
+    if origen_id is None:
+        return None
+    return (
+        Interpretation.objects.filter(
+            pk=origen_id, sujeto_id=interpretacion.sujeto_id, tier=interpretacion.tier,
+            prompt_version=interpretacion.prompt_version, completa=True,
+        )
+        .exclude(lang=interpretacion.lang)
+        .first()
+    )
+
+
 def _sibling_en_curso(objetivo, lang: str, tier: str) -> Interpretation | None:
     """Informe de esta misma carta en OTRO idioma que ya arrancó pero
     todavía no terminó (`completa=False`).
@@ -560,7 +582,9 @@ def completar_generacion(interpretacion: Interpretation, objetivo, account) -> N
         interpretacion.refresh_from_db()
         if interpretacion.completa:
             return
-        sibling = _sibling_completo(sujeto, interpretacion.lang, interpretacion.tier)
+        sibling = _origen_de_la_traduccion(interpretacion) or _sibling_completo(
+            sujeto, interpretacion.lang, interpretacion.tier,
+        )
 
         # Un intento más de terminar este informe, cuente como generación o
         # como traducción de un sibling: las dos pueden fallar, y las dos
