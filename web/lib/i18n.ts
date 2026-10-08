@@ -679,6 +679,12 @@ export type Dict = {
     name: string;
     namePlaceholder: string;
     nameHint: string;
+    tratoLabel: string;
+    tratoFemenino: string;
+    tratoMasculino: string;
+    tratoNeutro: string;
+    tratoVacio: string;
+    tratoNota: string;
     date: string;
     time: string;
     timeUnknown: string;
@@ -950,6 +956,12 @@ const es: Dict = {
     name: "Nombre",
     namePlaceholder: "Para reconocerla después",
     nameHint: "Opcional. No se usa para calcular nada.",
+    tratoLabel: "¿Cómo querés que te hablemos?",
+    tratoFemenino: "En femenino",
+    tratoMasculino: "En masculino",
+    tratoNeutro: "Sin género",
+    tratoVacio: "Elegí si querés",
+    tratoNota: "Opcional. Sólo cambia cómo te escribimos.",
     date: "Fecha de nacimiento",
     time: "Hora",
     timeUnknown: "No sé la hora",
@@ -1341,6 +1353,12 @@ const en: Dict = {
     name: "Name",
     namePlaceholder: "To recognise it later",
     nameHint: "Optional. It isn't used to compute anything.",
+    tratoLabel: "How should we address you?",
+    tratoFemenino: "Feminine",
+    tratoMasculino: "Masculine",
+    tratoNeutro: "No gender",
+    tratoVacio: "Optional",
+    tratoNota: "Optional. Only affects how we write to you in Spanish and Portuguese.",
     date: "Date of birth",
     time: "Time",
     timeUnknown: "I don't know the time",
@@ -1732,6 +1750,12 @@ const pt: Dict = {
     name: "Nome",
     namePlaceholder: "Para reconhecê-lo depois",
     nameHint: "Opcional. Não é usado para calcular nada.",
+    tratoLabel: "Como você quer que a gente fale com você?",
+    tratoFemenino: "No feminino",
+    tratoMasculino: "No masculino",
+    tratoNeutro: "Sem gênero",
+    tratoVacio: "Escolha se quiser",
+    tratoNota: "Opcional. Só muda como escrevemos para você.",
     date: "Data de nascimento",
     time: "Hora",
     timeUnknown: "Não sei a hora",

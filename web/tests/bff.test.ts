@@ -328,3 +328,15 @@ describe("POST /api/geocode", () => {
     expect(body.results[0].tz_name).toBe("America/Argentina/Cordoba");
   });
 });
+
+describe("el trato atraviesa las rutas BFF", () => {
+  it("POST /api/charts reenvía el trato al backend tal cual", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ id: CHART }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await chartsPost(post("http://x/api/charts", { date: "1976-05-31", trato: "femenino" }));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toMatchObject({ trato: "femenino" });
+  });
+});

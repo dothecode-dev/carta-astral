@@ -60,6 +60,15 @@ describe("POST /api/checkout/anonimo", () => {
     expect(cookie).toContain("Path=/");
   });
 
+  it("reenvía el trato al backend tal cual", async () => {
+    fetchMock.mockResolvedValue(json(OK));
+
+    await POST(req({ date: "1990-05-10", trato: "masculino" }));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toMatchObject({ trato: "masculino" });
+  });
+
   it("le pega al endpoint anónimo, sin sesión aunque haya una", async () => {
     store.set(SESSION_COOKIE, { value: "token-de-otro" });
     fetchMock.mockResolvedValue(json(OK));

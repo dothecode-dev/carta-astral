@@ -8,7 +8,7 @@ import { CartaPreview } from "@/components/CartaPreview";
 import { track } from "@/lib/telemetry";
 import { PlaceField } from "@/components/PlaceField";
 import type { CartaDibujable } from "@/lib/chart";
-import { armarDatosCarta, errorDeFecha, type DatosCarta } from "@/lib/datosCarta";
+import { armarDatosCarta, errorDeFecha, TRATOS, type DatosCarta, type Trato } from "@/lib/datosCarta";
 import type { Dict, Locale } from "@/lib/i18n";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
@@ -31,6 +31,12 @@ import type { Dict, Locale } from "@/lib/i18n";
  * útil es exactamente la del viaje de ida y vuelta al login. Muere con la
  * pestaña aunque algo falle en el medio. */
 const PENDIENTE = "astra-carta-pendiente";
+const TRATO_CLAVE = {
+  femenino: "tratoFemenino",
+  masculino: "tratoMasculino",
+  neutro: "tratoNeutro",
+} as const;
+
 /** A la carta recién calculada. Ahí se elige qué leer: calcularla no gasta nada. */
 function destinoDe(locale: Locale, id: string | undefined): string {
   if (!id) return `/${locale}/cuenta`;
@@ -62,6 +68,7 @@ export function NewChartForm({
   const t = dict.newChart;
 
   const [name, setName] = useState("");
+  const [trato, setTrato] = useState<Trato>("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [timeUnknown, setTimeUnknown] = useState(false);
@@ -138,6 +145,7 @@ export function NewChartForm({
       time,
       timeUnknown,
       place,
+      trato,
     });
 
     const res = await fetch(signedIn ? "/api/charts" : "/api/charts/preview", {
@@ -262,6 +270,26 @@ export function NewChartForm({
           onChange={(e) => setName(e.target.value)}
         />
         <p className="fieldNote">{t.nameHint}</p>
+      </div>
+
+      <div className="field">
+        <label className="fieldLabel" htmlFor="chart-trato">
+          {t.tratoLabel}
+        </label>
+        <select
+          id="chart-trato"
+          className="input"
+          value={trato}
+          onChange={(e) => setTrato(e.target.value as Trato)}
+        >
+          <option value="">{t.tratoVacio}</option>
+          {TRATOS.map((v) => (
+            <option key={v} value={v}>
+              {t[TRATO_CLAVE[v]]}
+            </option>
+          ))}
+        </select>
+        <p className="fieldNote">{t.tratoNota}</p>
       </div>
 
       <div className="fieldRow">

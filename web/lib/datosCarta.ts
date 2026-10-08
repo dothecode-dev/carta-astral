@@ -5,6 +5,12 @@ import type { Place } from "@/app/api/geocode/route";
 // carga dos personas con el mismo formulario y copiarlo una vez más garantiza
 // que las dos copias se vayan separando (pasó ya con la rueda).
 
+/** Cómo quiere la persona que le hablemos. `""` = sin elegir (el backend lo trata
+ *  como neutro). Nunca se infiere del nombre. */
+export type Trato = "" | "femenino" | "masculino" | "neutro";
+
+export const TRATOS: readonly Exclude<Trato, "">[] = ["femenino", "masculino", "neutro"];
+
 /** Los datos de una persona, tal como los espera el backend. */
 export type DatosCarta = {
   name: string | null;
@@ -14,6 +20,8 @@ export type DatosCarta = {
   lat: number;
   lng: number;
   place_label: string;
+  /** Sólo lo manda el formulario de la carta; Vínculo no lo lleva. */
+  trato?: Trato;
 };
 
 export function armarDatosCarta(entrada: {
@@ -22,8 +30,9 @@ export function armarDatosCarta(entrada: {
   time: string;
   timeUnknown: boolean;
   place: Place;
+  trato?: Trato;
 }): DatosCarta {
-  const { name, date, time, timeUnknown, place } = entrada;
+  const { name, date, time, timeUnknown, place, trato } = entrada;
   return {
     name,
     date,
@@ -33,6 +42,7 @@ export function armarDatosCarta(entrada: {
     lat: place.lat,
     lng: place.lng,
     place_label: place.place_query,
+    ...(trato === undefined ? {} : { trato }),
   };
 }
 
