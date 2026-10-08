@@ -20,6 +20,7 @@ export const legalEn: LegalContent = {
           "**Birth data:** what you enter to compute a chart — name (optional), date, time and place of birth.",
           "**Purchases:** payments are processed by **Stripe**, acting as merchant of record. We never see or store your card details: from Stripe we receive the payment confirmation and the purchase identifier, so we can give you access to what you bought.",
           "**Buying without an account:** if you open the payment for the report without signing in, we store that chart's data so we can deliver the report once the payment is confirmed. If the payment isn't completed, the chart is deleted when the checkout expires (one hour after opening it). You enter your email in **Stripe**, which passes it to us when the payment is confirmed: we use it to create your account, or to credit the purchase to the account you already had with that email, and to send you the access code.",
+          "**Reading without an account:** to write your short reading without an account we use your birth details at that moment and don't store them on our servers. The reading stays on our server only until your browser receives it (15 minutes at most). After that, the reading and your chart details stay only in your browser for 24 hours, so you can see it again or buy the full report. To keep the free reading to one per browser, we store for 24 hours a marker that contains no personal data.",
         ],
       },
       { kind: "h2", text: "How we use it" },

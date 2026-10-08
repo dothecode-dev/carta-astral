@@ -21,6 +21,7 @@ export const legalEs: LegalContent = {
           "**Datos de nacimiento:** los que cargás para calcular una carta — nombre (opcional), fecha, hora y lugar de nacimiento.",
           "**Compras:** el cobro lo procesa **Stripe**, que actúa como vendedor registrado. No vemos ni guardamos los datos de tu tarjeta: de Stripe recibimos la confirmación del pago y el identificador de la compra, para darte acceso a lo que compraste.",
           "**Comprar sin cuenta:** si abrís el pago del informe sin haber entrado, guardamos los datos de esa carta para poder entregarte el informe cuando se confirme el pago. Si el pago no se completa, la carta se borra cuando vence (a la hora de abrirlo). El email lo cargás en **Stripe**, que nos lo pasa al confirmar el pago: lo usamos para crear tu cuenta, o para acreditar la compra en la que ya tenías con ese email, y para mandarte el código de acceso.",
+          "**Lectura sin cuenta:** para escribir tu lectura breve sin cuenta usamos tus datos de nacimiento en el momento y no los guardamos en nuestros servidores. La lectura queda en nuestro servidor sólo hasta que tu navegador la recibe (como máximo 15 minutos). Después, la lectura y los datos de tu carta quedan únicamente en tu navegador durante 24 horas, para que puedas volver a verla o comprar el informe completo. Para que la lectura gratis sea una por navegador, guardamos durante 24 horas una marca que no contiene datos personales.",
         ],
       },
       { kind: "h2", text: "Para qué los usamos" },
