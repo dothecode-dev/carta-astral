@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CartaPreview } from "@/components/CartaPreview";
 import { getDict, LOCALES } from "@/lib/i18n";
+import type { EstadoLectura } from "@/lib/useLecturaAnonima";
 
 // El botón de pago de la vista previa es secundario: el principal sigue siendo
 // la lectura gratis, que va a /entrar. Y sin precio no hay botón: el precio
@@ -32,7 +33,9 @@ function pintar(locale: "es" | "en" | "pt", extra: Partial<Parameters<typeof Car
     carta: CARTA,
     dict: getDict(locale),
     locale,
+    lectura: { tipo: "nada" } as EstadoLectura,
     onPedirLectura: vi.fn(),
+    onReintentar: vi.fn(),
     onVolver: vi.fn(),
     precio: "US$ 29",
     onComprar: vi.fn().mockResolvedValue(undefined),
@@ -85,11 +88,11 @@ describe("botón de compra de la vista previa", () => {
     expect(screen.queryByText(/No guardamos nada de esto\. /)).toBeNull();
   });
 
-  it("sin precio no hay compra que mencionar: la nota habla sólo de la cuenta", () => {
+  it("sin precio no hay compra que mencionar: la nota dice que la lectura queda en el navegador", () => {
     pintar("es", { precio: null });
     expect(
       screen.getByText(
-        "No guardamos nada de esto mientras sólo la mirás. Si creás una cuenta, la carta queda guardada.",
+        "Tus datos de nacimiento no se guardan: la lectura queda sólo en este navegador.",
       ),
     ).toBeTruthy();
   });
@@ -120,5 +123,32 @@ describe("botón de compra de la vista previa", () => {
     pintar("es", { errorCompra: "No pudimos abrir el pago." });
 
     expect(screen.getByRole("alert").textContent).toBe("No pudimos abrir el pago.");
+  });
+});
+
+describe("la lectura breve en la vista previa", () => {
+  it("con la lectura lista la muestra con el disclaimer y saca el botón de pedir", () => {
+    pintar("es", { lectura: { tipo: "lista", texto: "Tu Sol en Escorpio", lang: "es", disclaimer: "Entretenimiento." } });
+    expect(screen.getByText(/Tu Sol en Escorpio/)).toBeInTheDocument();
+    expect(screen.getByText("Entretenimiento.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: getDict("es").newChart.previewCta })).toBeNull();
+  });
+
+  it("«usada» muestra la carta nueva y ofrece el informe", () => {
+    pintar("es", { lectura: { tipo: "usada" } });
+    expect(screen.getByText(getDict("es").newChart.lecturaUsada)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Leer el informe completo/ })).toBeInTheDocument();
+  });
+
+  it("en otro idioma lo avisa", () => {
+    pintar("en", { lectura: { tipo: "lista", texto: "t", lang: "es", disclaimer: "" } });
+    expect(screen.getByText("Your reading is in Spanish.")).toBeInTheDocument();
+  });
+
+  it("fallida ofrece reintentar", () => {
+    const onReintentar = vi.fn();
+    pintar("es", { lectura: { tipo: "fallida" }, onReintentar });
+    fireEvent.click(screen.getByRole("button", { name: getDict("es").newChart.lecturaReintentar }));
+    expect(onReintentar).toHaveBeenCalled();
   });
 });

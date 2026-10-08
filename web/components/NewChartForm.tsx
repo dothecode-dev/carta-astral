@@ -10,6 +10,9 @@ import { PlaceField } from "@/components/PlaceField";
 import type { CartaDibujable } from "@/lib/chart";
 import { armarDatosCarta, errorDeFecha, TRATOS, type DatosCarta, type Trato } from "@/lib/datosCarta";
 import type { Dict, Locale } from "@/lib/i18n";
+import { SIGN_NAMES } from "@/lib/i18n";
+import { leerLectura, type LecturaGuardada } from "@/lib/lecturaLocal";
+import { useLecturaAnonima } from "@/lib/useLecturaAnonima";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
 // es el único que sabe de efemérides. Lo único que resuelve acá es que no se
@@ -41,6 +44,17 @@ const TRATO_CLAVE = {
 function destinoDe(locale: Locale, id: string | undefined): string {
   if (!id) return `/${locale}/cuenta`;
   return `/${locale}/carta/${id}`;
+}
+
+/** De quién es una lectura guardada, para el botón de «verla». La carta de la
+ *  vista previa trae `birth` aunque el tipo `CartaDibujable` no lo declare; si
+ *  tampoco hay fecha, el signo solar es lo último que identifica algo. */
+function quienDe(carta: CartaDibujable, locale: Locale): string {
+  const birth = (carta as { birth?: { name?: string | null; date?: string } }).birth;
+  if (birth?.name) return birth.name;
+  if (birth?.date) return birth.date;
+  const sol = carta.data?.placements?.find((p) => p.name === "Sun");
+  return sol ? (SIGN_NAMES[locale][Math.floor(sol.abs_pos / 30) % 12] ?? "") : "";
 }
 
 async function motivoDe(res: Response): Promise<string | null> {
@@ -80,6 +94,16 @@ export function NewChartForm({
   const [comprando, setComprando] = useState(false);
   const [errorCompra, setErrorCompra] = useState<string | null>(null);
   const datos = useRef<DatosCarta | null>(null);
+  const lectura = useLecturaAnonima();
+  // La lectura breve guardada en este navegador (RF8). Se lee en un efecto:
+  // `localStorage` no existe en el servidor y leerlo en el render rompería la
+  // hidratación.
+  const [guardada, setGuardada] = useState<LecturaGuardada | null>(null);
+  useEffect(() => {
+    if (signedIn) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setGuardada(leerLectura());
+  }, [signedIn]);
 
   // Vuelve del login con una carta que ya vio: se la guardamos y la llevamos a
   // ella. El `sessionStorage` se limpia ANTES de crear nada —y hay un guard de
@@ -180,16 +204,10 @@ export function NewChartForm({
     router.refresh();
   }
 
-  /** Quiere la lectura: acá recién aparece el registro. */
+  /** Quiere la lectura: se escribe acá mismo, sin cuenta (spec 2026-10-08). */
   function pedirLectura() {
-    try {
-      if (datos.current) sessionStorage.setItem(PENDIENTE, JSON.stringify(datos.current));
-    } catch {
-      // Sin storage se pierde lo cargado y hay que reescribirlo después de
-      // entrar. Peor sería no dejarlo entrar.
-    }
-    track("lectura_pedida_sin_cuenta", {});
-    router.push(`/${locale}/entrar?next=${encodeURIComponent(`/${locale}/nueva`)}`);
+    if (!datos.current || !preview) return;
+    void lectura.pedir(datos.current, preview, locale);
   }
 
   /** Paga el informe sin crear cuenta antes (pagar es entrar): la carta de la
@@ -242,8 +260,11 @@ export function NewChartForm({
         carta={preview}
         dict={dict}
         locale={locale}
+        lectura={lectura.estado}
         onPedirLectura={pedirLectura}
+        onReintentar={pedirLectura}
         onVolver={() => {
+          lectura.reiniciar();
           setPreview(null);
           setErrorCompra(null);
         }}
@@ -257,6 +278,19 @@ export function NewChartForm({
 
   return (
     <form className="form" onSubmit={submit} noValidate>
+      {guardada && !signedIn && (
+        <button
+          type="button"
+          className="btn btnGhost"
+          onClick={() => {
+            setPreview(guardada.carta);
+            lectura.mostrar(guardada);
+          }}
+        >
+          {t.lecturaVerAnterior.replace("{quien}", quienDe(guardada.carta, locale))}
+        </button>
+      )}
+
       <div className="field">
         <label className="fieldLabel" htmlFor="chart-name">
           {t.name}

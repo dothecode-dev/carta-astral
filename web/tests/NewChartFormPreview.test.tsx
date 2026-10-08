@@ -77,6 +77,7 @@ describe("sin cuenta", () => {
     push.mockClear();
     replace.mockClear();
     sessionStorage.clear();
+    localStorage.clear();
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -103,17 +104,26 @@ describe("sin cuenta", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("al pedir la lectura guarda lo cargado y manda a entrar volviendo acá", async () => {
+  it("al pedir la lectura la escribe acá, sin ir a entrar", async () => {
     render(<NewChartForm locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando" }), { status: 202 }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
+    expect(push).not.toHaveBeenCalled();
+    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    expect(url).toBe("/api/lectura-anonima");
+    expect(JSON.parse(init.body)).toMatchObject({ date: "1976-05-31", lang: "es" });
+    expect(screen.getByRole("status")).toHaveTextContent(t.lecturaEscribiendo);
+  });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: t.previewCta }));
-    });
-
-    expect(push).toHaveBeenCalledWith("/es/entrar?next=%2Fes%2Fnueva");
-    const guardado = JSON.parse(sessionStorage.getItem("astra-carta-pendiente") ?? "null");
-    expect(guardado).toMatchObject({ date: "1976-05-31", lat: ROSARIO.lat, lng: ROSARIO.lng });
+  it("con una lectura guardada ofrece verla", async () => {
+    localStorage.setItem("astra-lectura-anonima", JSON.stringify({
+      carta: CARTA, texto: "guardada", lang: "es", disclaimer: "", vence: Date.now() + 3600_000,
+    }));
+    render(<NewChartForm locale="es" dict={dict} />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: /Ver tu lectura de/ }));
+    expect(screen.getByText("guardada")).toBeInTheDocument();
   });
 
   it("si el techo por IP corta, avisa en vez de quedarse mudo", async () => {

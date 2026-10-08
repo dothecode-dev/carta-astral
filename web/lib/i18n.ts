@@ -725,6 +725,17 @@ export type Dict = {
     previewPrivacidad: string;
     previewPrivacidadSinCompra: string;
     previewRetomando: string;
+    /** La breve sin cuenta (spec 2026-10-08). `{idioma}` y `{quien}` se reemplazan. */
+    lecturaEscribiendo: string;
+    lecturaOcupado: string;
+    lecturaFallida: string;
+    lecturaReintentar: string;
+    lecturaUsada: string;
+    lecturaSinCupo: string;
+    lecturaMantenimiento: string;
+    lecturaOtroIdioma: string;
+    lecturaVerAnterior: string;
+    idiomas: Record<Locale, string>;
     /** Copy indexable: sin esto la página es un formulario vacío para Google. */
     seoTitle: string;
     seoDescription: string;
@@ -988,7 +999,7 @@ const es: Dict = {
     previewTitle: "Tu carta natal",
     previewLede: "Es tuya y está completa: las posiciones, las casas y los aspectos del cielo del día en que naciste.",
     previewCta: "Leer qué dice",
-    previewNote: "Creás tu cuenta y la primera lectura va de regalo.",
+    previewNote: "Gratis y sin crear cuenta.",
     comprarCta: "Leer el informe completo · {precio}",
     legalAntes: "Al continuar aceptás los ",
     legalTerminos: "términos",
@@ -999,8 +1010,18 @@ const es: Dict = {
     previewPrivacidad:
       "No guardamos nada de esto mientras sólo la mirás. Si la comprás o creás una cuenta, la carta queda guardada.",
     previewPrivacidadSinCompra:
-      "No guardamos nada de esto mientras sólo la mirás. Si creás una cuenta, la carta queda guardada.",
+      "Tus datos de nacimiento no se guardan: la lectura queda sólo en este navegador.",
     previewRetomando: "Guardando tu carta…",
+    lecturaEscribiendo: "Estamos escribiendo tu lectura…",
+    lecturaOcupado: "Estamos escribiendo muchas lecturas, un momento…",
+    lecturaFallida: "No pudimos escribir tu lectura.",
+    lecturaReintentar: "Probar de nuevo",
+    lecturaUsada: "Tu lectura gratis ya la usaste en este navegador. La de esta carta está en el informe completo.",
+    lecturaSinCupo: "Por hoy no hay más lecturas gratis. El informe completo está disponible.",
+    lecturaMantenimiento: "Estamos actualizando el sitio. Probá en unos minutos.",
+    lecturaOtroIdioma: "Tu lectura está en {idioma}.",
+    lecturaVerAnterior: "Ver tu lectura de {quien}",
+    idiomas: { es: "español", en: "inglés", pt: "portugués" },
     seoTitle: "Calculá tu carta natal gratis",
     seoDescription:
       "Tu carta natal completa —posiciones, casas y aspectos— calculada con efemérides suizas. Sin registrarte: ponés fecha, hora y lugar y la ves.",
@@ -1388,7 +1409,7 @@ const en: Dict = {
     previewTitle: "Your birth chart",
     previewLede: "It's yours and it's complete: the positions, the houses and the aspects of the sky on the day you were born.",
     previewCta: "Read what it says",
-    previewNote: "Create your account and the first reading is on us.",
+    previewNote: "Free, no account needed.",
     comprarCta: "Read the full report · {precio}",
     legalAntes: "By continuing you accept the ",
     legalTerminos: "terms",
@@ -1399,8 +1420,18 @@ const en: Dict = {
     previewPrivacidad:
       "We don't store any of this while you're just looking at it. If you buy it or create an account, the chart is saved.",
     previewPrivacidadSinCompra:
-      "We don't store any of this while you're just looking at it. If you create an account, the chart is saved.",
+      "Your birth details aren't stored: the reading stays only in this browser.",
     previewRetomando: "Saving your chart…",
+    lecturaEscribiendo: "We're writing your reading…",
+    lecturaOcupado: "We're writing a lot of readings, one moment…",
+    lecturaFallida: "We couldn't write your reading.",
+    lecturaReintentar: "Try again",
+    lecturaUsada: "You've already used your free reading in this browser. This chart's reading is in the full report.",
+    lecturaSinCupo: "No more free readings today. The full report is available.",
+    lecturaMantenimiento: "We're updating the site. Please try again in a few minutes.",
+    lecturaOtroIdioma: "Your reading is in {idioma}.",
+    lecturaVerAnterior: "See your reading for {quien}",
+    idiomas: { es: "Spanish", en: "English", pt: "Portuguese" },
     seoTitle: "Calculate your birth chart, free",
     seoDescription:
       "Your full birth chart — positions, houses and aspects — computed with Swiss ephemeris. No sign-up: enter date, time and place and see it.",
@@ -1788,7 +1819,7 @@ const pt: Dict = {
     previewTitle: "Seu mapa natal",
     previewLede: "É seu e está completo: as posições, as casas e os aspectos do céu do dia em que você nasceu.",
     previewCta: "Ler o que diz",
-    previewNote: "Você cria sua conta e a primeira leitura é por nossa conta.",
+    previewNote: "Grátis e sem criar conta.",
     comprarCta: "Ler o relatório completo · {precio}",
     legalAntes: "Ao continuar, você aceita os ",
     legalTerminos: "termos",
@@ -1799,8 +1830,18 @@ const pt: Dict = {
     previewPrivacidad:
       "Não guardamos nada disso enquanto você só olha. Se você comprar ou criar uma conta, o mapa fica guardado.",
     previewPrivacidadSinCompra:
-      "Não guardamos nada disso enquanto você só olha. Se você criar uma conta, o mapa fica guardado.",
+      "Seus dados de nascimento não são guardados: a leitura fica só neste navegador.",
     previewRetomando: "Salvando seu mapa…",
+    lecturaEscribiendo: "Estamos escrevendo sua leitura…",
+    lecturaOcupado: "Estamos escrevendo muitas leituras, um momento…",
+    lecturaFallida: "Não conseguimos escrever sua leitura.",
+    lecturaReintentar: "Tentar de novo",
+    lecturaUsada: "Você já usou sua leitura grátis neste navegador. A desta carta está no relatório completo.",
+    lecturaSinCupo: "Hoje não há mais leituras grátis. O relatório completo está disponível.",
+    lecturaMantenimiento: "Estamos atualizando o site. Tente de novo em alguns minutos.",
+    lecturaOtroIdioma: "Sua leitura está em {idioma}.",
+    lecturaVerAnterior: "Ver sua leitura de {quien}",
+    idiomas: { es: "espanhol", en: "inglês", pt: "português" },
     seoTitle: "Calcule seu mapa natal grátis",
     seoDescription:
       "Seu mapa natal completo — posições, casas e aspectos — calculado com efemérides suíças. Sem cadastro: você põe data, hora e lugar e vê.",

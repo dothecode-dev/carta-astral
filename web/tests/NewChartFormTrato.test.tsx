@@ -142,19 +142,26 @@ describe("el trato llega al backend", () => {
     expect(JSON.parse(init.body)).toMatchObject({ trato: "masculino", locale: "es" });
   });
 
-  it("sin sesión, «Leer qué dice» guarda el trato y al volver logueado el POST lo lleva", async () => {
-    const { unmount } = render(<NewChartForm locale="es" dict={dict} />);
+  it("sin sesión, «Leer qué dice» manda el trato a la lectura sin cuenta", async () => {
+    render(<NewChartForm locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA, "neutro");
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando" }), { status: 202 }));
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: t.previewCta }));
     });
 
-    const guardado = JSON.parse(sessionStorage.getItem("astra-carta-pendiente") ?? "null");
-    expect(guardado).toMatchObject({ trato: "neutro" });
-    unmount();
+    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    expect(url).toBe("/api/lectura-anonima");
+    expect(JSON.parse(init.body)).toMatchObject({ trato: "neutro", date: "1976-05-31" });
+  });
 
-    // Vuelve del login: el formulario con sesión retoma lo guardado.
-    fetchMock.mockClear();
+  it("al volver logueado del login, retoma lo guardado y el POST lleva el trato", async () => {
+    // Ya nadie escribe esta clave desde la vista previa (la lectura se hace
+    // sin cuenta), pero quien entra por /entrar por su cuenta puede traerla.
+    sessionStorage.setItem(
+      "astra-carta-pendiente",
+      JSON.stringify({ trato: "neutro", date: "1976-05-31" }),
+    );
     fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ id: "abc" }) });
     await act(async () => {
       render(<NewChartForm locale="es" dict={dict} signedIn />);
