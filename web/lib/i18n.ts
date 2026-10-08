@@ -1008,7 +1008,7 @@ const es: Dict = {
     legalDespues: ".",
     comprarRequiereCuenta: "Para usar este cupón, entrá con tu mail.",
     previewPrivacidad:
-      "No guardamos nada de esto mientras sólo la mirás. Si la comprás o creás una cuenta, la carta queda guardada.",
+      "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta. Si leés tu lectura gratis, tu carta y tu lectura quedan sólo en este navegador por 24 horas. Si comprás el informe, la carta queda guardada para entregártelo.",
     previewPrivacidadSinCompra:
       "Tu carta y tu lectura quedan sólo en este navegador por 24 horas. No guardamos tus datos de nacimiento.",
     previewRetomando: "Guardando tu carta…",
@@ -1418,7 +1418,7 @@ const en: Dict = {
     legalDespues: ".",
     comprarRequiereCuenta: "To use this coupon, sign in with your email.",
     previewPrivacidad:
-      "We don't store any of this while you're just looking at it. If you buy it or create an account, the chart is saved.",
+      "Your birth details aren't stored on our servers while you look at your chart. If you read your free reading, your chart and your reading stay only in this browser for 24 hours. If you buy the report, the chart is saved so we can deliver it.",
     previewPrivacidadSinCompra:
       "Your chart and your reading stay only in this browser for 24 hours. We don't store your birth details.",
     previewRetomando: "Saving your chart…",
@@ -1828,7 +1828,7 @@ const pt: Dict = {
     legalDespues: ".",
     comprarRequiereCuenta: "Para usar este cupom, entre com o seu e-mail.",
     previewPrivacidad:
-      "Não guardamos nada disso enquanto você só olha. Se você comprar ou criar uma conta, o mapa fica guardado.",
+      "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta. Se você ler sua leitura grátis, sua carta e sua leitura ficam só neste navegador por 24 horas. Se você comprar o relatório, a carta fica guardada para entregá-lo.",
     previewPrivacidadSinCompra:
       "Sua carta e sua leitura ficam só neste navegador por 24 horas. Não guardamos seus dados de nascimento.",
     previewRetomando: "Salvando seu mapa…",

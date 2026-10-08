@@ -80,11 +80,7 @@ describe("botón de compra de la vista previa", () => {
 
   it("la nota de privacidad no promete que no se guarda nada: abrir el pago guarda la carta", () => {
     pintar("es");
-    expect(
-      screen.getByText(
-        "No guardamos nada de esto mientras sólo la mirás. Si la comprás o creás una cuenta, la carta queda guardada.",
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText(/Si comprás el informe, la carta queda guardada para entregártelo\./)).toBeTruthy();
     expect(screen.queryByText(/No guardamos nada de esto\. /)).toBeNull();
   });
 
@@ -95,6 +91,18 @@ describe("botón de compra de la vista previa", () => {
         "Tu carta y tu lectura quedan sólo en este navegador por 24 horas. No guardamos tus datos de nacimiento.",
       ),
     ).toBeTruthy();
+  });
+
+  // Final review I2: con precio (el caso normal) la nota tiene que decir las
+  // tres cosas ciertas: nada en el servidor mientras mira, la lectura gratis
+  // en el navegador 24 h, y la carta guardada sólo si compra.
+  it.each([
+    ["es", "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta. Si leés tu lectura gratis, tu carta y tu lectura quedan sólo en este navegador por 24 horas. Si comprás el informe, la carta queda guardada para entregártelo."],
+    ["en", "Your birth details aren't stored on our servers while you look at your chart. If you read your free reading, your chart and your reading stay only in this browser for 24 hours. If you buy the report, the chart is saved so we can deliver it."],
+    ["pt", "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta. Se você ler sua leitura grátis, sua carta e sua leitura ficam só neste navegador por 24 horas. Se você comprar o relatório, a carta fica guardada para entregá-lo."],
+  ] as const)("%s: con precio la nota de privacidad dice lo que de verdad pasa", (locale, texto) => {
+    pintar(locale, { precio: "US$ 29" });
+    expect(screen.getByText(texto)).toBeTruthy();
   });
 
   it.each(LOCALES)("%s: la nota de privacidad existe y cambia con y sin precio", (locale) => {
