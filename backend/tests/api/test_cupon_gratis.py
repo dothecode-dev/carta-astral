@@ -37,6 +37,19 @@ def avisos(monkeypatch):
     return llamadas
 
 
+def test_el_cupon_que_arranca_un_informe_avisa_informe_en_curso(account_client, cupon_100, make_chart, monkeypatch):
+    from api import compra_service
+
+    mails = []
+    monkeypatch.setattr(notificaciones, "notificar", lambda acc, ev, ctx, lang: mails.append(ev))
+    monkeypatch.setattr(compra_service, "arrancar_informe", lambda cuenta, fila: True)
+    carta = make_chart(account=account_client.account)
+
+    account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO", "chart_id": str(carta.uuid)})
+
+    assert mails == ["informe_en_curso"]
+
+
 def test_otorga_y_acredita_al_instante_sin_stripe(account_client, cupon_100, avisos):
     r = account_client.post(URL, {"producto": "informe_natal", "cupon": "regalo", "locale": "pt"})
 

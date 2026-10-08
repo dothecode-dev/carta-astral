@@ -24,8 +24,13 @@ from interpret.prompts import TIER_LARGO
 logger = logging.getLogger(__name__)
 
 
-def arrancar_informe(cuenta, fila) -> None:
+def arrancar_informe(cuenta, fila) -> bool:
     """Deja el informe escribiéndose apenas se acredita el pago.
+
+    Devuelve True si quedó un informe escribiéndose (o creado para que lo
+    termine el cron, en mantenimiento) y False si no había informe que
+    arrancar: quien llama elige con eso el aviso (`informe_en_curso` o
+    `compra_acreditada`, spec §11 RF24 v3).
 
     Es la diferencia entre "pagué y ya se está escribiendo" y "pagué y ahora
     andá a buscar dónde usarlo". Sin esto, `aplicar_compra` consume el derecho
@@ -44,12 +49,12 @@ def arrancar_informe(cuenta, fila) -> None:
     pagó—, así que la generación se lanza sin bloquear.
     """
     if fila is None or fila.chart is None:
-        return
+        return False
 
     prod = catalogo.producto(fila.codigo_producto)
     suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
     if not (suelto and prod.capacidades):
-        return
+        return False
 
     try:
         interpretacion = interpretation_service.iniciar_generacion(
@@ -74,7 +79,7 @@ def arrancar_informe(cuenta, fila) -> None:
             # un camino que llegue acá sin pasar por el webhook.
             PasarelaCheckout.objects.filter(pk=fila.pk).update(saldo_deuda=True)
             fila.saldo_deuda = True
-        return
+        return False
     if mantenimiento.activo():
         # Hay un deploy en curso: la fila queda creada —incompleta— y no se
         # lanza el hilo, que moriría con el contenedor viejo a mitad de camino.
@@ -84,8 +89,9 @@ def arrancar_informe(cuenta, fila) -> None:
             "compra %s acreditada en mantenimiento: el informe queda para el cron",
             fila.checkout_id,
         )
-        return
+        return True
     interpretation_service.arrancar_en_hilo(interpretacion, fila.chart, cuenta)
+    return True
 
 
 def _saldo_deuda(cuenta, fila) -> bool:

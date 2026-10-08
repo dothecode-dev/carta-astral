@@ -59,6 +59,11 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
         "line_items": {"data": [{"price": {"id": "price_natal"}, "quantity": 1}]},
     }
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _id: sesion)
+    avisos = []
+    monkeypatch.setattr(
+        webhooks_stripe.notificaciones, "notificar",
+        lambda cuenta, evento, contexto, lang: avisos.append(evento),
+    )
     cuerpo = json.dumps({
         "id": "evt_d", "type": "checkout.session.completed",
         "data": {"object": {"id": "cs_deuda", "object": "checkout.session"}},
@@ -76,6 +81,8 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
     assert cuenta.deuda == 0
     assert not Movimiento.objects.filter(account=cuenta, tipo="consumo").exists()
     assert not Interpretation.objects.filter(chart=fila.chart).exists()
+    # La unidad saldó la deuda y no hay informe: el aviso es el genérico.
+    assert avisos == ["compra_acreditada"]
 
 
 def _fila(cuenta, make_chart):
@@ -185,3 +192,27 @@ def test_con_deuda_pero_saldo_de_un_pack_se_canjea_y_no_marca_deuda(
     cuenta.refresh_from_db()
     assert cuenta.deuda == 1  # la unidad comprada fue a la deuda
     assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 1
+
+
+def test_arrancar_informe_dice_si_arranco(make_account, make_chart, monkeypatch, sin_hilo):
+    """El webhook elige el aviso por esto: True sólo si quedó un informe escribiéndose."""
+    cuenta = make_account()
+    fila = _fila(cuenta, make_chart)
+    monkeypatch.setattr(interpretation_service, "iniciar_generacion", lambda *a: object())
+    assert compra_service.arrancar_informe(cuenta, fila) is True
+    assert compra_service.arrancar_informe(cuenta, None) is False
+
+
+def test_arrancar_informe_con_la_deuda_saldada_dice_que_no(make_account, make_chart, monkeypatch):
+    cuenta = make_account()
+    fila = _fila(cuenta, make_chart)
+    Movimiento.objects.create(
+        account=cuenta, codigo_producto="informe_natal", tipo="otorgamiento",
+        cantidad=1, origen="compra", external_id="stripe:session:cs_x",
+    )
+
+    def sin_derecho(*a, **k):
+        raise SinDerecho("leer_informe")
+
+    monkeypatch.setattr(interpretation_service, "iniciar_generacion", sin_derecho)
+    assert compra_service.arrancar_informe(cuenta, fila) is False

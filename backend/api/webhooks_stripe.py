@@ -337,16 +337,13 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
     if cupon is not None:
         _registrar_uso(cupon, cuenta, fila, codigo, descuento, pagado, external_id)
 
+    # En el idioma en que compró, no en español siempre: el locale queda
+    # guardado al abrir el checkout. Sin `fila` no hay de dónde sacarlo
+    # —una sesión que Stripe reporta y nosotros no registramos— y ahí sí
+    # cae el default.
+    lang = fila.locale if fila is not None else "es"
     if aplicado:
         logger.info("sesión %s acreditada: %s", session_id, codigo)
-        # Dentro del `if`: en un reintento la compra ya se acreditó y avisar de
-        # nuevo sería un segundo mail por la misma compra.
-        lang = fila.locale if fila is not None else "es"
-        # En el idioma en que compró, no en español siempre: el locale queda
-        # guardado al abrir el checkout. Sin `fila` no hay de dónde sacarlo
-        # —una sesión que Stripe reporta y nosotros no registramos— y ahí sí
-        # cae el default.
-        notificaciones.notificar(cuenta, "compra_acreditada", {"producto": codigo}, lang=lang)
         # Acá y no en el navegador: quien paga cierra la pestaña —el informe
         # tarda seis minutos— y esa compra no la mediría nadie. Dentro del
         # mismo `if aplicado`, que es lo que ya hace idempotente al aviso: un
@@ -369,7 +366,20 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
     # reintento lo único que hace es volver a intentar lo que falló. Con Polar
     # esto se tragaba el error por obligación: allá diez fallidas seguidas
     # deshabilitan el endpoint para todos.
-    arrancar_informe(cuenta, fila)
+    informe_en_curso = False
+    try:
+        informe_en_curso = arrancar_informe(cuenta, fila)
+    finally:
+        # Un solo aviso por compra, y sólo en la entrega que la acreditó: en
+        # un reintento la compra ya se acreditó y avisar de nuevo sería un
+        # segundo mail. Va después del arranque porque es lo que dice cuál
+        # mandar: «lo estamos escribiendo» sólo si de verdad quedó un informe
+        # escribiéndose; si no —un pack, una deuda saldada o un arranque que
+        # falló y queda para el reintento—, el genérico, que siempre es cierto.
+        # `notificar` no lanza, así que no tapa la excepción del arranque.
+        if aplicado:
+            evento = "informe_en_curso" if informe_en_curso else "compra_acreditada"
+            notificaciones.notificar(cuenta, evento, {"producto": codigo}, lang=lang)
 
 
 def _marcar_saldo_deuda(fila) -> None:

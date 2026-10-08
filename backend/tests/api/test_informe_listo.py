@@ -55,3 +55,17 @@ def test_compra_acreditada_ya_no_promete_el_informe_disponible():
 
     for lang, (_, html) in _TEXTOS["compra_acreditada"].items():
         assert "disponible" not in html and "available" not in html and "disponível" not in html, lang
+
+
+def test_compra_acreditada_es_generica_e_informe_en_curso_promete_el_mail():
+    """Spec §11, RF24 v3: `compra_acreditada` sale para cualquier producto (un
+    pack, una compra que saldó deuda) y no puede prometer un informe que no
+    se está escribiendo; eso lo dice `informe_en_curso`."""
+    from api.notificaciones import EVENTOS, _TEXTOS
+
+    assert "informe_en_curso" in EVENTOS
+    for lang in ("es", "en", "pt"):
+        _, generico = _TEXTOS["compra_acreditada"][lang]
+        _, en_curso = _TEXTOS["informe_en_curso"][lang]
+        assert not any(p in generico for p in ("escribiendo", "writing", "escrevendo")), lang
+        assert any(p in en_curso for p in ("escribiendo", "writing", "escrevendo")), lang

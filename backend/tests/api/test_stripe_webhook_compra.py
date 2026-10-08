@@ -299,31 +299,71 @@ def test_el_reintento_deja_la_marca_aunque_la_compra_ya_estuviera_aplicada(
     assert compra.payment_intent == "pi_1"
 
 
-def test_al_acreditar_se_le_avisa_a_quien_compro(client, monkeypatch, compra):
+def _espiar_avisos(monkeypatch, con_contexto=False):
+    avisos = []
+    monkeypatch.setattr(
+        webhooks_stripe.notificaciones, "notificar",
+        lambda cuenta, evento, contexto, lang: avisos.append((evento, contexto) if con_contexto else evento),
+    )
+    return avisos
+
+
+def test_al_acreditar_se_le_avisa_a_quien_compro(client, monkeypatch, compra, sin_hilo):
     """El aviso existía sólo en el webhook de Polar y sin ningún test que lo
-    cubriera: viajó a Stripe cuando Polar se borró."""
-    avisos = []
-    monkeypatch.setattr(
-        webhooks_stripe.notificaciones, "notificar",
-        lambda cuenta, evento, contexto, lang: avisos.append((evento, contexto)),
-    )
+    cubriera: viajó a Stripe cuando Polar se borró. Una compra suelta con carta
+    arranca el informe, así que el aviso es «lo estamos escribiendo» (spec §11,
+    RF24 v3)."""
+    avisos = _espiar_avisos(monkeypatch, con_contexto=True)
 
     _entregar(client, monkeypatch)
 
-    assert avisos == [("compra_acreditada", {"producto": "informe_natal"})]
+    assert avisos == [("informe_en_curso", {"producto": "informe_natal"})]
+    assert len(sin_hilo) == 1
 
 
-def test_el_reintento_no_avisa_dos_veces(client, monkeypatch, compra):
-    avisos = []
-    monkeypatch.setattr(
-        webhooks_stripe.notificaciones, "notificar",
-        lambda cuenta, evento, contexto, lang: avisos.append(evento),
-    )
+def test_el_reintento_no_avisa_dos_veces(client, monkeypatch, compra, sin_hilo):
+    avisos = _espiar_avisos(monkeypatch)
 
     _entregar(client, monkeypatch)
     _entregar(client, monkeypatch)
+
+    assert avisos == ["informe_en_curso"]
+
+
+def test_un_pack_avisa_compra_acreditada(client, monkeypatch, make_account, settings, sin_hilo):
+    """Un pack no arranca ningún informe: decirle «lo estamos escribiendo»
+    sería mentirle."""
+    settings.STRIPE_PRECIOS = {PRECIO: "pack_5_natal"}
+    cuenta = make_account()
+    PasarelaCheckout.objects.create(checkout_id=SESSION, account=cuenta, codigo_producto="pack_5_natal")
+    avisos = _espiar_avisos(monkeypatch)
+
+    r = _entregar(client, monkeypatch, _sesion(amount_subtotal=12500, amount_total=12500))
+
+    assert r.status_code == 200
+    assert avisos == ["compra_acreditada"]
+    assert sin_hilo == []
+
+
+def test_si_el_informe_no_arranca_sale_el_aviso_generico_una_sola_vez(client, monkeypatch, compra):
+    """El arranque falla, el webhook pide reintento: el aviso que salió es el
+    genérico —siempre cierto—, y el reintento no manda otro."""
+    avisos = _espiar_avisos(monkeypatch)
+    llamadas = []
+
+    def rompe(cuenta, fila):
+        llamadas.append(fila)
+        if len(llamadas) == 1:
+            raise RuntimeError("la base se cayó")
+        return True
+
+    monkeypatch.setattr(webhooks_stripe, "arrancar_informe", rompe)
+
+    assert _entregar(client, monkeypatch).status_code >= 500
+    assert _entregar(client, monkeypatch).status_code == 200
 
     assert avisos == ["compra_acreditada"]
+    assert len(llamadas) == 2
 
 
 def _bajar_el_precio(monkeypatch, centavos):

@@ -160,12 +160,17 @@ class CheckoutView(APIView):
             )
         # Todo lo que hace `_acreditar` en el webhook después de la
         # transacción, y en el mismo orden. Fuera del átomo: hacen red.
-        notificaciones.notificar(cuenta, "compra_acreditada", {"producto": codigo}, lang=idioma)
         analitica.evento(
             cuenta, "compra_completada",
             {"producto": codigo, "monto_centavos": 0, "locale": idioma, "cupon": cupon.codigo},
         )
-        compra_service.arrancar_informe(cuenta, fila)
+        informe_en_curso = False
+        try:
+            informe_en_curso = compra_service.arrancar_informe(cuenta, fila)
+        finally:
+            # Como en el webhook: el aviso lo decide el arranque.
+            evento = "informe_en_curso" if informe_en_curso else "compra_acreditada"
+            notificaciones.notificar(cuenta, evento, {"producto": codigo}, lang=idioma)
         return Response({"url": f"/{idioma}/compra?checkout_id={fila.checkout_id}"})
 
 

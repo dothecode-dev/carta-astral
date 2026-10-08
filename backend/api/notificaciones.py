@@ -28,7 +28,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-EVENTOS = ("informe_no_entregado", "compra_acreditada", "informe_listo")
+EVENTOS = ("informe_no_entregado", "compra_acreditada", "informe_en_curso", "informe_listo")
 
 _API = "https://api.resend.com/emails"
 
@@ -40,21 +40,43 @@ _TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 # Mismo patrón que los DISCLAIMERS de `interpretation_service`: un dict por
 # idioma en el módulo. `{url}` es la cuenta de esa persona, en su idioma.
 _TEXTOS = {
+    # Genérico y siempre cierto: sale para cualquier compra acreditada que NO
+    # dejó un informe escribiéndose (un pack, una que saldó deuda, una cuyo
+    # arranque falló y queda para el reintento). Spec §11, RF24 v3.
     "compra_acreditada": {
         "es": (
             "Recibimos tu pago",
+            "<p>Recibimos tu pago. Lo que compraste ya está en tu cuenta.</p>"
+            '<p><a href="{url}">Ver mi cuenta</a></p>',
+        ),
+        "en": (
+            "We received your payment",
+            "<p>We received your payment. What you bought is now in your account.</p>"
+            '<p><a href="{url}">Go to my account</a></p>',
+        ),
+        "pt": (
+            "Recebemos seu pagamento",
+            "<p>Recebemos seu pagamento. O que você comprou já está na sua conta.</p>"
+            '<p><a href="{url}">Ver minha conta</a></p>',
+        ),
+    },
+    # Sólo cuando la compra SÍ dejó un informe escribiéndose; el aviso de que
+    # terminó es `informe_listo`.
+    "informe_en_curso": {
+        "es": (
+            "Estamos escribiendo tu informe",
             "<p>Recibimos tu pago y ya estamos escribiendo tu informe. Tarda unos minutos: "
             "te mandamos otro mail cuando esté listo.</p>"
             '<p><a href="{url}">Ver mi cuenta</a></p>',
         ),
         "en": (
-            "We received your payment",
+            "We're writing your report",
             "<p>We received your payment and we're writing your report. It takes a few minutes: "
             "we'll email you again when it's ready.</p>"
             '<p><a href="{url}">Go to my account</a></p>',
         ),
         "pt": (
-            "Recebemos seu pagamento",
+            "Estamos escrevendo seu relatório",
             "<p>Recebemos seu pagamento e já estamos escrevendo seu relatório. Leva alguns minutos: "
             "mandamos outro e-mail quando estiver pronto.</p>"
             '<p><a href="{url}">Ver minha conta</a></p>',
