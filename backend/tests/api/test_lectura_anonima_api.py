@@ -176,3 +176,27 @@ def test_otro_pedido_mientras_genera_409_y_el_mismo_202(monkeypatch):
     assert len(lanzados) == 1
     g = c.get(URL, HTTP_X_LECTURA_TOKEN=token)
     assert g.json() == {"estado": "generando", "pedido": PEDIDO}
+
+
+def test_reintentar_la_fallida_del_mismo_pedido_no_cuenta_para_la_ip(monkeypatch):
+    def rompe(*a):
+        raise RuntimeError("anthropic caído")
+
+    monkeypatch.setattr(la.informe_service, "escribir_breve", rompe)
+    c = APIClient()
+    token = _post(c).json()["token"]
+    for _ in range(5):
+        assert _post(c, token).status_code == 202
+    assert c.get(URL, HTTP_X_LECTURA_TOKEN=token).json()["estado"] == "fallida"
+    monkeypatch.setattr(la.informe_service, "escribir_breve", lambda *a: "breve")
+    assert _post(c).status_code == 202 and _post(c).status_code == 202
+    assert _post(c).status_code == 429
+
+
+def test_sin_cupo_no_cuenta_para_la_ip(settings):
+    settings.INTERPRETATION_ANON_DAILY_CAP = 0
+    c = APIClient()
+    for _ in range(4):
+        assert _post(c).json()["motivo"] == "cupo"
+    settings.INTERPRETATION_ANON_DAILY_CAP = 40
+    assert _post(c).status_code == 202

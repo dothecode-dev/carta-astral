@@ -8,11 +8,12 @@ la vuelve a pedir—; la borra el acuse (`acusar`, el DELETE) o el vencimiento.
 Después vive sólo en el navegador. Una marca sin datos personales recuerda
 24 h que ese token ya usó su lectura gratis.
 
-Orden de los chequeos de `pedir`, y por qué:
-  mantenimiento → ya usado → en curso → slot de concurrencia → IP → cupo.
-El slot va antes de la IP para que un «ocupado» (que la web reintenta sola)
-no gaste el techo por IP; la IP va antes del cupo para no reservar un lugar
-que después hay que devolver.
+Orden de los chequeos de `pedir`, y por qué (spec §11, RF13 v3):
+  mantenimiento → ya usado → en curso → slot de concurrencia → cupo → IP.
+El techo por IP se consume último: ni un «ocupado» (que la web reintenta
+sola) ni un «sin cupo» lo gastan. Si la IP rechaza, se devuelve el cupo
+recién reservado. Reintentar la lectura fallida (o caída) del mismo token y
+pedido no consulta la IP.
 
 El `pedido` es un id que la web genera por cada vez que se aprieta «leer» (no
 es un dato personal). Con el mismo token, mientras una lectura se escribe, sólo
@@ -139,6 +140,14 @@ def _en_curso(entrada: dict | None, pedido: str) -> bool:
     return True
 
 
+def _es_reintento(entrada: dict | None, pedido: str) -> bool:
+    """La entrada es una lectura de ESTE pedido que falló o se cayó."""
+    return (
+        entrada is not None and entrada.get("pedido") == pedido
+        and (entrada["estado"] == "fallida" or _caida(entrada))
+    )
+
+
 def _lista_propia(h: str, pedido: str) -> bool:
     """True si la lectura de ESTE pedido está escrita y sin acusar: con la marca
     puesta, un POST del mismo pedido la recibe (202 `lista`) en vez de 409."""
@@ -180,8 +189,6 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
             raise Ocupado()
         fecha = None
         try:
-            if not permitir():
-                raise PorIP()
             if entrada is not None and _caida(entrada):
                 # La generación anterior se dio por caída: su lugar vuelve una
                 # sola vez antes de reservar el nuevo.
@@ -195,6 +202,12 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
                     settings.INTERPRETATION_ANON_DAILY_CAP,
                 )
                 raise SinCupo()
+            # La IP va última: un «ocupado» o un «sin cupo» no la gastan, y
+            # reintentar la fallida (o caída) del MISMO pedido tampoco —es la
+            # misma lectura que ya la pagó—. Si rechaza, el `except` devuelve
+            # el cupo recién reservado y suelta el slot.
+            if not _es_reintento(entrada, pedido) and not permitir():
+                raise PorIP()
             iniciado = _ahora()
             cache.set(_clave(h), {
                 "estado": "generando", "lang": lang, "pedido": pedido,

@@ -490,3 +490,63 @@ def test_si_falla_la_escritura_el_latido_tambien_se_detiene(monkeypatch):
     time.sleep(0.05)
     assert len(latidos) == cantidad
     assert la.estado(pedido.token)["estado"] == "fallida"
+
+
+# --- Orden slot → cupo → IP (spec §11, RF13 v3): el techo por IP se consume
+# último, y reintentar la fallida/caída del mismo pedido no lo consume.
+
+
+def test_sin_cupo_no_consume_la_ip(breve, settings):
+    settings.INTERPRETATION_ANON_DAILY_CAP = 0
+    contadas = []
+    with pytest.raises(la.SinCupo):
+        la.pedir(DATOS, "es", "", None, lambda: contadas.append(1) or True, pedido=PEDIDO)
+    assert contadas == []
+    assert cache.get("lectura_anonima:slot:0") is None
+
+
+def test_la_ip_se_consulta_con_el_cupo_ya_reservado_y_si_rechaza_lo_devuelve(breve):
+    vistos = []
+
+    def permitir():
+        vistos.append(_usados())
+        return False
+
+    with pytest.raises(la.PorIP):
+        la.pedir(DATOS, "es", "", None, permitir, pedido=PEDIDO)
+    assert vistos == [1] and _usados() == 0
+    assert cache.get("lectura_anonima:slot:0") is None
+
+
+def _contar():
+    contadas = []
+    return contadas, lambda: contadas.append(1) or True
+
+
+def test_reintentar_la_fallida_del_mismo_pedido_no_consume_la_ip(monkeypatch):
+    monkeypatch.setattr(la.informe_service, "escribir_breve", lambda *a: (_ for _ in ()).throw(RuntimeError("x")))
+    contadas, permitir = _contar()
+    primero = la.pedir(DATOS, "es", "", None, permitir, pedido=PEDIDO)
+    assert contadas == [1]
+    monkeypatch.setattr(la.informe_service, "escribir_breve", lambda *a: "ahora sí")
+    la.pedir(DATOS, "es", "", primero.token, permitir, pedido=PEDIDO)
+    assert contadas == [1]
+    assert la.estado(primero.token)["texto"] == "ahora sí"
+    assert _usados() == 1
+
+
+def test_la_fallida_con_otro_pedido_si_consume_la_ip(monkeypatch):
+    monkeypatch.setattr(la.informe_service, "escribir_breve", lambda *a: (_ for _ in ()).throw(RuntimeError("x")))
+    contadas, permitir = _contar()
+    primero = la.pedir(DATOS, "es", "", None, permitir, pedido=PEDIDO)
+    la.pedir(DATOS, "es", "", primero.token, permitir, pedido=OTRO)
+    assert contadas == [1, 1]
+
+
+def test_relanzar_la_caida_del_mismo_pedido_no_consume_la_ip(breve, monkeypatch):
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: None)
+    contadas, permitir = _contar()
+    primero = la.pedir(DATOS, "es", "", None, permitir, pedido=PEDIDO)
+    _entrada_caida(primero.token)
+    la.pedir(DATOS, "es", "", primero.token, permitir, pedido=PEDIDO)
+    assert contadas == [1] and _usados() == 1
