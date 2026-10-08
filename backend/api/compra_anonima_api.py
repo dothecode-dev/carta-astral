@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from core.exceptions import CoreError
 
 from api import compra_anonima, mantenimiento, stripe_client
-from api.chart_service import calcular, mensaje_de_datos_invalidos
+from api.chart_service import calcular, mensaje_de_datos_invalidos, validar_trato
 from api.checkout import idioma_pedido, respuesta_de_stripe
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,7 @@ class CheckoutAnonimoView(APIView):
         # de alguien que todavía no aceptó nada.
         try:
             calcular(request.data)
+            validar_trato(request.data.get("trato"))
         except (KeyError, ValueError, CoreError) as exc:
             logger.warning("checkout anónimo rechazado: %s", type(exc).__name__)
             return Response(

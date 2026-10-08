@@ -6,6 +6,7 @@ from django.db import transaction
 from core.ephemeris import build_chart
 from core.models import BirthInput, ChartData
 from core.timeconv import resolve_tz
+from interpret.trato import TRATOS
 
 from api.models import BirthData, Chart
 from api.serializers import serialize_chart_data
@@ -80,9 +81,33 @@ def calcular(payload: dict) -> CartaCalculada:
     )
 
 
+class TratoInvalido(ValueError):
+    """El trato pedido no es uno de `TRATOS`. Es `ValueError` para que las vistas
+    que ya mapean los datos inválidos a 400 lo traten igual."""
+
+
+def validar_trato(valor) -> str:
+    """El trato que se va a guardar. Ausente o `None` = «sin elegir» (`""`)."""
+    if valor is None or valor == "":
+        return ""
+    if not isinstance(valor, str) or valor not in TRATOS:
+        raise TratoInvalido("trato inválido")
+    return valor
+
+
+def cambiar_trato(chart: Chart, valor) -> None:
+    """Cambia el trato de la carta. Sólo afecta a los informes que se creen
+    después: una `Interpretation` ya creada conserva el suyo (RF3)."""
+    trato = validar_trato(valor)
+    birth = chart.birth_data
+    birth.trato = trato
+    birth.save(update_fields=["trato"])
+
+
 def create_chart(payload: dict, account) -> Chart:
     """Calcula y guarda. El cálculo es el mismo de `calcular`, a propósito: si
     se bifurcan, la carta que vio el visitante deja de ser la que recibe."""
+    trato = validar_trato(payload.get("trato"))
     carta_calc = calcular(payload)
     bi = carta_calc.birth_input
 
@@ -91,6 +116,7 @@ def create_chart(payload: dict, account) -> Chart:
             name=bi.name, date=bi.date, time=bi.time, time_known=carta_calc.data.time_known,
             lat=bi.lat, lng=bi.lng, tz_name=carta_calc.tz_name,
             datetime_utc=carta_calc.datetime_utc, place_label=carta_calc.place_label,
+            trato=trato,
         )
         carta = Chart.objects.create(
             birth_data=birth_data,

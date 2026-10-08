@@ -19,7 +19,7 @@ from config.settings import INTERNAL_HOSTS
 
 CLAVES_CHART = {
     "id", "house_system", "zodiac", "data", "engine_version",
-    "interpretation_langs", "interpretations", "en_curso", "birth", "firma",
+    "interpretation_langs", "interpretations", "en_curso", "birth", "firma", "trato",
 }
 CLAVES_BIRTH = {
     "name", "date", "time", "time_known", "lat", "lng", "tz_name", "place_label",

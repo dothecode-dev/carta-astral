@@ -18,6 +18,7 @@ from api.auth import (
     create_session,
 )
 from api.deletion import delete_account, delete_charts
+from api import chart_service
 from api.chart_service import CartaCalculada, calcular, create_chart, mensaje_de_datos_invalidos
 from api.canje import SinDerecho, derechos_de
 from api.exceptions import CapReached, GenerationInProgress
@@ -150,6 +151,7 @@ def _chart_repr(chart: Chart) -> dict:
         "engine_version": chart.engine_version,
         "interpretation_langs": langs,
         "interpretations": tiers_por_lang,
+        "trato": birth.trato,
         "birth": {
             "name": birth.name,
             "date": birth.date.isoformat(),
@@ -279,6 +281,17 @@ class ChartDetailView(APIView):
 
     def get(self, request, uuid):
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        return Response(_chart_repr(chart))
+
+    def patch(self, request, uuid):
+        chart = get_object_or_404(
+            Chart.objects.select_related("birth_data").prefetch_related("interpretations"),
+            uuid=uuid, account=request.user,
+        )
+        try:
+            chart_service.cambiar_trato(chart, request.data.get("trato"))
+        except chart_service.TratoInvalido:
+            return Response({"error": "trato inválido"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(_chart_repr(chart))
 
 
