@@ -265,10 +265,21 @@ def _palabras_cambiadas(original: str, corregido: str) -> int:
     return sum(max(i2 - i1, j2 - j1) for _, i1, i2, j1, j2 in distintas)
 
 
-# Terminación de género: -o, -a, -os, -as. Incluye los pronombres «o»/«a» del
-# portugués («Áries o empurra»). Aproximado: también cae «para», «hacia» o
-# «una»; alcanza porque la regla sólo descarta pares que NO tocan ninguna.
-_GENERO = re.compile(r"(o|a|os|as)$")
+# Qué cuenta como palabra con género. La regla es aproximada en UNA sola
+# dirección: puede dejar pasar algún retoque de más («para», «hacia», «tenés»
+# también cuentan), pero nunca tiene que rechazar una corrección real.
+# Terminaciones: -o/-a/-os/-as, -or/-ora/-ores/-oras («soñador» →
+# «soñadora»), -ón/-ona/-ones/-onas, -és/-esa. Las femeninas ya caen en -a/-as.
+_GENERO = re.compile(r"(o|a|os|as|or|ores|ón|ones|és)$")
+# Determinantes y pronombres con género, aunque no terminen así («un» →
+# «una», «el protector» → «la protectora», «um sonhador» → «uma
+# sonhadora»). Incluye «o»/«a» del portugués («Áries o empurra»).
+_DETERMINANTES_CON_GENERO = frozenset({
+    "un", "una", "unos", "unas", "el", "la", "los", "las",
+    "um", "uma", "uns", "umas", "o", "a", "os", "as",
+    "aquel", "aquella", "este", "esta", "ese", "esa",
+    "ele", "ela", "él", "ella",
+})
 _PUNTUACION_PEGADA = re.compile(r"^\W+|\W+$")
 
 
@@ -280,7 +291,8 @@ def _cambia_palabra_con_genero(original: str, corregido: str) -> bool:
     a, distintas = _diferencias(original, corregido)
     for _, i1, i2, _, _ in distintas:
         for palabra in a[i1:i2]:
-            if _GENERO.search(_PUNTUACION_PEGADA.sub("", palabra.lower())):
+            limpia = _PUNTUACION_PEGADA.sub("", palabra.lower())
+            if limpia in _DETERMINANTES_CON_GENERO or _GENERO.search(limpia):
                 return True
     return False
 
@@ -298,8 +310,16 @@ def _solo_agrega_palabras(original: str, corregido: str) -> bool:
     return all(token in restantes for token in _TOKEN.findall(original.lower()))
 
 
+def _es_frase(fragmento: str) -> bool:
+    """Dos palabras o más: trae el género adentro, así que si se repite,
+    todas sus copias están mal y se corrigen todas. Una palabra suelta
+    repetida («seguro» en «es seguro que» y en «estás seguro») es ambigua."""
+    return len(fragmento.split()) >= 2
+
+
 def _motivo_de_rechazo(
-    original: str, corregido: str, texto: str, listados: set[str], clave: str, lang: str
+    original: str, corregido: str, texto: str, listados: set[str], clave: str, lang: str,
+    copias_al_empezar: dict[str, int],
 ) -> str | None:
     """Por qué un par no se aplica, o None si se aplica. Los motivos son
     claves fijas: van al log como contadores, nunca el texto."""
@@ -309,9 +329,12 @@ def _motivo_de_rechazo(
     if apariciones == 0:
         # Un par anterior ya lo tocó, o el modelo lo copió distinto.
         return "ausente"
-    if apariciones > 1:
-        # `replace(..., 1)` tocaría la primera aparición, que puede no ser la
-        # mal escrita; pasa si un corregido ya aplicado trae este texto.
+    if apariciones > 1 and not _es_frase(original):
+        # Una palabra suelta repetida: no se sabe cuál copia es la mal escrita.
+        return "no_unico"
+    if apariciones != copias_al_empezar.get(original):
+        # Un corregido ya aplicado en esta vuelta trae este texto: reemplazar
+        # todas las copias tocaría también esa corrección.
         return "no_unico"
     if corregido == original:
         return "identico"
@@ -382,18 +405,18 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
         )
         return texto, 0
 
-    # Sólo fragmentos que aparecen exactamente una vez. Uno que no está es una
-    # invención del juez: pedir repararlo invita a tocar otra cosa. Uno que
-    # aparece más de una vez («seguro» en «es seguro que Saturno» y en «estás
-    # seguro») no se puede reparar con garantías: `replace(..., 1)` y el
-    # contexto toman la primera aparición, que puede ser la que estaba bien.
-    # Y uno de más de `MAX_PALABRAS_FRAGMENTO` palabras invita a reescribir.
+    # Uno que no está es una invención del juez: pedir repararlo invita a
+    # tocar otra cosa. Una palabra suelta que aparece más de una vez («seguro»
+    # en «es seguro que Saturno» y en «estás seguro») no se puede reparar con
+    # garantías: no se sabe cuál copia está mal. Una frase repetida sí: se
+    # corrigen todas sus copias (`_es_frase`). Y uno de más de
+    # `MAX_PALABRAS_FRAGMENTO` palabras invita a reescribir.
     unicos = list(dict.fromkeys(f for f in fragmentos if f))
     largos = [f for f in unicos if len(f.split()) > MAX_PALABRAS_FRAGMENTO]
     cortos = [f for f in unicos if len(f.split()) <= MAX_PALABRAS_FRAGMENTO]
     ausentes = sum(1 for f in cortos if texto.count(f) == 0)
-    no_unicos = sum(1 for f in cortos if texto.count(f) > 1)
-    presentes = [f for f in cortos if texto.count(f) == 1]
+    no_unicos = sum(1 for f in cortos if texto.count(f) > 1 and not _es_frase(f))
+    presentes = [f for f in cortos if texto.count(f) == 1 or (texto.count(f) > 1 and _es_frase(f))]
     if largos or ausentes or no_unicos:
         logger.info(
             "revisión del trato: fragmentos del juez descartados: vuelta=%s largo=%s ausente=%s no_unico=%s",
@@ -429,14 +452,19 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
         return texto, 0
 
     listados = set(presentes)
+    copias_al_empezar = {f: texto.count(f) for f in presentes}
     rechazos: Counter[str] = Counter()
     aplicados = 0
     resultado = texto
     for original, corregido in pares:
-        if motivo := _motivo_de_rechazo(original, corregido, resultado, listados, clave, lang):
+        if motivo := _motivo_de_rechazo(
+            original, corregido, resultado, listados, clave, lang, copias_al_empezar
+        ):
             rechazos[motivo] += 1
             continue
-        resultado = resultado.replace(original, corregido, 1)
+        # Todas las copias: una palabra suelta llega acá sólo si es única, y
+        # una frase repetida está mal en todas (ver `_es_frase`).
+        resultado = resultado.replace(original, corregido)
         listados.discard(original)  # un fragmento se corrige una sola vez
         aplicados += 1
 

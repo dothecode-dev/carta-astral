@@ -599,3 +599,43 @@ def test_un_par_sin_palabra_con_genero_cambiada_se_rechaza(original, corregido, 
     else:
         assert resultado == texto
         assert "sin_genero=1" in _resumen(caplog)
+
+
+# --- code review sobre d3f6f1a..a0d5caa ---
+
+BASE = "## Tu motor\n\nUn párrafo que no tiene nada que corregir.\n\n"
+
+
+@pytest.mark.parametrize(
+    ("original", "corregido", "trato", "lang"),
+    [
+        ("un gran soñador", "una gran soñadora", "femenino", "es"),
+        ("el protector", "la protectora", "femenino", "es"),
+        ("um sonhador", "uma sonhadora", "femenino", "pt"),
+        ("un soñador", "alguien que sueña", "neutro", "es"),
+    ],
+)
+def test_correcciones_reales_con_determinante_o_sufijo_se_aplican(original, corregido, trato, lang):
+    """Hallazgo de code review: «sin_genero» rechazaba estas correcciones
+    porque sólo miraba -o/-a/-os/-as."""
+    texto = BASE + "Sos " + original + " de verdad."
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
+    assert revisar_trato(texto, trato, lang, cliente) == texto.replace(original, corregido)
+
+
+def test_una_frase_repetida_de_dos_palabras_se_corrige_en_todas_sus_copias():
+    texto = BASE + "Hoy estás cansado de esperar, y mañana estás cansado de correr."
+    original, corregido = "estás cansado", "estás cansada"
+    cliente = ClienteFalso(_juez(original), _reemplazos((original, corregido)), _juez())
+    resultado = revisar_trato(texto, "femenino", "es", cliente)
+    assert resultado == texto.replace(original, corregido)
+    assert resultado.count(corregido) == 2
+
+
+def test_una_palabra_suelta_repetida_se_sigue_descartando(caplog):
+    texto = BASE + "Es seguro que Saturno ayuda, y vos estás seguro de eso."
+    cliente = ClienteFalso(_juez("seguro"))
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(texto, "neutro", "es", cliente) == texto
+    assert len(cliente.llamadas) == 1
+    assert any("no_unico=1" in r.getMessage() for r in caplog.records)
