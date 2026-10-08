@@ -28,6 +28,14 @@ export type EventoProps = {
    *  la puerta del registro aparece recién acá. La distancia entre este evento
    *  y `login` es lo que mide cuánta gente se cae en esa puerta. */
   lectura_pedida_sin_cuenta: Record<string, never>;
+  /** Pidió la lectura breve sin cuenta desde la vista previa (spec 2026-10-08). */
+  lectura_anonima_pedida: Record<string, never>;
+  /** La lectura breve sin cuenta llegó a la pantalla. */
+  lectura_anonima_generada: Record<string, never>;
+  /** No llegó: por qué. */
+  lectura_anonima_fallida: { motivo: "modelo" | "ip" | "cupo" | "ocupado" | "mantenimiento" | "timeout" };
+  /** El navegador ya había usado su lectura gratis (409): se le ofrece el informe. */
+  lectura_anonima_usada: Record<string, never>;
   /** `desde` distingue al que llenó el formulario ya con sesión del que venía
    *  del preview anónimo: son dos costos de adquisición distintos. */
   carta_creada: { desde: "formulario" | "preview" };
