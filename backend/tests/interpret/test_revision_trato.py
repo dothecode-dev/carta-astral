@@ -15,7 +15,7 @@ import httpx
 import pytest
 
 from interpret import revision_trato
-from interpret.prompts import MODEL, TRANSLATE_MAX_TOKENS_GENERACION
+from interpret.prompts import MODEL
 from interpret.revision_trato import revisar_trato
 from interpret.trato import instruccion
 
@@ -29,9 +29,12 @@ TEXTO = (
     "Mercurio en Géminis te lleva a saltar de un tema a otro con curiosidad, "
     "sin convertirte en especialista de una sola cosa. Leés, preguntás, "
     "conectás ideas que nadie había juntado, y en esa mezcla aparece lo más "
-    "tuyo: la capacidad de traducir lo complejo en algo que se entiende."
+    "tuyo: la capacidad de traducir lo complejo en algo que se entiende. "
+    "Trabajar así no tiene por qué ser una pelea constante contra vos."
 )
-REPARADO = TEXTO.replace("vos misma", "por tu cuenta")
+FRAG = "generar vos misma el sacudón"
+FRAG_OK = "generar por tu cuenta el sacudón"
+REPARADO = TEXTO.replace(FRAG, FRAG_OK)
 
 
 class _Block:
@@ -90,6 +93,12 @@ def _juez(*fragmentos):
     return json.dumps({"fragmentos": list(fragmentos)}, ensure_ascii=False)
 
 
+def _reemplazos(*pares):
+    return json.dumps(
+        {"reemplazos": [{"original": o, "corregido": c} for o, c in pares]}, ensure_ascii=False
+    )
+
+
 def _system(llamada):
     return "\n".join(b["text"] for b in llamada["system"])
 
@@ -113,25 +122,37 @@ def test_juez_sin_fragmentos_no_repara():
 # --- el camino feliz ---
 
 
-def test_juez_con_fragmentos_repara_y_devuelve_lo_reparado(caplog):
-    cliente = ClienteFalso(_juez("generar vos misma el sacudón"), REPARADO)
+def test_reemplaza_el_fragmento_y_nada_mas(caplog):
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)))
     with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
-        assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
-    assert len(cliente.llamadas) == 2
+        resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
+    assert resultado == REPARADO
+    # Fuera del fragmento, byte-idéntico.
+    i = TEXTO.index(FRAG)
+    assert resultado[:i] == TEXTO[:i]
+    assert resultado[i + len(FRAG_OK):] == TEXTO[i + len(FRAG):]
+    # Se loguean números, no texto.
+    resumen = [r.getMessage() for r in caplog.records if "listados=" in r.getMessage()]
+    assert resumen and "listados=1" in resumen[0] and "aplicados=1" in resumen[0]
+    assert "sacudón" not in resumen[0]
+
+
+def test_la_reparacion_recibe_los_fragmentos_con_contexto_y_no_el_texto_entero():
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)))
+    revisar_trato(TEXTO, "neutro", "es", cliente)
     reparacion = cliente.llamadas[1]
     contenido = reparacion["messages"][0]["content"]
-    assert "generar vos misma el sacudón" in contenido
-    assert TEXTO in contenido
+    assert FRAG in contenido
+    assert "se estanca, podés" in contenido  # contexto de antes
+    assert TEXTO not in contenido
     assert instruccion("neutro", "es") in _system(reparacion)
-    assert reparacion["max_tokens"] == TRANSLATE_MAX_TOKENS_GENERACION
-    # Se loguea el número, no el texto.
-    aceptada = [r for r in caplog.records if r.levelno == logging.INFO and "reparación" in r.getMessage()]
-    assert aceptada and "fragmentos=1" in aceptada[0].getMessage()
-    assert "sacudón" not in aceptada[0].getMessage()
+    formato = reparacion["output_config"]["format"]
+    assert formato["type"] == "json_schema"
+    assert formato["schema"]["required"] == ["reemplazos"]
 
 
 def test_juez_con_bloque_json_tambien_se_entiende():
-    cliente = ClienteFalso(f"```json\n{_juez('generar vos misma el sacudón')}\n```", REPARADO)
+    cliente = ClienteFalso(f"```json\n{_juez(FRAG)}\n```", _reemplazos((FRAG, FRAG_OK)))
     assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
 
 
@@ -144,7 +165,7 @@ def test_fragmentos_que_no_estan_en_el_texto_se_descartan():
 
 @pytest.mark.parametrize("lang", ["es", "pt"])
 def test_las_dos_llamadas_van_sin_razonamiento_y_con_el_modelo_de_generacion(lang):
-    cliente = ClienteFalso(_juez("generar vos misma el sacudón"), REPARADO)
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG_OK)))
     revisar_trato(TEXTO, "femenino", lang, cliente)
     assert len(cliente.llamadas) == 2
     for llamada in cliente.llamadas:
@@ -182,48 +203,69 @@ def test_el_system_del_juez_nombra_el_trato(trato, esperado, ausente):
         assert ausente not in revision_trato.describir_trato(trato)
 
 
-# --- reparaciones que no se aceptan ---
+# --- pares que se descartan (el resto se aplica igual) ---
 
 
-def _reparacion_rechazada(reparado, caplog):
-    cliente = ClienteFalso(_juez("generar vos misma el sacudón"), reparado)
-    with caplog.at_level(logging.WARNING, logger="interpret.revision_trato"):
-        resultado = revisar_trato(TEXTO, "neutro", "es", cliente)
-    assert resultado == TEXTO
-    assert any(r.levelno == logging.WARNING for r in caplog.records)
+def test_un_par_que_introduce_vos_mismo_se_rechaza_y_el_otro_se_aplica(caplog):
+    """Medido en staging: la reparación pasó «contra vos» a «contra vos mismo»."""
+    contra = "una pelea constante contra vos"
+    cliente = ClienteFalso(
+        _juez(FRAG, contra),
+        _reemplazos((FRAG, FRAG_OK), (contra, "una pelea constante contra vos mismo")),
+    )
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
+    resumen = [r.getMessage() for r in caplog.records if "listados=" in r.getMessage()][0]
+    assert "aplicados=1" in resumen and "forma_prohibida=1" in resumen
 
 
-def test_reparacion_que_cambia_demasiado_devuelve_el_original(caplog):
-    reescrito = TEXTO.replace(
-        "Leés, preguntás, conectás ideas que nadie había juntado",
-        "Tu mente funciona como una red que no para de tejer conexiones nuevas",
-    ).replace("vos misma", "por tu cuenta")
-    _reparacion_rechazada(reescrito, caplog)
+def test_un_par_cuyo_original_no_listo_el_juez_se_descarta(caplog):
+    otro = "Mercurio en Géminis"
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((otro, "Mercurio en Cáncer"), (FRAG, FRAG_OK)))
+    with caplog.at_level(logging.INFO, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO
+    resumen = [r.getMessage() for r in caplog.records if "listados=" in r.getMessage()][0]
+    assert "no_listado=1" in resumen
 
 
-def test_reparacion_que_toca_un_encabezado_devuelve_el_original(caplog):
-    _reparacion_rechazada(REPARADO.replace("## Tu motor", "## Tu impulso"), caplog)
+def test_un_par_identico_se_descarta():
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, FRAG)))
+    assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
 
 
-def test_reparacion_que_pierde_un_encabezado_devuelve_el_original(caplog):
-    _reparacion_rechazada(REPARADO.replace("## Tu forma de pensar\n\n", ""), caplog)
+def test_un_par_con_salto_de_linea_se_descarta():
+    frag = "## Tu motor\n\nMarte en Aries"
+    cliente = ClienteFalso(_juez(frag), _reemplazos((frag, "## Tu impulso\n\nMarte en Aries")))
+    assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
 
 
-def test_reparacion_vacia_devuelve_el_original(caplog):
-    # `_stream_text` ya rechaza la respuesta vacía; lo que llega en blanco
-    # termina como InterpretationError y se trata igual.
-    _reparacion_rechazada("   ", caplog)
+@pytest.mark.parametrize(
+    ("trato", "corregido", "rechazado"),
+    [
+        ("neutro", "generar vos misma el sacudón con calma", True),
+        ("neutro", "generar por tu cuenta el sacudón", False),
+        ("neutro", "gerar você mesmo o sacudón", True),
+        ("neutro", "generar lo mismo de siempre", True),
+        ("femenino", "generar vos mismo el sacudón", True),
+        ("femenino", "generar vos misma el sacudón ya", False),
+        ("masculino", "generar vos misma el sacudón ya", True),
+        ("masculino", "generar vos mismo el sacudón", False),
+        ("femenino", "gerar você mesmo o sacudón", True),
+        ("masculino", "gerar você mesma o sacudón", True),
+    ],
+)
+def test_formas_prohibidas_segun_el_trato(trato, corregido, rechazado):
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos((FRAG, corregido)))
+    resultado = revisar_trato(TEXTO, trato, "es", cliente)
+    assert resultado == (TEXTO if rechazado else TEXTO.replace(FRAG, corregido))
 
 
-def test_reparacion_cortada_por_el_techo_devuelve_el_original(caplog):
-    cortada = _Resp(REPARADO[:100], stop_reason="max_tokens")
-    cliente = ClienteFalso(_juez("generar vos misma el sacudón"), cortada)
-    with caplog.at_level(logging.WARNING, logger="interpret.revision_trato"):
-        assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
-    assert any(r.levelno == logging.WARNING for r in caplog.records)
+def test_reparacion_sin_reemplazos_devuelve_el_original():
+    cliente = ClienteFalso(_juez(FRAG), _reemplazos())
+    assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
 
 
-# --- el juez falla ---
+# --- fallos del LLM o JSON roto: el original ---
 
 
 @pytest.mark.parametrize(
@@ -238,6 +280,23 @@ def test_juez_con_respuesta_ilegible_devuelve_el_original_y_loguea(respuesta, ca
     assert any(r.levelno == logging.WARNING for r in caplog.records)
 
 
+@pytest.mark.parametrize(
+    "respuesta",
+    [
+        "esto no es json",
+        '{"reemplazos": "no es lista"}',
+        '{"reemplazos": [{"original": "x"}]}',
+        '{"reemplazos": [{"original": 1, "corregido": 2}]}',
+        _Resp('{"reemplazos": [', stop_reason="max_tokens"),
+    ],
+)
+def test_reparacion_ilegible_devuelve_el_original_y_loguea(respuesta, caplog):
+    cliente = ClienteFalso(_juez(FRAG), respuesta)
+    with caplog.at_level(logging.WARNING, logger="interpret.revision_trato"):
+        assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
 def test_error_del_llm_en_el_juez_devuelve_el_original_y_loguea(caplog):
     error = anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com"))
     cliente = ClienteFalso(error)
@@ -248,12 +307,7 @@ def test_error_del_llm_en_el_juez_devuelve_el_original_y_loguea(caplog):
 
 def test_error_del_llm_en_la_reparacion_devuelve_el_original_y_loguea(caplog):
     error = anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com"))
-    cliente = ClienteFalso(_juez("generar vos misma el sacudón"), error)
+    cliente = ClienteFalso(_juez(FRAG), error)
     with caplog.at_level(logging.WARNING, logger="interpret.revision_trato"):
         assert revisar_trato(TEXTO, "neutro", "es", cliente) == TEXTO
     assert any(r.levelno == logging.WARNING for r in caplog.records)
-
-
-def test_reparacion_envuelta_en_la_etiqueta_del_pedido_se_desenvuelve():
-    cliente = ClienteFalso(_juez("generar vos misma el sacudón"), f"<texto>\n{REPARADO}\n</texto>")
-    assert revisar_trato(TEXTO, "neutro", "es", cliente) == REPARADO

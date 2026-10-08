@@ -8,23 +8,32 @@ hacia el género contrario en femenino y masculino.
 
 Dos llamadas a `MODEL` sin razonamiento: un juez que lista los fragmentos
 exactos con el género equivocado y, sólo si hay alguno, una reparación que
-corrige esos fragmentos y nada más. La reparación se verifica de forma
-determinista antes de aceptarla (no vacía, mismos encabezados, cambio
-acotado). Ante cualquier duda —el juez no responde JSON, el LLM falla, la
-reparación se pasa— se devuelve el texto original: la revisión nunca hace
-fallar un informe pago, y un texto con un «vos misma» suelto es mejor que
-uno reescrito sin control.
+devuelve un par `original → corregido` por fragmento. La reparación NO
+devuelve el texto: la primera versión lo hacía y, medido en staging el
+08-10, reescribía fuera de los fragmentos («contra vos» → «contra vos
+mismo» en un párrafo que estaba bien) sin que ningún tope de proporción lo
+frenara, porque era una sola palabra. Ahora es el código el que aplica cada
+par con `str.replace(original, corregido, 1)`, y sólo si `original` es uno de
+los fragmentos del juez: fuera de ellos el texto queda byte-idéntico. Cada
+par pasa además por reglas deterministas (no idéntico, sin saltos de línea,
+sin una forma prohibida para el trato); el que no las cumple se descarta y
+el resto se aplica igual.
+
+Ante cualquier falla —el juez o la reparación no responden JSON, el LLM
+falla— se devuelve el texto original: la revisión nunca hace fallar un
+informe pago.
 
 No importa django ni api (contrato de `lint-imports`).
 """
 
-import difflib
 import json
 import logging
+import re
+from collections import Counter
 
 from interpret.exceptions import InterpretationError
 from interpret.generator import _stream_text
-from interpret.prompts import MODEL, TRANSLATE_MAX_TOKENS_GENERACION
+from interpret.prompts import MODEL
 from interpret.trato import instruccion
 
 logger = logging.getLogger(__name__)
@@ -35,12 +44,26 @@ _IDIOMAS_CON_GENERO = ("es", "pt")
 # El juez sólo devuelve una lista corta de fragmentos.
 JUEZ_MAX_TOKENS = 1000
 
-# Proporción máxima de palabras que la reparación puede cambiar respecto del
-# original. Corregir un fragmento toca 1-3 palabras («vos misma» → «por tu
-# cuenta»); una sección de 900 palabras con 10 fragmentos mal cambia ~30, un
-# 3%. El 5% deja margen para eso y frena una reparación que reescribió
-# párrafos enteros —que es justo lo que no se le pidió—.
-MAX_PROPORCION_CAMBIADA = 0.05
+# La reparación devuelve sólo pares cortos (un fragmento de pocas palabras y
+# su corrección), no el texto: 2000 alcanza para decenas de pares, más de los
+# que el juez lista en una sección.
+REPARACION_MAX_TOKENS = 2000
+
+# Cuántos caracteres de alrededor del fragmento viajan a la reparación como
+# contexto: lo justo para saber a quién se refiere, sin mandar la sección.
+_CONTEXTO_CARACTERES = 80
+
+# Formas que un `corregido` no puede traer, según el trato. Neutro: «mismo»,
+# «misma», «mesmo», «mesma» como palabra suelta (es lo que más se escapa, y
+# «contra vos mismo» fue el error que introdujo la primera reparación); cae
+# también algún uso que no se refiere a quien lee («lo mismo»), y ese par se
+# pierde: preferible a aceptar uno malo. Los oblicuos «o»/«a» del portugués
+# no entran: son ambiguos con el artículo y la preposición.
+_FORMAS_PROHIBIDAS = {
+    "neutro": re.compile(r"\b(mismo|misma|mesmo|mesma)\b", re.IGNORECASE),
+    "femenino": re.compile(r"\b(vos\s+mismo|você\s+mesmo)\b", re.IGNORECASE),
+    "masculino": re.compile(r"\b(vos\s+misma|você\s+mesma)\b", re.IGNORECASE),
+}
 
 _DESCRIPCION_TRATO = {
     "femenino": "en femenino",
@@ -82,14 +105,32 @@ _SCHEMA_JUEZ = {
 }
 
 _SYSTEM_REPARACION = (
-    "Sos un corrector. Quien lee este texto eligió que le hablen {trato}. Te paso el texto "
-    "completo y una lista de fragmentos donde se escapó un género que no corresponde. Corregí "
-    "SÓLO esos fragmentos para que queden {trato}, reformulando lo mínimo. No cambies ninguna "
-    "otra palabra, ni la puntuación, ni los saltos de línea, ni el formato markdown (títulos "
-    "con #, negritas, listas). Devolvé el texto completo corregido y nada más: sin comentarios, "
-    "sin explicaciones, sin bloques de código.\n\n"
+    "Sos un corrector. Quien lee eligió que le hablen {trato}. Te paso fragmentos de un texto "
+    "donde se escapó un género que no corresponde, cada uno con unas palabras de contexto "
+    "alrededor para que sepas a quién se refiere. Para cada fragmento devolvé un par: "
+    "«original», el fragmento copiado EXACTAMENTE como te lo pasé, y «corregido», el mismo "
+    "fragmento reformulado lo mínimo para que quede {trato}. Corregí sólo lo que está dentro "
+    "del fragmento; el contexto es para entender, no para cambiar. Respondé sólo con un JSON "
+    'de la forma {{"reemplazos": [{{"original": "...", "corregido": "..."}}]}}.\n\n'
     "Cómo reformular:\n{guia}"
 )
+
+_SCHEMA_REPARACION = {
+    "type": "object",
+    "properties": {
+        "reemplazos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"original": {"type": "string"}, "corregido": {"type": "string"}},
+                "required": ["original", "corregido"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["reemplazos"],
+    "additionalProperties": False,
+}
 
 
 def describir_trato(trato: str) -> str:
@@ -102,42 +143,66 @@ def _clave(trato: str) -> str:
     return trato if trato in _DESCRIPCION_TRATO else "neutro"
 
 
-def _parsear_fragmentos(crudo: str) -> list[str]:
-    """La lista del juez. Tolera un bloque ```json por si la salida
-    estructurada no se aplicó. Levanta ValueError si no es la forma pedida."""
+def _cargar_json(crudo: str):
+    """Tolera un bloque ```json por si la salida estructurada no se aplicó."""
     texto = crudo.strip()
     if texto.startswith("```"):
         texto = texto.split("\n", 1)[1] if "\n" in texto else ""
         texto = texto.rsplit("```", 1)[0]
-    datos = json.loads(texto)
+    return json.loads(texto)
+
+
+def _parsear_fragmentos(crudo: str) -> list[str]:
+    """La lista del juez. Levanta ValueError si no es la forma pedida."""
+    datos = _cargar_json(crudo)
     fragmentos = datos.get("fragmentos") if isinstance(datos, dict) else None
     if not isinstance(fragmentos, list) or not all(isinstance(f, str) for f in fragmentos):
         raise ValueError("el juez no devolvió una lista de fragmentos")
     return fragmentos
 
 
-def _encabezados(texto: str) -> list[str]:
-    return [linea.rstrip() for linea in texto.splitlines() if linea.startswith("#")]
+def _parsear_reemplazos(crudo: str) -> list[tuple[str, str]]:
+    """Los pares de la reparación. Levanta ValueError si no es la forma pedida."""
+    datos = _cargar_json(crudo)
+    pares = datos.get("reemplazos") if isinstance(datos, dict) else None
+    if not isinstance(pares, list):
+        raise ValueError("la reparación no devolvió una lista de reemplazos")
+    resultado = []
+    for par in pares:
+        original = par.get("original") if isinstance(par, dict) else None
+        corregido = par.get("corregido") if isinstance(par, dict) else None
+        if not isinstance(original, str) or not isinstance(corregido, str):
+            raise ValueError("un reemplazo no tiene original y corregido de texto")
+        resultado.append((original, corregido))
+    return resultado
 
 
-def _proporcion_cambiada(original: str, reparado: str) -> float:
-    a, b = original.split(), reparado.split()
-    if not a:
-        return 1.0
-    # autojunk=False: con más de 200 palabras, el default trata como basura
-    # las más frecuentes («de», «la», «que») y el emparejamiento sale peor.
-    iguales = sum(m.size for m in difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks())
-    return (max(len(a), len(b)) - iguales) / len(a)
+def _con_contexto(texto: str, fragmento: str) -> str:
+    i = texto.index(fragmento)
+    antes = texto[max(0, i - _CONTEXTO_CARACTERES):i]
+    despues = texto[i + len(fragmento):i + len(fragmento) + _CONTEXTO_CARACTERES]
+    return f"- fragmento: «{fragmento}»\n  contexto: «…{antes}[[{fragmento}]]{despues}…»"
 
 
-def _motivo_de_rechazo(original: str, reparado: str) -> str | None:
-    if not reparado.strip():
-        return "reparación vacía"
-    if _encabezados(reparado) != _encabezados(original):
-        return "la reparación cambió los encabezados"
-    proporcion = _proporcion_cambiada(original, reparado)
-    if proporcion > MAX_PROPORCION_CAMBIADA:
-        return f"la reparación cambió demasiado ({proporcion:.1%} de las palabras)"
+def _motivo_de_rechazo(original: str, corregido: str, texto: str, listados: set[str], clave: str) -> str | None:
+    """Por qué un par no se aplica, o None si se aplica. Los motivos son
+    claves fijas: van al log como contadores, nunca el texto."""
+    if original not in listados:
+        return "no_listado"
+    if original not in texto:
+        # Un par anterior ya lo tocó, o el modelo lo copió distinto.
+        return "ausente"
+    if corregido == original:
+        return "identico"
+    if not corregido.strip():
+        return "vacio"
+    if "\n" in original or "\n" in corregido:
+        # Un fragmento es unas palabras dentro de una oración. Con un salto
+        # de línea cruza párrafos o un título, y corregirlo podría tocar la
+        # estructura markdown (lo que antes cuidaba el chequeo de encabezados).
+        return "salto_de_linea"
+    if _FORMAS_PROHIBIDAS[clave].search(corregido):
+        return "forma_prohibida"
     return None
 
 
@@ -182,31 +247,45 @@ def revisar_trato(texto: str, trato: str, lang: str, client) -> str:
         "type": "text",
         "text": _SYSTEM_REPARACION.format(trato=descripcion, guia=instruccion(clave, lang)),
     }]
-    lista = "\n".join(f"- «{f}»" for f in presentes)
-    contenido = f"<fragmentos>\n{lista}\n</fragmentos>\n\n<texto>\n{texto}\n</texto>"
+    contenido = "\n".join(_con_contexto(texto, f) for f in presentes)
     try:
-        reparado = _stream_text(
-            client, MODEL, system_reparacion, contenido, TRANSLATE_MAX_TOKENS_GENERACION,
+        crudo = _stream_text(
+            client, MODEL, system_reparacion, contenido, REPARACION_MAX_TOKENS,
             thinking={"type": "disabled"},
+            output_config={"format": {"type": "json_schema", "schema": _SCHEMA_REPARACION}},
         )
+        pares = _parsear_reemplazos(crudo)
     except InterpretationError as exc:
         logger.warning(
             "revisión del trato: falló la reparación, se deja el texto: trato=%s lang=%s fragmentos=%s error=%s",
             clave, lang, len(presentes), exc,
         )
         return texto
-
-    # Si el modelo devolvió el texto con la etiqueta con que se lo pasamos,
-    # se la saca: dos palabras de más pasan el tope de cambio y quedarían
-    # guardadas en el informe.
-    if reparado.startswith("<texto>") and reparado.endswith("</texto>"):
-        reparado = reparado[len("<texto>"):-len("</texto>")].strip()
-
-    if motivo := _motivo_de_rechazo(texto, reparado):
+    except ValueError as exc:  # json.JSONDecodeError es ValueError
         logger.warning(
-            "revisión del trato: reparación rechazada, se deja el texto: trato=%s lang=%s fragmentos=%s motivo=%s",
-            clave, lang, len(presentes), motivo,
+            "revisión del trato: la reparación no devolvió JSON válido, se deja el texto: "
+            "trato=%s lang=%s fragmentos=%s error=%s",
+            clave, lang, len(presentes), exc,
         )
         return texto
-    logger.info("revisión del trato: reparación aceptada: trato=%s lang=%s fragmentos=%s", clave, lang, len(presentes))
-    return reparado
+
+    listados = set(presentes)
+    rechazos: Counter[str] = Counter()
+    aplicados = 0
+    resultado = texto
+    for original, corregido in pares:
+        if motivo := _motivo_de_rechazo(original, corregido, resultado, listados, clave):
+            rechazos[motivo] += 1
+            continue
+        resultado = resultado.replace(original, corregido, 1)
+        listados.discard(original)  # un fragmento se corrige una sola vez
+        aplicados += 1
+
+    detalle = " ".join(f"{motivo}={n}" for motivo, n in sorted(rechazos.items()))
+    nivel = logging.WARNING if rechazos else logging.INFO
+    logger.log(
+        nivel,
+        "revisión del trato: listados=%s aplicados=%s rechazados=%s %s trato=%s lang=%s",
+        len(presentes), aplicados, sum(rechazos.values()), detalle, clave, lang,
+    )
+    return resultado
