@@ -16,9 +16,8 @@ import httpx
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connections
-from django.utils import timezone
 
-from api import notificaciones
+from api import cupo_diario, notificaciones
 from api.canje import SinDerecho, canjear, devolver
 from api.catalogo import codigos_otorgados_por
 from api.exceptions import CapReached, GenerationInProgress
@@ -95,14 +94,6 @@ def _build_client():
         api_key=settings.ANTHROPIC_API_KEY,
         timeout=httpx.Timeout(120.0, connect=10.0),
     )
-
-
-def _seconds_until_midnight() -> int:
-    now = timezone.now()
-    tomorrow = (now + timezone.timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    return int((tomorrow - now).total_seconds())
 
 
 def esta_generandose(objetivo, tier: str) -> bool:
@@ -427,28 +418,29 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
         )
 
     capacidad = CAPACIDAD_POR_TIER[tier]
-    # El cap diario protege el gasto de LLM sin ingreso: aplica sólo a lo
-    # regalado, que es exactamente la lectura breve (Task 11). Un cap
-    # pensado para eso no puede frenar un informe que alguien pagó — antes
-    # de esta tarea se gateaba con `lote == "free"`, mismo criterio, sin
-    # tener que adivinar de qué lote *iba* a cobrarse.
-    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
-    if capacidad == "leer_breve" and cache.get(cap_key, 0) >= settings.INTERPRETATION_DAILY_CAP:
-        interpretacion.delete()
-        logger.warning(
-            "interpretation daily cap reached (cap=%s)", settings.INTERPRETATION_DAILY_CAP
-        )
-        raise CapReached()
+    # El tope protege el gasto de LLM sin ingreso: aplica sólo a lo regalado,
+    # que es la lectura breve. Se reserva ANTES de canjear con un UPDATE
+    # atómico (`cupo_diario`): `cache.incr` leía y escribía, y dos pedidos
+    # simultáneos pasaban el mismo lugar (spec 2026-10-08, RF11). Un tope
+    # pensado para eso no puede frenar un informe que alguien pagó.
+    fecha_cupo = None
+    if capacidad == "leer_breve":
+        fecha_cupo = cupo_diario.reservar(cupo_diario.CUENTA, settings.INTERPRETATION_DAILY_CAP)
+        if fecha_cupo is None:
+            interpretacion.delete()
+            logger.warning(
+                "interpretation daily cap reached (cap=%s)", settings.INTERPRETATION_DAILY_CAP
+            )
+            raise CapReached()
 
     try:
         canjear(account, capacidad, sujeto, build=lambda: interpretacion)
     except SinDerecho:
         interpretacion.delete()
+        if fecha_cupo is not None:
+            cupo_diario.devolver(cupo_diario.CUENTA, fecha_cupo)
         raise
 
-    if capacidad == "leer_breve":
-        cache.add(cap_key, 0, timeout=_seconds_until_midnight())
-        cache.incr(cap_key)
     return interpretacion
 
 

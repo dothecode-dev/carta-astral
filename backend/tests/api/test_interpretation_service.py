@@ -196,8 +196,9 @@ def test_daily_cap_blocks_new_generation(fake_client, settings):
     # al LLM, así que esto no distingue "una vez" de "una por llamada" tan
     # claramente como el informe completo, pero sigue siendo la única forma
     # de ejercitar el contador ahora que sólo el lote free lo toca.
-    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
-    assert cache.get(cap_key) == 1
+    from api.models import CupoDiario
+
+    assert CupoDiario.objects.get(fecha=timezone.now().date(), ambito="cuenta").usados == 1
     llamadas_tras_la_primera = fake_client.calls
     with pytest.raises(svc.CapReached):
         # el cap se chequea (y cuenta) en `iniciar_generacion`, antes de

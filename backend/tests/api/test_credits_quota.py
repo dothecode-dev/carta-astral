@@ -1,6 +1,5 @@
 import pytest
 from django.core.cache import cache
-from django.utils import timezone
 
 from api import interpretation_service as svc
 from api.interpretation_service import SinDerecho
@@ -70,12 +69,13 @@ def test_paid_generation_bypasses_daily_cap(settings):
     otorgar(acc, "informe_natal", 1, origen="compra", external_id="test:paid-bypasses-cap")
     chart = _chart()
 
-    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
+    from api.models import CupoDiario
+
     cache.clear()
 
-    before = cache.get(cap_key)
+    before = CupoDiario.objects.filter(ambito="cuenta").first()
     interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
-    after = cache.get(cap_key)
+    after = CupoDiario.objects.filter(ambito="cuenta").first()
 
     assert isinstance(interp, Interpretation)
     assert before is None

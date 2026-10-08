@@ -9,7 +9,6 @@ sondea mientras tanto.
 
 import pytest
 from django.core.cache import cache
-from django.utils import timezone
 
 pytestmark = pytest.mark.django_db
 
@@ -361,8 +360,9 @@ def test_el_cap_no_se_toca_con_credito_pago(account, settings):
 
     interp = svc.iniciar_generacion(chart, "es", account, tier="largo")
     assert interp is not None
-    cap_key = f"interp:cap:{timezone.now().date().isoformat()}"
-    assert cache.get(cap_key) is None
+    from api.models import CupoDiario
+
+    assert not CupoDiario.objects.filter(ambito="cuenta").exists()
 
 
 # --- BUG 1: el segundo idioma es una traducción gratis (RF8), no un cobro nuevo ---
