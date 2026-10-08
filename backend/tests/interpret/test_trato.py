@@ -113,3 +113,26 @@ def test_la_neutra_pt_nombra_los_pronombres_obliquos_para_prohibirlos():
     texto = instruccion("neutro", "pt")
     assert "«o empurra»" in texto
     assert "«consigo mesmo»" in texto
+
+
+@pytest.mark.parametrize(
+    "trato,lang,esperado",
+    [
+        ("neutro", "pt", generator.MODEL),
+        ("", "es", generator.MODEL),
+        ("neutro", "es", generator.MODEL),
+        ("femenino", "pt", generator.TRANSLATE_MODEL),
+        ("masculino", "es", generator.TRANSLATE_MODEL),
+        ("neutro", "en", generator.TRANSLATE_MODEL),
+        ("", "en", generator.TRANSLATE_MODEL),
+    ],
+)
+def test_la_traduccion_neutra_a_es_o_pt_usa_el_modelo_de_generacion(monkeypatch, trato, lang, esperado):
+    modelos = []
+    monkeypatch.setattr(
+        generator,
+        "_stream_text",
+        lambda client, model, system, content, max_tokens: modelos.append(model) or "ok",
+    )
+    generator.translate_interpretation("texto", lang, None, trato=trato)
+    assert modelos == [esperado]
