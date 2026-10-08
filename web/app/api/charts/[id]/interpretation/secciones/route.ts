@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi } from "@/lib/session";
+import { noExiste, uuidValido } from "@/lib/uuid";
 
 // Las secciones del informe que ya están escritas, con su texto, para leerlas
 // mientras el resto se genera (06-10-2026). La web lo sondea desde el navegador
@@ -15,6 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (!uuidValido(id)) return noExiste();
   const url = new URL(request.url);
   const lang = url.searchParams.get("lang") ?? "es";
   // Sin default (RF20): adivinar el tier es sondear el producto equivocado.

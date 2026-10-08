@@ -19,6 +19,7 @@ import type { Derecho } from "@/lib/derechos";
 import { INTL_LOCALE, type Locale, getDict, isLocale } from "@/lib/i18n";
 import { buildPdfPayload } from "@/lib/pdfPayload";
 import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
+import { uuidValido } from "@/lib/uuid";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -30,6 +31,9 @@ export default async function ChartPage({
 }) {
   const { locale, id } = await params;
   if (!isLocale(locale)) notFound();
+  // `id` se interpola en el path del backend: lo que no es un uuid no es una
+  // carta, y `..%2Fcuenta` apuntaría a otro endpoint (`lib/uuid.ts`).
+  if (!uuidValido(id)) notFound();
   if (!(await getSessionToken()))
     redirect(`/${locale}/entrar?next=${encodeURIComponent(`/${locale}/carta/${id}`)}`);
 

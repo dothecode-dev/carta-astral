@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi } from "@/lib/session";
+import { noExiste, uuidValido } from "@/lib/uuid";
 
 // Cambia cómo quiere la persona que le hablemos (el trato de la carta). Vale
 // para lo que se escriba o traduzca de ahí en adelante: lo ya escrito no se
@@ -13,6 +14,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (!uuidValido(id)) return noExiste();
 
   let body: { trato?: unknown };
   try {

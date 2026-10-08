@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi, callApiRaw } from "@/lib/session";
+import { noExiste, uuidValido } from "@/lib/uuid";
 
 // Genera la lectura de una carta. Es la única llamada de la web que gasta un
 // derecho: el descuento lo hace el backend, nunca el navegador.
@@ -18,6 +19,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (!uuidValido(id)) return noExiste();
   const url = new URL(request.url);
   const lang = url.searchParams.get("lang") ?? "es";
   // Sin default (RF20, mismo criterio que el POST y que `estado`): adivinar
@@ -42,6 +44,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (!uuidValido(id)) return noExiste();
 
   let body: { lang?: unknown; tier?: unknown };
   try {

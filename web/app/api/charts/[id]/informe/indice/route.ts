@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi } from "@/lib/session";
+import { noExiste, uuidValido } from "@/lib/uuid";
 
 // El índice del informe completo (RF3): título de cada sección y, si ya hay
 // algo generado, el arranque de cada una. Lo pide el pie de la lectura breve
@@ -14,6 +15,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (!uuidValido(id)) return noExiste();
   const url = new URL(request.url);
   const lang = url.searchParams.get("lang") ?? "es";
 

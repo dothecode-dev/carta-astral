@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiError, callApi } from "@/lib/session";
+import { noExiste, uuidValido } from "@/lib/uuid";
 
 // Cuántas de las ocho secciones del informe ya están escritas (RF7/RF10). La
 // web lo sondea desde el navegador mientras el backend genera en un hilo
@@ -15,6 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (!uuidValido(id)) return noExiste();
   const url = new URL(request.url);
   const lang = url.searchParams.get("lang") ?? "es";
   // Sin default (RF20): adivinar el tier es sondear el producto equivocado.

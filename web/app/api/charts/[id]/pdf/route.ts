@@ -1,4 +1,5 @@
 import { ApiError, callApiRaw } from "@/lib/session";
+import { noExiste, uuidValido } from "@/lib/uuid";
 
 // El PDF de una carta. El navegador arma la geometría de la rueda y los rótulos
 // traducidos; el backend escribe el documento. Acá sólo se agrega la sesión y se
@@ -11,6 +12,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (!uuidValido(id)) return noExiste();
 
   let body: unknown;
   try {
