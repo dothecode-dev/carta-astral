@@ -47,13 +47,16 @@ def mensaje_de_datos_invalidos(exc: Exception) -> str:
 MAX_TEXTO = 200  # `BirthData.name` y `place_label` son CharField(200)
 
 
-def _texto(payload: dict, campo: str, default: str | None) -> str | None:
-    valor = payload.get(campo, default)
-    if valor is None and default is None:
-        return None
-    if not isinstance(valor, str) or len(valor) > MAX_TEXTO:
+def _texto(payload: dict, campo: str) -> str:
+    """`name` y `place_label`: ausente o `null` es "", y lo largo se recorta
+    a MAX_TEXTO como siempre (rechazarlo rompía cartas que antes andaban).
+    Sólo otro tipo es inválido."""
+    valor = payload.get(campo)
+    if valor is None:
+        return ""
+    if not isinstance(valor, str):
         raise ValueError(f"{campo} inválido")
-    return valor
+    return valor[:MAX_TEXTO]
 
 
 def _coordenada(payload: dict, campo: str, limite: float) -> float:
@@ -81,9 +84,9 @@ def calcular(payload: dict) -> CartaCalculada:
     """Efemérides puras: no toca la base ni necesita cuenta.
 
     Valida el payload ENTERO antes de calcular (spec §11): tipos, rangos de
-    lat/lng, `house_system`/`zodiac` de lo que `build_chart` soporta y largo
-    de los textos. Levanta `KeyError` si falta un campo obligatorio,
-    `ValueError` si alguno es inválido y `CoreError` si el cálculo no se
+    lat/lng, `house_system`/`zodiac` de lo que `build_chart` soporta y tipo
+    de los textos (los largos se recortan). Levanta `KeyError` si falta un
+    campo obligatorio, `ValueError` si alguno es inválido y `CoreError` si el cálculo no se
     puede hacer; quien llama los traduce a 400. Un JSON con el tipo
     equivocado (`"date": 123`, `"house_system": ["x"]`, `"lat": 1e400`)
     llegaba hasta el motor como TypeError u OverflowError: un 500.
@@ -103,8 +106,8 @@ def calcular(payload: dict) -> CartaCalculada:
     lng = _coordenada(payload, "lng", 180)
     house_system = _de_lista(payload, "house_system", HOUSE_SYSTEMS, "Placidus")
     zodiac = _de_lista(payload, "zodiac", ZODIACS, "Tropical")
-    name = _texto(payload, "name", None)
-    place_label = _texto(payload, "place_label", "")
+    name = _texto(payload, "name")
+    place_label = _texto(payload, "place_label")
 
     birth_input = BirthInput(
         name=name, date=date, time=time, time_known=time_known,
@@ -121,7 +124,7 @@ def calcular(payload: dict) -> CartaCalculada:
             if chart_data.time_known
             else None
         ),
-        place_label=place_label or "",
+        place_label=place_label,
     )
 
 

@@ -134,7 +134,7 @@ def test_numeros_fuera_de_rango_flotante_dan_400(reemplazos):
     ("zodiac", "Chino"), ("zodiac", {"a": 1}),
     ("time_known", "sí"), ("time_known", 1),
     ("time", ["19:30"]), ("time", "no-es-hora"), ("date", None), ("date", ["1976-05-31"]),
-    ("name", ["Ceci"]), ("name", "x" * 201), ("place_label", 5), ("place_label", "x" * 201),
+    ("name", ["Ceci"]), ("name", 5), ("place_label", 5), ("place_label", 123), ("place_label", ["x"]),
 ])
 def test_cada_campo_invalido_da_400(campo, valor):
     r = APIClient().post(URL, {**PAYLOAD, campo: valor}, format="json")
@@ -155,3 +155,28 @@ def test_sin_house_system_ni_zodiac_usa_los_de_siempre():
     r = APIClient().post(URL, PAYLOAD, format="json")
     assert r.status_code == 200
     assert r.data["house_system"] == "Placidus" and r.data["zodiac"] == "Tropical"
+
+
+# Fix round 1 (B5): `name` y `place_label` largos se recortan a 200 como antes,
+# y `null` (o ausente) es "": rechazarlos sería una regresión en producción.
+
+
+@pytest.mark.parametrize("extra", [
+    {"place_label": "x" * 250}, {"place_label": None}, {"name": "x" * 250}, {"name": None},
+])
+def test_textos_largos_o_nulos_no_son_400(extra):
+    r = APIClient().post(URL, {**PAYLOAD, **extra}, format="json")
+    assert r.status_code == 200, r.data
+
+
+def test_la_carta_guardada_recorta_los_textos_y_el_nulo_es_vacio():
+    from api.chart_service import create_chart
+
+    acc = Account.objects.create()
+    largo = create_chart({**PAYLOAD, "name": "n" * 250, "place_label": "p" * 250}, acc)
+    assert largo.birth_data.name == "n" * 200
+    assert largo.birth_data.place_label == "p" * 200
+    nulo = create_chart({**PAYLOAD, "name": None, "place_label": None}, acc)
+    assert nulo.birth_data.name == "" and nulo.birth_data.place_label == ""
+    sin = create_chart({k: v for k, v in PAYLOAD.items() if k not in ("name", "place_label")}, acc)
+    assert sin.birth_data.name == "" and sin.birth_data.place_label == ""
