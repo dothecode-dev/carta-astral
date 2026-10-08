@@ -16,12 +16,7 @@ _INSTRUCCIONES = {
                      "adjetivo, participio y pronombre que se refiera a él, incluidos ejemplos y "
                      "preguntas, de forma consistente en todo el texto. Esto vale sólo para quien "
                      "lee; a terceros (pareja, madre, padre) nombralos como corresponda.",
-        "neutro": "No marques el género de la persona: ningún adjetivo ni participio referido a ella "
-                  "puede llevar terminación de género. Reformulá: usá sustantivos («tenés seguridad», "
-                  "«tu sensibilidad»), verbos («confiás en vos») o adjetivos que no cambian («sos "
-                  "sensible», «sos capaz»). No abuses de «sos una persona…». Nunca uses barras, «x», "
-                  "«@» ni «e» como terminación neutra. Esto vale sólo para quien lee; a terceros "
-                  "nombralos como corresponda.",
+        "neutro": "No marques el género de quien lee: ningún adjetivo, participio ni pronombre referido a esa persona puede terminar en -o/-a. Eso incluye «vos mismo» y «vos misma»: usá «vos», «a vos», «tu propia…» o «por tu cuenta» («te sorprende incluso a vos», «versiones de vos», «que levantás por tu cuenta»). Lo mismo con «dispuesto», «solo», «atrapado», «sorprendido», «seguro», «cansado» y similares: reformulá con verbos («estás en condiciones de», «te sorprende», «te sentís sin salida»), sustantivos («tenés seguridad», «tu sensibilidad») o adjetivos que no cambian («sos sensible», «sos capaz»). No abuses de «sos una persona…». Nunca uses barras, «x», «@» ni «e» como terminación neutra. Antes de terminar, revisá que no quede ninguna forma con género referida a quien lee. Esto vale sólo para quien lee; a terceros nombralos como corresponda.",
     },
     "pt": {
         "femenino": "Dirija-se à pessoa no feminino (por exemplo «você mesma», «segura») em todo "
@@ -32,12 +27,7 @@ _INSTRUCCIONES = {
                      "adjetivo, particípio e pronome que se refira a ele, incluindo exemplos e "
                      "perguntas, de forma consistente em todo o texto. Isso vale só para quem lê; "
                      "terceiros (parceiro, mãe, pai) devem ser nomeados normalmente.",
-        "neutro": "Não marque o gênero da pessoa: nenhum adjetivo ou particípio referido a ela pode "
-                  "ter terminação de gênero. Reformule: use substantivos («você tem segurança», "
-                  "«sua sensibilidade»), verbos («você confia em si») ou adjetivos que não mudam "
-                  "(«você é sensível», «você é capaz»). Não abuse de «você é uma pessoa…». Nunca use "
-                  "barras, «x», «@» nem «e» como terminação neutra. Isso vale só para quem lê; "
-                  "terceiros devem ser nomeados normalmente.",
+        "neutro": "Não marque o gênero de quem lê: nenhum adjetivo, particípio ou pronome referido a essa pessoa pode terminar em -o/-a. Isso inclui «você mesmo» e «você mesma»: use «você», «a si», «sua própria…» ou «por conta própria» («surpreende até você», «versões de você», «que você ergue por conta própria»). O mesmo vale para «disposto», «sozinho», «preso», «surpreso», «seguro», «cansado» e similares: reformule com verbos («você está em condições de», «isso te surpreende», «você se sente sem saída»), substantivos («você tem segurança», «sua sensibilidade») ou adjetivos que não mudam («você é sensível», «você é capaz»). Não abuse de «você é uma pessoa…». Nunca use barras, «x», «@» nem «e» como terminação neutra. Antes de terminar, revise que não reste nenhuma forma com gênero referida a quem lê. Isso vale só para quem lê; terceiros devem ser nomeados normalmente.",
     },
 }
 

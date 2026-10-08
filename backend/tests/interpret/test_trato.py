@@ -97,3 +97,13 @@ def test_en_ingles_todo_queda_igual(monkeypatch):
     generator.build_seccion({"time_known": True}, SECCIONES[0], "en", "", None)
     assert vistos[0] == vistos[1]
     assert vistos[2] == vistos[3]
+
+
+@pytest.mark.parametrize(
+    "lang, prohibidas",
+    [("es", ("vos mismo", "vos misma")), ("pt", ("você mesmo", "você mesma"))],
+)
+def test_la_neutra_nombra_el_intensificador_para_prohibirlo(lang, prohibidas):
+    texto = instruccion("neutro", lang)
+    for forma in prohibidas:
+        assert f"«{forma}»" in texto
