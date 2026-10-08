@@ -69,6 +69,15 @@ describe("PATCH /api/charts/[id]", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it.each([null, [], 3, "x"])(
+    "cuerpo JSON que no es objeto (%j): 400 sin llamar al backend",
+    async (cuerpo) => {
+      const res = await PATCH(req(cuerpo), ctx);
+      expect(res.status).toBe(400);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
   it("traduce el 400 y el 404 del backend", async () => {
     fetchMock.mockResolvedValueOnce(json({ error: "trato inválido" }, 400));
     expect((await PATCH(req({ trato: "x" }), ctx)).status).toBe(400);

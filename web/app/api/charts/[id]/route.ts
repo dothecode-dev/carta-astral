@@ -18,7 +18,12 @@ export async function PATCH(
 
   let body: { trato?: unknown };
   try {
-    body = await request.json();
+    const parsed: unknown = await request.json();
+    // JSON válido no es lo mismo que objeto: null, [], 3 y "x" también parsean.
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "cuerpo inválido" }, { status: 400 });
+    }
+    body = parsed;
   } catch {
     return NextResponse.json({ error: "cuerpo inválido" }, { status: 400 });
   }
