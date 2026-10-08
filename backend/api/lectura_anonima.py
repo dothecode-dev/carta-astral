@@ -2,7 +2,9 @@
 
 Los datos de nacimiento NO se guardan: el hilo los recibe en memoria. En la
 caché queda `{estado, lang, pedido, iniciado, fecha_cupo[, texto]}` bajo el
-hash del token, 15 minutos como máximo, y el GET que entrega la lectura la borra.
+hash del token, 15 minutos como máximo. La entrega es en dos tiempos (spec §11):
+el GET que devuelve `lista` NO la borra —si la respuesta se pierde, el navegador
+la vuelve a pedir—; la borra el acuse (`acusar`, el DELETE) o el vencimiento.
 Después vive sólo en el navegador. Una marca sin datos personales recuerda
 24 h que ese token ya usó su lectura gratis.
 
@@ -124,6 +126,13 @@ def _en_curso(entrada: dict | None, pedido: str) -> bool:
     return True
 
 
+def _lista_propia(h: str, pedido: str) -> bool:
+    """True si la lectura de ESTE pedido está escrita y sin acusar: con la marca
+    puesta, un POST del mismo pedido la recibe (202 `lista`) en vez de 409."""
+    entrada = cache.get(_clave(h))
+    return entrada is not None and entrada["estado"] == "lista" and entrada.get("pedido") == pedido
+
+
 def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
           permitir: Callable[[], bool], *, pedido: str) -> Pedido:
     if mantenimiento.activo():
@@ -131,6 +140,8 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
     token = token or secrets.token_urlsafe(32)
     h = hash_token(token)
     if cache.get(_marca(h)) is not None:
+        if _lista_propia(h, pedido):
+            return Pedido(token, "lista")
         raise Usado()
     if _en_curso(cache.get(_clave(h)), pedido):
         return Pedido(token, "generando")
@@ -144,6 +155,8 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
         # Se vuelve a leer ya con el lock: entre la lectura de arriba y el lock
         # otro pedido del mismo token pudo haber escrito la entrada o la marca.
         if cache.get(_marca(h)) is not None:
+            if _lista_propia(h, pedido):
+                return Pedido(token, "lista")
             raise Usado()
         entrada = cache.get(_clave(h))
         if _en_curso(entrada, pedido):
@@ -231,9 +244,20 @@ def estado(token: str) -> dict | None:
         }, TTL_ENTRADA)
         return {"estado": "fallida", "pedido": entrada.get("pedido")}
     if entrada["estado"] == "lista":
-        cache.delete(_clave(h))
         return {
             "estado": "lista", "texto": entrada["texto"], "lang": entrada["lang"],
             "disclaimer": DISCLAIMERS[entrada["lang"]], "pedido": entrada.get("pedido"),
         }
     return {"estado": entrada["estado"], "pedido": entrada.get("pedido")}
+
+
+def acusar(token: str, pedido: str) -> bool:
+    """El acuse de recibo de la web: borra la lectura `lista` de ESE pedido.
+    False si no hay nada que borrar —ya acusada, vencida, de otro pedido o
+    todavía escribiéndose (borrar un `generando` perdería la detección de
+    caída y, con ella, la devolución del cupo)—."""
+    h = hash_token(token)
+    if not _lista_propia(h, pedido):
+        return False
+    cache.delete(_clave(h))
+    return True

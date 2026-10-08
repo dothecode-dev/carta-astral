@@ -42,7 +42,43 @@ def test_post_202_y_get_lista():
     assert g.status_code == 200 and g.json()["texto"] == "breve"
     assert g.json()["lang"] == "es" and g.json()["disclaimer"]
     assert g.json()["pedido"] == PEDIDO
+    # Spec §11: el GET no borra; el DELETE (acuse) sí.
+    assert c.get(URL, HTTP_X_LECTURA_TOKEN=token).status_code == 200
+    assert c.delete(f"{URL}?pedido={PEDIDO}", HTTP_X_LECTURA_TOKEN=token).status_code == 204
     assert c.get(URL, HTTP_X_LECTURA_TOKEN=token).status_code == 404
+
+
+def test_delete_con_el_pedido_en_el_cuerpo():
+    c = APIClient()
+    token = _post(c).json()["token"]
+    r = c.delete(URL, {"pedido": PEDIDO}, format="json", HTTP_X_LECTURA_TOKEN=token)
+    assert r.status_code == 204
+    assert c.get(URL, HTTP_X_LECTURA_TOKEN=token).status_code == 404
+
+
+def test_delete_idempotente_y_de_otro_pedido_404():
+    c = APIClient()
+    token = _post(c).json()["token"]
+    assert c.delete(f"{URL}?pedido={OTRO}", HTTP_X_LECTURA_TOKEN=token).status_code == 404
+    assert c.get(URL, HTTP_X_LECTURA_TOKEN=token).status_code == 200
+    assert c.delete(f"{URL}?pedido={PEDIDO}", HTTP_X_LECTURA_TOKEN=token).status_code == 204
+    assert c.delete(f"{URL}?pedido={PEDIDO}", HTTP_X_LECTURA_TOKEN=token).status_code == 404
+
+
+@pytest.mark.parametrize("query", ["", "?pedido=no-es-un-uuid"])
+def test_delete_sin_token_o_pedido_invalido(query):
+    c = APIClient()
+    token = _post(c).json()["token"]
+    assert c.delete(f"{URL}?pedido={PEDIDO}").status_code == 404
+    r = c.delete(f"{URL}{query}", HTTP_X_LECTURA_TOKEN=token)
+    assert r.status_code == 400 and r.json()["motivo"] == "datos"
+
+
+def test_post_del_mismo_pedido_con_la_lista_sin_acusar_202_lista():
+    c = APIClient()
+    token = _post(c).json()["token"]
+    r = _post(c, token)
+    assert r.status_code == 202 and r.json() == {"token": token, "estado": "lista"}
 
 
 def test_datos_invalidos_400():
@@ -73,6 +109,7 @@ def test_usado_409():
     c = APIClient()
     token = _post(c).json()["token"]
     c.get(URL, HTTP_X_LECTURA_TOKEN=token)
+    c.delete(f"{URL}?pedido={PEDIDO}", HTTP_X_LECTURA_TOKEN=token)
     r = _post(c, token)
     assert r.status_code == 409 and r.json()["motivo"] == "usado"
 

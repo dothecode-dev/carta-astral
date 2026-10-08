@@ -75,3 +75,15 @@ class LecturaAnonimaView(APIView):
         if resultado is None:
             return Response({"error": "no hay lectura"}, status=status.HTTP_404_NOT_FOUND)
         return Response(resultado)
+
+    def delete(self, request):
+        """El acuse de recibo (spec §11): la web ya guardó la lectura `lista` y
+        pide borrarla. `pedido` va en la query o en el cuerpo."""
+        datos = request.data if isinstance(request.data, dict) else {}
+        pedido_id = request.query_params.get("pedido") or datos.get("pedido")
+        if not isinstance(pedido_id, str) or not _PEDIDO.fullmatch(pedido_id):
+            return Response({"error": "pedido inválido", "motivo": "datos"}, status=status.HTTP_400_BAD_REQUEST)
+        token = request.headers.get("X-Lectura-Token")
+        if not token or not lectura_anonima.acusar(token, pedido_id):
+            return Response({"error": "no hay lectura"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)

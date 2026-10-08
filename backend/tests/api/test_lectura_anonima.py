@@ -46,7 +46,7 @@ def si():
     return True
 
 
-def test_camino_feliz_y_el_get_borra_la_entrada(breve):
+def test_camino_feliz_el_get_no_borra_y_el_acuse_si(breve):
     pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
     assert pedido.estado == "generando" and pedido.token
     assert breve == [(DATOS, "es", "")]
@@ -55,7 +55,40 @@ def test_camino_feliz_y_el_get_borra_la_entrada(breve):
     assert resultado["texto"] == "breve es"
     assert resultado["lang"] == "es"
     assert resultado["disclaimer"]
-    assert la.estado(pedido.token) is None  # RF4: la entrada ya no existe
+    # Spec §11 (RF4 v3): el GET entrega pero no borra; borra el acuse.
+    assert la.estado(pedido.token)["texto"] == "breve es"
+    assert la.acusar(pedido.token, PEDIDO) is True
+    assert la.estado(pedido.token) is None
+    assert la.acusar(pedido.token, PEDIDO) is False  # idempotente
+
+
+def test_el_acuse_de_otro_pedido_no_borra(breve):
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    assert la.acusar(pedido.token, OTRO) is False
+    assert la.estado(pedido.token)["estado"] == "lista"
+
+
+def test_el_acuse_no_borra_una_generacion_en_curso(breve, monkeypatch):
+    """Borrar un `generando` perdería la detección de caída y con ella el cupo."""
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: None)
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    assert la.acusar(pedido.token, PEDIDO) is False
+    assert la.estado(pedido.token)["estado"] == "generando"
+
+
+def test_con_marca_el_mismo_pedido_con_la_lista_sin_entregar_da_lista(breve):
+    """RF7 v3: la marca no tapa la lectura propia que el navegador todavía no guardó."""
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    otra = la.pedir(DATOS, "es", "", pedido.token, si, pedido=PEDIDO)
+    assert otra == la.Pedido(pedido.token, "lista")
+    assert len(breve) == 1 and _usados() == 1
+
+
+def test_con_marca_y_la_lista_ya_acusada_da_usado(breve):
+    pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
+    la.acusar(pedido.token, PEDIDO)
+    with pytest.raises(la.Usado):
+        la.pedir(DATOS, "es", "", pedido.token, si, pedido=PEDIDO)
 
 
 def test_no_crea_filas(breve):
@@ -76,7 +109,7 @@ def test_con_la_lectura_lista_otro_pedido_da_usado(breve):
     pedido = la.pedir(DATOS, "es", "", None, si, pedido=PEDIDO)
     la.estado(pedido.token)
     with pytest.raises(la.Usado):
-        la.pedir(DATOS, "es", "", pedido.token, si, pedido=PEDIDO)
+        la.pedir(DATOS, "es", "", pedido.token, si, pedido=OTRO)
 
 
 def test_generando_no_lanza_otro_hilo(breve, monkeypatch):
