@@ -44,6 +44,10 @@ def init_sentry(dsn: str, entorno: str, release: str | None) -> None:
         # El cuerpo del pedido no viaja nunca. Ver el docstring: es una opción
         # aparte de `send_default_pii`, y sin ella el cuerpo se manda igual.
         max_request_body_size="never",
+        # Sin variables locales en los frames: la lectura anónima tiene los datos
+        # de nacimiento en variables locales y Sentry es un tercero (spec
+        # 2026-10-08, RF4: no salen del pedido).
+        include_local_variables=False,
         # Sin performance tracing: lo que hace falta es enterarse de las
         # excepciones. Prender el muestreo cuesta cuota y no responde ninguna
         # pregunta que hoy tengamos.

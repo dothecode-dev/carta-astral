@@ -101,6 +101,13 @@ def _tomar_slot(h: str) -> int | None:
     return None
 
 
+def _soltar_slot(slot: int, h: str) -> None:
+    """Suelta el slot sólo si sigue siendo de esta generación: tras más de
+    TTL_SLOT segundos pudo vencer y estar en manos de otro pedido."""
+    if cache.get(_slot(slot)) == h:
+        cache.delete(_slot(slot))
+
+
 def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
           permitir: Callable[[], bool]) -> Pedido:
     if mantenimiento.activo():
@@ -115,28 +122,49 @@ def pedir(chart_data: dict, lang: str, trato: str, token: str | None,
     if not cache.add(_lock(h), 1, timeout=TTL_LOCK):
         return Pedido(token, "generando")
     try:
+        # Se vuelve a leer ya con el lock: entre la lectura de arriba y el lock
+        # otro pedido del mismo token pudo haber escrito la entrada o la marca.
+        if cache.get(_marca(h)) is not None:
+            raise Usado()
+        entrada = cache.get(_clave(h))
+        if entrada is not None and entrada["estado"] == "generando" and not _caida(entrada):
+            return Pedido(token, "generando")
         slot = _tomar_slot(h)
         if slot is None:
             logger.info("lectura anónima: sin slot libre")
             raise Ocupado()
-        if not permitir():
-            cache.delete(_slot(slot))
-            raise PorIP()
-        fecha = cupo_diario.reservar(cupo_diario.ANONIMO, settings.INTERPRETATION_ANON_DAILY_CAP)
-        if fecha is None:
-            cache.delete(_slot(slot))
-            logger.warning(
-                "lectura anónima: cupo diario agotado (cap=%s)",
-                settings.INTERPRETATION_ANON_DAILY_CAP,
-            )
-            raise SinCupo()
-        iniciado = time.time()
-        cache.set(_clave(h), {
-            "estado": "generando", "lang": lang, "iniciado": iniciado,
-            "fecha_cupo": fecha.isoformat(),
-        }, TTL_ENTRADA)
-        logger.info("lectura anónima pedida (lang=%s)", lang)
-        _arrancar_en_hilo(h, chart_data, lang, trato, slot, fecha, iniciado)
+        fecha = None
+        try:
+            if not permitir():
+                raise PorIP()
+            if entrada is not None and _caida(entrada):
+                # La generación anterior se dio por caída: su lugar vuelve una
+                # sola vez antes de reservar el nuevo.
+                _devolver_una_vez(
+                    h, entrada["iniciado"], dt.date.fromisoformat(entrada["fecha_cupo"])
+                )
+            fecha = cupo_diario.reservar(cupo_diario.ANONIMO, settings.INTERPRETATION_ANON_DAILY_CAP)
+            if fecha is None:
+                logger.warning(
+                    "lectura anónima: cupo diario agotado (cap=%s)",
+                    settings.INTERPRETATION_ANON_DAILY_CAP,
+                )
+                raise SinCupo()
+            iniciado = time.time()
+            cache.set(_clave(h), {
+                "estado": "generando", "lang": lang, "iniciado": iniciado,
+                "fecha_cupo": fecha.isoformat(),
+            }, TTL_ENTRADA)
+            logger.info("lectura anónima pedida (lang=%s)", lang)
+            _arrancar_en_hilo(h, chart_data, lang, trato, slot, fecha, iniciado)
+        except BaseException:
+            # Cualquier salida antes de que el hilo tenga el slot y el lugar
+            # (los rechazos esperados incluidos) los suelta; si el hilo ya
+            # arrancó, `generar` es quien los suelta.
+            _soltar_slot(slot, h)
+            if fecha is not None:
+                cupo_diario.devolver(cupo_diario.ANONIMO, fecha)
+            raise
     finally:
         cache.delete(_lock(h))
     return Pedido(token, "generando")
@@ -155,7 +183,7 @@ def generar(h: str, chart_data: dict, lang: str, trato: str, slot: int,
         cache.set(_marca(h), 1, TTL_MARCA)
         logger.info("lectura anónima lista (lang=%s)", lang)
     finally:
-        cache.delete(_slot(slot))
+        _soltar_slot(slot, h)
 
 
 def _arrancar_en_hilo(*args) -> None:

@@ -114,3 +114,13 @@ def test_la_configuracion_declara_que_el_cuerpo_no_se_manda(monkeypatch):
     init_sentry(dsn="https://clave@sentry.io/1", entorno="produccion", release=None)
 
     assert kwargs[0]["max_request_body_size"] == "never"
+
+
+def test_la_configuracion_no_manda_variables_locales(monkeypatch):
+    """Los datos de nacimiento viven en variables locales de la lectura anónima."""
+    kwargs: list[dict] = []
+    monkeypatch.setattr("sentry_sdk.init", lambda **kw: kwargs.append(kw))
+
+    init_sentry(dsn="https://clave@sentry.io/1", entorno="produccion", release=None)
+
+    assert kwargs[0]["include_local_variables"] is False

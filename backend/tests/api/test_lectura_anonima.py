@@ -156,3 +156,95 @@ def test_caida_devuelve_cupo_una_sola_vez(breve, monkeypatch):
     monkeypatch.setattr(la.informe_service, "escribir_breve", rompe)
     la.generar(hash_token(pedido.token), DATOS, "es", "", 0, timezone.now().date(), entrada["iniciado"])
     assert _usados() == 0
+
+
+def _entrada_caida(token):
+    clave = f"lectura_anonima:{hash_token(token)}"
+    entrada = cache.get(clave)
+    entrada["iniciado"] = time.time() - 100
+    cache.set(clave, entrada, 900)
+    return entrada
+
+
+def test_carrera_del_lock_no_lanza_dos_veces(breve, monkeypatch):
+    """Otro pedido escribió la entrada entre la primera lectura y el lock."""
+    lanzados = []
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: lanzados.append(a))
+    primero = la.pedir(DATOS, "es", "", None, si)
+    clave = f"lectura_anonima:{hash_token(primero.token)}"
+    reales = cache.get
+    vistas = {"n": 0}
+
+    def get_ciego(k, *a, **kw):
+        if k == clave and vistas["n"] == 0:
+            vistas["n"] += 1
+            return None  # la lectura previa al lock no ve la entrada
+        return reales(k, *a, **kw)
+
+    monkeypatch.setattr(la.cache, "get", get_ciego)
+    otro = la.pedir(DATOS, "es", "", primero.token, si)
+    assert otro.estado == "generando"
+    assert len(lanzados) == 1 and _usados() == 1
+
+
+def test_carrera_del_lock_con_marca_da_usado(breve, monkeypatch):
+    token = "t" * 20
+    h = hash_token(token)
+    reales = cache.get
+    llamadas = {"n": 0}
+
+    def get(k, *a, **kw):
+        if k == f"lectura_anonima:usado:{h}":
+            llamadas["n"] += 1
+            if llamadas["n"] == 1:
+                return None
+            return 1
+        return reales(k, *a, **kw)
+
+    monkeypatch.setattr(la.cache, "get", get)
+    with pytest.raises(la.Usado):
+        la.pedir(DATOS, "es", "", token, si)
+    assert _usados() == 0
+
+
+def test_caida_relanzada_por_post_devuelve_el_cupo_viejo(breve, monkeypatch):
+    monkeypatch.setattr(la, "_arrancar_en_hilo", lambda *a: None)
+    pedido = la.pedir(DATOS, "es", "", None, si)
+    _entrada_caida(pedido.token)
+    la.pedir(DATOS, "es", "", pedido.token, si)
+    assert _usados() == 1
+    nueva = cache.get(f"lectura_anonima:{hash_token(pedido.token)}")
+    assert nueva["estado"] == "generando"
+    la.estado(pedido.token)
+    assert _usados() == 1
+
+
+def test_el_slot_ajeno_no_se_borra(breve):
+    cache.add("lectura_anonima:slot:0", "otro", timeout=90)
+    la.generar("mio", DATOS, "es", "", 0, timezone.now().date(), time.time())
+    assert cache.get("lectura_anonima:slot:0") == "otro"
+
+
+def test_error_tras_reservar_libera_slot_y_cupo(breve, monkeypatch):
+    reales = cache.set
+
+    def set_roto(k, *a, **kw):
+        if k.startswith("lectura_anonima:") and ":" not in k[len("lectura_anonima:"):]:
+            raise RuntimeError("caché caída")
+        return reales(k, *a, **kw)
+
+    monkeypatch.setattr(la.cache, "set", set_roto)
+    with pytest.raises(RuntimeError):
+        la.pedir(DATOS, "es", "", None, si)
+    assert _usados() == 0
+    assert cache.get("lectura_anonima:slot:0") is None
+
+
+def test_error_en_permitir_libera_el_slot(breve):
+    def rompe():
+        raise RuntimeError("ip")
+
+    with pytest.raises(RuntimeError):
+        la.pedir(DATOS, "es", "", None, rompe)
+    assert cache.get("lectura_anonima:slot:0") is None
+    assert _usados() == 0
