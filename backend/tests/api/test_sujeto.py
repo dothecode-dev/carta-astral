@@ -7,8 +7,8 @@ dos veces. Por eso la unicidad la pone la base, no el código."""
 import pytest
 from django.db import IntegrityError, transaction
 
-from api.models import Interpretation, Movimiento, PasarelaCheckout, Sujeto
-from api.sujetos import a_sujeto, adoptar_huerfanas, sujeto_natal
+from api.models import Interpretation, Sujeto
+from api.sujetos import a_sujeto, sujeto_natal
 from interpret.prompts import PROMPT_VERSION
 
 pytestmark = pytest.mark.django_db
@@ -72,58 +72,6 @@ def test_a_sujeto_acepta_sujetos_y_rechaza_una_carta(chart):
         a_sujeto(chart)
 
 
-def test_una_interpretacion_escrita_con_carta_sale_con_su_sujeto(chart, account):
-    """EXPANDIR: mientras conviven los dos campos, toda fila nueva con carta
-    lleva el sujeto. Así ningún test ni llamador existente tiene que cambiar."""
-    i = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
-    )
-    assert i.sujeto_id == sujeto_natal(chart).pk
-
-
-def test_un_checkout_con_carta_sale_con_su_sujeto_y_sin_carta_sin_sujeto(chart, account):
-    con = PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account, codigo_producto="informe_natal", sujeto=sujeto_natal(chart), chart=chart,
-    )
-    sin = PasarelaCheckout.objects.create(
-        checkout_id="cs_2", account=account, codigo_producto="informe_natal",
-    )
-    assert con.sujeto_id == sujeto_natal(chart).pk
-    assert sin.sujeto_id is None
-
-
-def test_adopta_las_filas_huerfanas_de_su_carta(chart, account):
-    """Lo que escribió el código viejo durante el deploy llega sin sujeto."""
-    i = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
-    )
-    m = Movimiento.objects.create(
-        account=account, codigo_producto="informe_natal", tipo="consumo",
-        origen="compra", cantidad=-1, chart=chart,
-    )
-    p = PasarelaCheckout.objects.create(
-        checkout_id="cs_3", account=account, codigo_producto="informe_natal", sujeto=sujeto_natal(chart), chart=chart,
-    )
-    Interpretation.objects.filter(pk=i.pk).update(sujeto=None)
-    PasarelaCheckout.objects.filter(pk=p.pk).update(sujeto=None)
-
-    s = sujeto_natal(chart)
-    adoptar_huerfanas(s)
-
-    for modelo, pk in ((Interpretation, i.pk), (Movimiento, m.pk), (PasarelaCheckout, p.pk)):
-        assert modelo.objects.get(pk=pk).sujeto_id == s.pk, modelo.__name__
-
-
-def test_adoptar_no_toca_filas_de_otra_carta(make_chart, account):
-    una, otra = make_chart(account=account), make_chart(account=account)
-    m = Movimiento.objects.create(
-        account=account, codigo_producto="informe_natal", tipo="consumo",
-        origen="compra", cantidad=-1, chart=otra,
-    )
-    adoptar_huerfanas(sujeto_natal(una))
-    assert Movimiento.objects.get(pk=m.pk).sujeto_id is None
-
-
 def test_borrar_la_carta_borra_su_sujeto_natal_y_el_informe(chart, account):
     """Mismo efecto que hoy: el informe cae con la carta (CASCADE)."""
     i = Interpretation.objects.create(
@@ -132,25 +80,3 @@ def test_borrar_la_carta_borra_su_sujeto_natal_y_el_informe(chart, account):
     chart.delete()
     assert not Sujeto.objects.exists()
     assert not Interpretation.objects.filter(pk=i.pk).exists()
-
-
-def test_un_consumo_desvinculado_por_el_codigo_viejo_se_suelta_del_sujeto(chart, account):
-    """El `devolver` viejo desvincula con `update(chart=None)` y deja el sujeto
-    puesto. Sin soltarlo, el canje nuevo lo vería «ya canjeado» y regalaría el
-    informe. Un consumo natal sin carta es exactamente eso: el código nuevo
-    siempre lo escribe con `chart`, y si la carta se borra, el sujeto natal cae
-    con ella y el consumo queda sin sujeto."""
-    s = sujeto_natal(chart)
-    desvinculado = Movimiento.objects.create(
-        account=account, codigo_producto="informe_natal", tipo="consumo",
-        origen="compra", cantidad=-1, chart=None, sujeto=s,
-    )
-    vigente = Movimiento.objects.create(
-        account=account, codigo_producto="informe_natal", tipo="consumo",
-        origen="compra", cantidad=-1, chart=chart, sujeto=s,
-    )
-
-    adoptar_huerfanas(s)
-
-    assert Movimiento.objects.get(pk=desvinculado.pk).sujeto_id is None
-    assert Movimiento.objects.get(pk=vigente.pk).sujeto_id == s.pk

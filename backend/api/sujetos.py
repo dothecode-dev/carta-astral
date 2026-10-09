@@ -1,15 +1,12 @@
-"""El sujeto de un informe pago, y el puente con la carta mientras convivan.
+"""El sujeto de un informe pago (parte 2 de la spec de Vínculo).
 
-Parte 2 de la spec de Vínculo. En el deploy 1 (EXPANDIR) las funciones de
-cobro y generación aceptan una carta o un sujeto, y `a_sujeto` lo resuelve: así
-la idempotencia del cobro y los locks ya son por sujeto sin que cambie ningún
-llamador. En el deploy 2 (CONTRAER) sólo aceptan sujetos, y
-`adoptar_huerfanas` desaparece.
+Desde el deploy 2 (CONTRAER) el cobro y la generación reciben sólo sujetos; una
+carta vale por su sujeto natal, que se obtiene con `sujeto_natal`.
 """
 
 from django.db import IntegrityError, transaction
 
-from api.models import Chart, Interpretation, Movimiento, PasarelaCheckout, Sujeto
+from api.models import Chart, Sujeto
 
 
 def sujeto_natal(carta: Chart) -> Sujeto:
@@ -27,29 +24,6 @@ def sujeto_natal(carta: Chart) -> Sujeto:
             )
     except IntegrityError:
         return Sujeto.objects.get(natal_de=carta)
-
-
-def adoptar_huerfanas(sujeto: Sujeto) -> None:
-    """Le asigna el sujeto a las filas de su carta que se escribieron sin él.
-
-    Existen por el deploy: `entrypoint.sh` migra en el contenedor nuevo
-    mientras el viejo sigue atendiendo, y el webhook de Stripe acredita
-    incluso con el cartel de mantenimiento puesto. Lo que el código viejo
-    escribe en esa ventana llega sin sujeto; sin adoptarlo, el informe de una
-    compra hecha durante el deploy no figuraría como «ya canjeado» y se podría
-    cobrar dos veces. El deploy 2 rellena todo y borra esta función."""
-    if sujeto.natal_de_id is None:
-        return
-    carta_id = sujeto.natal_de_id
-    Interpretation.objects.filter(chart_id=carta_id, sujeto__isnull=True).update(sujeto=sujeto)
-    Movimiento.objects.filter(chart_id=carta_id, sujeto__isnull=True).update(sujeto=sujeto)
-    PasarelaCheckout.objects.filter(chart_id=carta_id, sujeto__isnull=True).update(sujeto=sujeto)
-    # Y al revés: el `devolver` viejo desvincula sólo con `update(chart=None)` y
-    # deja el sujeto puesto. Un consumo natal sin carta es eso —el código nuevo
-    # siempre lo escribe con `chart`, y si la carta se borra el sujeto natal cae
-    # con ella—: sin soltarlo, el canje lo daría por cobrado y regalaría el
-    # informe junto con el derecho devuelto.
-    Movimiento.objects.filter(sujeto=sujeto, tipo="consumo", chart__isnull=True).update(sujeto=None)
 
 
 def a_sujeto(objetivo) -> Sujeto:

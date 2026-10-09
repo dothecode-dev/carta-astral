@@ -1,9 +1,8 @@
 """Cada carta con su sujeto natal, y cada informe, consumo y checkout con el
 de su carta. Parte 2 de Vínculo, deploy 1.
 
-`rellenar` es idempotente y la vuelve a llamar la 0040 (deploy 2): entre las
-dos, el contenedor viejo pudo escribir filas sin sujeto (ver
-`api.sujetos.adoptar_huerfanas`)."""
+`rellenar` es idempotente y la vuelve a llamar la 0047 (deploy 2): entre las
+dos, el contenedor viejo pudo escribir filas sin sujeto."""
 
 from django.db import migrations
 from django.db.models import OuterRef, Subquery
@@ -26,8 +25,7 @@ def rellenar(apps, schema_editor=None) -> dict:
 
     # Una sola sentencia por modelo. Si el contenedor viejo creó una carta
     # después del `bulk_create`, su subconsulta da NULL y la fila queda sin
-    # sujeto: la adopta `api.sujetos.adoptar_huerfanas` al primer uso, y la
-    # 0040 vuelve a pasar. Con un dict en memoria eso era un `KeyError` que
+    # sujeto: la 0047 vuelve a pasar. Con un dict en memoria eso era un `KeyError` que
     # abortaba la migración y tiraba el deploy.
     natal = Sujeto.objects.filter(natal_de_id=OuterRef("chart_id")).values("id")[:1]
     filas = 0

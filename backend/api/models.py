@@ -101,7 +101,7 @@ class GeoName(models.Model):
 
 
 class Interpretation(models.Model):
-    """Interpretación LLM cacheada de una carta. Clave de cache: (chart, lang,
+    """Interpretación LLM cacheada de un sujeto. Clave de cache: (sujeto, lang,
     prompt_version, tier) — cambiar prompt_version genera registros nuevos."""
 
     # Mismos literales que interpret.prompts.SECCION_BREVE/SECCIONES usan para
@@ -109,13 +109,13 @@ class Interpretation(models.Model):
     # atar dejarían el bug en silencio si alguien cambia una y no la otra.
     TIERS = ((TIER_CORTO, TIER_CORTO), (TIER_LARGO, TIER_LARGO))
 
-    chart = models.ForeignKey(Chart, on_delete=models.CASCADE, related_name="interpretations")
-    # Parte 2 de Vínculo, deploy 1 (EXPANDIR): convive con `chart`. Lo rellenan
-    # la 0039 y `save()`; el deploy 2 lo vuelve obligatorio y borra `chart`.
-    sujeto = models.ForeignKey(
-        "Sujeto", on_delete=models.CASCADE, null=True, blank=True,
-        related_name="interpretations",
+    # Parte 2 de Vínculo, deploy 2: nada la lee, pero se sigue escribiendo
+    # para poder volver al deploy 1. NULL-able para que el deploy 3 pueda dejar
+    # de escribirla; la columna se borra con el primer deploy de la parte 3.
+    chart = models.ForeignKey(
+        Chart, on_delete=models.CASCADE, null=True, blank=True, related_name="interpretations",
     )
+    sujeto = models.ForeignKey("Sujeto", on_delete=models.CASCADE, related_name="interpretations")
     account = models.ForeignKey(
         "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="interpretations",
     )
