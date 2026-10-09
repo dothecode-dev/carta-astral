@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from api import notificaciones
 from api.interpretation_service import renovar_lock
-from api.models import Interpretation, InterpretationSection
+from api.models import Interpretation, InterpretationSection, Sujeto
 from interpret.generator import build_interpretation, build_seccion, translate_interpretation
 from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO, Seccion
 from interpret.reparto import bloque as bloque_de_reparto
@@ -41,7 +41,15 @@ PRESUPUESTO_GRATIS = 400
 _PUNTUACION_COLGANTE = " ,;:.!?¡¿-—"
 
 
-def secciones_aplicables(chart, tier: str) -> list[Seccion]:
+def _datos(sujeto) -> dict:
+    """El cálculo sobre el que se escribe el informe. El natal lo tiene en su
+    carta; el vínculo lo traerá en `sujeto.data` (parte 3)."""
+    if sujeto.producto != Sujeto.NATAL:
+        raise NotImplementedError("el informe de vínculo todavía no existe")
+    return sujeto.natal_de.data
+
+
+def secciones_aplicables(sujeto, tier: str) -> list[Seccion]:
     """El catálogo del informe pedido.
 
     El corto es una sola sección; el largo son las ocho, menos las que dependen
@@ -56,13 +64,13 @@ def secciones_aplicables(chart, tier: str) -> list[Seccion]:
     `pdf_payload` y la vista de estado."""
     if tier == TIER_CORTO:
         return [SECCION_BREVE]
-    hora = chart.data.get("time_known", True)
+    hora = _datos(sujeto).get("time_known", True)
     return [s for s in SECCIONES if hora or not s.requiere_hora]
 
 
 def secciones_pendientes(interpretacion) -> list[Seccion]:
     hechas = set(interpretacion.secciones.values_list("slug", flat=True))
-    aplicables = secciones_aplicables(interpretacion.chart, interpretacion.tier)
+    aplicables = secciones_aplicables(interpretacion.sujeto, interpretacion.tier)
     return [s for s in aplicables if s.slug not in hechas]
 
 
@@ -132,7 +140,7 @@ def resumen_gratis(interpretacion) -> list[dict]:
     Ascendente —justo lo que más le importa a la gente—, y regalarla entera
     hace que quien la lee ya no tenga por qué pagar.
 
-    El índice sale de `secciones_aplicables(chart, "largo")` —el catálogo,
+    El índice sale de `secciones_aplicables(sujeto, "largo")` —el catálogo,
     filtrado por si hay hora de nacimiento—, no de
     `interpretacion.secciones.all()`. Siempre `"largo"`, no
     `interpretacion.tier`: este resumen describe el informe completo que se
@@ -149,7 +157,7 @@ def resumen_gratis(interpretacion) -> list[dict]:
     apertura, así que sin este recorte el resumen entero podía superar
     ampliamente las 400 palabras que promete RF3.
     """
-    aplicables = secciones_aplicables(interpretacion.chart, TIER_LARGO)
+    aplicables = secciones_aplicables(interpretacion.sujeto, TIER_LARGO)
     tope = _tope_por_seccion(len(aplicables))
     generadas = {s.slug: s for s in interpretacion.secciones.all()}
     salida = []
@@ -170,14 +178,14 @@ def resumen_gratis(interpretacion) -> list[dict]:
     return salida
 
 
-def indice_informe(chart, lang: str) -> list[dict]:
+def indice_informe(sujeto, lang: str) -> list[dict]:
     """El índice del informe completo (RF3): los títulos de las ocho
     secciones (o las siete que aplican sin hora de nacimiento) y, si ya hay
     algo generado, el arranque de cada una. Es lo que ve quien todavía no
     compró, para decidir si compra.
 
     Si ya existe una `Interpretation` tier=largo vigente (mismo
-    `PROMPT_VERSION`) para este `(chart, lang)`, delega en `resumen_gratis`,
+    `PROMPT_VERSION`) para este `(sujeto, lang)`, delega en `resumen_gratis`,
     que arma el índice con el arranque recortado de cada sección ya escrita
     —el informe puede estar a medio generar (RF10) y el índice tiene que
     poder mostrarse igual. Si no existe —el caso más común: nadie generó
@@ -185,14 +193,14 @@ def indice_informe(chart, lang: str) -> list[dict]:
     catálogo, con `parrafo` vacío y `restante` igual al objetivo de palabras
     de cada sección: sirve igual como vidriera de lo que se compra.
     """
-    interpretacion = chart.interpretations.filter(
+    interpretacion = sujeto.interpretations.filter(
         lang=lang, prompt_version=PROMPT_VERSION, tier=TIER_LARGO,
     ).first()
     if interpretacion is not None:
         return resumen_gratis(interpretacion)
     return [
         {"slug": seccion.slug, "titulo": seccion.titulo[lang], "parrafo": "", "restante": seccion.palabras}
-        for seccion in secciones_aplicables(chart, TIER_LARGO)
+        for seccion in secciones_aplicables(sujeto, TIER_LARGO)
     ]
 
 
@@ -216,16 +224,12 @@ def _sin_titulo(texto: str, titulo: str) -> str:
     return texto
 
 
-def secciones_escritas(interpretacion, chart) -> list[dict]:
+def secciones_escritas(interpretacion) -> list[dict]:
     """Las secciones que ya están, con su texto entero, para leerlas mientras
-    se escriben las demás. Son las mismas filas que después forman `text`.
-
-    Recibe `chart` en vez de leer `interpretacion.chart`: esa columna se va en
-    el deploy 2 del sujeto genérico y acá no hace falta sumar otra lectura.
-    """
+    se escriben las demás. Son las mismas filas que después forman `text`."""
     titulos = {
         s.slug: s.titulo[interpretacion.lang]
-        for s in secciones_aplicables(chart, interpretacion.tier)
+        for s in secciones_aplicables(interpretacion.sujeto, interpretacion.tier)
     }
     return [
         {
@@ -260,7 +264,7 @@ def avisar_informe_listo(interpretacion: Interpretation) -> None:
         return
     # El informe vive en la página de la carta (web/app/[locale]/carta/[id],
     # `id` = uuid), no en la cuenta: el mail lleva directo a leerlo.
-    uuid = str(interpretacion.chart.uuid)
+    uuid = str(interpretacion.sujeto.natal_de.uuid)
     notificaciones.notificar(
         interpretacion.account, "informe_listo",
         {"chart": uuid, "ruta": f"/carta/{uuid}"}, lang=interpretacion.lang,
@@ -281,7 +285,7 @@ def generar_informe(interpretacion, client, token: str) -> bool:
 
     `token` es el mismo valor que `interpretation_service` guardó al tomar el
     lock de esta carta en `completar_generacion`. Después de persistir CADA sección
-    se llama a `renovar_lock(chart, tier, token)`: un informe son ocho llamadas
+    se llama a `renovar_lock(sujeto, tier, token)`: un informe son ocho llamadas
     secuenciales de hasta 1000 palabras, unos 6 minutos contra un
     `LOCK_TTL = 600`, así que sin renovar el lock la generación sobrevive a su
     propio candado. Si `renovar_lock` devuelve `False` el lock YA NO ES
@@ -327,10 +331,11 @@ def generar_informe(interpretacion, client, token: str) -> bool:
       parcial de `CreditTransaction.external_id`), no en la disciplina de
       quien llama.
     """
-    aplicables = secciones_aplicables(interpretacion.chart, interpretacion.tier)
+    aplicables = secciones_aplicables(interpretacion.sujeto, interpretacion.tier)
     orden_por_slug = {seccion.slug: indice for indice, seccion in enumerate(aplicables)}
     slugs = [seccion.slug for seccion in aplicables]
     titulos = {seccion.slug: seccion.titulo[interpretacion.lang] for seccion in aplicables}
+    datos = _datos(interpretacion.sujeto)
 
     pendientes = secciones_pendientes(interpretacion)
     for indice, seccion in enumerate(pendientes):
@@ -341,17 +346,17 @@ def generar_informe(interpretacion, client, token: str) -> bool:
             # secciones que nadie va a leer (ver interpret/prompts.py).
             # `escribir_breve` ya la pasa por el juez del trato.
             texto = escribir_breve(
-                interpretacion.chart.data, interpretacion.lang, interpretacion.trato, client,
+                datos, interpretacion.lang, interpretacion.trato, client,
             )
         else:
             texto = build_seccion(
-                interpretacion.chart.data,
+                datos,
                 seccion,
                 interpretacion.lang,
                 resumen_previo(interpretacion),
                 client,
                 reparto=bloque_de_reparto(
-                    parte_de(interpretacion.chart.data, seccion.slug, slugs),
+                    parte_de(datos, seccion.slug, slugs),
                     interpretacion.lang,
                     titulos,
                 ),
@@ -367,7 +372,7 @@ def generar_informe(interpretacion, client, token: str) -> bool:
             orden=orden_por_slug[seccion.slug],
             texto=texto,
         )
-        lock_renovado = renovar_lock(interpretacion.chart, interpretacion.tier, token)
+        lock_renovado = renovar_lock(interpretacion.sujeto, interpretacion.tier, token)
         queda_trabajo = indice < len(pendientes) - 1
         # El lock se renueva siempre (arriba), pero sólo importa su
         # resultado cuando falta al menos otra sección (HALLAZGO 4): perder
@@ -422,13 +427,13 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
     El `get_or_create` de `destino` no necesita ese mismo `except`: el
     `get_or_create` de Django ya envuelve su `create()` en un `atomic()`
     propio y, si choca contra el `unique_together` de `Interpretation`
-    (`chart`, `lang`, `prompt_version`, `tier`), vuelve a hacer el `get()`
+    (`sujeto`, `lang`, `prompt_version`, `tier`), vuelve a hacer el `get()`
     con esos mismos campos antes de relanzar — la carrera ahí ya está
     resuelta por el ORM, no hace falta repetirlo a mano.
 
     `tier=origen.tier` en el filtro (fix round 1, Important 2) no es
     opcional: sin él, con dos productos sobre la misma carta, el filtro
-    (chart, lang, prompt_version) puede matchear la `Interpretation` del
+    (sujeto, lang, prompt_version) puede matchear la `Interpretation` del
     OTRO tier en ese idioma si ya existe —no una excepción, algo peor— y
     esta función le escribiría las secciones traducidas del `origen` encima
     de esa fila ajena, corrompiendo el informe pagado con el contenido de la
@@ -441,9 +446,14 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
     toca).
     """
     destino, _ = Interpretation.objects.get_or_create(
-        chart=origen.chart, lang=destino_lang, prompt_version=origen.prompt_version,
+        sujeto=origen.sujeto, lang=destino_lang, prompt_version=origen.prompt_version,
         tier=origen.tier,
-        defaults={"text": "", "account": origen.account, "trato": origen.trato, "traducido_de": origen},
+        # `chart` se sigue escribiendo hasta el deploy 3: el código del deploy 1
+        # la lee, y es lo que permite volver a él.
+        defaults={
+            "chart": origen.sujeto.natal_de, "text": "", "account": origen.account,
+            "trato": origen.trato, "traducido_de": origen,
+        },
     )
     # Fix round 2: un destino que en la base ya está completo se entregó y no
     # se toca, sea o no traducción de este origen. Sin esto, quien llegara con
@@ -497,7 +507,7 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
         # seguidas pueden superar `LOCK_TTL`, así que el lock se renueva tras
         # cada sección y, si se perdió con trabajo pendiente, se aborta sin
         # marcar nada: otro proceso lo tiene y va a terminar este informe.
-        lock_renovado = renovar_lock(origen.chart, origen.tier, token)
+        lock_renovado = renovar_lock(origen.sujeto, origen.tier, token)
         if not lock_renovado and indice < len(pendientes) - 1:
             logger.warning(
                 "se perdió el lock de la traducción (interpretation=%s, lang=%s) a "

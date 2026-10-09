@@ -145,7 +145,7 @@ def _informe_completo(chart, lang="es"):
     interp = Interpretation.objects.create(
         chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=True,
     )
-    for orden, seccion in enumerate(secciones_aplicables(chart, interp.tier)):
+    for orden, seccion in enumerate(secciones_aplicables(interp.sujeto, interp.tier)):
         InterpretationSection.objects.create(
             interpretation=interp, slug=seccion.slug, orden=orden,
             texto=f"Texto de la sección {seccion.slug}.",

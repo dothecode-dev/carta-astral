@@ -117,11 +117,13 @@ def test_al_reanudar_no_vuelve_a_pedir_las_secciones_ya_escritas(interpretacion)
 
 
 class _ChartFalso:
-    """Un chart minimo, sin base de datos: `secciones_aplicables` sólo lee
-    `chart.data.get("time_known", ...)`."""
+    """Un sujeto natal mínimo, sin base de datos: `secciones_aplicables` sólo
+    lee `sujeto.natal_de.data.get("time_known", ...)`."""
+
+    producto = "natal"
 
     def __init__(self, hora):
-        self.data = {"time_known": hora}
+        self.natal_de = type("Carta", (), {"data": {"time_known": hora}})()
 
 
 def _chart(hora):
@@ -219,14 +221,14 @@ def test_el_resumen_previo_crece_con_cada_seccion(interpretacion):
 def test_renueva_el_lock_despues_de_cada_seccion_persistida(interpretacion, monkeypatch):
     llamadas = []
 
-    def _renovar(chart, tier, token):
-        llamadas.append((chart.id, token))
+    def _renovar(sujeto, tier, token):
+        llamadas.append((sujeto.id, token))
         return True
 
     monkeypatch.setattr(informe_service, "renovar_lock", _renovar)
     informe_service.generar_informe(interpretacion, ClienteFalso(), TOKEN)
     assert len(llamadas) == 8
-    assert all(chart_id == interpretacion.chart_id and token == TOKEN for chart_id, token in llamadas)
+    assert all(s_id == interpretacion.sujeto_id and token == TOKEN for s_id, token in llamadas)
 
 
 def test_si_pierde_el_lock_justo_tras_la_ultima_seccion_igual_marca_completa(interpretacion, monkeypatch):
@@ -237,7 +239,7 @@ def test_si_pierde_el_lock_justo_tras_la_ultima_seccion_igual_marca_completa(int
     ausente del PDF). Sólo importa perder el lock cuando todavía hay
     secciones por pedir: ahí sí hay que abortar para no escribir en paralelo
     con el proceso que tomó el lock."""
-    total = len(informe_service.secciones_aplicables(interpretacion.chart, interpretacion.tier))
+    total = len(informe_service.secciones_aplicables(interpretacion.sujeto, interpretacion.tier))
     llamadas = []
 
     def _renovar(chart, tier, token):
@@ -364,3 +366,20 @@ def test_dos_pasadas_sobre_el_mismo_informe_mandan_un_solo_mail(interpretacion, 
     informe_service.generar_informe(interpretacion, ClienteFalso(), TOKEN)
     informe_service.avisar_informe_listo(interpretacion)
     assert len(resend) == 1
+
+
+def test_generar_informe_renueva_el_lock_del_sujeto_que_lo_tomo(interpretacion, monkeypatch):
+    """RF23: el lock se toma por sujeto; renovarlo por carta daría False en un
+    vínculo y el informe abortaría tras la primera sección. Con el lock REAL
+    (lo toma `lock_tomado`): sólo se espía qué recibe."""
+    from api.models import Sujeto
+
+    vistos = []
+    real = interpretation_service.renovar_lock
+    monkeypatch.setattr(
+        informe_service, "renovar_lock",
+        lambda objetivo, tier, tok: vistos.append(objetivo) or real(objetivo, tier, tok),
+    )
+    assert informe_service.generar_informe(interpretacion, ClienteFalso(), TOKEN)
+    assert len(vistos) == 8
+    assert all(isinstance(o, Sujeto) and o.pk == interpretacion.sujeto_id for o in vistos)

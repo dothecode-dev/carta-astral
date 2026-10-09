@@ -29,6 +29,7 @@ from api import apple
 from api.models import Chart, Interpretation, ProviderIdentity
 from api.permissions import HasAccount
 from api.serializers import serialize_chart_data
+from api.sujetos import sujeto_natal
 from api.versioning import engine_version
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
@@ -366,7 +367,7 @@ class InterpretationView(APIView):
         if tier == TIER_LARGO:
             # Para el índice (spec 2026-10-07 RF8): las secciones con su título
             # del catálogo. `text` se queda para el PDF y la app.
-            cuerpo["secciones"] = informe_service.secciones_escritas(interp, chart)
+            cuerpo["secciones"] = informe_service.secciones_escritas(interp)
         return Response(cuerpo)
 
     def post(self, request, uuid):
@@ -484,7 +485,7 @@ class InterpretationEstadoView(APIView):
         interpretacion = Interpretation.objects.filter(
             chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
-        total = len(informe_service.secciones_aplicables(chart, tier))
+        total = len(informe_service.secciones_aplicables(sujeto_natal(chart), tier))
         if interpretacion is None:
             return Response({"completa": False, "hechas": 0, "total": total})
         return Response(
@@ -518,7 +519,7 @@ class InterpretationSeccionesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
-        total = len(informe_service.secciones_aplicables(chart, tier))
+        total = len(informe_service.secciones_aplicables(sujeto_natal(chart), tier))
         interpretacion = Interpretation.objects.filter(
             chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
@@ -529,7 +530,7 @@ class InterpretationSeccionesView(APIView):
         return Response({
             "completa": interpretacion.completa,
             "total": total,
-            "secciones": informe_service.secciones_escritas(interpretacion, chart),
+            "secciones": informe_service.secciones_escritas(interpretacion),
             # El aviso lo agrega el sistema, no el modelo (los prompts le piden
             # que no lo escriba): quien lee mientras se escribe lo ve igual que
             # en la lectura terminada.
@@ -555,7 +556,7 @@ class IndiceInformeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
-        return Response(informe_service.indice_informe(chart, lang))
+        return Response(informe_service.indice_informe(sujeto_natal(chart), lang))
 
 
 class _BaseAuthView(APIView):

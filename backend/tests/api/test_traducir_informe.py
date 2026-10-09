@@ -302,15 +302,15 @@ def test_renueva_el_lock_despues_de_cada_seccion_traducida(interpretacion, monke
     _crear_secciones(interpretacion)
     llamadas = []
 
-    def _renovar(chart, tier, token):
-        llamadas.append((chart.id, tier, token))
+    def _renovar(sujeto, tier, token):
+        llamadas.append((sujeto.id, tier, token))
         return True
 
     monkeypatch.setattr(informe_service, "renovar_lock", _renovar)
     terminado = informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), "tok-x")
 
     assert terminado is True
-    assert llamadas == [(interpretacion.chart_id, interpretacion.tier, "tok-x")] * 8
+    assert llamadas == [(interpretacion.sujeto_id, interpretacion.tier, "tok-x")] * 8
 
 
 def test_si_pierde_el_lock_a_mitad_de_la_traduccion_aborta_sin_completar(interpretacion, monkeypatch):
@@ -337,3 +337,28 @@ def test_traducir_no_manda_el_mail_de_informe_listo(interpretacion, resend):
     informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), TOKEN)
     assert Interpretation.objects.get(lang="en", tier=interpretacion.tier).completa
     assert resend == []
+
+
+def test_traducir_renueva_el_lock_del_sujeto_que_lo_tomo(interpretacion, monkeypatch):
+    """RF23, la traducción: renueva el lock del sujeto del origen, con el lock
+    REAL tomado con la misma clave que usa `completar_generacion`."""
+    from django.core.cache import cache
+
+    from api import interpretation_service
+    from api.models import Sujeto
+
+    _crear_secciones(interpretacion)
+    clave = interpretation_service._lock_key(interpretacion.sujeto, interpretacion.tier)
+    cache.set(clave, TOKEN, timeout=600)
+    vistos = []
+    real = interpretation_service.renovar_lock
+    monkeypatch.setattr(
+        informe_service, "renovar_lock",
+        lambda objetivo, tier, tok: vistos.append(objetivo) or real(objetivo, tier, tok),
+    )
+    try:
+        assert informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), TOKEN)
+    finally:
+        cache.delete(clave)
+    assert vistos
+    assert all(isinstance(o, Sujeto) and o.pk == interpretacion.sujeto_id for o in vistos)

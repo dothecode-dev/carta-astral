@@ -210,7 +210,7 @@ def build(chart: Chart, reading_lang: str | None) -> dict[str, Any] | None:
     Sólo entran informes terminados (`completa=True`): una generación en
     curso no es un informe que se pueda imprimir.
 
-    El índice sale de `secciones_aplicables(chart, interpretacion.tier)` —el
+    El índice sale de `secciones_aplicables(interpretacion.sujeto, interpretacion.tier)` —el
     catálogo, filtrado por si hay hora de nacimiento—, no de
     `interpretacion.secciones.all()`: nombra las que corresponden aunque
     alguna todavía no se haya escrito (mismo criterio que
@@ -244,7 +244,7 @@ def build(chart: Chart, reading_lang: str | None) -> dict[str, Any] | None:
     if interpretacion is None:
         return None
 
-    aplicables = secciones_aplicables(chart, interpretacion.tier)
+    aplicables = secciones_aplicables(interpretacion.sujeto, interpretacion.tier)
     lang = interpretacion.lang
     escritas = {s.slug: s.texto for s in interpretacion.secciones.all()}
 
