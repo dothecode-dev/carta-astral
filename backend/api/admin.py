@@ -37,6 +37,7 @@ from api.models import (
     Account, Chart, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, Movimiento,
     PasarelaCheckout,
 )
+from api.sujetos import sujeto_natal
 
 
 class SoloLectura(admin.ModelAdmin):
@@ -134,7 +135,7 @@ class ChartAdmin(SoloLectura):
 
     @admin.display(description="lecturas")
     def lecturas(self, obj):
-        return obj.interpretations.count()
+        return sujeto_natal(obj).interpretations.count()
 
 
 @admin.register(Interpretation)
@@ -142,10 +143,10 @@ class InterpretationAdmin(SoloLectura):
     """Sin el texto: la lectura habla de la persona y no hace falta leerla para
     operar. Lo que importa acá es qué se generó, en qué idioma y con qué versión."""
 
-    list_display = ("id", "chart", "account", "lang", "prompt_version", "created_at")
-    list_filter = ("lang", "prompt_version")
-    search_fields = ("chart__uuid", "account__id")
-    fields = ("chart", "account", "lang", "prompt_version", "content_key", "created_at")
+    list_display = ("id", "sujeto", "account", "lang", "tier", "prompt_version", "created_at")
+    list_filter = ("lang", "tier", "prompt_version")
+    search_fields = ("sujeto__uuid", "sujeto__natal_de__uuid", "account__id")
+    fields = ("sujeto", "account", "lang", "tier", "prompt_version", "content_key", "created_at")
     readonly_fields = fields
 
 

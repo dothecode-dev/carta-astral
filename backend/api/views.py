@@ -26,7 +26,7 @@ from api.firma_frases import firma
 from api.interpretation_service import DISCLAIMERS
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 from api import apple
-from api.models import Chart, Interpretation, ProviderIdentity
+from api.models import Chart, Interpretation, ProviderIdentity, Sujeto
 from api.permissions import HasAccount
 from api.serializers import serialize_chart_data
 from api.sujetos import sujeto_natal
@@ -78,7 +78,15 @@ class AccountView(APIView):
 
 def _chart_repr(chart: Chart) -> dict:
     birth = chart.birth_data
-    # Con prefetch_related("interpretations") esto no agrega queries por
+    # Los informes cuelgan del sujeto natal (parte 2 de Vínculo). La relación
+    # y no `sujeto_natal()`: con el prefetch del listado ya está cargada, y la
+    # función haría una consulta por carta. Si faltara, se crea.
+    try:
+        sujeto = chart.sujeto_natal
+    except Sujeto.DoesNotExist:
+        sujeto = sujeto_natal(chart)
+    informes = sujeto.interpretations.all()
+    # Con prefetch_related("sujeto_natal__interpretations") esto no agrega queries por
     # carta (por eso no delega en `interpretation_service.interpretation_langs`,
     # que haría una consulta propia por carta). `completa` es la misma
     # condición que esa función aplica: una fila `completa=False` es la
@@ -86,7 +94,7 @@ def _chart_repr(chart: Chart) -> dict:
     # lectura disponible.
     langs = sorted(
         {
-            i.lang for i in chart.interpretations.all()
+            i.lang for i in informes
             if i.prompt_version == PROMPT_VERSION and i.completa
         }
     )
@@ -95,7 +103,7 @@ def _chart_repr(chart: Chart) -> dict:
     # si ofrecer el informe completo sobre una carta que ya tiene la breve, o
     # si ya tiene ambos y no ofrecer de nuevo la breve. Mismo criterio que
     # `langs` arriba (completa=True y prompt_version vigente) y misma pasada
-    # sobre `chart.interpretations.all()`, ya resuelta por el
+    # sobre `informes`, ya resuelta por el
     # prefetch_related del listado: no agrega queries por carta.
     #
     # Sólo aparecen los idiomas con al menos un tier completo —`setdefault`
@@ -104,7 +112,7 @@ def _chart_repr(chart: Chart) -> dict:
     # `interpretations[lang] ?? []`, así que el resultado es el mismo sin
     # cargar el payload de claves vacías por cada carta.
     tiers_por_lang: dict[str, list[str]] = {}
-    for i in chart.interpretations.all():
+    for i in informes:
         if i.completa and i.prompt_version == PROMPT_VERSION:
             tiers_por_lang.setdefault(i.lang, []).append(i.tier)
     # `Interpretation` no tiene `Meta.ordering`: sin esto el orden depende del
@@ -134,7 +142,7 @@ def _chart_repr(chart: Chart) -> dict:
     # API advierte que cuando listado y detalle divergen la app rompe al navegar
     # entre uno y otro (ya pasó con `interpretation_langs`).
     en_curso: dict[str, list[str]] = {}
-    for i in chart.interpretations.all():
+    for i in informes:
         if i.completa or i.prompt_version != PROMPT_VERSION:
             continue
         if i.intentos >= interpretation_service.INTENTOS_MAXIMOS:
@@ -182,8 +190,8 @@ class ChartCollectionView(APIView):
     def get(self, request):
         charts = (
             Chart.objects.filter(account=request.user)
-            .select_related("birth_data")
-            .prefetch_related("interpretations")
+            .select_related("birth_data", "sujeto_natal")
+            .prefetch_related("sujeto_natal__interpretations")
             .order_by("-created_at")
         )
         return Response({"results": [_chart_repr(c) for c in charts]})
@@ -286,7 +294,7 @@ class ChartDetailView(APIView):
 
     def patch(self, request, uuid):
         chart = get_object_or_404(
-            Chart.objects.select_related("birth_data").prefetch_related("interpretations"),
+            Chart.objects.select_related("birth_data", "sujeto_natal").prefetch_related("sujeto_natal__interpretations"),
             uuid=uuid, account=request.user,
         )
         try:
@@ -342,7 +350,7 @@ class InterpretationView(APIView):
         # `.first()` queda a criterio del motor — entregar el informe
         # completo a quien pidió la breve (o al revés) es entregar el
         # producto equivocado.
-        interp = chart.interpretations.filter(
+        interp = sujeto_natal(chart).interpretations.filter(
             lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
         if interp is None or not interp.completa:
@@ -483,7 +491,7 @@ class InterpretationEstadoView(APIView):
         # podía devolver el progreso del informe completo a quien está
         # sondeando la lectura breve (o al revés).
         interpretacion = Interpretation.objects.filter(
-            chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
+            sujeto=sujeto_natal(chart), lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
         total = len(informe_service.secciones_aplicables(sujeto_natal(chart), tier))
         if interpretacion is None:
@@ -521,7 +529,7 @@ class InterpretationSeccionesView(APIView):
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
         total = len(informe_service.secciones_aplicables(sujeto_natal(chart), tier))
         interpretacion = Interpretation.objects.filter(
-            chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
+            sujeto=sujeto_natal(chart), lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
         if interpretacion is None:
             return Response(

@@ -367,7 +367,7 @@ def test_la_lectura_empieza_en_hoja_nueva(account_client):
 def test_el_pdf_trae_las_ocho_secciones_con_indice(interpretacion_completa):
     from api import pdf_payload
 
-    payload = pdf_payload.build(interpretacion_completa.chart, interpretacion_completa.lang)
+    payload = pdf_payload.build(interpretacion_completa.sujeto, interpretacion_completa.lang)
     assert len(payload["reading"]["secciones"]) == 8
     assert payload["reading"]["indice"] == [s.titulo["es"] for s in SECCIONES]
 
@@ -399,8 +399,9 @@ def test_el_pdf_prefiere_el_informe_completo_si_existe(account_client):
     _informe_completo(chart)
 
     from api import pdf_payload
+    from api.sujetos import sujeto_natal
 
-    payload = pdf_payload.build(chart, "es")
+    payload = pdf_payload.build(sujeto_natal(chart), "es")
     assert payload["reading"]["tier"] == TIER_LARGO
 
     html = _html(chart, reading_lang="es")

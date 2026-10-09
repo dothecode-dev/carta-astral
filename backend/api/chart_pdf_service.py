@@ -25,6 +25,7 @@ from urllib.parse import quote
 from api import pdf_payload
 from api.interpretation_service import DISCLAIMERS
 from api.models import Chart
+from api.sujetos import sujeto_natal
 
 logger = logging.getLogger(__name__)
 
@@ -308,7 +309,7 @@ def _reading_for(chart: Chart, lang: str | None) -> tuple[dict, str] | None:
     salir en un PDF como si estuviera terminado. Cuál de los dos tiers gana
     si hay más de uno lo decide `pdf_payload.build`.
     """
-    resultado = pdf_payload.build(chart, lang)
+    resultado = pdf_payload.build(sujeto_natal(chart), lang)
     if resultado is None:
         # No es un error: la carta se baja igual, sin la lectura.
         return None

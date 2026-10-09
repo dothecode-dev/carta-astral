@@ -4,6 +4,9 @@ from api.auth import create_session
 from api.models import Account, Interpretation
 from interpret.prompts import PROMPT_VERSION
 
+#: Consultas de `GET /api/charts/`, medidas antes de leer los informes por sujeto.
+CONSULTAS_LISTA = 3
+
 
 def _client(acc):
     c = APIClient()
@@ -152,3 +155,26 @@ def test_una_version_vieja_del_prompt_no_se_anuncia_como_lista(client_autenticad
     )
     datos = client_autenticado.get(f"/api/charts/{chart.uuid}/").json()
     assert datos["interpretations"].get("es", []) == []
+
+
+@pytest.mark.django_db
+def test_la_lista_de_cartas_no_hace_una_consulta_por_informe(
+    client_autenticado, account, make_chart, django_assert_num_queries,
+):
+    """`_chart_repr` lee los informes del sujeto natal ya prefetcheado: con 3
+    cartas y 2 informes cada una, la lista hace las mismas consultas que con
+    una sola carta. Fijado contra lo que medía antes del cambio (RF9)."""
+    from api.sujetos import sujeto_natal
+
+    for _ in range(3):
+        carta = make_chart(account=account)
+        s = sujeto_natal(carta)
+        for lang in ("es", "en"):
+            Interpretation.objects.create(
+                sujeto=s, chart=carta, lang=lang, prompt_version=PROMPT_VERSION,
+                text="", completa=True,
+            )
+    with django_assert_num_queries(CONSULTAS_LISTA):
+        r = client_autenticado.get("/api/charts/")
+    assert r.status_code == 200
+    assert all(set(c["interpretations"]) == {"es", "en"} for c in r.json()["results"])

@@ -24,7 +24,7 @@ from typing import Any
 from rest_framework import serializers
 
 from api.informe_service import secciones_aplicables
-from api.models import Chart
+from api.models import Sujeto
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 
 
@@ -192,14 +192,14 @@ class ChartPdfSerializer(_Strict):
     )
 
 
-def build(chart: Chart, reading_lang: str | None) -> dict[str, Any] | None:
+def build(sujeto: Sujeto, reading_lang: str | None) -> dict[str, Any] | None:
     """La lectura para el PDF: título y texto de cada sección ya escrita, más
     el índice completo del informe. `None` si no hay ningún informe
     terminado para `reading_lang` (incluido el caso `reading_lang=None`: el
     PDF de la carta sola).
 
     Con los dos tiers conviviendo sobre la misma carta (RF6) puede haber dos
-    interpretaciones para el mismo `(chart, lang, prompt_version)` —una por
+    interpretaciones para el mismo `(sujeto, lang, prompt_version)` —una por
     tier, la `unique_together` de `Interpretation` no permite más—, y acá se
     elige el informe completo (tier="largo") si existe; si no, la lectura
     breve (tier="corto"). La preferencia se resuelve en Python y no con
@@ -236,7 +236,7 @@ def build(chart: Chart, reading_lang: str | None) -> dict[str, Any] | None:
 
     candidatas = {
         interp.tier: interp
-        for interp in chart.interpretations.filter(
+        for interp in sujeto.interpretations.filter(
             lang=reading_lang, prompt_version=PROMPT_VERSION, completa=True,
         )
     }
