@@ -135,3 +135,23 @@ def test_si_el_informe_no_arranca_la_plata_queda_acreditada_y_se_reintenta(
 
     assert r.status_code >= 500
     assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
+
+
+def test_el_webhook_canjea_el_sujeto_del_checkout_aunque_no_tenga_carta(
+    client, monkeypatch, make_account, make_chart, sin_hilo,
+):
+    """CONTRAER: el webhook lee `fila.sujeto`, no `fila.chart`. Un checkout con
+    sujeto y sin carta (como quedan todos desde el deploy 3) se canjea igual."""
+    from api.sujetos import sujeto_natal
+
+    cuenta = make_account()
+    s = sujeto_natal(make_chart(account=cuenta))
+    PasarelaCheckout.objects.create(
+        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal", sujeto=s,
+    )
+
+    assert _entregar(client, monkeypatch).status_code == 200
+
+    assert Movimiento.objects.get(account=cuenta, tipo="consumo").sujeto_id == s.pk
+    assert Interpretation.objects.filter(sujeto=s).count() == 1
+    assert len(sin_hilo) == 1

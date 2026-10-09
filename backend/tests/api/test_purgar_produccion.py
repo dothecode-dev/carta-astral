@@ -26,6 +26,7 @@ from api.models import (
     Session,
     SubTombstone,
 )
+from api.sujetos import sujeto_natal
 from cms.models import NoteIndexPage
 from interpret.prompts import PROMPT_VERSION, SECCIONES
 
@@ -60,7 +61,7 @@ def _sembrar_cuenta_con_cartas_y_ledger(account):
         account, "informe_natal", 1, origen="compra",
         external_id=f"purga-test:{account.pk}",
     )
-    canjear(account, "leer_informe", chart)
+    canjear(account, "leer_informe", sujeto_natal(chart))
     Device.objects.create(account=account, platform="ios", push_token="tok-de-prueba")
     # Session es CASCADE (fix wave final / Minor de la revisión final): sin
     # sembrarla acá, un `count() == 0` de más abajo no distingue "el comando

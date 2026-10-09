@@ -18,6 +18,7 @@ from api.auth import create_session
 from api.chart_service import create_chart
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
 from api.models import Account, BirthData, Chart, CodigoAcceso, PasarelaCheckout, ProviderIdentity, Sujeto
+from api.sujetos import sujeto_natal
 from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
@@ -52,12 +53,14 @@ def abrir(datos: dict, locale: str):
     nonce = secrets.token_urlsafe(32)
     with transaction.atomic():
         carta = create_chart(datos, account=None)
+        sujeto = sujeto_natal(carta)
         checkout_id, url = stripe_client.crear_checkout(
-            None, PRODUCTO, chart=carta, locale=locale, terminos=True,
+            None, PRODUCTO, sujeto=sujeto, locale=locale, terminos=True,
         )
         precio, descuento = cupones.precio_y_descuento(PRODUCTO, None)
         fila = PasarelaCheckout.objects.create(
-            checkout_id=checkout_id, account=None, codigo_producto=PRODUCTO, chart=carta,
+            checkout_id=checkout_id, account=None, codigo_producto=PRODUCTO,
+            sujeto=sujeto, chart=carta,
             locale=locale, descuento_centavos=descuento, url=url,
             precio_centavos=precio, anonimo=True, nonce_hash=hash_token(nonce),
         )
@@ -212,10 +215,10 @@ def adjudicar(checkout_id: str, email: str) -> Account | None:
             _cerrar_puertas_sin_probar(fila, cuenta)
         fila.account, fila.cuenta_nueva = cuenta, nueva
         fila.save(update_fields=["account", "cuenta_nueva"])
-        if fila.chart_id is not None:
-            Chart.objects.filter(pk=fila.chart_id, account__isnull=True).update(account=cuenta)
-            Sujeto.objects.filter(
-                natal_de_id=fila.chart_id, account__isnull=True,
+        if fila.sujeto_id is not None:
+            Sujeto.objects.filter(pk=fila.sujeto_id, account__isnull=True).update(account=cuenta)
+            Chart.objects.filter(
+                sujeto_natal__pk=fila.sujeto_id, account__isnull=True,
             ).update(account=cuenta)
     logger.info(
         "compra anónima %s adjudicada a la cuenta %s (nueva=%s, mail=%s)",
@@ -242,14 +245,13 @@ def descartar(checkout_id: str) -> bool:
         fila = PasarelaCheckout.objects.select_for_update().filter(checkout_id=checkout_id).first()
         if (
             fila is None or not fila.anonimo or fila.account_id is not None
-            or fila.acreditado_at is not None or fila.chart_id is None
+            or fila.acreditado_at is not None
+            or fila.sujeto_id is None or fila.sujeto.natal_de_id is None
         ):
             return False
-        carta_id = fila.chart_id
+        carta_id = fila.sujeto.natal_de_id
         birth_data_id = Chart.objects.values_list("birth_data_id", flat=True).get(pk=carta_id)
-        fila.chart = None
-        fila.sujeto = None
-        fila.save(update_fields=["chart", "sujeto"])
+        PasarelaCheckout.objects.filter(pk=fila.pk).update(chart=None, sujeto=None)
         Chart.objects.filter(pk=carta_id).delete()
         if not Chart.objects.filter(birth_data_id=birth_data_id).exists():
             BirthData.objects.filter(pk=birth_data_id).delete()
@@ -336,7 +338,7 @@ def canjear(checkout_id: str, nonce: str) -> dict:
         # LEFT JOIN (cuenta y carta pueden faltar); el lock es de la fila.
         fila = (
             PasarelaCheckout.objects.select_for_update(of=("self",))
-            .select_related("account", "chart").filter(checkout_id=checkout_id).first()
+            .select_related("account", "sujeto__natal_de").filter(checkout_id=checkout_id).first()
         )
         if (
             fila is None or not fila.anonimo or not fila.nonce_hash
@@ -348,7 +350,8 @@ def canjear(checkout_id: str, nonce: str) -> dict:
         if timezone.now() - fila.acreditado_at > VIDA_CANJE_POR_NONCE:
             return {"estado": "invalido"}
         destino = (
-            f"/{fila.locale}/carta/{fila.chart.uuid}" if fila.chart_id is not None
+            f"/{fila.locale}/carta/{fila.sujeto.natal_de.uuid}"
+            if fila.sujeto_id is not None and fila.sujeto.natal_de_id is not None
             else f"/{fila.locale}/cuenta"
         )
         if fila.cuenta_nueva and fila.canjeado_at is not None:

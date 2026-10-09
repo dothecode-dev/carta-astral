@@ -52,17 +52,9 @@ def adoptar_huerfanas(sujeto: Sujeto) -> None:
     Movimiento.objects.filter(sujeto=sujeto, tipo="consumo", chart__isnull=True).update(sujeto=None)
 
 
-def a_sujeto(objetivo, adoptar: bool = True) -> Sujeto:
-    """Carta o sujeto → sujeto. Con `adoptar`, también trae las huérfanas.
-
-    `adoptar=False` es para los locks: se consultan una vez por sección del
-    informe y no necesitan las filas, sólo la clave."""
-    if isinstance(objetivo, Sujeto):
-        sujeto = objetivo
-    elif isinstance(objetivo, Chart):
-        sujeto = sujeto_natal(objetivo)
-    else:
-        raise TypeError(f"se esperaba Chart o Sujeto, llegó {type(objetivo).__name__}")
-    if adoptar:
-        adoptar_huerfanas(sujeto)
-    return sujeto
+def a_sujeto(objetivo) -> Sujeto:
+    """CONTRAER (deploy 2): el cobro recibe sujetos. Una carta acá es un
+    llamador que se quedó en el deploy 1; un vínculo no tiene carta."""
+    if not isinstance(objetivo, Sujeto):
+        raise TypeError(f"se esperaba Sujeto, llegó {type(objetivo).__name__}")
+    return objetivo

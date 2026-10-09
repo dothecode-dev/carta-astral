@@ -3,6 +3,7 @@ import pytest
 from api.canje import MontoInvalido, aplicar_compra
 from api.catalogo import producto
 from api.models import Derecho, Movimiento
+from api.sujetos import sujeto_natal
 
 # Del catálogo y no un literal: el precio cambia (el pack de 5 pasó de
 # US$ 149,90 a US$ 125,00 el 02-09-2026) y estos tests son sobre qué otorga
@@ -16,7 +17,7 @@ def test_una_compra_suelta_otorga_uno_y_lo_canjea_contra_la_carta(make_account, 
     cuenta = make_account()
     carta = make_chart(account=cuenta)
 
-    aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:1", chart=carta)
+    aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:1", sujeto=sujeto_natal(carta))
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
     assert Movimiento.objects.filter(tipo="consumo", chart=carta).count() == 1
@@ -35,10 +36,10 @@ def test_si_la_carta_ya_no_existe_otorga_igual_y_no_canjea(make_account, make_ch
     # Compró desde /carta/41 y borró la carta antes de que llegara el webhook.
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    carta_id = carta.id
     carta.delete()
 
-    aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:3", chart_id=carta_id)
+    # El sujeto natal cayó con la carta y el checkout quedó con `sujeto` NULL.
+    aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:3", sujeto=None)
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
 
@@ -97,7 +98,7 @@ def test_el_pack_no_canjea_aunque_llegue_con_carta(make_account, make_chart):
     cuenta = make_account()
     carta = make_chart(account=cuenta)
 
-    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="stripe:11", chart=carta)
+    aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="stripe:11", sujeto=sujeto_natal(carta))
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 5
     assert Movimiento.objects.filter(tipo="consumo").count() == 0
@@ -126,7 +127,7 @@ def test_si_el_canje_falla_el_otorgamiento_no_queda_committeado(
 
     with pytest.raises(RuntimeError):
         aplicar_compra(
-            cuenta, "informe_natal", 2900, external_id="stripe:session:cs_1", chart=carta,
+            cuenta, "informe_natal", 2900, external_id="stripe:session:cs_1", sujeto=sujeto_natal(carta),
         )
 
     assert not Movimiento.objects.filter(external_id="stripe:session:cs_1").exists()
@@ -148,11 +149,11 @@ def test_el_reintento_despues_de_un_canje_fallido_entrega_el_informe(
     with monkeypatch.context() as m, pytest.raises(RuntimeError):
         m.setattr("api.canje.canjear", _canje_que_explota)
         aplicar_compra(
-            cuenta, "informe_natal", 2900, external_id="stripe:session:cs_2", chart=carta,
+            cuenta, "informe_natal", 2900, external_id="stripe:session:cs_2", sujeto=sujeto_natal(carta),
         )
 
     assert aplicar_compra(
-        cuenta, "informe_natal", 2900, external_id="stripe:session:cs_2", chart=carta,
+        cuenta, "informe_natal", 2900, external_id="stripe:session:cs_2", sujeto=sujeto_natal(carta),
     ) is True
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0

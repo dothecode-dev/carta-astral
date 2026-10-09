@@ -314,7 +314,7 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
         aplicado = aplicar_compra(
             cuenta, codigo, pagado,
             external_id=external_id,
-            chart=fila.chart if fila is not None else None,
+            sujeto=fila.sujeto if fila is not None else None,
             descuento_centavos=descuento,
             precio_centavos=fila.precio_de_lista() if fila is not None else None,
             al_saldar_deuda=(lambda: _marcar_saldo_deuda(fila)) if fila is not None else None,

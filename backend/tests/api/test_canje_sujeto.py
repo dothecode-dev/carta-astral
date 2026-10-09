@@ -41,30 +41,18 @@ def _consumos(cuenta):
 
 def test_canjear_deja_el_consumo_con_sujeto_y_carta(cuenta, carta):
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:1")
-    canjear(cuenta, "leer_informe", carta)
+    canjear(cuenta, "leer_informe", sujeto_natal(carta))
     consumo = _consumos(cuenta).get()
     assert consumo.sujeto_id == sujeto_natal(carta).pk
     assert consumo.chart_id == carta.pk
 
 
-def test_carta_y_su_sujeto_son_el_mismo_canje(cuenta, carta):
+def test_canjear_dos_veces_el_mismo_sujeto_es_un_solo_canje(cuenta, carta):
     otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:2")
-    canjear(cuenta, "leer_informe", carta)
+    canjear(cuenta, "leer_informe", sujeto_natal(carta))
     canjear(cuenta, "leer_informe", sujeto_natal(carta))
     assert _consumos(cuenta).count() == 1
     assert _restante(cuenta) == 1
-
-
-def test_un_consumo_huerfano_del_deploy_cuenta_como_ya_canjeado(cuenta, carta):
-    """El código viejo escribió el consumo con carta y sin sujeto."""
-    otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:3")
-    Movimiento.objects.create(
-        account=cuenta, codigo_producto="informe_natal", tipo="consumo",
-        origen="compra", cantidad=-1, chart=carta,
-    )
-    canjear(cuenta, "leer_informe", sujeto_natal(carta))
-    assert _consumos(cuenta).count() == 1
-    assert _restante(cuenta) == 2
 
 
 def test_un_sujeto_sin_carta_se_canjea_y_queda_sin_carta(cuenta):
@@ -94,7 +82,7 @@ def test_dos_vinculos_distintos_se_cobran_por_separado(cuenta):
 
 def test_dos_sujetos_distintos_son_dos_canjes(cuenta, carta):
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:5")
-    canjear(cuenta, "leer_informe", carta)
+    canjear(cuenta, "leer_informe", sujeto_natal(carta))
     with pytest.raises(SinDerecho):
         canjear(cuenta, "leer_informe", Sujeto.objects.create(producto=Sujeto.VINCULO))
 
@@ -129,19 +117,12 @@ def test_aplicar_compra_sin_carta_ni_sujeto_acredita_y_no_canjea(cuenta):
     assert not _consumos(cuenta).exists()
 
 
-def test_una_devolucion_del_codigo_viejo_permite_volver_a_cobrar(cuenta, carta):
-    """El `devolver` viejo (durante el deploy) repone el derecho y desvincula el
-    consumo sólo por carta. El informe se tiene que poder volver a cobrar: si
-    no, sería un informe gratis más el derecho devuelto."""
-    otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:8")
-    canjear(cuenta, "leer_informe", carta)
-    # Lo que hace el código viejo al devolver:
-    _consumos(cuenta).update(chart=None)
-    Derecho.objects.filter(account=cuenta, codigo_producto="informe_natal").update(
-        cantidad_restante=1,
-    )
+def test_el_cobro_ya_no_acepta_una_carta():
+    """CONTRAER (deploy 2): lo que se cobra y devuelve es un sujeto."""
+    import inspect
 
-    canjear(cuenta, "leer_informe", carta)
+    from api.canje import aplicar_compra, devolver
 
-    assert _restante(cuenta) == 0
-    assert _consumos(cuenta).filter(sujeto__isnull=False).count() == 1
+    assert "chart" not in inspect.signature(aplicar_compra).parameters
+    assert "chart_id" not in inspect.signature(aplicar_compra).parameters
+    assert "chart" not in inspect.signature(devolver).parameters

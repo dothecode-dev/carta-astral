@@ -19,6 +19,7 @@ from rest_framework.views import APIView
 from api import analitica, catalogo, compra_service, cupones, mantenimiento, notificaciones, stripe_client
 from api.auth import AccountTokenAuthentication
 from api.models import Chart, PasarelaCheckout
+from api.sujetos import sujeto_natal
 from api.permissions import HasAccount
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ class CheckoutView(APIView):
         chart_id = request.data.get("chart_id")
         if chart_id:
             carta = get_object_or_404(Chart, uuid=chart_id, account=request.user)
+        sujeto = sujeto_natal(carta) if carta is not None else None
 
         # El idioma en el que está navegando. Decide tres cosas: en qué idioma
         # ve el checkout de Stripe, a qué página vuelve después de pagar, y en
@@ -112,7 +114,7 @@ class CheckoutView(APIView):
 
         try:
             checkout_id, url = stripe_client.crear_checkout(
-                request.user, codigo, chart=carta, locale=idioma, cupon=cupon,
+                request.user, codigo, sujeto=sujeto, locale=idioma, cupon=cupon,
             )
         except (KeyError, ValueError) as exc:
             # Producto que no está en el catálogo, o gratis. Es un pedido mal
@@ -129,7 +131,7 @@ class CheckoutView(APIView):
         precio, descuento = cupones.precio_y_descuento(codigo, cupon)
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
-            chart=carta, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
+            sujeto=sujeto, chart=carta, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
             precio_centavos=precio,
         )
         return Response({"url": url})
@@ -201,10 +203,10 @@ class CheckoutEstadoView(APIView):
         # se haya comprado mirando una carta—.
         prod = catalogo.producto(fila.codigo_producto)
         suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
-        # `chart` es SET_NULL: puede no estar cuando se pregunta, y mandar a
+        # `sujeto` es SET_NULL: puede no estar cuando se pregunta, y mandar a
         # `/carta/None` sería un 404 en la cara de quien pagó.
-        if suelto and fila.chart is not None:
-            destino = {"tipo": "carta", "id": str(fila.chart.uuid)}
+        if suelto and fila.sujeto is not None and fila.sujeto.natal_de_id is not None:
+            destino = {"tipo": "carta", "id": str(fila.sujeto.natal_de.uuid)}
         else:
             destino = {"tipo": "cuenta"}
         cuerpo = {"estado": "acreditado", "destino": destino}

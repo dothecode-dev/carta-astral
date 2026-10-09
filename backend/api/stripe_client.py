@@ -173,7 +173,7 @@ def _validar_success_url(url: str) -> None:
 
 
 def crear_checkout(
-    account, codigo_producto: str, chart=None, locale: str = LOCALE_POR_DEFECTO, cupon=None,
+    account, codigo_producto: str, sujeto=None, locale: str = LOCALE_POR_DEFECTO, cupon=None,
     terminos: bool = False,
 ) -> tuple[str, str]:
     """Abre una sesión de pago y devuelve `(session_id, url)`.
@@ -187,7 +187,7 @@ def crear_checkout(
     esa cajita deja entrar un descuento que nuestra base no conoce.
 
     La `metadata` viaja como respaldo. La relación que manda es
-    `PasarelaCheckout`, porque además de la cuenta guarda la carta y el idioma,
+    `PasarelaCheckout`, porque además de la cuenta guarda el sujeto y el idioma,
     que Stripe no conoce.
 
     `account=None` es la compra sin cuenta: la metadata no lleva `account_id`
@@ -207,8 +207,8 @@ def crear_checkout(
     price_id = _price_de(codigo_producto)
     idioma = locale if locale in LOCALES else LOCALE_POR_DEFECTO
     metadata = {"account_id": str(account.pk)} if account is not None else {}
-    if chart is not None:
-        metadata["chart_id"] = str(chart.pk)
+    if sujeto is not None:
+        metadata["sujeto_id"] = str(sujeto.uuid)
 
     extra: dict = {}
     if cupon is not None:

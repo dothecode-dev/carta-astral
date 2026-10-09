@@ -13,7 +13,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from api.catalogo import ACCESO, codigos_otorgados_por, producto
-from api.models import Account, Chart, Derecho, Movimiento
+from api.models import Account, Derecho, Movimiento
 from api.sujetos import a_sujeto
 
 logger = logging.getLogger(__name__)
@@ -119,8 +119,8 @@ def _aplicar_otorgamiento(acc, account, prod, codigo_otorgado: str, otorgado: in
 
 def aplicar_compra(
     account, codigo_producto, monto_centavos, external_id,
-    chart=None, chart_id=None, descuento_centavos=0, origen="compra",
-    precio_centavos=None, sujeto=None, al_saldar_deuda=None,
+    sujeto=None, descuento_centavos=0, origen="compra",
+    precio_centavos=None, al_saldar_deuda=None,
 ) -> bool:
     """Traduce un pago a derechos, con lo que el producto declara en el catálogo.
 
@@ -186,17 +186,13 @@ def aplicar_compra(
         ):
             return False
 
-        carta = chart
-        if carta is None and chart_id is not None:
-            carta = Chart.objects.filter(pk=chart_id).first()
-        # Parte 2 de Vínculo: lo que se canjea es un sujeto; una carta vale por
-        # su sujeto natal (la conversión la hace `canjear`).
-        objetivo = sujeto if sujeto is not None else carta
+        # Parte 2 de Vínculo: lo que se canjea es un sujeto.
+        objetivo = sujeto
         # Sólo canjea una compra suelta: un producto que otorga más de una
         # unidad es un pack, y uno que otorga más de un producto es un combo —
         # ninguno de los dos canjea al comprar, porque no hay una sola cosa que
         # canjear, aunque el llamador le pase una carta. Si la carta ya no
-        # existe, el otorgamiento ya ocurrió y el canje se omite igual.
+        # existe (SET_NULL), el otorgamiento ya ocurrió y el canje se omite.
         suelto = len(prod.otorga) == 1 and prod.otorga[0][1] == 1
         if objetivo is not None and suelto and prod.capacidades:
             # El criterio es el SALDO, no la deuda (review 07-10): con deuda
@@ -231,8 +227,8 @@ def _saldo(account, codigo_producto: str) -> int:
 def canjear(account, capacidad: str, objetivo, build=None):
     """Consume una unidad de la capacidad y la vincula a ese sujeto.
 
-    `objetivo` es una carta o un sujeto (parte 2 de Vínculo, deploy 1): la
-    idempotencia es por SUJETO, y una carta vale por su sujeto natal.
+    `objetivo` es un sujeto (parte 2 de Vínculo): la idempotencia es por
+    SUJETO.
 
     Si la carta ya tiene canjeada esa capacidad, es un no-op: NO se consume
     nada y el derecho queda disponible. El mismo camino lo recorre alguien que
@@ -247,8 +243,6 @@ def canjear(account, capacidad: str, objetivo, build=None):
     codigos = codigos_otorgados_por(capacidad)
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
-        # Bajo el lock de la cuenta, que el código viejo también toma durante
-        # el deploy: adoptar las filas huérfanas acá no compite con otro canje.
         sujeto = a_sujeto(objetivo)
 
         ya = Movimiento.objects.filter(
@@ -277,7 +271,7 @@ def canjear(account, capacidad: str, objetivo, build=None):
     return construido, derecho.codigo_producto
 
 
-def devolver(account, codigo_producto, external_id, chart=None, note="", sujeto=None) -> bool:
+def devolver(account, codigo_producto, external_id, sujeto=None, note="") -> bool:
     """Repone un derecho cuya entrega falló. Idempotente por external_id.
 
     Desvincula el movimiento de consumo de esa carta (no lo borra: `Movimiento`
@@ -287,10 +281,8 @@ def devolver(account, codigo_producto, external_id, chart=None, note="", sujeto=
     """
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
-        # Parte 2 de Vínculo: se devuelve sobre un sujeto; una carta vale por
-        # su sujeto natal.
-        objetivo = sujeto if sujeto is not None else chart
-        s = a_sujeto(objetivo) if objetivo is not None else None
+        # Parte 2 de Vínculo: se devuelve sobre un sujeto.
+        s = a_sujeto(sujeto) if sujeto is not None else None
         if not _movimiento_idempotente(
             account=acc, codigo_producto=codigo_producto, tipo="devolucion",
             cantidad=1, origen="ajuste", sujeto=s, chart=s.natal_de if s is not None else None,

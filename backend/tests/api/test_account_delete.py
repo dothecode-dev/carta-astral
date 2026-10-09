@@ -7,6 +7,7 @@ from api.canje import canjear, devolver, puede
 from api.identity import sub_hash
 from api.models import Account, Derecho, SubTombstone
 from api.sso import VerifiedIdentity
+from api.sujetos import sujeto_natal
 
 
 def _gastar_lecturas_breves(cuenta, make_chart, n):
@@ -18,7 +19,7 @@ def _gastar_lecturas_breves(cuenta, make_chart, n):
     contador cambia, no que el usuario gastó.
     """
     for _ in range(n):
-        canjear(cuenta, "leer_breve", make_chart(account=cuenta))
+        canjear(cuenta, "leer_breve", sujeto_natal(make_chart(account=cuenta)))
 
 
 @pytest.mark.django_db
@@ -111,8 +112,8 @@ def test_el_tombstone_no_cuenta_una_lectura_devuelta(make_chart):
 
     acc = resolve_account(VerifiedIdentity("apple", "DEV", "d@x.com", True))
     carta = make_chart(account=acc)
-    canjear(acc, "leer_breve", carta)
-    devolver(acc, "lectura_breve", external_id="falló-la-generación", chart=carta)
+    canjear(acc, "leer_breve", sujeto_natal(carta))
+    devolver(acc, "lectura_breve", external_id="falló-la-generación", sujeto=sujeto_natal(carta))
 
     delete_account(acc)
 

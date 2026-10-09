@@ -64,12 +64,12 @@ def test_crear_una_carta_crea_su_sujeto_natal(account):
     assert carta.sujeto_natal.producto == Sujeto.NATAL
 
 
-def test_a_sujeto_acepta_carta_o_sujeto_y_rechaza_otra_cosa(chart):
+def test_a_sujeto_acepta_sujetos_y_rechaza_una_carta(chart):
+    """CONTRAER (deploy 2): una carta es un llamador del deploy 1."""
     s = sujeto_natal(chart)
-    assert a_sujeto(chart).pk == s.pk
     assert a_sujeto(s).pk == s.pk
     with pytest.raises(TypeError):
-        a_sujeto("una carta")
+        a_sujeto(chart)
 
 
 def test_una_interpretacion_escrita_con_carta_sale_con_su_sujeto(chart, account):

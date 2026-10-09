@@ -135,3 +135,16 @@ def test_pago_asincronico_fallido_no_toca_una_fila_acreditada(entregar_anonima, 
     assert Chart.objects.filter(pk=carta_id).exists()
     anonima.refresh_from_db()
     assert anonima.chart_id == carta_id and anonima.vencido_at is None
+
+
+def test_descartar_encuentra_la_carta_por_el_sujeto(anonima):
+    """CONTRAER: la carta de la compra se busca por `fila.sujeto.natal_de_id`.
+    Tras borrarla el sujeto cae por CASCADE y una segunda llamada no hace nada."""
+    carta_id = anonima.sujeto.natal_de_id
+    PasarelaCheckout.objects.filter(pk=anonima.pk).update(chart=None)
+
+    assert compra_anonima.descartar(SESSION_ANONIMA) is True
+
+    assert not Chart.objects.filter(pk=carta_id).exists()
+    assert not Sujeto.objects.filter(natal_de_id=carta_id).exists()
+    assert compra_anonima.descartar(SESSION_ANONIMA) is False

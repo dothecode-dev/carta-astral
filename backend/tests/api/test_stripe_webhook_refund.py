@@ -18,6 +18,7 @@ import pytest
 from api.canje import aplicar_compra, canjear
 from api.catalogo import producto
 from api.models import Account, Derecho, Movimiento, PasarelaCheckout
+from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
 
 pytestmark = pytest.mark.django_db
@@ -78,7 +79,7 @@ def test_un_reembolso_revoca_lo_comprado(client, comprado):
 
 def test_reembolsar_algo_ya_usado_deja_deuda(client, comprado, make_chart):
     """El informe ya se entregó: no se le saca a nadie, se anota la deuda."""
-    canjear(comprado.account, "leer_informe", comprado.chart)
+    canjear(comprado.account, "leer_informe", sujeto_natal(comprado.chart))
 
     r = _entregar(client)
 

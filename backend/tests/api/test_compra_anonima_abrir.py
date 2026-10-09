@@ -61,7 +61,7 @@ def test_abre_sin_cuenta_y_guarda_carta_y_fila(client, stripe_responde):
     assert fila.nonce_hash == identity.hash_token(cuerpo["nonce"])
     assert cuerpo["nonce"] not in fila.nonce_hash and len(cuerpo["nonce"]) >= 32
     meta = stripe_responde[0]["metadata"]
-    assert "account_id" not in meta and meta["chart_id"] == str(fila.chart.pk)
+    assert "account_id" not in meta and meta["sujeto_id"] == str(fila.sujeto.uuid)
 
 
 def test_cada_apertura_tiene_su_propio_nonce(client, stripe_responde):

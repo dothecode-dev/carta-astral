@@ -16,6 +16,7 @@ from api import stripe_client
 from api.canje import aplicar_compra
 from api.catalogo import producto
 from api.models import Cupon, CuponUso, PasarelaCheckout
+from api.sujetos import sujeto_natal
 
 logger = logging.getLogger(__name__)
 
@@ -90,18 +91,19 @@ def canjear_gratis(account, cupon: Cupon, codigo_producto: str, carta, locale: s
     llama, fuera de la transacción, igual que `_acreditar` en el webhook.
     """
     prod = producto(codigo_producto)
+    sujeto = sujeto_natal(carta) if carta is not None else None
     with transaction.atomic():
         cupon = Cupon.objects.select_for_update().get(pk=cupon.pk)
         _chequear(cupon, codigo_producto, account, timezone.now())
         checkout_id = f"cupon_{uuid.uuid4().hex}"
         external_id = f"cupon:{checkout_id}"
         aplicar_compra(
-            account, codigo_producto, 0, external_id, chart=carta,
+            account, codigo_producto, 0, external_id, sujeto=sujeto,
             descuento_centavos=prod.precio_centavos, origen="cupon",
         )
         fila = PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=account, codigo_producto=codigo_producto,
-            chart=carta, locale=locale, acreditado_at=timezone.now(),
+            sujeto=sujeto, chart=carta, locale=locale, acreditado_at=timezone.now(),
             cupon=cupon, descuento_centavos=prod.precio_centavos,
             precio_centavos=prod.precio_centavos,
         )

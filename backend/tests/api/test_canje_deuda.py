@@ -13,6 +13,7 @@ from api.canje import aplicar_compra
 from api import compra_service, interpretation_service
 from api.canje import SinDerecho
 from api.models import Derecho, Interpretation, Movimiento, PasarelaCheckout
+from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
 
 pytestmark = pytest.mark.django_db
@@ -24,7 +25,7 @@ def test_con_deuda_el_pago_salda_y_no_revienta(make_account, make_chart):
     cuenta.save(update_fields=["deuda"])
     carta = make_chart(account=cuenta)
 
-    assert aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:session:cs_d", chart=carta) is True
+    assert aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:session:cs_d", sujeto=sujeto_natal(carta)) is True
 
     cuenta.refresh_from_db()
     assert cuenta.deuda == 0
@@ -36,7 +37,7 @@ def test_con_deuda_el_pago_salda_y_no_revienta(make_account, make_chart):
 def test_sin_deuda_sigue_canjeando(make_account, make_chart):
     cuenta = make_account()
     carta = make_chart(account=cuenta)
-    assert aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:session:cs_ok", chart=carta) is True
+    assert aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:session:cs_ok", sujeto=sujeto_natal(carta)) is True
     assert Movimiento.objects.filter(account=cuenta, tipo="consumo").exists()
 
 
@@ -182,7 +183,7 @@ def test_con_deuda_pero_saldo_de_un_pack_se_canjea_y_no_marca_deuda(
 
     with caplog.at_level(logging.ERROR, logger="api.canje"):
         assert aplicar_compra(
-            cuenta, "informe_natal", 2900, external_id="stripe:session:cs_pack", chart=carta,
+            cuenta, "informe_natal", 2900, external_id="stripe:session:cs_pack", sujeto=sujeto_natal(carta),
             al_saldar_deuda=lambda: saldadas.append(True),
         ) is True
 

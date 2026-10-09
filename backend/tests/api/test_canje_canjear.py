@@ -2,6 +2,7 @@ import pytest
 
 from api.canje import SinDerecho, canjear, otorgar
 from api.models import Derecho, Movimiento
+from api.sujetos import sujeto_natal
 
 pytestmark = pytest.mark.django_db
 
@@ -11,7 +12,7 @@ def test_canjear_descuenta_uno_y_deja_el_movimiento_atado_a_la_carta(make_accoun
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:1")
     carta = make_chart(account=cuenta)
 
-    _, codigo = canjear(cuenta, "leer_informe", carta)
+    _, codigo = canjear(cuenta, "leer_informe", sujeto_natal(carta))
 
     assert codigo == "informe_natal"
     assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 0
@@ -25,7 +26,7 @@ def test_sin_derecho_falla_y_no_toca_el_otro_producto(make_account, make_chart):
     carta = make_chart(account=cuenta)
 
     with pytest.raises(SinDerecho) as exc:
-        canjear(cuenta, "leer_informe", carta)
+        canjear(cuenta, "leer_informe", sujeto_natal(carta))
 
     assert exc.value.capacidad == "leer_informe"
     assert Derecho.objects.get(codigo_producto="lectura_breve").cantidad_restante == 3
@@ -37,7 +38,7 @@ def test_lo_que_build_construye_se_devuelve_y_queda_en_la_misma_transaccion(make
     carta = make_chart(account=cuenta)
     centinela = object()
 
-    obj, _ = canjear(cuenta, "leer_informe", carta, build=lambda: centinela)
+    obj, _ = canjear(cuenta, "leer_informe", sujeto_natal(carta), build=lambda: centinela)
 
     assert obj is centinela
 
@@ -49,9 +50,9 @@ def test_canjear_de_nuevo_sobre_una_carta_ya_canjeada_no_consume_ni_duplica(make
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:3")
     carta = make_chart(account=cuenta)
-    canjear(cuenta, "leer_informe", carta)
+    canjear(cuenta, "leer_informe", sujeto_natal(carta))
 
-    canjear(cuenta, "leer_informe", carta)
+    canjear(cuenta, "leer_informe", sujeto_natal(carta))
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
     assert Movimiento.objects.filter(tipo="consumo").count() == 1
@@ -60,9 +61,9 @@ def test_canjear_de_nuevo_sobre_una_carta_ya_canjeada_no_consume_ni_duplica(make
 def test_la_misma_capacidad_sobre_otra_carta_si_consume(make_account, make_chart):
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:4")
-    canjear(cuenta, "leer_informe", make_chart(account=cuenta))
+    canjear(cuenta, "leer_informe", sujeto_natal(make_chart(account=cuenta)))
 
-    canjear(cuenta, "leer_informe", make_chart(account=cuenta))
+    canjear(cuenta, "leer_informe", sujeto_natal(make_chart(account=cuenta)))
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
     assert Movimiento.objects.filter(tipo="consumo").count() == 2

@@ -368,7 +368,7 @@ def test_no_devuelve_si_hay_una_fila_completa_en_otro_prompt_version(make_accoun
 
     # Se cobra de verdad (Movimiento real, vinculado a esta carta) y se
     # entrega con una versión VIEJA del prompt.
-    canjear(acc, "leer_informe", chart)
+    canjear(acc, "leer_informe", sujeto_natal(chart))
     interp_vieja = Interpretation.objects.create(
         chart=chart, lang="es", prompt_version="prompt-version-vieja",
         tier="largo", account=acc, completa=True,

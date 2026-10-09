@@ -3,6 +3,7 @@ from django.test import override_settings
 
 from api.canje import canjear, otorgar, revocar
 from api.models import Derecho, Movimiento
+from api.sujetos import sujeto_natal
 
 pytestmark = pytest.mark.django_db
 
@@ -22,7 +23,7 @@ def test_revocar_algo_ya_canjeado_deja_deuda_y_no_toca_el_informe(make_account, 
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:2")
     carta = make_chart(account=cuenta)
-    canjear(cuenta, "leer_informe", carta)
+    canjear(cuenta, "leer_informe", sujeto_natal(carta))
 
     revocar(cuenta, "informe_natal", 1, external_id="stripe:refund:2")
 
@@ -37,7 +38,7 @@ def test_reembolso_parcial_de_un_pack_revoca_lo_no_usado(make_account, make_char
     cuenta = make_account()
     otorgar(cuenta, "pack_5_natal", 1, origen="compra", external_id="p:3")
     for _ in range(2):
-        canjear(cuenta, "leer_informe", make_chart(account=cuenta))
+        canjear(cuenta, "leer_informe", sujeto_natal(make_chart(account=cuenta)))
 
     revocar(cuenta, "informe_natal", 3, external_id="stripe:refund:3")
 
@@ -105,7 +106,7 @@ def test_reembolsar_un_pack_ya_usado_deja_la_deuda_de_todas_sus_unidades(
     cuenta = make_account()
     otorgar(cuenta, "pack_5_natal", 1, origen="compra", external_id="p:pack2")
     for _ in range(5):
-        canjear(cuenta, "leer_informe", make_chart(account=cuenta))
+        canjear(cuenta, "leer_informe", sujeto_natal(make_chart(account=cuenta)))
 
     revocar(cuenta, "pack_5_natal", 1, external_id="stripe:refund:pack2")
 

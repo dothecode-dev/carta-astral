@@ -314,3 +314,17 @@ def test_cuenta_verificada_con_identidad_no_la_duplica(entregar_anonima, anonima
     anonima.refresh_from_db()
     assert anonima.account == dueña and anonima.cuenta_nueva is False
     assert ProviderIdentity.objects.filter(provider="email", sub="conid@mail.com").count() == 1
+
+
+def test_la_carta_se_adjudica_por_el_sujeto_del_checkout(entregar_anonima, anonima, sin_hilo):
+    """CONTRAER: adjudicar busca la carta por `fila.sujeto`, no por `fila.chart`."""
+    carta_id = anonima.sujeto.natal_de_id
+    PasarelaCheckout.objects.filter(pk=anonima.pk).update(chart=None)
+
+    assert entregar_anonima(con_mail("otra@mail.com")).status_code == 200
+
+    anonima.refresh_from_db()
+    assert Chart.objects.get(pk=carta_id).account == anonima.account
+    assert Sujeto.objects.get(natal_de_id=carta_id).account == anonima.account
+    assert _restante(anonima.account, "informe_natal") == 0
+    assert len(sin_hilo) == 1

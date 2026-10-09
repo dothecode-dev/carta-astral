@@ -26,6 +26,7 @@ from django.db.models import Sum
 from api.canje import SinDerecho, aplicar_compra, canjear, otorgar, revocar
 from api.catalogo import producto
 from api.models import Derecho, Movimiento
+from api.sujetos import sujeto_natal
 from tests.api.concurrencia import en_hilos, requiere_postgres
 
 def _restante(codigo="informe_natal") -> int:
@@ -43,7 +44,7 @@ def test_dos_canjes_simultaneos_con_un_solo_derecho_dejan_uno_solo(make_account,
     def correr(carta):
         listo.wait()
         try:
-            canjear(cuenta, "leer_informe", carta)
+            canjear(cuenta, "leer_informe", sujeto_natal(carta))
         except SinDerecho as e:
             errores.append(e)
         finally:
@@ -71,7 +72,7 @@ def test_cinco_canjes_simultaneos_con_tres_derechos_gastan_exactamente_tres(
     misma carta mediría el no-op y no la carrera."""
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 3, origen="compra", external_id="p:3")
-    cartas = [make_chart(account=cuenta) for _ in range(5)]
+    cartas = [sujeto_natal(make_chart(account=cuenta)) for _ in range(5)]
 
     resultados, errores = en_hilos(lambda i: canjear(cuenta, "leer_informe", cartas[i]), 5)
 
@@ -155,7 +156,7 @@ def test_canjear_y_otorgar_a_la_vez_no_pierde_ninguna_operacion(make_account, ma
     """
     cuenta = make_account()
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:mix")
-    cartas = [make_chart(account=cuenta) for _ in range(4)]
+    cartas = [sujeto_natal(make_chart(account=cuenta)) for _ in range(4)]
 
     def operar(i):
         if i % 2 == 0:
@@ -221,7 +222,7 @@ def test_dos_entregas_de_la_misma_compra_suelta_dejan_un_otorgamiento_y_un_consu
     resultados, errores = en_hilos(
         lambda _i: aplicar_compra(
             cuenta, "informe_natal", 2900, external_id="stripe:session:cs_suelto",
-            chart=carta,
+            sujeto=sujeto_natal(carta),
         ),
         3,
     )
