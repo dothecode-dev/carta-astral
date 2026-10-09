@@ -11,6 +11,7 @@ from rest_framework.test import APIClient
 from api.auth import create_session
 from api.chart_service import create_chart
 from api.models import Account, Interpretation
+from api.sujetos import sujeto_natal
 from interpret.prompts import PROMPT_VERSION
 
 
@@ -36,7 +37,7 @@ def cliente(cuenta):
 @pytest.mark.django_db
 def test_devuelve_la_interpretacion_existente(cliente, carta):
     Interpretation.objects.create(
-        chart=carta, lang="es", text="Un texto ya escrito.", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="Un texto ya escrito.", prompt_version=PROMPT_VERSION,
         content_key="x", completa=True,
     )
 
@@ -59,11 +60,11 @@ def test_con_dos_productos_en_el_mismo_idioma_el_tier_del_query_param_decide(cli
     del query param (RF20): pedir "corto" sirve la breve, pedir "largo" sirve
     el informe completo, sobre la MISMA carta y el MISMO idioma."""
     Interpretation.objects.create(
-        chart=carta, lang="es", text="Lectura breve.", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="Lectura breve.", prompt_version=PROMPT_VERSION,
         tier="corto", completa=True,
     )
     Interpretation.objects.create(
-        chart=carta, lang="es", text="Informe completo.", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="Informe completo.", prompt_version=PROMPT_VERSION,
         tier="largo", completa=True,
     )
 
@@ -85,7 +86,7 @@ def test_no_devuelve_200_vacio_mientras_se_genera(cliente, carta):
     reintento. Un error acá lo puede manejar el cliente; un éxito vacío lo
     deja en un estado terminal sin salida."""
     Interpretation.objects.create(
-        chart=carta, lang="es", text="", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="", prompt_version=PROMPT_VERSION,
         content_key="x", completa=False,
     )
 
@@ -108,7 +109,7 @@ def test_si_no_existe_devuelve_404_y_no_la_genera(cliente, carta):
 @pytest.mark.django_db
 def test_no_devuelve_la_de_otro_idioma(cliente, carta):
     Interpretation.objects.create(
-        chart=carta, lang="es", text="En español.", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="En español.", prompt_version=PROMPT_VERSION,
         content_key="x"
     )
 
@@ -142,7 +143,7 @@ def test_ignora_una_version_vieja_del_prompt(cliente, carta):
     # Si el prompt cambió, el texto guardado ya no corresponde a lo que hoy
     # generaría el sistema: para la web es como si no existiera.
     Interpretation.objects.create(
-        chart=carta, lang="es", text="Escrita con otro prompt.", prompt_version="viejo",
+        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="Escrita con otro prompt.", prompt_version="viejo",
         content_key="x"
     )
 

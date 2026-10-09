@@ -166,17 +166,6 @@ class Interpretation(models.Model):
             ),
         ]
 
-    def save(self, *args, **kwargs):
-        # EXPANDIR (parte 2 de Vínculo): toda fila que se escribe con carta
-        # sale con su sujeto natal. Se borra en el deploy 2, junto con `chart`.
-        if self.sujeto_id is None and self.chart_id is not None:
-            from api.sujetos import sujeto_natal
-
-            self.sujeto = sujeto_natal(self.chart)
-            campos = kwargs.get("update_fields")
-            if campos is not None:
-                kwargs["update_fields"] = {*campos, "sujeto"}
-        super().save(*args, **kwargs)
 
 
 class InterpretationSection(models.Model):
@@ -559,18 +548,6 @@ class PasarelaCheckout(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-    def save(self, *args, **kwargs):
-        # EXPANDIR (parte 2 de Vínculo): el checkout de una carta sale con su
-        # sujeto natal; el de un pack no tiene ni una cosa ni la otra. Se borra
-        # en el deploy 2, junto con `chart`.
-        if self.sujeto_id is None and self.chart_id is not None:
-            from api.sujetos import sujeto_natal
-
-            self.sujeto = sujeto_natal(self.chart)
-            campos = kwargs.get("update_fields")
-            if campos is not None:
-                kwargs["update_fields"] = {*campos, "sujeto"}
-        super().save(*args, **kwargs)
 
     def precio_de_lista(self) -> int:
         """El precio con el que se abrió. Las filas sin él caen al catálogo,

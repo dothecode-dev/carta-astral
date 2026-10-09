@@ -76,14 +76,14 @@ def test_una_interpretacion_escrita_con_carta_sale_con_su_sujeto(chart, account)
     """EXPANDIR: mientras conviven los dos campos, toda fila nueva con carta
     lleva el sujeto. Así ningún test ni llamador existente tiene que cambiar."""
     i = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     assert i.sujeto_id == sujeto_natal(chart).pk
 
 
 def test_un_checkout_con_carta_sale_con_su_sujeto_y_sin_carta_sin_sujeto(chart, account):
     con = PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account, codigo_producto="informe_natal", chart=chart,
+        checkout_id="cs_1", account=account, codigo_producto="informe_natal", sujeto=sujeto_natal(chart), chart=chart,
     )
     sin = PasarelaCheckout.objects.create(
         checkout_id="cs_2", account=account, codigo_producto="informe_natal",
@@ -95,14 +95,14 @@ def test_un_checkout_con_carta_sale_con_su_sujeto_y_sin_carta_sin_sujeto(chart, 
 def test_adopta_las_filas_huerfanas_de_su_carta(chart, account):
     """Lo que escribió el código viejo durante el deploy llega sin sujeto."""
     i = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     m = Movimiento.objects.create(
         account=account, codigo_producto="informe_natal", tipo="consumo",
         origen="compra", cantidad=-1, chart=chart,
     )
     p = PasarelaCheckout.objects.create(
-        checkout_id="cs_3", account=account, codigo_producto="informe_natal", chart=chart,
+        checkout_id="cs_3", account=account, codigo_producto="informe_natal", sujeto=sujeto_natal(chart), chart=chart,
     )
     Interpretation.objects.filter(pk=i.pk).update(sujeto=None)
     PasarelaCheckout.objects.filter(pk=p.pk).update(sujeto=None)
@@ -127,7 +127,7 @@ def test_adoptar_no_toca_filas_de_otra_carta(make_chart, account):
 def test_borrar_la_carta_borra_su_sujeto_natal_y_el_informe(chart, account):
     """Mismo efecto que hoy: el informe cae con la carta (CASCADE)."""
     i = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     chart.delete()
     assert not Sujeto.objects.exists()

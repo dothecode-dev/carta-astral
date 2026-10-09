@@ -240,7 +240,7 @@ def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
 
     # Mientras tanto, "en" termina (sibling completo: mismo chart y tier).
     interp_en = Interpretation.objects.create(
-        chart=chart, lang="en", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(chart), chart=chart, lang="en", prompt_version=PROMPT_VERSION,
         tier="largo", account=acc, completa=True,
     )
     for orden, seccion in enumerate(SECCIONES):
@@ -330,7 +330,7 @@ def test_devuelve_si_ningun_idioma_de_la_carta_y_tier_se_entrego(make_account, c
     # Otro idioma de la MISMA carta y tier, a medias: existe como fila pero
     # no debe fingir que la carta ya se entregó en ningún idioma.
     Interpretation.objects.create(
-        chart=chart, lang="en", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(chart), chart=chart, lang="en", prompt_version=PROMPT_VERSION,
         tier="largo", account=acc, completa=False,
     )
 
@@ -370,7 +370,7 @@ def test_no_devuelve_si_hay_una_fila_completa_en_otro_prompt_version(make_accoun
     # entrega con una versión VIEJA del prompt.
     canjear(acc, "leer_informe", sujeto_natal(chart))
     interp_vieja = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version="prompt-version-vieja",
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version="prompt-version-vieja",
         tier="largo", account=acc, completa=True,
     )
     assert _restante(acc, "informe_natal") == 0  # se cobró
@@ -379,7 +379,7 @@ def test_no_devuelve_si_hay_una_fila_completa_en_otro_prompt_version(make_accoun
     # prompt —lo que habría dejado `iniciar_generacion` tras el no-op de
     # `canjear` si `PROMPT_VERSION` se hubiera bumpeado de verdad.
     interp_nueva = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION,
         tier="largo", account=acc, completa=False,
     )
 

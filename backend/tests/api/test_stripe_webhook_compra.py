@@ -18,6 +18,7 @@ import pytest
 from api import webhooks_stripe
 from api.canje import MontoInvalido
 from api.models import Derecho, Movimiento, PasarelaCheckout
+from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
 
 pytestmark = pytest.mark.django_db
@@ -72,7 +73,7 @@ def compra(make_account, make_chart):
     cuenta = make_account()
     return PasarelaCheckout.objects.create(
         checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
-        chart=make_chart(account=cuenta),
+        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
     )
 
 

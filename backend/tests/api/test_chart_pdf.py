@@ -18,6 +18,7 @@ import pytest
 
 from api.chart_service import create_chart
 from api.models import Interpretation, InterpretationSection
+from api.sujetos import sujeto_natal
 from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO
 
 pytestmark = pytest.mark.django_db
@@ -105,7 +106,7 @@ def _informe(chart, texto, lang="es", completa=True):
     """Un informe con una sola sección escrita, para probar el render de la
     lectura sin tener que armar las ocho."""
     interp = Interpretation.objects.create(
-        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=completa,
+        sujeto=sujeto_natal(chart), chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=completa,
     )
     InterpretationSection.objects.create(
         interpretation=interp, slug=SECCIONES[0].slug, orden=0, texto=texto,
@@ -119,7 +120,7 @@ def _informe_legacy(chart, texto, lang="es", completa=True):
     `0020_backfill_completa` para lo que ya existía en producción antes del
     informe de ocho secciones — sigue existiendo hoy, no es un caso teórico."""
     return Interpretation.objects.create(
-        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=completa, text=texto,
+        sujeto=sujeto_natal(chart), chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=completa, text=texto,
     )
 
 
@@ -129,7 +130,7 @@ def _informe_corto(chart, texto, lang="es", completa=True):
     (RF6), así que necesita su propio helper y no reusar `_informe`, que
     siempre arma tier="largo"."""
     interp = Interpretation.objects.create(
-        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=TIER_CORTO, completa=completa,
+        sujeto=sujeto_natal(chart), chart=chart, lang=lang, prompt_version=PROMPT_VERSION, tier=TIER_CORTO, completa=completa,
     )
     InterpretationSection.objects.create(
         interpretation=interp, slug=SECCION_BREVE.slug, orden=0, texto=texto,
@@ -143,7 +144,7 @@ def _informe_completo(chart, lang="es"):
     from api.informe_service import secciones_aplicables
 
     interp = Interpretation.objects.create(
-        chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=True,
+        sujeto=sujeto_natal(chart), chart=chart, lang=lang, prompt_version=PROMPT_VERSION, completa=True,
     )
     for orden, seccion in enumerate(secciones_aplicables(interp.sujeto, interp.tier)):
         InterpretationSection.objects.create(
@@ -236,7 +237,7 @@ def test_el_documento_lista_la_carta(account_client):
 def test_sin_reading_lang_no_aparece_la_lectura(account_client):
     chart = _chart(account_client)
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION,
         text="Tu Sol en Piscis habla de fronteras porosas.", content_key="k",
     )
     html = _html(chart)  # reading_lang=None
@@ -399,7 +400,6 @@ def test_el_pdf_prefiere_el_informe_completo_si_existe(account_client):
     _informe_completo(chart)
 
     from api import pdf_payload
-    from api.sujetos import sujeto_natal
 
     payload = pdf_payload.build(sujeto_natal(chart), "es")
     assert payload["reading"]["tier"] == TIER_LARGO

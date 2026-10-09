@@ -14,6 +14,7 @@ from django.test import Client
 
 from api import webhooks_stripe
 from api.models import Account, Chart, Interpretation, Movimiento, PasarelaCheckout
+from api.sujetos import sujeto_natal
 from tests.api.concurrencia import en_hilos, requiere_postgres
 from tests.api.conftest import PRECIO_ANONIMA, SESSION_ANONIMA, con_mail
 from tests.api.stripe_firma import SECRETO, firmar
@@ -83,7 +84,7 @@ def test_dos_compras_distintas_con_el_mismo_mail_nuevo_crean_una_cuenta_y_una_so
     for checkout_id in ids:
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=None, codigo_producto="informe_natal",
-            chart=make_chart(account=None), anonimo=True, nonce_hash="y" * 64,
+            chart=(_carta := make_chart(account=None)), sujeto=sujeto_natal(_carta), anonimo=True, nonce_hash="y" * 64,
             precio_centavos=2900,
         )
     monkeypatch.setattr(
@@ -153,7 +154,7 @@ def test_el_canje_y_una_segunda_compra_a_la_vez_no_dejan_sesion_ni_se_traban(mak
         for checkout_id in (atacante, victima):
             PasarelaCheckout.objects.create(
                 checkout_id=checkout_id, account=None, codigo_producto="informe_natal",
-                chart=make_chart(account=None), anonimo=True, nonce_hash=hash_token(f"n-{checkout_id}"),
+                chart=(_carta := make_chart(account=None)), sujeto=sujeto_natal(_carta), anonimo=True, nonce_hash=hash_token(f"n-{checkout_id}"),
                 precio_centavos=2900,
             )
         cuenta = compra_anonima.adjudicar(atacante, email)

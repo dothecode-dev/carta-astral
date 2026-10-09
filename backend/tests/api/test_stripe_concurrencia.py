@@ -13,6 +13,7 @@ import pytest
 from api import interpretation_service as svc
 from api import webhooks_stripe
 from api.models import Derecho, Interpretation, Movimiento, PasarelaCheckout
+from api.sujetos import sujeto_natal
 from tests.api.concurrencia import en_hilos, requiere_postgres
 
 SESSION = "cs_test_carrera"
@@ -52,7 +53,7 @@ def test_dos_entregas_simultaneas_acreditan_y_arrancan_una_sola_vez(
     cuenta = make_account()
     carta = make_chart(account=cuenta)
     PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal", chart=carta,
+        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal", sujeto=sujeto_natal(carta), chart=carta,
     )
 
     _resultados, errores = en_hilos(lambda _i: webhooks_stripe._acreditar(SESSION), 3)
@@ -73,7 +74,7 @@ def test_el_reembolso_y_el_pago_a_la_vez_no_se_pierden(make_account, make_chart,
     cuenta = make_account()
     carta = make_chart(account=cuenta)
     PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal", chart=carta,
+        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal", sujeto=sujeto_natal(carta), chart=carta,
     )
     refund = {"id": "re_carrera", "amount": 2900, "payment_intent": PI}
 

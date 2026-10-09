@@ -91,7 +91,7 @@ def _a_medias(chart, account, *, intentos=1, secciones=2, prompt_version=PROMPT_
     """Una interpretación como la que deja un intento que se cortó: pagada,
     con algunas secciones escritas, incompleta y sin lock tomado."""
     interp = Interpretation.objects.create(
-        chart=chart, lang="es", tier="largo", prompt_version=prompt_version,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", tier="largo", prompt_version=prompt_version,
         account=account, completa=False, intentos=intentos,
     )
     for orden, seccion in enumerate(SECCIONES[:secciones]):

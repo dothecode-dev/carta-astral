@@ -38,7 +38,7 @@ def _pedir(client, chart):
 def _en_curso(chart, tier="largo", lang="es"):
     """Deja la carta como la deja `iniciar_generacion`: fila incompleta + lock."""
     interp = Interpretation.objects.create(
-        chart=chart, lang=lang, tier=tier, prompt_version=PROMPT_VERSION, completa=False,
+        sujeto=sujeto_natal(chart), chart=chart, lang=lang, tier=tier, prompt_version=PROMPT_VERSION, completa=False,
     )
     cache.set(_lock_key(sujeto_natal(chart), tier), "un-token", timeout=600)
     return interp
@@ -84,7 +84,7 @@ def test_una_generacion_que_agoto_los_intentos_ya_no_esta_pendiente(
 
 def test_una_interpretacion_terminada_no_esta_en_curso(client_autenticado, chart):
     Interpretation.objects.create(
-        chart=chart, lang="es", tier="corto", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", tier="corto", prompt_version=PROMPT_VERSION,
         completa=True, text="ya está",
     )
 
@@ -104,7 +104,7 @@ def test_los_dos_productos_pueden_estar_en_curso_a_la_vez(client_autenticado, ch
 def test_una_version_de_prompt_vieja_no_cuenta(client_autenticado, chart):
     """Mismo criterio que `interpretations`: sólo la versión vigente."""
     Interpretation.objects.create(
-        chart=chart, lang="es", tier="largo", prompt_version="prompt-viejo", completa=False,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", tier="largo", prompt_version="prompt-viejo", completa=False,
     )
     cache.set(_lock_key(sujeto_natal(chart), "largo"), "un-token", timeout=600)
 

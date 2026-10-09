@@ -139,7 +139,7 @@ def _interpretacion(tier):
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
     return Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account, tier=tier,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account, tier=tier,
     )
 
 

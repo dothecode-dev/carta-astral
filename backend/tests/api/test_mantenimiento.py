@@ -90,7 +90,7 @@ def test_el_estado_cuenta_lo_que_un_deploy_cortaria(client, make_chart, make_acc
     cuenta = make_account()
     carta = make_chart(account=cuenta)
     Interpretation.objects.create(
-        chart=carta, account=cuenta, lang="es", tier="largo",
+        sujeto=sujeto_natal(carta), chart=carta, account=cuenta, lang="es", tier="largo",
         prompt_version=PROMPT_VERSION, completa=False,
     )
 

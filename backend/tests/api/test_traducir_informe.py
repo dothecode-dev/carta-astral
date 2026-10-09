@@ -5,6 +5,7 @@ from django.db import connection, connections
 
 from api import informe_service
 from api.models import Account, BirthData, Chart, Interpretation, InterpretationSection
+from api.sujetos import sujeto_natal
 from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES
 
 pytestmark = pytest.mark.django_db
@@ -116,7 +117,7 @@ def test_traduce_al_tier_correcto_cuando_hay_dos_productos_en_la_carta(chart, ac
     `largo/en` completo, se traduce un `corto/es` hacia "en" — tiene que
     crear/encontrar el `corto/en`, sin tocar el `largo/en`."""
     largo_en = Interpretation.objects.create(
-        chart=chart, lang="en", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(chart), chart=chart, lang="en", prompt_version=PROMPT_VERSION, tier="largo",
         account=account, completa=True,
     )
     for i, s in enumerate(SECCIONES):
@@ -125,7 +126,7 @@ def test_traduce_al_tier_correcto_cuando_hay_dos_productos_en_la_carta(chart, ac
         )
 
     corto_es = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
         account=account, completa=True,
     )
     InterpretationSection.objects.create(
@@ -275,7 +276,7 @@ def test_dos_traducciones_concurrentes_de_la_misma_carta_no_duplican_ni_explotan
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=acc)
     origen = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=acc, completa=True,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=acc, completa=True,
     )
     for i, s in enumerate(SECCIONES):
         InterpretationSection.objects.create(

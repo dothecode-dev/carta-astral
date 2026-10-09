@@ -147,14 +147,14 @@ def test_el_estado_no_mezcla_el_progreso_de_otro_tier(client_autenticado, chart,
     from interpret.prompts import PROMPT_VERSION, SECCIONES
 
     largo = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
         account=account, completa=True,
     )
     for orden, seccion in enumerate(SECCIONES):
         InterpretationSection.objects.create(interpretation=largo, slug=seccion.slug, orden=orden, texto="x")
 
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
         account=account, completa=False,
     )
 

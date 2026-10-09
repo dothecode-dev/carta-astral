@@ -11,6 +11,7 @@ import pytest
 from django.apps import apps
 
 from api.models import Interpretation, Movimiento, PasarelaCheckout, Sujeto
+from api.sujetos import sujeto_natal
 from interpret.prompts import PROMPT_VERSION
 
 pytestmark = pytest.mark.django_db
@@ -28,13 +29,13 @@ def _sin_sujetos():
 
 def test_cada_carta_y_cada_fila_quedan_con_su_sujeto(make_chart, account):
     c1, c2 = make_chart(account=account), make_chart(account=account)
-    Interpretation.objects.create(chart=c1, lang="es", prompt_version=PROMPT_VERSION, text="")
+    Interpretation.objects.create(sujeto=sujeto_natal(c1), chart=c1, lang="es", prompt_version=PROMPT_VERSION, text="")
     Movimiento.objects.create(
         account=account, codigo_producto="informe_natal", tipo="consumo",
         origen="compra", cantidad=-1, chart=c2,
     )
     PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account, codigo_producto="informe_natal", chart=c2,
+        checkout_id="cs_1", account=account, codigo_producto="informe_natal", sujeto=sujeto_natal(c2), chart=c2,
     )
     _sin_sujetos()
 
@@ -69,7 +70,7 @@ def test_lo_que_no_tiene_carta_sigue_sin_sujeto(account):
 def test_correrla_dos_veces_no_duplica_nada(make_chart, account):
     """El deploy 2 la vuelve a correr para lo que escribió el código viejo."""
     c = make_chart(account=account)
-    Interpretation.objects.create(chart=c, lang="es", prompt_version=PROMPT_VERSION, text="")
+    Interpretation.objects.create(sujeto=sujeto_natal(c), chart=c, lang="es", prompt_version=PROMPT_VERSION, text="")
     _sin_sujetos()
 
     rellenar(apps)

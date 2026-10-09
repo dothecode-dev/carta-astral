@@ -3,6 +3,7 @@ import dataclasses
 import pytest
 
 from api import catalogo
+from api.sujetos import sujeto_natal
 
 #: El precio de lista con el que corren los tests de la mecánica del cobro
 #: —webhook, cupones, reembolsos, compras—. Prueban cómo se valida y se
@@ -66,12 +67,13 @@ def con_mail(email, **cambios) -> dict:
 @pytest.fixture
 def anonima(make_chart):
     """Un checkout abierto sin cuenta, como lo deja `compra_anonima.abrir`: la
-    carta sin dueño y (por `PasarelaCheckout.save`) su sujeto natal también."""
+    carta sin dueño y su sujeto natal también."""
     from api.models import PasarelaCheckout
 
+    carta = make_chart(account=None)
     return PasarelaCheckout.objects.create(
         checkout_id=SESSION_ANONIMA, account=None, codigo_producto="informe_natal",
-        chart=make_chart(account=None), anonimo=True, nonce_hash="x" * 64,
+        sujeto=sujeto_natal(carta), chart=carta, anonimo=True, nonce_hash="x" * 64,
         precio_centavos=2900,
     )
 

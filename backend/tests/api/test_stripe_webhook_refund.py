@@ -61,7 +61,7 @@ def comprado(make_account, make_chart):
     cuenta = make_account()
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_1", account=cuenta, codigo_producto="informe_natal",
-        chart=make_chart(account=cuenta), payment_intent=PI,
+        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta), payment_intent=PI,
     )
     aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:session:cs_1")
     return fila

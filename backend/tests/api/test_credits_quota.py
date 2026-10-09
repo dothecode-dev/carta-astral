@@ -43,7 +43,7 @@ def test_cache_hit_served_with_zero_credits(settings):
     chart = _chart()
     from interpret.prompts import PROMPT_VERSION
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="cached", account=acc,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="cached", account=acc,
         completa=True,  # una fila `completa=False` es "en curso", no una lectura servible
     )
     # 0 créditos pero ya existe: `iniciar_generacion` la encuentra

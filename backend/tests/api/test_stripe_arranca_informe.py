@@ -16,6 +16,7 @@ import pytest
 
 from api import compra_service, interpretation_service as svc, webhooks_stripe
 from api.models import Interpretation, Movimiento, PasarelaCheckout
+from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
 
 pytestmark = pytest.mark.django_db
@@ -62,7 +63,7 @@ def _entregar(client, monkeypatch, precio="price_natal", monto=2900):
 
 def _compra(cuenta, chart, codigo="informe_natal"):
     return PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto=codigo, chart=chart,
+        checkout_id=SESSION, account=cuenta, codigo_producto=codigo, sujeto=sujeto_natal(chart), chart=chart,
     )
 
 
@@ -142,7 +143,6 @@ def test_el_webhook_canjea_el_sujeto_del_checkout_aunque_no_tenga_carta(
 ):
     """CONTRAER: el webhook lee `fila.sujeto`, no `fila.chart`. Un checkout con
     sujeto y sin carta (como quedan todos desde el deploy 3) se canjea igual."""
-    from api.sujetos import sujeto_natal
 
     cuenta = make_account()
     s = sujeto_natal(make_chart(account=cuenta))

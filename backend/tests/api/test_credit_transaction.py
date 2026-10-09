@@ -29,12 +29,13 @@ def test_credit_transaction_records_movement():
 @pytest.mark.django_db
 def test_chart_and_interpretation_have_account():
     from api.models import Account, BirthData, Chart, Interpretation
+    from api.sujetos import sujeto_natal
 
     acc = Account.objects.create()
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     ch = Chart.objects.create(birth_data=bd, data={}, engine_version="x", account=acc)
     interp = Interpretation.objects.create(
-        chart=ch, lang="es", prompt_version="v1", text="t", account=acc,
+        sujeto=sujeto_natal(ch), chart=ch, lang="es", prompt_version="v1", text="t", account=acc,
     )
     assert ch in acc.charts.all()
     assert interp in acc.interpretations.all()

@@ -50,7 +50,7 @@ def _interpretacion_legacy(chart, account):
     texto completo, cero secciones persistidas, `completa=False` por el
     default que puso `0019` al agregar el campo."""
     return Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION,
         text="Un informe ya escrito antes de la Tarea 10.",
         account=account, content_key="legacy", completa=False,
     )
@@ -84,7 +84,7 @@ def test_no_toca_una_generacion_con_secciones_pero_incompleta(chart, account):
     """Otra generación real: ya tiene una sección persistida pero no las
     ocho. Tampoco matchea (tiene al menos una sección)."""
     en_curso = Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="",
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="",
         account=account, completa=False,
     )
     InterpretationSection.objects.create(interpretation=en_curso, slug="firma", orden=0, texto="x")

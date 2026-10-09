@@ -4,6 +4,7 @@ import pytest
 from django.db import IntegrityError
 
 from api.models import BirthData, Chart, Interpretation
+from api.sujetos import sujeto_natal
 
 pytestmark = pytest.mark.django_db
 
@@ -22,7 +23,7 @@ def _chart():
 
 def test_interpretation_persists():
     c = _chart()
-    interp = Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="hola")
+    interp = Interpretation.objects.create(sujeto=sujeto_natal(c), chart=c, lang="es", prompt_version="v1", text="hola")
     assert interp.created_at is not None
     assert c.interpretations.count() == 1
 
@@ -35,15 +36,15 @@ def test_tier_default_es_largo():
     pero las filas viejas se leerían como lecturas breves. Este test falla si
     eso sucede."""
     c = _chart()
-    interp = Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="hola")
+    interp = Interpretation.objects.create(sujeto=sujeto_natal(c), chart=c, lang="es", prompt_version="v1", text="hola")
     assert interp.tier == "largo"
 
 
 def test_interpretation_unique_per_chart_lang_version():
     c = _chart()
-    Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="a")
+    Interpretation.objects.create(sujeto=sujeto_natal(c), chart=c, lang="es", prompt_version="v1", text="a")
     with pytest.raises(IntegrityError):
-        Interpretation.objects.create(chart=c, lang="es", prompt_version="v1", text="b")
+        Interpretation.objects.create(sujeto=sujeto_natal(c), chart=c, lang="es", prompt_version="v1", text="b")
 
 
 def test_corto_y_largo_conviven_en_la_misma_carta():
@@ -52,10 +53,10 @@ def test_corto_y_largo_conviven_en_la_misma_carta():
     choca contra el unique y el usuario que pagó no puede generar."""
     chart = _chart()
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version="v2", tier="corto", text="breve",
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version="v2", tier="corto", text="breve",
     )
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version="v2", tier="largo", text="completo",
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version="v2", tier="largo", text="completo",
     )
     assert chart.interpretations.count() == 2
 
@@ -67,9 +68,9 @@ def test_no_se_duplica_el_mismo_tier():
     gana la carrera y cobra; el segundo recupera la fila existente."""
     chart = _chart()
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version="v2", tier="corto", text="a",
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version="v2", tier="corto", text="a",
     )
     with pytest.raises(IntegrityError):
         Interpretation.objects.create(
-            chart=chart, lang="es", prompt_version="v2", tier="corto", text="b",
+            sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version="v2", tier="corto", text="b",
         )

@@ -15,6 +15,7 @@ from django.utils import timezone
 from api import codigos_acceso, compra_anonima, mantenimiento, notificaciones
 from api.identity import hash_token
 from api.models import Account, CodigoAcceso, ProviderIdentity, Session
+from api.sujetos import sujeto_natal
 from tests.api.conftest import SESSION_ANONIMA
 
 # El caché (donde viven los baldes de throttle) se vacía antes y después de
@@ -434,7 +435,7 @@ def _segunda_compra(make_chart, email):
 
     fila = PasarelaCheckout.objects.create(
         checkout_id=SESSION_VICTIMA, account=None, codigo_producto="informe_natal",
-        chart=make_chart(account=None), anonimo=True, nonce_hash=hash_token("otro-nonce"),
+        chart=(_carta := make_chart(account=None)), sujeto=sujeto_natal(_carta), anonimo=True, nonce_hash=hash_token("otro-nonce"),
         precio_centavos=2900,
     )
     cuenta = compra_anonima.adjudicar(SESSION_VICTIMA, email)

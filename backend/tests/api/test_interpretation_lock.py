@@ -25,7 +25,7 @@ def test_interpretacion_en_curso_con_lock_vivo_bloquea_otro_idioma(db_cache, cha
     está cubierto con más detalle, incluido el saldo, por
     `test_informe_endpoint.py::test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra`."""
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     cache.set(interpretation_service._lock_key(sujeto_natal(chart), "largo"), "token-vivo", timeout=600)
     with pytest.raises(GenerationInProgress):
@@ -46,7 +46,7 @@ def test_interpretacion_en_curso_con_lock_vivo_bloquea_otro_idioma(db_cache, cha
 
 def test_sibling_en_curso_ignora_una_interpretacion_abandonada_sin_lock(db_cache, chart, account):
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     # No se toma ningún lock: simula un proceso muerto (restart de gunicorn a
     # mitad de generación, o el fallo terminal del HALLAZGO 1) que ya no
@@ -58,7 +58,7 @@ def test_sibling_en_curso_sigue_bloqueando_con_el_lock_vivo(db_cache, chart, acc
     """Contrapunto: con el lock realmente tomado, el criterio nuevo sigue
     detectando la generación en curso igual que antes."""
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     cache.set(interpretation_service._lock_key(sujeto_natal(chart), "largo"), "token-vivo", timeout=600)
     sibling = interpretation_service._sibling_en_curso(sujeto_natal(chart), "en", "largo")
@@ -71,7 +71,7 @@ def test_interpretacion_abandonada_sin_lock_no_bloquea_otro_idioma(db_cache, cha
     idioma sobre una carta con un informe abandonado no puede quedar
     bloqueado para siempre — `iniciar_generacion` tiene que poder seguir."""
     Interpretation.objects.create(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     otra = interpretation_service.iniciar_generacion(sujeto_natal(chart), "en", account, tier="largo")
     assert otra.lang == "en"

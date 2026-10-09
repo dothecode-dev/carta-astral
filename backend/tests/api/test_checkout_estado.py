@@ -16,6 +16,7 @@ import pytest
 
 from api import webhooks_stripe
 from api.models import PasarelaCheckout
+from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
 
 pytestmark = pytest.mark.django_db
@@ -73,7 +74,7 @@ def test_mientras_el_webhook_no_llega_la_compra_esta_pendiente(account_client, m
     carta = make_chart(account=account_client.account)
     PasarelaCheckout.objects.create(
         checkout_id="cs_1", account=account_client.account,
-        codigo_producto="informe_natal", chart=carta,
+        codigo_producto="informe_natal", sujeto=sujeto_natal(carta), chart=carta,
     )
 
     assert account_client.get("/api/checkout/cs_1/").json()["estado"] == "pendiente"
@@ -85,7 +86,7 @@ def test_acreditada_y_con_carta_manda_a_la_carta(account_client, make_chart, acr
     carta = make_chart(account=account_client.account)
     PasarelaCheckout.objects.create(
         checkout_id="cs_1", account=account_client.account,
-        codigo_producto="informe_natal", chart=carta,
+        codigo_producto="informe_natal", sujeto=sujeto_natal(carta), chart=carta,
     )
 
     acreditar()
@@ -104,7 +105,7 @@ def test_un_pack_manda_a_la_cuenta(account_client, make_chart, acreditar):
     carta = make_chart(account=account_client.account)
     PasarelaCheckout.objects.create(
         checkout_id="cs_5", account=account_client.account,
-        codigo_producto="pack_5_natal", chart=carta,
+        codigo_producto="pack_5_natal", sujeto=sujeto_natal(carta), chart=carta,
     )
 
     acreditar(checkout_id="cs_5", price="price_pack",
@@ -133,7 +134,7 @@ def test_una_compra_cuya_carta_se_borro_manda_a_la_cuenta(
     carta = make_chart(account=account_client.account)
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_1", account=account_client.account,
-        codigo_producto="informe_natal", chart=carta,
+        codigo_producto="informe_natal", sujeto=sujeto_natal(carta), chart=carta,
     )
 
     acreditar()
