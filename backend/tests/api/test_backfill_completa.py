@@ -19,6 +19,7 @@ import pytest
 from django.apps import apps as django_apps
 
 from api.models import Interpretation, InterpretationSection
+from api.sujetos import sujeto_natal
 from interpret.prompts import PROMPT_VERSION
 
 pytestmark = pytest.mark.django_db
@@ -69,7 +70,7 @@ def test_no_toca_una_generacion_real_en_curso(chart, account):
     matchea el marcador legacy, así que el backfill no debe tocarla."""
     from api import interpretation_service as svc
 
-    en_curso = svc.iniciar_generacion(chart, "es", account, tier="largo")
+    en_curso = svc.iniciar_generacion(sujeto_natal(chart), "es", account, tier="largo")
     assert en_curso.completa is False
     assert en_curso.text == ""
 
@@ -126,7 +127,7 @@ def test_escenario_legacy_end_to_end(client_autenticado, chart, account, monkeyp
 
     # 3) iniciar_generacion: encuentra la fila existente y NO cobra de nuevo.
     antes = _derechos_de_cobro(account)
-    encontrada = svc.iniciar_generacion(chart, "es", account, tier="largo")
+    encontrada = svc.iniciar_generacion(sujeto_natal(chart), "es", account, tier="largo")
     assert encontrada.pk == legacy.pk
     assert _derechos_de_cobro(account) == antes
 
@@ -134,7 +135,7 @@ def test_escenario_legacy_end_to_end(client_autenticado, chart, account, monkeyp
     # el lock o de tocar el LLM — no regenera nada.
     llamadas = []
     monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas.append(1))
-    svc.completar_generacion(encontrada, chart, account)
+    svc.completar_generacion(encontrada, account)
     assert llamadas == []
     assert InterpretationSection.objects.filter(interpretation=encontrada).count() == 0
     assert _derechos_de_cobro(account) == antes

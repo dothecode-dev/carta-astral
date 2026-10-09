@@ -25,6 +25,7 @@ import pytest
 from django.core.cache import cache
 
 from api.interpretation_service import INTENTOS_MAXIMOS, PROMPT_VERSION, _lock_key
+from api.sujetos import sujeto_natal
 from api.models import Interpretation
 
 pytestmark = pytest.mark.django_db
@@ -39,7 +40,7 @@ def _en_curso(chart, tier="largo", lang="es"):
     interp = Interpretation.objects.create(
         chart=chart, lang=lang, tier=tier, prompt_version=PROMPT_VERSION, completa=False,
     )
-    cache.set(_lock_key(chart, tier), "un-token", timeout=600)
+    cache.set(_lock_key(sujeto_natal(chart), tier), "un-token", timeout=600)
     return interp
 
 
@@ -63,7 +64,7 @@ def test_una_generacion_caida_sigue_pendiente_porque_el_cron_la_retoma(
     informe que ya pagó y que se está por terminar solo.
     """
     _en_curso(chart, tier="largo")
-    cache.delete(_lock_key(chart, "largo"))
+    cache.delete(_lock_key(sujeto_natal(chart), "largo"))
 
     assert _pedir(client_autenticado, chart)["en_curso"] == {"es": ["largo"]}
 
@@ -75,7 +76,7 @@ def test_una_generacion_que_agoto_los_intentos_ya_no_esta_pendiente(
     derecho y borra la fila. Seguir mostrando la espera sería esperar para
     siempre por un informe que nadie va a terminar."""
     interp = _en_curso(chart, tier="largo")
-    cache.delete(_lock_key(chart, "largo"))
+    cache.delete(_lock_key(sujeto_natal(chart), "largo"))
     Interpretation.objects.filter(pk=interp.pk).update(intentos=INTENTOS_MAXIMOS)
 
     assert _pedir(client_autenticado, chart)["en_curso"] == {}
@@ -105,7 +106,7 @@ def test_una_version_de_prompt_vieja_no_cuenta(client_autenticado, chart):
     Interpretation.objects.create(
         chart=chart, lang="es", tier="largo", prompt_version="prompt-viejo", completa=False,
     )
-    cache.set(_lock_key(chart, "largo"), "un-token", timeout=600)
+    cache.set(_lock_key(sujeto_natal(chart), "largo"), "un-token", timeout=600)
 
     assert _pedir(client_autenticado, chart)["en_curso"] == {}
 

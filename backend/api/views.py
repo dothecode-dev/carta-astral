@@ -405,7 +405,7 @@ class InterpretationView(APIView):
         account = request.user
         try:
             interpretacion = interpretation_service.iniciar_generacion(
-                chart, lang, account, tier=tier
+                sujeto_natal(chart), lang, account, tier=tier
             )
         except SinDerecho as exc:
             # `.capacidad` dice cuál faltó ("leer_breve" o "leer_informe"):
@@ -444,7 +444,7 @@ class InterpretationView(APIView):
         # El hilo lo lanza el servicio: el webhook de Polar arranca informes
         # por el mismo camino, y el patrón —cerrar la conexión, no morir en
         # silencio— tiene que estar escrito una sola vez.
-        interpretation_service.arrancar_en_hilo(interpretacion, chart, account)
+        interpretation_service.arrancar_en_hilo(interpretacion, account)
         return Response(status=status.HTTP_202_ACCEPTED)
 
 

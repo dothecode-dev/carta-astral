@@ -15,6 +15,7 @@ import pytest
 from django.core.cache import cache
 
 from api import mantenimiento
+from api.sujetos import sujeto_natal
 from api.models import Interpretation
 from interpret.prompts import PROMPT_VERSION
 
@@ -97,7 +98,7 @@ def test_el_estado_cuenta_lo_que_un_deploy_cortaria(client, make_chart, make_acc
 
     from api.interpretation_service import _lock_key
 
-    cache.set(_lock_key(carta, "largo"), "1", 600)
+    cache.set(_lock_key(sujeto_natal(carta), "largo"), "1", 600)
 
     assert client.get("/api/estado/").json()["generando"] == 1
 

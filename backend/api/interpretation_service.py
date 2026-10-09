@@ -22,8 +22,7 @@ from api.canje import SinDerecho as SinDerecho  # re-exportado: lo importan test
 from api.canje import canjear, devolver
 from api.catalogo import codigos_otorgados_por
 from api.exceptions import CapReached, GenerationInProgress
-from api.models import Chart, Interpretation, Movimiento, Sujeto
-from api.sujetos import a_sujeto
+from api.models import Interpretation, Movimiento, Sujeto
 from interpret.exceptions import InterpretationError
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 
@@ -97,6 +96,16 @@ def _build_client():
     )
 
 
+def _sujeto(objetivo) -> Sujeto:
+    """CONTRAER (deploy 2 de la parte 2): la generación recibe sujetos. Una
+    carta acá es un llamador que se quedó en el deploy 1, y resolverla en
+    silencio escondería justo el error que la parte 3 no puede tener: un
+    vínculo no tiene carta de la cual partir."""
+    if not isinstance(objetivo, Sujeto):
+        raise TypeError(f"se esperaba Sujeto, llegó {type(objetivo).__name__}")
+    return objetivo
+
+
 def esta_generandose(objetivo, tier: str) -> bool:
     """¿Hay un proceso escribiendo este tier de esta carta ahora mismo?
 
@@ -110,10 +119,7 @@ def esta_generandose(objetivo, tier: str) -> bool:
     La usa `_chart_repr` para que la carta pueda decir qué se está generando
     cuando alguien vuelve después de cerrar la pestaña.
     """
-    if cache.get(_lock_key(objetivo, tier)) is not None:
-        return True
-    viejo = _lock_key_viejo(objetivo, tier)
-    return viejo is not None and cache.get(viejo) is not None
+    return cache.get(_lock_key(objetivo, tier)) is not None
 
 
 def _lock_key(objetivo, tier: str) -> str:
@@ -132,25 +138,9 @@ def _lock_key(objetivo, tier: str) -> str:
     # Desde la parte 2 de Vínculo la clave es por SUJETO: el natal tiene uno
     # por carta, así que para el natal es la misma exclusión que antes. La `s`
     # del formato la distingue de la clave vieja (por carta): un deploy que la
-    # cambia tiene que drenar primero (`make deploy`). Sin adoptar huérfanas:
-    # se consulta una vez por sección y sólo necesita la clave.
-    sujeto = a_sujeto(objetivo, adoptar=False)
+    # cambia tiene que drenar primero (`make deploy`).
+    sujeto = _sujeto(objetivo)
     return f"interp:lock:s{sujeto.pk}:{PROMPT_VERSION}:{tier}"
-
-
-def _lock_key_viejo(objetivo, tier: str) -> str | None:
-    """EXPANDIR (deploy 1): la clave con la que el código anterior a la parte 2
-    toma el lock, por carta.
-
-    Durante el deploy conviven los dos contenedores, y el cron del viejo puede
-    arrancar un informe después del drenaje: si el nuevo no viera ese lock,
-    escribirían la misma fila en paralelo (doble gasto de LLM e intentos
-    contados dos veces). Sólo se CONSULTA, nunca se toma. Se borra en el deploy
-    2, cuando ya no queda código que la use."""
-    sujeto = a_sujeto(objetivo, adoptar=False)
-    if sujeto.natal_de_id is None:
-        return None
-    return f"interp:lock:{sujeto.natal_de_id}:{PROMPT_VERSION}:{tier}"
 
 
 def renovar_lock(objetivo, tier: str, token: str) -> bool:
@@ -209,9 +199,7 @@ def _sibling_completo(objetivo, lang: str, tier: str) -> Interpretation | None:
     otro. Sin este filtro, pedir la breve en "en" después de tener el
     completo en "es" encontraría ese completo como sibling y lo entregaría
     gratis en vez de cobrar el crédito free que corresponde."""
-    # Adopta sólo si llega una carta: quien pasa un sujeto ya lo resolvió (y
-    # adoptó) un renglón antes, y repetirlo son tres UPDATE por consulta.
-    sujeto = a_sujeto(objetivo, adoptar=isinstance(objetivo, Chart))
+    sujeto = _sujeto(objetivo)
     return (
         Interpretation.objects.filter(
             sujeto=sujeto, prompt_version=PROMPT_VERSION, tier=tier, completa=True,
@@ -312,7 +300,7 @@ def _sibling_en_curso(objetivo, lang: str, tier: str) -> Interpretation | None:
     fix round 1): el lock es por (chart, tier) desde que dos tiers de la
     misma carta pueden generarse en paralelo — mirar el lock de OTRO tier
     acá no diría nada sobre si hay una generación en curso de ESTE."""
-    sujeto = a_sujeto(objetivo, adoptar=isinstance(objetivo, Chart))
+    sujeto = _sujeto(objetivo)
     if not esta_generandose(sujeto, tier):
         return None
     return (
@@ -391,7 +379,7 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
     para el detalle y la justificación de por qué se rechaza acá en vez de
     esperar). Se lanza `GenerationInProgress` ANTES de cobrar: no hay nada
     que devolver porque nunca se llega a tocar ningún derecho."""
-    sujeto = a_sujeto(objetivo)
+    sujeto = _sujeto(objetivo)
     if sujeto.producto != Sujeto.NATAL:
         # El informe de vínculo es la parte 3: sin su prompt y sus secciones,
         # generar acá escribiría un informe natal sobre datos vacíos.
@@ -450,7 +438,7 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
     return interpretacion
 
 
-def completar_generacion(interpretacion: Interpretation, objetivo, account) -> None:
+def completar_generacion(interpretacion: Interpretation, account) -> None:
     """Toma el lock de la carta y corre `informe_service.generar_informe`
     hasta terminar o fallar; al final liquida el crédito.
 
@@ -529,15 +517,10 @@ def completar_generacion(interpretacion: Interpretation, objetivo, account) -> N
     if interpretacion.completa:
         return
 
-    sujeto = a_sujeto(objetivo)
+    sujeto = interpretacion.sujeto
     lock_key = _lock_key(sujeto, interpretacion.tier)
     token = uuid.uuid4().hex
-    # EXPANDIR: si el contenedor viejo está generando esta carta (con su clave
-    # vieja), no se toma el lock nuevo: sería escribir la misma fila en paralelo.
-    viejo = _lock_key_viejo(sujeto, interpretacion.tier)
-    got_lock = (viejo is None or cache.get(viejo) is None) and cache.add(
-        lock_key, token, timeout=LOCK_TTL,
-    )
+    got_lock = cache.add(lock_key, token, timeout=LOCK_TTL)
 
     from api import informe_service  # import diferido: ver nota al tope del módulo
 
@@ -732,7 +715,7 @@ def completar_generacion(interpretacion: Interpretation, objetivo, account) -> N
         soltar_lock(sujeto, interpretacion.tier, token)
 
 
-def arrancar_en_hilo(interpretacion: Interpretation, objetivo, account) -> None:
+def arrancar_en_hilo(interpretacion: Interpretation, account) -> None:
     """Termina en un hilo aparte un informe cuya fila ya existe.
 
     Vive acá y no en la vista porque tiene dos llamadores: el POST de la web y
@@ -757,7 +740,7 @@ def arrancar_en_hilo(interpretacion: Interpretation, objetivo, account) -> None:
         # de fondo que muere en silencio deja el informe colgado y nadie se
         # entera.
         try:
-            completar_generacion(interpretacion, objetivo, account)
+            completar_generacion(interpretacion, account)
         except Exception:
             logger.exception(
                 "el hilo de generación del informe %s murió sin control", interpretacion.pk,
@@ -768,7 +751,7 @@ def arrancar_en_hilo(interpretacion: Interpretation, objetivo, account) -> None:
     threading.Thread(target=_en_hilo, daemon=True).start()
 
 
-def generar_en_segundo_plano(objetivo, lang: str, account, tier: str) -> None:
+def generar_en_segundo_plano(sujeto, lang: str, account, tier: str) -> None:
     """Arranca (o reanuda) el informe de principio a fin, para el tier
     pedido: `iniciar_generacion` + `completar_generacion`.
 
@@ -777,5 +760,5 @@ def generar_en_segundo_plano(objetivo, lang: str, account, tier: str) -> None:
     antes de responder, para poder devolver 402/503 sincrónicamente), pero
     todo lo demás —un cron, un management command, o un test que quiere
     correr el flujo entero sincrónico sobre su propia conexión— sí."""
-    interpretacion = iniciar_generacion(objetivo, lang, account, tier)
-    completar_generacion(interpretacion, objetivo, account)
+    interpretacion = iniciar_generacion(sujeto, lang, account, tier)
+    completar_generacion(interpretacion, account)

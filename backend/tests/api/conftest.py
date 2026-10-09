@@ -84,7 +84,7 @@ def sin_hilo(monkeypatch):
     arrancados = []
     monkeypatch.setattr(
         interpretation_service, "arrancar_en_hilo",
-        lambda interpretacion, chart, account: arrancados.append(interpretacion),
+        lambda interpretacion, account: arrancados.append(interpretacion),
     )
     return arrancados
 

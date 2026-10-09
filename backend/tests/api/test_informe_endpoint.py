@@ -10,6 +10,8 @@ sondea mientras tanto.
 import pytest
 from django.core.cache import cache
 
+from api.sujetos import sujeto_natal
+
 pytestmark = pytest.mark.django_db
 
 
@@ -181,12 +183,12 @@ def test_lock_tomado_no_genera_ni_cobra_de_nuevo(chart, account, db_cache, monke
     llamadas = []
     monkeypatch.setattr(informe_service, "generar_informe", lambda *a, **kw: llamadas.append(1))
 
-    interpretacion = svc.iniciar_generacion(chart, "es", account, tier="largo")
+    interpretacion = svc.iniciar_generacion(sujeto_natal(chart), "es", account, tier="largo")
     antes = _derechos_de_cobro(account)
 
-    cache.add(svc._lock_key(chart, "largo"), "otro-token", timeout=30)
+    cache.add(svc._lock_key(sujeto_natal(chart), "largo"), "otro-token", timeout=30)
 
-    svc.completar_generacion(interpretacion, chart, account)
+    svc.completar_generacion(interpretacion, account)
 
     assert llamadas == []  # no generó en paralelo
     assert InterpretationSection.objects.filter(interpretation=interpretacion).count() == 0
@@ -207,7 +209,7 @@ def test_si_la_generacion_muere_el_credito_vuelve(chart, account, monkeypatch):
     monkeypatch.setattr("api.informe_service.generar_informe", explota)
     antes = _derechos_de_cobro(account)
     for _ in range(interpretation_service.INTENTOS_MAXIMOS):
-        interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+        interpretation_service.generar_en_segundo_plano(sujeto_natal(chart), "es", account, tier="largo")
     assert _derechos_de_cobro(account) == antes
 
 
@@ -236,7 +238,7 @@ def test_si_la_generacion_gratis_muere_el_credito_vuelve_al_lote_free(chart, acc
     antes_informe = _restante(account, "informe_natal")
 
     for _ in range(interpretation_service.INTENTOS_MAXIMOS):
-        interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="corto")
+        interpretation_service.generar_en_segundo_plano(sujeto_natal(chart), "es", account, tier="corto")
 
     assert _restante(account, "lectura_breve") == antes_breve  # se cobró y se devolvió: neto sin cambios
     assert _restante(account, "informe_natal") == antes_informe  # nunca se tocó
@@ -257,7 +259,7 @@ def test_si_la_generacion_paga_muere_el_credito_vuelve_al_lote_paid(chart, accou
     antes_informe = _restante(account, "informe_natal")
 
     for _ in range(interpretation_service.INTENTOS_MAXIMOS):
-        interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+        interpretation_service.generar_en_segundo_plano(sujeto_natal(chart), "es", account, tier="largo")
 
     assert _restante(account, "lectura_breve") == antes_breve  # nunca se tocó
     assert _restante(account, "informe_natal") == antes_informe  # se cobró y se devolvió: neto sin cambios
@@ -273,7 +275,7 @@ def test_si_la_generacion_muere_no_queda_una_interpretacion_vacia(chart, account
 
     monkeypatch.setattr("api.informe_service.generar_informe", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
     for _ in range(interpretation_service.INTENTOS_MAXIMOS):
-        interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+        interpretation_service.generar_en_segundo_plano(sujeto_natal(chart), "es", account, tier="largo")
     assert not Interpretation.objects.filter(chart=chart, lang="es", prompt_version=PROMPT_VERSION).exists()
 
 
@@ -287,7 +289,7 @@ def test_si_falla_una_sola_vez_la_interpretacion_sigue_viva_para_reintentar(char
 
     monkeypatch.setattr("api.informe_service.generar_informe", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
     antes = _derechos_de_cobro(account)
-    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+    interpretation_service.generar_en_segundo_plano(sujeto_natal(chart), "es", account, tier="largo")
     assert _derechos_de_cobro(account) == antes - 1  # sigue cobrado
     assert Interpretation.objects.filter(
         chart=chart, lang="es", prompt_version=PROMPT_VERSION, completa=False,
@@ -313,7 +315,7 @@ def test_si_queda_una_seccion_no_se_devuelve_el_credito(chart, account, settings
     # necesita una key no vacía para no explotar antes de llegar al mock.
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
     antes = _derechos_de_cobro(account)
-    interpretation_service.generar_en_segundo_plano(chart, "es", account, tier="largo")
+    interpretation_service.generar_en_segundo_plano(sujeto_natal(chart), "es", account, tier="largo")
     assert _derechos_de_cobro(account) == antes - 1
 
 
@@ -358,7 +360,7 @@ def test_el_cap_no_se_toca_con_credito_pago(account, settings):
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
 
-    interp = svc.iniciar_generacion(chart, "es", account, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", account, tier="largo")
     assert interp is not None
     from api.models import CupoDiario
 
@@ -377,7 +379,7 @@ def test_iniciar_generacion_no_cobra_si_ya_hay_un_idioma_completo(chart, account
     from api import interpretation_service as svc
 
     antes = _derechos_de_cobro(account)
-    svc.iniciar_generacion(chart, "en", account, tier="largo")
+    svc.iniciar_generacion(sujeto_natal(chart), "en", account, tier="largo")
     assert _derechos_de_cobro(account) == antes
 
 
@@ -387,7 +389,7 @@ def test_iniciar_generacion_cobra_si_no_hay_ningun_idioma_completo(chart, accoun
     from api import interpretation_service as svc
 
     antes = _derechos_de_cobro(account)
-    svc.iniciar_generacion(chart, "es", account, tier="largo")
+    svc.iniciar_generacion(sujeto_natal(chart), "es", account, tier="largo")
     assert _derechos_de_cobro(account) == antes - 1
 
 
@@ -410,7 +412,7 @@ def test_completar_generacion_traduce_el_segundo_idioma_en_vez_de_regenerar(
         lambda *a, **kw: llamadas_traducir.append(1) or True,
     )
 
-    svc.generar_en_segundo_plano(chart, "en", account, tier="largo")
+    svc.generar_en_segundo_plano(sujeto_natal(chart), "en", account, tier="largo")
 
     assert llamadas_traducir == [1]
     assert llamadas_generar == []
@@ -444,17 +446,17 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
     from api.models import Interpretation
     from interpret.prompts import PROMPT_VERSION
 
-    interpretacion_es = svc.iniciar_generacion(chart, "es", account, tier="largo")
+    interpretacion_es = svc.iniciar_generacion(sujeto_natal(chart), "es", account, tier="largo")
     assert interpretacion_es.completa is False
 
     # El hilo de "es" ya tomó el lock de SU tier y sigue generando (igual
     # que haría `completar_generacion` en segundo plano durante ~6 minutos).
-    cache.add(svc._lock_key(chart, "largo"), "token-es-en-curso", timeout=600)
+    cache.add(svc._lock_key(sujeto_natal(chart), "largo"), "token-es-en-curso", timeout=600)
 
     antes = _derechos_de_cobro(account)
 
     with pytest.raises(GenerationInProgress):
-        svc.iniciar_generacion(chart, "en", account, tier="largo")
+        svc.iniciar_generacion(sujeto_natal(chart), "en", account, tier="largo")
 
     assert _derechos_de_cobro(account) == antes  # no se perdió ningún crédito
     assert not Interpretation.objects.filter(
@@ -487,17 +489,17 @@ def test_pedir_el_corto_con_el_largo_en_curso_mismo_idioma_no_pierde_el_credito(
 
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
 
-    interpretacion_largo = svc.iniciar_generacion(chart, "es", account, tier="largo")
+    interpretacion_largo = svc.iniciar_generacion(sujeto_natal(chart), "es", account, tier="largo")
     assert interpretacion_largo.completa is False
 
     # El "largo" ya tomó SU lock y sigue generando.
-    cache.add(svc._lock_key(chart, "largo"), "token-largo-en-curso", timeout=600)
+    cache.add(svc._lock_key(sujeto_natal(chart), "largo"), "token-largo-en-curso", timeout=600)
 
     antes = _derechos_de_cobro(account)
 
     # Mismo idioma, tier distinto: no es sibling (ni completo ni en curso) del
     # largo, así que cobra normal (free) y arranca su propia generación.
-    interpretacion_corto = svc.iniciar_generacion(chart, "es", account, tier="corto")
+    interpretacion_corto = svc.iniciar_generacion(sujeto_natal(chart), "es", account, tier="corto")
     assert _derechos_de_cobro(account) == antes - 1  # cobró el free normal
 
     def _generar_fake(interpretacion, client, token):
@@ -510,7 +512,7 @@ def test_pedir_el_corto_con_el_largo_en_curso_mismo_idioma_no_pierde_el_credito(
 
     monkeypatch.setattr(informe_service, "generar_informe", _generar_fake)
 
-    svc.completar_generacion(interpretacion_corto, chart, account)
+    svc.completar_generacion(interpretacion_corto, account)
 
     interpretacion_corto.refresh_from_db()
     # Antes del fix esto daba completa=False para siempre: el lock ajeno del
@@ -551,7 +553,7 @@ def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
     settings.ANTHROPIC_API_KEY = "sk-test-no-se-usa"
     antes = _derechos_de_cobro(account)
 
-    interpretacion_en = svc.iniciar_generacion(chart, "en", account, tier="largo")
+    interpretacion_en = svc.iniciar_generacion(sujeto_natal(chart), "en", account, tier="largo")
     assert _derechos_de_cobro(account) == antes  # confirmado: no cobró
 
     interpretacion_completa.delete()  # el sibling desaparece antes de completar_generacion
@@ -562,7 +564,7 @@ def test_no_devuelve_credito_si_nunca_se_cobro_aunque_el_sibling_desaparezca(
     monkeypatch.setattr(informe_service, "generar_informe", falla_sin_secciones)
 
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.completar_generacion(interpretacion_en, chart, account)
+        svc.completar_generacion(interpretacion_en, account)
 
     assert _derechos_de_cobro(account) == antes  # nunca se cobró: no hay nada que devolver
 

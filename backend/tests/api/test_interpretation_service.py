@@ -5,6 +5,7 @@ from django.core.cache import cache
 from django.conf import settings as django_settings
 
 from api import informe_service
+from api.sujetos import sujeto_natal
 from api import interpretation_service as svc
 from api.models import Account, BirthData, Chart, Interpretation
 from interpret.exceptions import InterpretationError
@@ -86,8 +87,8 @@ def _generar(chart, lang, account, tier="largo"):
     adentro de esa función, no sobre el objeto `interp` que tenemos acá.
     tier="largo" por default: este archivo prueba el flujo del informe
     completo."""
-    interp = svc.iniciar_generacion(chart, lang, account, tier=tier)
-    svc.completar_generacion(interp, chart, account)
+    interp = svc.iniciar_generacion(sujeto_natal(chart), lang, account, tier=tier)
+    svc.completar_generacion(interp, account)
     interp.refresh_from_db()
     return interp
 
@@ -206,7 +207,7 @@ def test_daily_cap_blocks_new_generation(fake_client, settings):
         # (no hay dedup contra el camino nuevo, ver concern en el reporte de
         # la Task 0) y de todas formas choca contra el cap ya consumido.
         svc.iniciar_generacion(
-            _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", acc,
+            sujeto_natal(_chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"})), "es", acc,
             tier="corto",
         )
     assert fake_client.calls == llamadas_tras_la_primera  # sólo la primera generación llegó a pedirle al LLM
@@ -238,7 +239,7 @@ def test_llm_error_no_deja_interpretacion_persistida(monkeypatch, settings):
     acc = _account(informes=1)  # tier="largo" canjea informe_natal, no lectura_breve
     antes = _restante(acc, "informe_natal")
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
+        svc.generar_en_segundo_plano(sujeto_natal(c), "es", acc, tier="largo")
     assert Interpretation.objects.count() == 0
     assert _restante(acc, "informe_natal") == antes
 
@@ -255,7 +256,7 @@ def test_missing_api_key_no_deja_interpretacion_persistida(settings):
     acc = _account(informes=1)  # tier="largo" canjea informe_natal, no lectura_breve
     antes = _restante(acc, "informe_natal")
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.generar_en_segundo_plano(c, "es", acc, tier="largo")
+        svc.generar_en_segundo_plano(sujeto_natal(c), "es", acc, tier="largo")
     assert Interpretation.objects.count() == 0
     assert _restante(acc, "informe_natal") == antes
 
@@ -334,7 +335,7 @@ def test_translation_does_not_consume_daily_cap(fake_client, fake_translator, se
     _generar(c, "en", _account(lecturas_breves=1), tier="corto")
     with pytest.raises(svc.CapReached):
         svc.iniciar_generacion(
-            _chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"}), "es", _account(),
+            sujeto_natal(_chart_with_data({"time_known": True, "utc_iso": "1990-01-01T00:00:00Z"})), "es", _account(),
             tier="corto",
         )
 
@@ -431,6 +432,6 @@ def test_un_error_inesperado_al_canjear_devuelve_el_cupo_y_no_deja_la_fila(make_
 
     monkeypatch.setattr(svc, "canjear", rompe)
     with pytest.raises(RuntimeError):
-        svc.iniciar_generacion(carta, "es", cuenta, tier="corto")
+        svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="corto")
     assert CupoDiario.objects.get(fecha=timezone.now().date(), ambito="cuenta").usados == 0
     assert not Interpretation.objects.filter(chart=carta).exists()

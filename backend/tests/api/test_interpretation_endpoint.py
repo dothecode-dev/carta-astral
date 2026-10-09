@@ -5,6 +5,7 @@ import pytest
 from django.core.cache import cache
 
 from api import interpretation_service as svc
+from api.sujetos import sujeto_natal
 from api.models import BirthData, Chart, Interpretation
 
 pytestmark = pytest.mark.django_db
@@ -156,7 +157,7 @@ def test_lock_tomado_no_bloquea_el_202(account_client, fake_client, db_cache):
     db_cache: el lock vive en DatabaseCache en producción, no en LocMem.
     """
     c = _chart(account=account_client.account)
-    cache.add(svc._lock_key(c, "largo"), "otro-token", timeout=30)
+    cache.add(svc._lock_key(sujeto_natal(c), "largo"), "otro-token", timeout=30)
     resp = account_client.post(
         f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
     )
@@ -191,7 +192,7 @@ def test_segundo_idioma_con_el_primero_en_curso_devuelve_409(
     assert r1.status_code == 202
 
     # El hilo de "es" —que no arrancó— es quien tomaría el lock de la carta.
-    cache.add(svc._lock_key(c, "largo"), "hilo-de-es", timeout=30)
+    cache.add(svc._lock_key(sujeto_natal(c), "largo"), "hilo-de-es", timeout=30)
 
     r2 = account_client.post(
         f"/api/charts/{c.uuid}/interpretation/", {"lang": "en", "tier": "largo"}, format="json"

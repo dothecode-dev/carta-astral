@@ -48,7 +48,7 @@ def arrancar_informe(cuenta, fila) -> bool:
     espera —Stripe le da 10 segundos al webhook antes de redirigir a quien
     pagó—, así que la generación se lanza sin bloquear.
     """
-    if fila is None or fila.chart is None:
+    if fila is None or fila.sujeto is None:
         return False
 
     prod = catalogo.producto(fila.codigo_producto)
@@ -58,7 +58,7 @@ def arrancar_informe(cuenta, fila) -> bool:
 
     try:
         interpretacion = interpretation_service.iniciar_generacion(
-            fila.chart, fila.locale, cuenta, TIER_LARGO,
+            fila.sujeto, fila.locale, cuenta, TIER_LARGO,
         )
     except SinDerecho:
         if not (fila.saldo_deuda or _saldo_deuda(cuenta, fila)):
@@ -90,7 +90,7 @@ def arrancar_informe(cuenta, fila) -> bool:
             fila.checkout_id,
         )
         return True
-    interpretation_service.arrancar_en_hilo(interpretacion, fila.chart, cuenta)
+    interpretation_service.arrancar_en_hilo(interpretacion, cuenta)
     return True
 
 

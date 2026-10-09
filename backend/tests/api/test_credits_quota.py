@@ -2,6 +2,7 @@ import pytest
 from django.core.cache import cache
 
 from api import interpretation_service as svc
+from api.sujetos import sujeto_natal
 from api.interpretation_service import SinDerecho
 from api.models import Account, BirthData, Chart, Interpretation
 
@@ -33,7 +34,7 @@ def test_quota_exceeded_blocks_new_generation(settings):
     settings.INSTALL_FREE_CREDITS = 0
     acc = _account()  # INSTALL_FREE_CREDITS=0 → sin derecho de lectura_breve
     with pytest.raises(SinDerecho):
-        svc.iniciar_generacion(_chart(), "es", acc, tier="corto")
+        svc.iniciar_generacion(sujeto_natal(_chart()), "es", acc, tier="corto")
 
 
 def test_cache_hit_served_with_zero_credits(settings):
@@ -49,7 +50,7 @@ def test_cache_hit_served_with_zero_credits(settings):
     # (`get_or_create` con `created=False`) y la devuelve sin volver a
     # consultar el ledger. tier="largo": el default del modelo, el mismo
     # tier de la fila creada arriba.
-    out = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    out = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     assert out.text == "cached"
 
 
@@ -74,7 +75,7 @@ def test_paid_generation_bypasses_daily_cap(settings):
     cache.clear()
 
     before = CupoDiario.objects.filter(ambito="cuenta").first()
-    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     after = CupoDiario.objects.filter(ambito="cuenta").first()
 
     assert isinstance(interp, Interpretation)
@@ -92,10 +93,10 @@ def test_la_breve_cobra_free_y_el_completo_cobra_paid(make_account):
 
     acc = make_account(lecturas_breves=1, informes=1)
     chart = _chart()
-    svc.iniciar_generacion(chart, "es", acc, tier="corto")
+    svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="corto")
     assert Derecho.objects.get(codigo_producto="lectura_breve").cantidad_restante == 0
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
-    svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     assert Derecho.objects.get(codigo_producto="lectura_breve").cantidad_restante == 0
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
 
@@ -107,7 +108,7 @@ def test_sin_free_la_breve_falla_diciendo_que_falto_free(make_account):
     ("te quedaste sin lecturas gratis", no "comprá el informe")."""
     acc = make_account(lecturas_breves=0, informes=5)
     with pytest.raises(SinDerecho) as exc:
-        svc.iniciar_generacion(_chart(), "es", acc, tier="corto")
+        svc.iniciar_generacion(sujeto_natal(_chart()), "es", acc, tier="corto")
     assert exc.value.capacidad == "leer_breve"
 
 
@@ -117,7 +118,7 @@ def test_sin_paid_el_completo_falla_diciendo_que_falto_paid(make_account):
     capacidad` dice "leer_informe", no la otra capacidad."""
     acc = make_account(lecturas_breves=5, informes=0)
     with pytest.raises(SinDerecho) as exc:
-        svc.iniciar_generacion(_chart(), "es", acc, tier="largo")
+        svc.iniciar_generacion(sujeto_natal(_chart()), "es", acc, tier="largo")
     assert exc.value.capacidad == "leer_informe"
 
 
@@ -127,5 +128,5 @@ def test_la_interpretacion_vacia_se_borra_si_no_hay_credito(make_account):
     acc = make_account(lecturas_breves=0, informes=0)
     chart = _chart()
     with pytest.raises(SinDerecho):
-        svc.iniciar_generacion(chart, "es", acc, tier="corto")
+        svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="corto")
     assert chart.interpretations.count() == 0

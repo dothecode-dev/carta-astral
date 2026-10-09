@@ -12,6 +12,7 @@ import pytest
 from django.core.cache import cache
 
 from api import informe_service, notificaciones
+from api.sujetos import sujeto_natal
 from api import interpretation_service as svc
 from api.models import Derecho, Interpretation, InterpretationSection, Movimiento
 from interpret.exceptions import InterpretationError
@@ -120,11 +121,11 @@ def test_un_informe_a_medias_se_reanuda_sin_cobrar_de_nuevo(make_account, chart,
     vez de devolver — el crédito ya compró el trabajo, no hay nada que
     reembolsar."""
     acc = make_account(lecturas_breves=0, informes=1)
-    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     _generar_solo_tres_secciones(interp)
     assert _restante(acc, "informe_natal") == 0  # ya se cobró al iniciar
 
-    svc.completar_generacion(interp, chart, acc)  # reintento: retoma desde la 4ta sección
+    svc.completar_generacion(interp, acc)  # reintento: retoma desde la 4ta sección
 
     interp.refresh_from_db()
     assert interp.completa is True
@@ -151,12 +152,12 @@ def test_agotados_los_intentos_devuelve_credito_borra_secciones_y_avisa(
         lambda account, evento, contexto, lang: avisos.append((account.pk, evento, contexto, lang)),
     )
     acc = make_account(lecturas_breves=0, informes=1)
-    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     _generar_solo_tres_secciones(interp)
     interp_pk = interp.pk
 
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.completar_generacion(interp, chart, acc)
+        svc.completar_generacion(interp, acc)
 
     assert _restante(acc, "informe_natal") == 1  # devuelto
     assert not Interpretation.objects.filter(pk=interp_pk).exists()
@@ -172,10 +173,10 @@ def test_mientras_quedan_intentos_no_devuelve_ni_borra(make_account, chart, buil
     cobrado — devolver antes de agotar los intentos regalaría el reintento
     Y el crédito."""
     acc = make_account(lecturas_breves=0, informes=1)
-    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
 
     for _ in range(svc.INTENTOS_MAXIMOS - 1):
-        svc.completar_generacion(interp, chart, acc)
+        svc.completar_generacion(interp, acc)
 
     assert _restante(acc, "informe_natal") == 0  # todavía no se devolvió
     assert Interpretation.objects.filter(pk=interp.pk).exists()
@@ -202,11 +203,11 @@ def test_la_devolucion_no_se_duplica(make_account, chart, monkeypatch, build_sec
     que esto pase; lo que importa es el resultado observable: una sola
     devolución."""
     acc = make_account(lecturas_breves=0, informes=1)
-    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     monkeypatch.setattr(Interpretation, "delete", lambda self, *a, **kw: None)
 
     for _ in range(svc.INTENTOS_MAXIMOS + 1):
-        svc.completar_generacion(interp, chart, acc)
+        svc.completar_generacion(interp, acc)
 
     assert _restante(acc, "informe_natal") == 1  # sólo una devolución prosperó
     assert Movimiento.objects.filter(codigo_producto="informe_natal", tipo="devolucion").count() == 1
@@ -228,11 +229,11 @@ def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
     ÉXITO. Eso no puede devolver el crédito ni borrar el informe que se
     acaba de entregar."""
     acc = make_account(lecturas_breves=0, informes=1)
-    interp_es = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp_es = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
 
     # Dos intentos de generación DIRECTA fallan: todavía no existe sibling en "en".
-    svc.completar_generacion(interp_es, chart, acc)
-    svc.completar_generacion(interp_es, chart, acc)
+    svc.completar_generacion(interp_es, acc)
+    svc.completar_generacion(interp_es, acc)
     interp_es.refresh_from_db()
     assert interp_es.intentos == 2
     assert interp_es.completa is False
@@ -252,7 +253,7 @@ def test_traduccion_exitosa_con_intentos_agotados_no_devuelve_ni_borra(
         lambda texto, lang, client, trato="": f"[es] {texto}",
     )
 
-    svc.completar_generacion(interp_es, chart, acc)  # 3er intento: encuentra el sibling y traduce
+    svc.completar_generacion(interp_es, acc)  # 3er intento: encuentra el sibling y traduce
 
     assert _restante(acc, "informe_natal") == 0  # sigue cobrado: el informe SE ENTREGÓ, no hay nada que devolver
     assert Interpretation.objects.filter(pk=interp_es.pk).exists()  # no se borró
@@ -285,7 +286,7 @@ def test_traduccion_a_un_tercer_idioma_que_falla_no_devuelve_lo_ya_entregado(
 
     # "es" se cobra y se entrega de verdad: es el único Movimiento de
     # consumo que existe para esta carta y tier.
-    interp_es = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp_es = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     interp_es.completa = True
     interp_es.save(update_fields=["completa"])
     for orden, seccion in enumerate(SECCIONES):
@@ -297,7 +298,7 @@ def test_traduccion_a_un_tercer_idioma_que_falla_no_devuelve_lo_ya_entregado(
 
     # "pt" encuentra a "es" como sibling completo: no cobra nada (RF8), y
     # su único camino es traducir — que en este test SIEMPRE falla.
-    interp_pt = svc.iniciar_generacion(chart, "pt", acc, tier="largo")
+    interp_pt = svc.iniciar_generacion(sujeto_natal(chart), "pt", acc, tier="largo")
     assert _restante(acc, "informe_natal") == 0  # "pt" no cobró nada
 
     monkeypatch.setattr(
@@ -306,7 +307,7 @@ def test_traduccion_a_un_tercer_idioma_que_falla_no_devuelve_lo_ya_entregado(
     )
 
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.completar_generacion(interp_pt, chart, acc)
+        svc.completar_generacion(interp_pt, acc)
 
     # La carta YA entregó lo que se cobró (en "es"): no hay nada que
     # devolver aunque la traducción gratis a "pt" nunca prospere.
@@ -325,7 +326,7 @@ def test_devuelve_si_ningun_idioma_de_la_carta_y_tier_se_entrego(make_account, c
     un sibling no alcanza para frenar la devolución, hace falta que esté
     COMPLETO (ver el test de arriba, donde si lo está)."""
     acc = make_account(lecturas_breves=0, informes=1)
-    interp_es = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp_es = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     # Otro idioma de la MISMA carta y tier, a medias: existe como fila pero
     # no debe fingir que la carta ya se entregó en ningún idioma.
     Interpretation.objects.create(
@@ -334,7 +335,7 @@ def test_devuelve_si_ningun_idioma_de_la_carta_y_tier_se_entrego(make_account, c
     )
 
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.completar_generacion(interp_es, chart, acc)
+        svc.completar_generacion(interp_es, acc)
 
     assert _restante(acc, "informe_natal") == 1  # devuelto: la carta nunca se entregó en ningún idioma
     assert not Interpretation.objects.filter(pk=interp_es.pk).exists()
@@ -383,7 +384,7 @@ def test_no_devuelve_si_hay_una_fila_completa_en_otro_prompt_version(make_accoun
     )
 
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.completar_generacion(interp_nueva, chart, acc)
+        svc.completar_generacion(interp_nueva, acc)
 
     # No se devuelve nada: el chart+tier YA se entregó (con la versión
     # vieja del prompt), y el `Movimiento` de consumo real sigue vinculado
@@ -426,11 +427,11 @@ def test_la_devolucion_acredita_el_producto_real_no_una_constante_por_tier(
     acc = make_account(lecturas_breves=0, informes=0)
     otorgar(acc, "informe_vinculo", 1, origen="compra", external_id="test:vinculo")
 
-    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
     assert _restante(acc, "informe_vinculo") == 0  # se cobró de verdad
 
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.completar_generacion(interp, chart, acc)
+        svc.completar_generacion(interp, acc)
 
     assert _restante(acc, "informe_vinculo") == 1  # devuelto al producto real
     assert not Interpretation.objects.filter(pk=interp.pk).exists()
@@ -449,10 +450,10 @@ def test_lock_perdido_repetido_no_devuelve_ni_borra(make_account, chart, fake_cl
     cada uno se descuenta apenas se detecta."""
     monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: False)
     acc = make_account(lecturas_breves=0, informes=1)
-    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
 
     for _ in range(svc.INTENTOS_MAXIMOS):
-        svc.completar_generacion(interp, chart, acc)
+        svc.completar_generacion(interp, acc)
 
     assert _restante(acc, "informe_natal") == 0  # sigue cobrado: nunca hubo un fallo real
     assert Interpretation.objects.filter(pk=interp.pk).exists()  # no se borró
@@ -480,12 +481,12 @@ def test_soltar_lock_no_queda_colgado_si_notificar_revienta(
         lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("el proveedor de mail está caído")),
     )
     acc = make_account(lecturas_breves=0, informes=1)
-    interp = svc.iniciar_generacion(chart, "es", acc, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="largo")
 
-    svc.completar_generacion(interp, chart, acc)
-    svc.completar_generacion(interp, chart, acc)
+    svc.completar_generacion(interp, acc)
+    svc.completar_generacion(interp, acc)
     with pytest.raises(RuntimeError):
-        svc.completar_generacion(interp, chart, acc)  # agota los intentos; notificar revienta
+        svc.completar_generacion(interp, acc)  # agota los intentos; notificar revienta
 
-    assert cache.get(svc._lock_key(chart, "largo")) is None  # el lock no quedó colgado
+    assert cache.get(svc._lock_key(sujeto_natal(chart), "largo")) is None  # el lock no quedó colgado
     assert _restante(acc, "informe_natal") == 1  # la devolución ya había corrido antes de que reventara notificar

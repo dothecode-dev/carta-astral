@@ -49,7 +49,7 @@ class Command(BaseCommand):
             prompt_version=PROMPT_VERSION,
             intentos__lt=svc.INTENTOS_MAXIMOS,
             account__isnull=False,
-        ).select_related("chart", "account")
+        ).select_related("sujeto", "account")
 
         terminados = 0
         sin_terminar = 0
@@ -59,12 +59,10 @@ class Command(BaseCommand):
             # interpretación ahora mismo. `completar_generacion` lo chequea
             # igual y se retira solo, pero saltearlo acá evita el trabajo y
             # deja el contador diciendo la verdad.
-            if svc.esta_generandose(interpretacion.chart, interpretacion.tier):
+            if svc.esta_generandose(interpretacion.sujeto, interpretacion.tier):
                 continue
             try:
-                svc.completar_generacion(
-                    interpretacion, interpretacion.chart, interpretacion.account
-                )
+                svc.completar_generacion(interpretacion, interpretacion.account)
             except Exception:
                 # Esto procesa una cola, no un caso: un informe que revienta
                 # por algo que `completar_generacion` no contempla no puede

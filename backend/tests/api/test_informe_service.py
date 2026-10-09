@@ -2,6 +2,7 @@ import pytest
 from django.core.cache import cache
 
 from api import informe_service, interpretation_service
+from api.sujetos import sujeto_natal
 from api.models import Account, BirthData, Chart, Interpretation, InterpretationSection
 from interpret.prompts import PROMPT_VERSION
 
@@ -30,7 +31,7 @@ def lock_tomado(chart):
     # "largo" — el fixture `interpretacion` (que usan los tests de este
     # archivo salvo los que arman su propio tier vía `_interpretacion`,
     # abajo) crea su fila con el tier default del modelo, "largo".
-    key = interpretation_service._lock_key(chart, "largo")
+    key = interpretation_service._lock_key(sujeto_natal(chart), "largo")
     cache.set(key, TOKEN, timeout=600)
     yield
     cache.delete(key)

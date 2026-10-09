@@ -9,6 +9,7 @@ from django.core.cache import cache
 from django.core.management import call_command
 
 from api import informe_service
+from api.sujetos import sujeto_natal
 from api import interpretation_service as svc
 from api.models import Interpretation, InterpretationSection
 from interpret.prompts import PROMPT_VERSION, SECCIONES
@@ -82,7 +83,7 @@ def _cambiar_trato(carta, trato):
 def test_el_informe_nace_con_el_trato_de_la_carta(make_chart, cuenta, llamadas):
     carta = _con_trato(make_chart, cuenta, "femenino")
 
-    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="largo")
 
     assert interp.trato == "femenino"
     interp.refresh_from_db()
@@ -91,28 +92,28 @@ def test_el_informe_nace_con_el_trato_de_la_carta(make_chart, cuenta, llamadas):
 
 def test_las_secciones_se_generan_con_el_trato_del_informe(make_chart, cuenta, llamadas):
     carta = _con_trato(make_chart, cuenta, "femenino")
-    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="largo")
 
-    svc.completar_generacion(interp, carta, cuenta)
+    svc.completar_generacion(interp, cuenta)
 
     assert llamadas["seccion"] == ["femenino"] * len(SECCIONES)
 
 
 def test_la_lectura_breve_se_genera_con_el_trato_del_informe(make_chart, cuenta, llamadas):
     carta = _con_trato(make_chart, cuenta, "masculino")
-    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="corto")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="corto")
 
-    svc.completar_generacion(interp, carta, cuenta)
+    svc.completar_generacion(interp, cuenta)
 
     assert llamadas["breve"] == ["masculino"]
 
 
 def test_cambiar_la_carta_despues_no_cambia_las_secciones_pendientes(make_chart, cuenta, llamadas):
     carta = _con_trato(make_chart, cuenta, "femenino")
-    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="largo")
 
     _cambiar_trato(carta, "masculino")
-    svc.completar_generacion(interp, carta, cuenta)
+    svc.completar_generacion(interp, cuenta)
 
     assert llamadas["seccion"] == ["femenino"] * len(SECCIONES)
 
@@ -120,7 +121,7 @@ def test_cambiar_la_carta_despues_no_cambia_las_secciones_pendientes(make_chart,
 def test_el_cron_retoma_con_el_trato_del_informe_no_el_de_la_carta(make_chart, cuenta, llamadas):
     """Review Focus 1: `reanudar_informes` llama a `completar_generacion`."""
     carta = _con_trato(make_chart, cuenta, "femenino")
-    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="largo")
     for orden, seccion in enumerate(SECCIONES[:2]):
         InterpretationSection.objects.create(
             interpretation=interp, slug=seccion.slug, orden=orden, texto="ya estaba",
@@ -182,10 +183,10 @@ def test_el_destino_ya_existente_con_otro_trato_se_alinea_con_el_origen(make_cha
 
 def test_carta_sin_trato_usa_vacio(make_chart, cuenta, llamadas):
     carta = make_chart(account=cuenta)
-    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="largo")
     assert interp.trato == ""
 
-    svc.completar_generacion(interp, carta, cuenta)
+    svc.completar_generacion(interp, cuenta)
 
     assert llamadas["seccion"] == [""] * len(SECCIONES)
 
@@ -264,13 +265,13 @@ def test_reintento_de_una_traduccion_a_medias_no_retraduce_lo_hecho(make_chart, 
 def test_completar_generacion_retraduce_el_destino_escrito_de_cero(make_chart, cuenta, llamadas):
     """Por el camino real: el "pt" quedó a medias de cero y existe el "es"."""
     carta = _con_trato(make_chart, cuenta, "femenino")
-    pt = svc.iniciar_generacion(carta, "pt", cuenta, tier="largo")
+    pt = svc.iniciar_generacion(sujeto_natal(carta), "pt", cuenta, tier="largo")
     InterpretationSection.objects.create(
         interpretation=pt, slug=SECCIONES[0].slug, orden=0, texto="escrita de cero",
     )
     _origen_completo(carta, cuenta, trato="femenino")
 
-    svc.completar_generacion(pt, carta, cuenta)
+    svc.completar_generacion(pt, cuenta)
 
     pt.refresh_from_db()
     assert pt.completa is True
@@ -303,7 +304,7 @@ def test_completar_generacion_con_foto_vieja_no_toca_un_informe_ya_entregado(mak
     foto_vieja = Interpretation.objects.get(pk=pt.pk)
     foto_vieja.completa = False  # lo que el cron tenía en memoria
 
-    svc.completar_generacion(foto_vieja, carta, cuenta)
+    svc.completar_generacion(foto_vieja, cuenta)
 
     pt.refresh_from_db()
     assert pt.completa is True
@@ -345,10 +346,10 @@ def test_perder_el_lock_al_traducir_no_gasta_un_intento(make_chart, cuenta, llam
     proceso tomó el lock no es un intento fallido."""
     carta = _con_trato(make_chart, cuenta, "femenino")
     _origen_completo(carta, cuenta, trato="femenino")
-    pt = svc.iniciar_generacion(carta, "pt", cuenta, tier="largo")
+    pt = svc.iniciar_generacion(sujeto_natal(carta), "pt", cuenta, tier="largo")
     monkeypatch.setattr(informe_service, "renovar_lock", lambda chart, tier, token: False)
 
-    svc.completar_generacion(pt, carta, cuenta)
+    svc.completar_generacion(pt, cuenta)
 
     pt.refresh_from_db()
     assert pt.completa is False
@@ -375,7 +376,7 @@ def test_completar_generacion_relee_la_fila_antes_de_generar(make_chart, cuenta,
     foto_vieja = Interpretation.objects.get(pk=es.pk)
     foto_vieja.completa = False
 
-    svc.completar_generacion(foto_vieja, carta, cuenta)
+    svc.completar_generacion(foto_vieja, cuenta)
 
     es.refresh_from_db()
     assert es.completa is True
@@ -436,7 +437,7 @@ def test_reintento_de_traduccion_sigue_desde_el_mismo_origen(make_chart, cuenta,
 
     monkeypatch.setattr(informe_service, "translate_interpretation", _traduccion)
 
-    svc.completar_generacion(pt, carta, cuenta)
+    svc.completar_generacion(pt, cuenta)
 
     pt.refresh_from_db()
     assert pt.completa is True
@@ -453,24 +454,24 @@ def test_completar_generacion_usa_el_lock_real(make_chart, cuenta, llamadas, mon
     proceso se queda con él a mitad, la generación aborta sin gastar el
     intento. Con `renovar_lock` stubbeado a True terminaba las ocho."""
     carta = _con_trato(make_chart, cuenta, "femenino")
-    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="largo")
     escritas = []
 
     def _seccion(chart_data, seccion, lang, previo, client, reparto="", trato=""):
         escritas.append(seccion.slug)
         if len(escritas) == 2:
-            cache.set(svc._lock_key(carta, "largo"), "otro-proceso", timeout=600)
+            cache.set(svc._lock_key(sujeto_natal(carta), "largo"), "otro-proceso", timeout=600)
         return f"texto de {seccion.slug}"
 
     monkeypatch.setattr(informe_service, "build_seccion", _seccion)
 
-    svc.completar_generacion(interp, carta, cuenta)
+    svc.completar_generacion(interp, cuenta)
 
     interp.refresh_from_db()
     assert interp.completa is False
     assert interp.secciones.count() == 2
     assert interp.intentos == 0
-    assert cache.get(svc._lock_key(carta, "largo")) == "otro-proceso"
+    assert cache.get(svc._lock_key(sujeto_natal(carta), "largo")) == "otro-proceso"
 
 
 # --- Juez + reparación del trato (interpret/revision_trato.py) ---
@@ -494,9 +495,9 @@ def test_cada_seccion_generada_pasa_por_la_revision_y_se_guarda_la_revisada(
     make_chart, cuenta, llamadas, revisiones,
 ):
     carta = _con_trato(make_chart, cuenta, "neutro")
-    interp = svc.iniciar_generacion(carta, "es", cuenta, tier="largo")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="largo")
 
-    svc.completar_generacion(interp, carta, cuenta)
+    svc.completar_generacion(interp, cuenta)
 
     assert revisiones == [(f"texto de {s.slug}", "neutro", "es") for s in SECCIONES]
     interp.refresh_from_db()
@@ -508,9 +509,9 @@ def test_cada_seccion_generada_pasa_por_la_revision_y_se_guarda_la_revisada(
 
 def test_la_lectura_breve_pasa_por_la_revision(make_chart, cuenta, llamadas, revisiones):
     carta = _con_trato(make_chart, cuenta, "masculino")
-    interp = svc.iniciar_generacion(carta, "pt", cuenta, tier="corto")
+    interp = svc.iniciar_generacion(sujeto_natal(carta), "pt", cuenta, tier="corto")
 
-    svc.completar_generacion(interp, carta, cuenta)
+    svc.completar_generacion(interp, cuenta)
 
     assert revisiones == [("lectura breve", "masculino", "pt")]
     interp.refresh_from_db()

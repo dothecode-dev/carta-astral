@@ -19,6 +19,7 @@ import pytest
 from django.core.management import call_command
 
 from api import interpretation_service as svc
+from api.sujetos import sujeto_natal
 from api.models import Interpretation, InterpretationSection
 from interpret.prompts import PROMPT_VERSION, SECCIONES
 
@@ -81,7 +82,7 @@ def reanudados(monkeypatch):
     llamadas = []
     monkeypatch.setattr(
         svc, "completar_generacion",
-        lambda interpretacion, chart, account: llamadas.append(interpretacion.pk),
+        lambda interpretacion, account: llamadas.append(interpretacion.pk),
     )
     return llamadas
 
@@ -119,7 +120,7 @@ def test_no_toca_un_informe_que_se_esta_escribiendo_ahora(chart, account, reanud
     from django.core.cache import cache
 
     _a_medias(chart, account)
-    cache.set(svc._lock_key(chart, "largo"), "un-token", timeout=600)
+    cache.set(svc._lock_key(sujeto_natal(chart), "largo"), "un-token", timeout=600)
 
     call_command("reanudar_informes")
 
@@ -188,7 +189,7 @@ def test_un_informe_que_revienta_no_frena_a_los_demas(
     segunda = _a_medias(make_chart(account), account)
     atendidas = []
 
-    def _revienta_la_primera(interpretacion, chart, cuenta):
+    def _revienta_la_primera(interpretacion, cuenta):
         if interpretacion.pk == primera.pk:
             raise RuntimeError("la base se cayó justo acá")
         atendidas.append(interpretacion.pk)
