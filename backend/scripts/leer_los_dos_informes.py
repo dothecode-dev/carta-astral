@@ -30,6 +30,7 @@ from api import interpretation_service as svc  # noqa: E402
 from api.chart_service import create_chart  # noqa: E402
 from api.canje import otorgar  # noqa: E402
 from api.models import Account  # noqa: E402
+from api.sujetos import sujeto_natal  # noqa: E402
 
 if not os.environ.get("ANTHROPIC_API_KEY"):
     sys.exit(
@@ -60,8 +61,8 @@ chart = create_chart({
 
 for tier, salida in (("corto", "/tmp/astra-breve.md"), ("largo", "/tmp/astra-completo.md")):
     print(f"generando {tier}… (el completo son ocho llamadas, tarda varios minutos)")
-    interp = svc.iniciar_generacion(chart, "es", cuenta, tier=tier)
-    svc.completar_generacion(interp, chart, cuenta)
+    interp = svc.iniciar_generacion(sujeto_natal(chart), "es", cuenta, tier=tier)
+    svc.completar_generacion(interp, cuenta)
     interp.refresh_from_db()
     if not interp.completa:
         print(f"  ¡el {tier} no se completó! revisá los logs de arriba")

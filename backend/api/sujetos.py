@@ -16,6 +16,9 @@ def sujeto_natal(carta: Chart) -> Sujeto:
     carrera lee el que ganó en vez de crear un segundo."""
     existente = Sujeto.objects.filter(natal_de=carta).first()
     if existente is not None:
+        # Quien llama ya tiene la carta: cacheada, leer `sujeto.natal_de` (lo
+        # hace `secciones_aplicables` en cada sondeo de estado) no vuelve a la base.
+        existente.natal_de = carta
         return existente
     try:
         with transaction.atomic():
@@ -27,8 +30,10 @@ def sujeto_natal(carta: Chart) -> Sujeto:
 
 
 def a_sujeto(objetivo) -> Sujeto:
-    """CONTRAER (deploy 2): el cobro recibe sujetos. Una carta acá es un
-    llamador que se quedó en el deploy 1; un vínculo no tiene carta."""
+    """CONTRAER (deploy 2): el cobro y la generación reciben sujetos. Una
+    carta acá es un llamador que se quedó en el deploy 1, y resolverla en
+    silencio escondería justo el error que la parte 3 no puede tener: un
+    vínculo no tiene carta de la cual partir."""
     if not isinstance(objetivo, Sujeto):
         raise TypeError(f"se esperaba Sujeto, llegó {type(objetivo).__name__}")
     return objetivo

@@ -167,7 +167,6 @@ class Interpretation(models.Model):
         ]
 
 
-
 class InterpretationSection(models.Model):
     """Una sección del informe, persistida apenas se termina de generar.
 

@@ -23,6 +23,7 @@ from api.canje import canjear, devolver
 from api.catalogo import codigos_otorgados_por
 from api.exceptions import CapReached, GenerationInProgress
 from api.models import Interpretation, Movimiento, Sujeto
+from api.sujetos import a_sujeto
 from interpret.exceptions import InterpretationError
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 
@@ -96,16 +97,6 @@ def _build_client():
     )
 
 
-def _sujeto(objetivo) -> Sujeto:
-    """CONTRAER (deploy 2 de la parte 2): la generación recibe sujetos. Una
-    carta acá es un llamador que se quedó en el deploy 1, y resolverla en
-    silencio escondería justo el error que la parte 3 no puede tener: un
-    vínculo no tiene carta de la cual partir."""
-    if not isinstance(objetivo, Sujeto):
-        raise TypeError(f"se esperaba Sujeto, llegó {type(objetivo).__name__}")
-    return objetivo
-
-
 def esta_generandose(objetivo, tier: str) -> bool:
     """¿Hay un proceso escribiendo este tier de esta carta ahora mismo?
 
@@ -139,7 +130,7 @@ def _lock_key(objetivo, tier: str) -> str:
     # por carta, así que para el natal es la misma exclusión que antes. La `s`
     # del formato la distingue de la clave vieja (por carta): un deploy que la
     # cambia tiene que drenar primero (`make deploy`).
-    sujeto = _sujeto(objetivo)
+    sujeto = a_sujeto(objetivo)
     return f"interp:lock:s{sujeto.pk}:{PROMPT_VERSION}:{tier}"
 
 
@@ -199,7 +190,7 @@ def _sibling_completo(objetivo, lang: str, tier: str) -> Interpretation | None:
     otro. Sin este filtro, pedir la breve en "en" después de tener el
     completo en "es" encontraría ese completo como sibling y lo entregaría
     gratis en vez de cobrar el crédito free que corresponde."""
-    sujeto = _sujeto(objetivo)
+    sujeto = a_sujeto(objetivo)
     return (
         Interpretation.objects.filter(
             sujeto=sujeto, prompt_version=PROMPT_VERSION, tier=tier, completa=True,
@@ -300,7 +291,7 @@ def _sibling_en_curso(objetivo, lang: str, tier: str) -> Interpretation | None:
     fix round 1): el lock es por (chart, tier) desde que dos tiers de la
     misma carta pueden generarse en paralelo — mirar el lock de OTRO tier
     acá no diría nada sobre si hay una generación en curso de ESTE."""
-    sujeto = _sujeto(objetivo)
+    sujeto = a_sujeto(objetivo)
     if not esta_generandose(sujeto, tier):
         return None
     return (
@@ -379,7 +370,7 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
     para el detalle y la justificación de por qué se rechaza acá en vez de
     esperar). Se lanza `GenerationInProgress` ANTES de cobrar: no hay nada
     que devolver porque nunca se llega a tocar ningún derecho."""
-    sujeto = _sujeto(objetivo)
+    sujeto = a_sujeto(objetivo)
     if sujeto.producto != Sujeto.NATAL:
         # El informe de vínculo es la parte 3: sin su prompt y sus secciones,
         # generar acá escribiría un informe natal sobre datos vacíos.

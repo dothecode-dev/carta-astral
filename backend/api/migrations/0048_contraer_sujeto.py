@@ -8,7 +8,6 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
-
 class Migration(migrations.Migration):
     dependencies = [("api", "0047_rellenar_sujetos_de_nuevo")]
 

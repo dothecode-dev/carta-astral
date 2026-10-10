@@ -21,7 +21,11 @@ def rellenar(apps, schema_editor=None) -> dict:
         for carta_id, account_id in Chart.objects.values_list("id", "account_id")
         if carta_id not in con_sujeto
     ]
-    Sujeto.objects.bulk_create(nuevos, batch_size=500)
+    # `ignore_conflicts`: entre la foto de arriba y esta línea el contenedor
+    # viejo puede crear el sujeto de una carta (la 0047 corre con él atendiendo).
+    # El suyo gana y el UPDATE de abajo lo encuentra igual; sin esto, el único de
+    # `natal_de` abortaba la migración y tiraba el deploy.
+    Sujeto.objects.bulk_create(nuevos, batch_size=500, ignore_conflicts=True)
 
     # Una sola sentencia por modelo. Si el contenedor viejo creó una carta
     # después del `bulk_create`, su subconsulta da NULL y la fila queda sin

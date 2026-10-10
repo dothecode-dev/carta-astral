@@ -26,6 +26,7 @@ import secrets
 
 from django import forms
 from django.contrib import admin, messages
+from django.db.models import Count
 from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import path, reverse
 from django.utils import timezone
@@ -37,7 +38,6 @@ from api.models import (
     Account, Chart, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, Movimiento,
     PasarelaCheckout,
 )
-from api.sujetos import sujeto_natal
 
 
 class SoloLectura(admin.ModelAdmin):
@@ -133,9 +133,17 @@ class ChartAdmin(SoloLectura):
     fields = ("uuid", "account", "house_system", "zodiac", "engine_version", "created_at")
     readonly_fields = fields
 
-    @admin.display(description="lecturas")
+    def get_queryset(self, request):
+        # Un conteo por la base en vez de una consulta por fila; y sin
+        # `sujeto_natal`, que crea el sujeto si falta: mirar el listado de un
+        # admin de sólo lectura no tiene que escribir nada.
+        return super().get_queryset(request).annotate(
+            n_lecturas=Count("sujeto_natal__interpretations"),
+        )
+
+    @admin.display(description="lecturas", ordering="n_lecturas")
     def lecturas(self, obj):
-        return sujeto_natal(obj).interpretations.count()
+        return obj.n_lecturas
 
 
 @admin.register(Interpretation)

@@ -294,3 +294,32 @@ def test_los_modelos_que_si_importan_estan_registrados():
 
     for modelo in (Account, Chart, Interpretation):
         assert modelo in dj_admin.site._registry
+
+
+@pytest.mark.django_db
+@sin_manifiesto
+def test_el_listado_de_cartas_cuenta_lecturas_sin_crear_sujetos(admin_montado):
+    """`sujeto_natal` crea el sujeto si falta: llamarlo por fila hacía que mirar
+    el listado de un admin de sólo lectura escribiera en la base."""
+    from api.models import Sujeto
+    from api.sujetos import sujeto_natal
+
+    acc = Account.objects.create(email="l@x.com")
+    bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
+    con_lecturas = Chart.objects.create(birth_data=bd, data={}, engine_version="t", account=acc)
+    for lang in ("es", "en"):
+        Interpretation.objects.create(
+            sujeto=sujeto_natal(con_lecturas), lang=lang, prompt_version="v", text="", account=acc,
+        )
+    sin_sujeto = Chart.objects.create(birth_data=bd, data={}, engine_version="t", account=acc)
+    staff = User.objects.create_superuser("staff6", "s6@x.com", "pw-de-test-12345")
+    c = Client()
+    c.force_login(staff)
+
+    r = c.get("/panel-test/api/chart/")
+
+    assert r.status_code == 200
+    assert not Sujeto.objects.filter(natal_de=sin_sujeto).exists()
+    filas = {f.uuid: f for f in r.context["cl"].result_list}
+    assert filas[con_lecturas.uuid].n_lecturas == 2
+    assert filas[sin_sujeto.uuid].n_lecturas == 0

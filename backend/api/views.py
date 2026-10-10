@@ -486,14 +486,15 @@ class InterpretationEstadoView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
+        sujeto = sujeto_natal(chart)
         # Filtrado por tier, mismo motivo que en `InterpretationView.get`:
         # sin él, con dos productos conviviendo en (chart, lang), `.first()`
         # podía devolver el progreso del informe completo a quien está
         # sondeando la lectura breve (o al revés).
         interpretacion = Interpretation.objects.filter(
-            sujeto=sujeto_natal(chart), lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
+            sujeto=sujeto, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
-        total = len(informe_service.secciones_aplicables(sujeto_natal(chart), tier))
+        total = len(informe_service.secciones_aplicables(sujeto, tier))
         if interpretacion is None:
             return Response({"completa": False, "hechas": 0, "total": total})
         return Response(
@@ -527,9 +528,11 @@ class InterpretationSeccionesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         chart = get_object_or_404(Chart, uuid=uuid, account=request.user)
-        total = len(informe_service.secciones_aplicables(sujeto_natal(chart), tier))
-        interpretacion = Interpretation.objects.filter(
-            sujeto=sujeto_natal(chart), lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
+        sujeto = sujeto_natal(chart)
+        total = len(informe_service.secciones_aplicables(sujeto, tier))
+        # `select_related`: `secciones_escritas` vuelve a leer el sujeto y su carta.
+        interpretacion = Interpretation.objects.select_related("sujeto__natal_de").filter(
+            sujeto=sujeto, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         ).first()
         if interpretacion is None:
             return Response(

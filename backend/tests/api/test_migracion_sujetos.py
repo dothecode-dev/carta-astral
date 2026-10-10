@@ -154,6 +154,50 @@ def test_la_0047_rellena_lo_que_quedo_sin_sujeto(en):
     assert PasarelaCheckout.objects.get(checkout_id="cs_v").sujeto_id == s.pk
 
 
+class _ConCarrera:
+    """Los `apps` de la migración, pero listar las cartas corre antes `al_listar`:
+    el contenedor viejo creando un sujeto entre la foto de `rellenar` y su
+    `bulk_create`, que es lo que pasa en la ventana del deploy."""
+
+    def __init__(self, apps, al_listar):
+        self._apps, self._al_listar = apps, al_listar
+
+    def get_model(self, app, nombre):
+        modelo = self._apps.get_model(app, nombre)
+        if nombre != "Chart":
+            return modelo
+        al_listar = self._al_listar
+
+        class _Objetos:
+            def values_list(self, *a, **k):
+                al_listar()
+                return modelo.objects.values_list(*a, **k)
+
+        class _Carta:
+            objects = _Objetos()
+
+        return _Carta
+
+
+def test_rellenar_tolera_un_sujeto_creado_por_el_contenedor_viejo_en_la_ventana(en):
+    """La 0047 corre con el deploy 1 todavía atendiendo —y el webhook acredita
+    aun con el cartel puesto—: si crea el sujeto de una carta después de la
+    foto, el `bulk_create` choca con el único de `natal_de` y tira el deploy."""
+    from importlib import import_module
+
+    rellenar = import_module("api.migrations.0039_rellenar_sujetos").rellenar
+    apps = en("0046_entrada_cache")
+    Sujeto, Interpretation, _, _ = _modelos(apps)
+    c = _carta(apps, _cuenta(apps))
+    Interpretation.objects.bulk_create([Interpretation(chart=c, lang="es", prompt_version="v", text="")])
+
+    rellenar(_ConCarrera(apps, lambda: Sujeto.objects.create(producto="natal", natal_de=c)))
+
+    s = Sujeto.objects.get(natal_de_id=c.pk)
+    assert Sujeto.objects.count() == 1
+    assert Interpretation.objects.get().sujeto_id == s.pk
+
+
 def test_la_0047_suelta_los_consumos_que_desvinculo_el_devolver_viejo(en):
     """El `devolver` anterior a la parte 2 desvinculaba sólo `chart`: un
     consumo natal sin carta y con sujeto se daría por cobrado y regalaría el

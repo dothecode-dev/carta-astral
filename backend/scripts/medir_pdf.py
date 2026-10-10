@@ -43,13 +43,13 @@ def _mb_rss() -> float:
 # VPS es el incremento de abajo, no este número.
 mb_antes = _mb_rss()
 
-interp = Interpretation.objects.filter(completa=True).first()
+interp = Interpretation.objects.filter(completa=True, sujeto__producto="natal").first()
 assert interp is not None, "generá un informe completo antes de medir"
 
 payload = {
     "labels": {
         "brand_tagline": "Tu carta natal", "eyebrow": "Carta natal",
-        "chart_name": interp.chart.birth_data.name or "Carta",
+        "chart_name": interp.sujeto.natal_de.birth_data.name or "Carta",
         "birth_line": "12 de marzo de 1994 · 07:20 · Buenos Aires, Argentina",
         "positions": "Posiciones", "aspects": "Aspectos",
         "reading": "Tu lectura", "made_with": "Hecho con ASTRA",
@@ -68,7 +68,7 @@ ser = ChartPdfSerializer(data=payload)
 assert ser.is_valid(), ser.errors
 
 t0 = time.time()
-blob = render_pdf(interp.chart, ser.validated_data)
+blob = render_pdf(interp.sujeto.natal_de, ser.validated_data)
 segundos = time.time() - t0
 mb_despues = _mb_rss()
 

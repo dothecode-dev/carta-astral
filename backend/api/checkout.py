@@ -192,7 +192,11 @@ class CheckoutEstadoView(APIView):
     permission_classes = [HasAccount]
 
     def get(self, request, checkout_id: str):
-        fila = get_object_or_404(PasarelaCheckout, checkout_id=checkout_id, account=request.user)
+        fila = get_object_or_404(
+            # La web sondea esto hasta que se acredita: el destino lee el sujeto y su carta.
+            PasarelaCheckout.objects.select_related("sujeto__natal_de"),
+            checkout_id=checkout_id, account=request.user,
+        )
 
         if fila.acreditado_at is None:
             return Response({"estado": "pendiente"})
