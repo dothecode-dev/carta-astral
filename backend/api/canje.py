@@ -12,7 +12,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from api.catalogo import ACCESO, codigos_otorgados_por, producto
+from api.catalogo import ACCESO, codigos_otorgados_por, producto, sujeto_de
 from api.models import Account, Derecho, Movimiento
 from api.sujetos import a_sujeto
 
@@ -25,6 +25,11 @@ class SinDerecho(Exception):
     def __init__(self, capacidad: str):
         self.capacidad = capacidad
         super().__init__(f"sin derecho para {capacidad}")
+
+
+class CapacidadAjena(ValueError):
+    """Un derecho de un producto pedido contra el sujeto de otro: un error de
+    programación, no algo que decida quien compra (RF18)."""
 
 
 class MontoInvalido(Exception):
@@ -244,6 +249,8 @@ def canjear(account, capacidad: str, objetivo, build=None):
     with transaction.atomic():
         acc = Account.objects.select_for_update().get(pk=account.pk)
         sujeto = a_sujeto(objetivo)
+        if sujeto.producto != sujeto_de(capacidad):
+            raise CapacidadAjena(f"{capacidad} no se canjea sobre un sujeto {sujeto.producto}")
 
         ya = Movimiento.objects.filter(
             account=acc, sujeto=sujeto, tipo="consumo", codigo_producto__in=codigos,

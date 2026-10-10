@@ -10,7 +10,9 @@ pytestmark = pytest.mark.catalogo_real
 
 
 def test_catalogo_tiene_exactamente_los_productos_de_esta_iteracion():
-    assert set(CATALOGO) == {"lectura_breve", "informe_natal", "pack_3_natal", "pack_5_natal"}
+    assert set(CATALOGO) == {
+        "lectura_breve", "informe_natal", "pack_3_natal", "pack_5_natal", "informe_vinculo",
+    }
 
 
 @pytest.mark.parametrize(

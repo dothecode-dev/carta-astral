@@ -30,6 +30,11 @@ class Producto:
     #: nombra —`Movimiento`, `PasarelaCheckout`, un reembolso de una compra
     #: vieja lo busca en el catálogo—, pero no se puede abrir una compra nueva.
     vendible: bool = True
+    #: Nombre del setting que lo enciende; "" = siempre encendido (RF19).
+    flag: str = ""
+    #: A qué sujeto se aplican sus capacidades: un derecho de un producto no
+    #: canjea el sujeto de otro (RF18).
+    sujeto: str = "natal"
 
     def __post_init__(self) -> None:
         if self.naturaleza not in (CONSUMIBLE, ACCESO):
@@ -56,6 +61,11 @@ _PRODUCTOS = (
         "pack_5_natal", 12500, CONSUMIBLE, ("leer_informe",), (("informe_natal", 5),),
         vendible=False,
     ),
+    # Precio provisorio (decisión del 10-10-2026); el definitivo se fija al lanzar.
+    Producto(
+        "informe_vinculo", 900, CONSUMIBLE, ("leer_vinculo",), (("informe_vinculo", 1),),
+        flag="VINCULO_ENABLED", sujeto="vinculo",
+    ),
 )
 
 CATALOGO: dict[str, Producto] = {p.codigo: p for p in _PRODUCTOS}
@@ -68,15 +78,37 @@ def producto(codigo: str) -> Producto:
         raise KeyError(f"producto desconocido: {codigo}") from None
 
 
+def _encendido(p: Producto) -> bool:
+    from django.conf import settings
+
+    return not p.flag or bool(getattr(settings, p.flag))
+
+
 def a_la_venta() -> list[Producto]:
-    """Lo que se cobra hoy: con precio y no retirado. Es la única definición;
-    el catálogo público, los cupones, el admin y la verificación contra Stripe
-    preguntan acá."""
-    return [p for p in CATALOGO.values() if p.precio_centavos > 0 and p.vendible]
+    """Lo que se cobra hoy: con precio, no retirado y con su flag encendido
+    (RF19). Es la única definición; el catálogo público, los cupones, el admin
+    y la verificación contra Stripe preguntan acá."""
+    return [
+        p for p in CATALOGO.values() if p.precio_centavos > 0 and p.vendible and _encendido(p)
+    ]
+
+
+def disponible(codigo: str) -> bool:
+    """Si se puede abrir una compra de este producto: existe, no está retirado
+    y su flag está encendido."""
+    p = CATALOGO.get(codigo)
+    return p is not None and p.vendible and _encendido(p)
 
 
 def productos_con_capacidad(capacidad: str) -> tuple[Producto, ...]:
     return tuple(p for p in CATALOGO.values() if capacidad in p.capacidades)
+
+
+def sujeto_de(capacidad: str) -> str:
+    """Sobre qué sujeto se ejerce una capacidad. Todos los productos que la
+    declaran coinciden; si no, el catálogo está mal y conviene que explote."""
+    (sujeto,) = {p.sujeto for p in productos_con_capacidad(capacidad)}
+    return sujeto
 
 
 def codigos_otorgados_por(capacidad: str) -> set[str]:

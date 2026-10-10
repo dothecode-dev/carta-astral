@@ -523,6 +523,9 @@ IAP_WEBHOOK_ENABLED = os.environ.get("IAP_WEBHOOK_ENABLED", "0") == "1"
 # construir el cobro (spec de Vínculo, sección 10). La web no tiene flag
 # propio: le pregunta a `GET /api/vinculo/`, así hay una sola fuente de verdad.
 VINCULO_PREVIEW_ENABLED = os.environ.get("VINCULO_PREVIEW_ENABLED", "0") == "1"
+# La compra del vínculo: catálogo, checkout, cupones y todos sus endpoints
+# (RF19, RF25). Se enciende junto con VINCULO_PREVIEW_ENABLED, nunca uno solo.
+VINCULO_ENABLED = os.environ.get("VINCULO_ENABLED", "0") == "1"
 
 # Cache compartido entre workers: el throttle, el tope global y el lock viven
 # acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache

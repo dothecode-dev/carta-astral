@@ -31,8 +31,8 @@ def carta(make_chart, cuenta):
     return make_chart(account=cuenta)
 
 
-def _restante(cuenta) -> int:
-    return Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante
+def _restante(cuenta, codigo="informe_natal") -> int:
+    return Derecho.objects.get(account=cuenta, codigo_producto=codigo).cantidad_restante
 
 
 def _consumos(cuenta):
@@ -56,10 +56,10 @@ def test_canjear_dos_veces_el_mismo_sujeto_es_un_solo_canje(cuenta, carta):
 
 
 def test_un_sujeto_sin_carta_se_canjea_y_queda_sin_carta(cuenta):
-    """Lo que será un vínculo: no tiene `natal_de`."""
-    otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:4")
+    """Un vínculo: no tiene `natal_de`. Con su propio producto (RF18)."""
+    otorgar(cuenta, "informe_vinculo", 1, origen="compra", external_id="p:4")
     s = Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
-    canjear(cuenta, "leer_informe", s)
+    canjear(cuenta, "leer_vinculo", s)
     consumo = _consumos(cuenta).get()
     assert consumo.sujeto_id == s.pk
 
@@ -68,22 +68,22 @@ def test_dos_vinculos_distintos_se_cobran_por_separado(cuenta):
     """Ninguno de los dos tiene carta (`natal_de` vacío): si el «ya canjeado»
     mirara la carta y no el sujeto, el segundo figuraría como ya cobrado y la
     persona pagaría un informe que nunca se arranca."""
-    otorgar(cuenta, "informe_natal", 2, origen="compra", external_id="p:7")
+    otorgar(cuenta, "informe_vinculo", 2, origen="compra", external_id="p:7")
     uno = Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
     otro = Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
 
-    canjear(cuenta, "leer_informe", uno)
-    canjear(cuenta, "leer_informe", otro)
+    canjear(cuenta, "leer_vinculo", uno)
+    canjear(cuenta, "leer_vinculo", otro)
 
     assert _consumos(cuenta).count() == 2
-    assert _restante(cuenta) == 0
+    assert _restante(cuenta, "informe_vinculo") == 0
 
 
-def test_dos_sujetos_distintos_son_dos_canjes(cuenta, carta):
+def test_dos_sujetos_distintos_son_dos_canjes(cuenta, carta, make_chart):
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:5")
     canjear(cuenta, "leer_informe", sujeto_natal(carta))
     with pytest.raises(SinDerecho):
-        canjear(cuenta, "leer_informe", Sujeto.objects.create(producto=Sujeto.VINCULO))
+        canjear(cuenta, "leer_informe", sujeto_natal(make_chart(account=cuenta)))
 
 
 def test_devolver_por_sujeto_libera_el_canje(cuenta, carta):
@@ -104,9 +104,10 @@ def test_devolver_por_sujeto_libera_el_canje(cuenta, carta):
 
 def test_aplicar_compra_con_sujeto_canjea_ese_sujeto(cuenta):
     s = Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
-    aplicar_compra(cuenta, "informe_natal", _precio(), external_id="stripe:1", sujeto=s)
+    precio = producto("informe_vinculo").precio_centavos
+    aplicar_compra(cuenta, "informe_vinculo", precio, external_id="stripe:1", sujeto=s)
     assert _consumos(cuenta).get().sujeto_id == s.pk
-    assert _restante(cuenta) == 0
+    assert _restante(cuenta, "informe_vinculo") == 0
 
 
 def test_aplicar_compra_sin_carta_ni_sujeto_acredita_y_no_canjea(cuenta):
