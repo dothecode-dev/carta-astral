@@ -10,17 +10,26 @@ webhook lo vuelve a validar contra la orden antes de otorgar nada.
 
 import logging
 
+from django.conf import settings
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from api import analitica, catalogo, compra_service, cupones, mantenimiento, notificaciones, stripe_client
+from api import (
+    analitica,
+    catalogo,
+    compra_service,
+    cupones,
+    mantenimiento,
+    notificaciones,
+    stripe_client,
+)
 from api.auth import AccountTokenAuthentication
-from api.models import Chart, PasarelaCheckout
-from api.sujetos import sujeto_natal
+from api.models import Chart, PasarelaCheckout, Sujeto
 from api.permissions import HasAccount
+from api.sujetos import sujeto_natal
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +99,23 @@ class CheckoutView(APIView):
         if chart_id:
             carta = get_object_or_404(Chart, uuid=chart_id, account=request.user)
         sujeto = sujeto_natal(carta) if carta is not None else None
+        # Un vínculo propio (parte 3): mismo trato que la carta, 404 si es ajeno.
+        vinculo_id = request.data.get("vinculo_id")
+        if vinculo_id:
+            if carta is not None or not settings.VINCULO_ENABLED:
+                return Response({"error": "producto inválido"}, status=status.HTTP_400_BAD_REQUEST)
+            sujeto = get_object_or_404(
+                Sujeto, uuid=vinculo_id, account=request.user, producto=Sujeto.VINCULO,
+            )
+        # El producto tiene que ser del sujeto: un natal contra un vínculo (o al
+        # revés) cobraría algo que el webhook no puede canjear (RF18).
+        if (
+            sujeto is not None and codigo in catalogo.CATALOGO
+            and catalogo.producto(codigo).sujeto != sujeto.producto
+        ):
+            return Response(
+                {"error": "producto inválido para este sujeto"}, status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # El idioma en el que está navegando. Decide tres cosas: en qué idioma
         # ve el checkout de Stripe, a qué página vuelve después de pagar, y en
@@ -211,6 +237,8 @@ class CheckoutEstadoView(APIView):
         # `/carta/None` sería un 404 en la cara de quien pagó.
         if suelto and fila.sujeto is not None and fila.sujeto.natal_de_id is not None:
             destino = {"tipo": "carta", "id": str(fila.sujeto.natal_de.uuid)}
+        elif suelto and fila.sujeto is not None and fila.sujeto.producto == Sujeto.VINCULO:
+            destino = {"tipo": "vinculo", "id": str(fila.sujeto.uuid)}
         else:
             destino = {"tipo": "cuenta"}
         cuerpo = {"estado": "acreditado", "destino": destino}
