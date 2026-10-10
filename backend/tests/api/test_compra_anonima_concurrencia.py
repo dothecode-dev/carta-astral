@@ -39,9 +39,9 @@ def test_tres_entregas_simultaneas_crean_una_cuenta_y_acreditan_una_vez(monkeypa
     cuenta = Account.objects.get(email="c@mail.com")
     anonima.refresh_from_db()
     assert anonima.account == cuenta and anonima.cuenta_nueva is True
-    assert Chart.objects.get(pk=anonima.chart_id).account == cuenta
+    assert Chart.objects.get(pk=anonima.sujeto.natal_de_id).account == cuenta
     assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION_ANONIMA}").count() == 1
-    assert Interpretation.objects.filter(chart_id=anonima.chart_id).count() == 1
+    assert Interpretation.objects.filter(sujeto__natal_de_id=anonima.sujeto.natal_de_id).count() == 1
 
 
 @requiere_postgres
@@ -84,7 +84,7 @@ def test_dos_compras_distintas_con_el_mismo_mail_nuevo_crean_una_cuenta_y_una_so
     for checkout_id in ids:
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=None, codigo_producto="informe_natal",
-            chart=(_carta := make_chart(account=None)), sujeto=sujeto_natal(_carta), anonimo=True, nonce_hash="y" * 64,
+            sujeto=sujeto_natal(make_chart(account=None)), anonimo=True, nonce_hash="y" * 64,
             precio_centavos=2900,
         )
     monkeypatch.setattr(
@@ -154,7 +154,7 @@ def test_el_canje_y_una_segunda_compra_a_la_vez_no_dejan_sesion_ni_se_traban(mak
         for checkout_id in (atacante, victima):
             PasarelaCheckout.objects.create(
                 checkout_id=checkout_id, account=None, codigo_producto="informe_natal",
-                chart=(_carta := make_chart(account=None)), sujeto=sujeto_natal(_carta), anonimo=True, nonce_hash=hash_token(f"n-{checkout_id}"),
+                sujeto=sujeto_natal(make_chart(account=None)), anonimo=True, nonce_hash=hash_token(f"n-{checkout_id}"),
                 precio_centavos=2900,
             )
         cuenta = compra_anonima.adjudicar(atacante, email)

@@ -75,7 +75,7 @@ def test_a_sujeto_acepta_sujetos_y_rechaza_una_carta(chart):
 def test_borrar_la_carta_borra_su_sujeto_natal_y_el_informe(chart, account):
     """Mismo efecto que hoy: el informe cae con la carta (CASCADE)."""
     i = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
     chart.delete()
     assert not Sujeto.objects.exists()

@@ -110,7 +110,7 @@ def test_post_returns_interpretation(account_client, fake_client):
         f"/api/charts/{c.uuid}/interpretation/", {"lang": "es", "tier": "largo"}, format="json"
     )
     assert resp.status_code == 202
-    interp = Interpretation.objects.get(chart=c, lang="es", prompt_version=svc.PROMPT_VERSION)
+    interp = Interpretation.objects.get(sujeto__natal_de=c, lang="es", prompt_version=svc.PROMPT_VERSION)
     assert interp.completa is False
     assert _derechos_de_cobro(account_client.account) == antes - 1
 
@@ -119,7 +119,7 @@ def test_default_lang_es(account_client, fake_client):
     c = _chart(account=account_client.account)
     resp = account_client.post(f"/api/charts/{c.uuid}/interpretation/", {"tier": "largo"}, format="json")
     assert resp.status_code == 202
-    assert Interpretation.objects.get(chart=c).lang == "es"
+    assert Interpretation.objects.get(sujeto__natal_de=c).lang == "es"
 
 
 def test_invalid_lang_400(account_client, fake_client):

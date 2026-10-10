@@ -448,10 +448,8 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
     destino, _ = Interpretation.objects.get_or_create(
         sujeto=origen.sujeto, lang=destino_lang, prompt_version=origen.prompt_version,
         tier=origen.tier,
-        # `chart` se sigue escribiendo hasta el deploy 3: el código del deploy 1
-        # la lee, y es lo que permite volver a él.
         defaults={
-            "chart": origen.sujeto.natal_de, "text": "", "account": origen.account,
+            "text": "", "account": origen.account,
             "trato": origen.trato, "traducido_de": origen,
         },
     )

@@ -109,12 +109,6 @@ class Interpretation(models.Model):
     # atar dejarían el bug en silencio si alguien cambia una y no la otra.
     TIERS = ((TIER_CORTO, TIER_CORTO), (TIER_LARGO, TIER_LARGO))
 
-    # Parte 2 de Vínculo, deploy 2: nada la lee, pero se sigue escribiendo
-    # para poder volver al deploy 1. NULL-able para que el deploy 3 pueda dejar
-    # de escribirla; la columna se borra con el primer deploy de la parte 3.
-    chart = models.ForeignKey(
-        Chart, on_delete=models.CASCADE, null=True, blank=True, related_name="interpretations",
-    )
     sujeto = models.ForeignKey("Sujeto", on_delete=models.CASCADE, related_name="interpretations")
     account = models.ForeignKey(
         "Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="interpretations",
@@ -158,7 +152,6 @@ class Interpretation(models.Model):
     avisada_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        unique_together = ("chart", "lang", "prompt_version", "tier")
         constraints = [
             models.UniqueConstraint(
                 fields=["sujeto", "lang", "prompt_version", "tier"],
@@ -428,9 +421,6 @@ class Movimiento(models.Model):
     tipo = models.CharField(max_length=12, choices=TIPOS)
     origen = models.CharField(max_length=8, choices=ORIGENES)
     cantidad = models.IntegerField(help_text="firmado: + ingresa, - consume")
-    chart = models.ForeignKey(
-        "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos",
-    )
     # Parte 2 de Vínculo: lo escribe `canje.py`, explícito (sin `save()` mágico).
     sujeto = models.ForeignKey(
         "Sujeto", on_delete=models.SET_NULL, null=True, blank=True,
@@ -464,10 +454,10 @@ class PasarelaCheckout(models.Model):
     pasarela no conoce —la carta y el idioma—. La fila es la fuente de verdad;
     la metadata que viaja a Stripe es el respaldo.
 
-    `chart` es opcional y es lo que hace que comprar desde una carta termine
-    con esa carta escribiéndose, en vez de con un derecho suelto que hay que ir
-    a usar a mano. `SET_NULL`: si se borra la carta antes de que llegue el
-    webhook, el pago se acredita igual.
+    `sujeto` es opcional y es lo que hace que comprar desde una carta termine
+    con ese informe escribiéndose, en vez de con un derecho suelto que hay que
+    ir a usar a mano. `SET_NULL`: si se borra la carta (y con ella su sujeto)
+    antes de que llegue el webhook, el pago se acredita igual.
     """
 
     checkout_id = models.CharField(max_length=100, unique=True)
@@ -475,10 +465,6 @@ class PasarelaCheckout(models.Model):
         "Account", on_delete=models.SET_NULL, null=True, related_name="checkouts",
     )
     codigo_producto = models.CharField(max_length=50)
-    chart = models.ForeignKey(
-        "Chart", on_delete=models.SET_NULL, null=True, blank=True, related_name="checkouts",
-    )
-    # Parte 2 de Vínculo, deploy 1: convive con `chart` (ver `Interpretation`).
     sujeto = models.ForeignKey(
         "Sujeto", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="checkouts",

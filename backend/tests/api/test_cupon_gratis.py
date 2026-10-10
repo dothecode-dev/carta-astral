@@ -87,7 +87,7 @@ def test_avisa_mide_y_arranca_el_informe_como_un_pago(account_client, cupon_100,
     assert nombre == "compra_completada"
     assert props["monto_centavos"] == 0 and props["cupon"] == "REGALO"
     (fila,) = avisos["informe"]
-    assert fila.chart == carta
+    assert fila.sujeto.natal_de == carta
 
 
 def test_dos_pedidos_seguidos_otorgan_una_sola_vez(account_client, cupon_100, avisos):

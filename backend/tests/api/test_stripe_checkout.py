@@ -84,7 +84,7 @@ def test_la_carta_queda_atada_a_la_compra(account_client, stripe_responde, make_
 
     account_client.post(URL, {"producto": "informe_natal", "chart_id": str(carta.uuid)})
 
-    assert PasarelaCheckout.objects.get(checkout_id="cs_test_nueva").chart_id == carta.pk
+    assert PasarelaCheckout.objects.get(checkout_id="cs_test_nueva").sujeto.natal_de_id == carta.pk
 
 
 def test_una_carta_ajena_no_se_puede_atar(

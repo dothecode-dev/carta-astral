@@ -42,7 +42,7 @@ def _sembrar_cuenta_con_cartas_y_ledger(account):
         birth_data=bd, data={}, engine_version="test", account=account,
     )
     interpretacion = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, account=account, text="x",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, account=account, text="x",
     )
     InterpretationSection.objects.create(
         interpretation=interpretacion, slug=SECCIONES[0].slug, orden=0, texto="texto",

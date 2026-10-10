@@ -142,7 +142,7 @@ def test_la_traduccion_nace_con_el_trato_del_origen(make_chart, cuenta, llamadas
     """Review Focus 2."""
     carta = _con_trato(make_chart, cuenta, "femenino")
     origen = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="es", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, completa=True, trato="femenino",
     )
     for orden, seccion in enumerate(SECCIONES):
@@ -153,7 +153,7 @@ def test_la_traduccion_nace_con_el_trato_del_origen(make_chart, cuenta, llamadas
     _cambiar_trato(carta, "masculino")
     informe_service.traducir_informe(origen, "pt", object(), TOKEN)
 
-    destino = Interpretation.objects.get(chart=carta, lang="pt", tier="largo")
+    destino = Interpretation.objects.get(sujeto__natal_de=carta, lang="pt", tier="largo")
     assert destino.trato == "femenino"
     assert llamadas["traduccion"] == ["femenino"] * len(SECCIONES)
 
@@ -164,14 +164,14 @@ def test_el_destino_ya_existente_con_otro_trato_se_alinea_con_el_origen(make_cha
     trato ACTUAL de la carta, pero es una traducción del origen."""
     carta = _con_trato(make_chart, cuenta, "femenino")
     origen = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="es", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, completa=True, trato="femenino",
     )
     InterpretationSection.objects.create(
         interpretation=origen, slug=SECCIONES[0].slug, orden=0, texto="x",
     )
     destino = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, trato="masculino",
     )
 
@@ -196,7 +196,7 @@ def test_carta_sin_trato_usa_vacio(make_chart, cuenta, llamadas):
 
 def _origen_completo(carta, cuenta, trato="femenino"):
     origen = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="es", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, completa=True, trato=trato,
     )
     for orden, seccion in enumerate(SECCIONES):
@@ -214,7 +214,7 @@ def test_un_destino_con_secciones_de_cero_se_retraduce_entero(make_chart, cuenta
     carta = _con_trato(make_chart, cuenta, "femenino")
     origen = _origen_completo(carta, cuenta, trato="femenino")
     destino = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, trato="masculino",
     )
     for orden, seccion in enumerate(SECCIONES[:3]):
@@ -247,7 +247,7 @@ def test_reintento_de_una_traduccion_a_medias_no_retraduce_lo_hecho(make_chart, 
     monkeypatch.setattr(informe_service, "translate_interpretation", _falla_en_la_cuarta)
     with pytest.raises(RuntimeError):
         informe_service.traducir_informe(origen, "pt", object(), TOKEN)
-    destino = Interpretation.objects.get(chart=carta, lang="pt", tier="largo")
+    destino = Interpretation.objects.get(sujeto__natal_de=carta, lang="pt", tier="largo")
     assert destino.secciones.count() == 3
 
     def _bien(text, target_lang, client, trato=""):
@@ -289,7 +289,7 @@ def test_completar_generacion_con_foto_vieja_no_toca_un_informe_ya_entregado(mak
     ya entregado."""
     carta = _con_trato(make_chart, cuenta, "femenino")
     pt = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, completa=True, trato="femenino",
     )
     for orden, seccion in enumerate(SECCIONES):
@@ -321,7 +321,7 @@ def test_traducir_informe_no_toca_un_destino_ya_completo(make_chart, cuenta, lla
     carta = _con_trato(make_chart, cuenta, "femenino")
     origen = _origen_completo(carta, cuenta, trato="femenino")
     destino = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, completa=True, trato="masculino", text="entregado",
     )
     for orden, seccion in enumerate(SECCIONES):
@@ -364,7 +364,7 @@ def test_completar_generacion_relee_la_fila_antes_de_generar(make_chart, cuenta,
     reescribir nada."""
     carta = _con_trato(make_chart, cuenta, "femenino")
     es = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="es", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, completa=True, trato="femenino", text="entregado", intentos=1,
     )
     for orden, seccion in enumerate(SECCIONES):
@@ -391,7 +391,7 @@ def test_completar_generacion_relee_la_fila_antes_de_generar(make_chart, cuenta,
 
 def _completo(carta, cuenta, lang, trato="femenino"):
     interp = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang=lang, prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang=lang, prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, completa=True, trato=trato,
     )
     for orden, seccion in enumerate(SECCIONES):
@@ -408,12 +408,12 @@ def test_reintento_de_traduccion_sigue_desde_el_mismo_origen(make_chart, cuenta,
     de «en» y gastaría el intento en rehacerlas."""
     carta = _con_trato(make_chart, cuenta, "femenino")
     es = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="es", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, trato="femenino",
     )
     en = _completo(carta, cuenta, "en")
     pt = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(carta), lang="pt", prompt_version=PROMPT_VERSION, tier="largo",
         account=cuenta, trato="femenino", traducido_de=en, intentos=1,
     )
     for orden, seccion in enumerate(SECCIONES[:3]):
@@ -531,5 +531,5 @@ def test_cada_seccion_traducida_pasa_por_la_revision_con_el_trato_y_el_idioma_de
     informe_service.traducir_informe(origen, "pt", object(), TOKEN)
 
     assert revisiones == [("traducido", "femenino", "pt")] * len(SECCIONES)
-    destino = Interpretation.objects.get(chart=carta, lang="pt", tier="largo")
+    destino = Interpretation.objects.get(sujeto__natal_de=carta, lang="pt", tier="largo")
     assert set(destino.secciones.values_list("texto", flat=True)) == {"revisado: traducido"}

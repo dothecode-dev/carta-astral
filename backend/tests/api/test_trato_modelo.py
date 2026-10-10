@@ -15,7 +15,7 @@ def test_birthdata_e_interpretation_nacen_sin_trato(make_chart, make_account):
     carta = make_chart(account=account)
     assert carta.birth_data.trato == ""
     i = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es",
+        sujeto=sujeto_natal(carta), lang="es",
         prompt_version="v2", tier="corto", text="",
     )
     assert i.trato == ""

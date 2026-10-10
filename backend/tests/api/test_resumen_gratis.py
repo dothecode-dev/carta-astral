@@ -78,8 +78,8 @@ def test_titulos_en_el_idioma_de_la_interpretacion(interpretacion):
 
 
 def test_sin_hora_de_nacimiento_el_indice_no_incluye_casas(interpretacion):
-    interpretacion.chart.data["time_known"] = False
-    interpretacion.chart.save()
+    interpretacion.sujeto.natal_de.data["time_known"] = False
+    interpretacion.sujeto.natal_de.save()
     salida = informe_service.resumen_gratis(interpretacion)
     assert len(salida) == 7
     assert "casas" not in [e["slug"] for e in salida]
@@ -116,8 +116,8 @@ def test_con_parrafos_realistas_el_total_sigue_bajo_400(interpretacion):
 
 
 def test_con_parrafos_realistas_sin_hora_el_total_sigue_bajo_400(interpretacion):
-    interpretacion.chart.data["time_known"] = False
-    interpretacion.chart.save()
+    interpretacion.sujeto.natal_de.data["time_known"] = False
+    interpretacion.sujeto.natal_de.save()
     for i, s in enumerate(SECCIONES):
         if s.requiere_hora:
             continue

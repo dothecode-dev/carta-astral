@@ -62,7 +62,7 @@ def test_iniciar_crea_la_fila_con_sujeto_y_carta_y_cobra(cuenta, carta):
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:1")
     i = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, TIER_LARGO)
     assert i.sujeto_id == sujeto_natal(carta).pk
-    assert i.chart_id == carta.pk
+    assert i.sujeto.natal_de_id == carta.pk
     assert _restante(cuenta) == 0
     assert Movimiento.objects.get(account=cuenta, tipo="consumo").sujeto_id == i.sujeto_id
 

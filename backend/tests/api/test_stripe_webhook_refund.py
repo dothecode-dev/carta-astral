@@ -61,7 +61,7 @@ def comprado(make_account, make_chart):
     cuenta = make_account()
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_1", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta), payment_intent=PI,
+        sujeto=sujeto_natal(make_chart(account=cuenta)), payment_intent=PI,
     )
     aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:session:cs_1")
     return fila
@@ -79,7 +79,7 @@ def test_un_reembolso_revoca_lo_comprado(client, comprado):
 
 def test_reembolsar_algo_ya_usado_deja_deuda(client, comprado, make_chart):
     """El informe ya se entregó: no se le saca a nadie, se anota la deuda."""
-    canjear(comprado.account, "leer_informe", sujeto_natal(comprado.chart))
+    canjear(comprado.account, "leer_informe", sujeto_natal(comprado.sujeto.natal_de))
 
     r = _entregar(client)
 

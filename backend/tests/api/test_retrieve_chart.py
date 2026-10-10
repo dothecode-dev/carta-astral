@@ -67,7 +67,7 @@ def test_chart_repr_lists_interpretation_langs(account_client):
     assert resp.json()["interpretation_langs"] == []
     chart = Chart.objects.get(uuid=resp.json()["id"])
     Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="x", content_key="k",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, text="x", content_key="k",
         completa=True,
     )
     detail = account_client.get(f"/api/charts/{chart.uuid}/")
@@ -89,7 +89,7 @@ def test_chart_repr_no_lista_interpretacion_en_curso(account_client):
     }, format="json")
     chart = Chart.objects.get(uuid=resp.json()["id"])
     Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, text="",
         account=account_client.account, completa=False,
     )
     detail = account_client.get(f"/api/charts/{chart.uuid}/")

@@ -63,7 +63,7 @@ def _entregar(client, monkeypatch, precio="price_natal", monto=2900):
 
 def _compra(cuenta, chart, codigo="informe_natal"):
     return PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto=codigo, sujeto=sujeto_natal(chart), chart=chart,
+        checkout_id=SESSION, account=cuenta, codigo_producto=codigo, sujeto=sujeto_natal(chart),
     )
 
 
@@ -77,7 +77,7 @@ def test_una_compra_suelta_con_carta_deja_el_informe_iniciado(
     r = _entregar(client, monkeypatch)
 
     assert r.status_code == 200
-    assert Interpretation.objects.filter(chart=carta).count() == 1
+    assert Interpretation.objects.filter(sujeto__natal_de=carta).count() == 1
     assert len(sin_hilo) == 1
 
 
@@ -113,7 +113,7 @@ def test_en_mantenimiento_acredita_y_deja_la_fila_sin_lanzar_el_hilo(
 
     assert r.status_code == 200
     assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
-    assert Interpretation.objects.filter(chart=carta).count() == 1
+    assert Interpretation.objects.filter(sujeto__natal_de=carta).count() == 1
     assert not sin_hilo
 
 

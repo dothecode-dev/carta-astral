@@ -31,7 +31,7 @@ def test_revocar_algo_ya_canjeado_deja_deuda_y_no_toca_el_informe(make_account, 
     assert cuenta.deuda == 1
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
     # El texto entregado se queda con quien lo leyó.
-    assert Movimiento.objects.filter(tipo="consumo", chart=carta).exists()
+    assert Movimiento.objects.filter(tipo="consumo", sujeto__natal_de=carta).exists()
 
 
 def test_reembolso_parcial_de_un_pack_revoca_lo_no_usado(make_account, make_chart):

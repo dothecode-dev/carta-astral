@@ -35,7 +35,7 @@ def test_chart_and_interpretation_have_account():
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     ch = Chart.objects.create(birth_data=bd, data={}, engine_version="x", account=acc)
     interp = Interpretation.objects.create(
-        sujeto=sujeto_natal(ch), chart=ch, lang="es", prompt_version="v1", text="t", account=acc,
+        sujeto=sujeto_natal(ch), lang="es", prompt_version="v1", text="t", account=acc,
     )
     assert ch in acc.charts.all()
     assert interp in acc.interpretations.all()

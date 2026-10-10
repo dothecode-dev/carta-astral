@@ -44,7 +44,7 @@ def test_canjear_deja_el_consumo_con_sujeto_y_carta(cuenta, carta):
     canjear(cuenta, "leer_informe", sujeto_natal(carta))
     consumo = _consumos(cuenta).get()
     assert consumo.sujeto_id == sujeto_natal(carta).pk
-    assert consumo.chart_id == carta.pk
+    assert consumo.sujeto.natal_de_id == carta.pk
 
 
 def test_canjear_dos_veces_el_mismo_sujeto_es_un_solo_canje(cuenta, carta):
@@ -62,7 +62,6 @@ def test_un_sujeto_sin_carta_se_canjea_y_queda_sin_carta(cuenta):
     canjear(cuenta, "leer_informe", s)
     consumo = _consumos(cuenta).get()
     assert consumo.sujeto_id == s.pk
-    assert consumo.chart_id is None
 
 
 def test_dos_vinculos_distintos_se_cobran_por_separado(cuenta):
@@ -95,7 +94,7 @@ def test_devolver_por_sujeto_libera_el_canje(cuenta, carta):
 
     assert _restante(cuenta) == 1
     consumo = _consumos(cuenta).get()
-    assert consumo.sujeto_id is None and consumo.chart_id is None
+    assert consumo.sujeto_id is None
     devolucion = Movimiento.objects.get(account=cuenta, tipo="devolucion")
     assert devolucion.sujeto_id == s.pk
     # Liberado: se puede volver a canjear.

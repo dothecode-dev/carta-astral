@@ -20,7 +20,7 @@ def test_una_compra_suelta_otorga_uno_y_lo_canjea_contra_la_carta(make_account, 
     aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:1", sujeto=sujeto_natal(carta))
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
-    assert Movimiento.objects.filter(tipo="consumo", chart=carta).count() == 1
+    assert Movimiento.objects.filter(tipo="consumo", sujeto__natal_de=carta).count() == 1
 
 
 def test_el_pack_otorga_cinco_y_no_canjea_nada(make_account):
@@ -157,5 +157,5 @@ def test_el_reintento_despues_de_un_canje_fallido_entrega_el_informe(
     ) is True
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
-    assert Movimiento.objects.filter(tipo="consumo", chart=carta).count() == 1
+    assert Movimiento.objects.filter(tipo="consumo", sujeto__natal_de=carta).count() == 1
     assert Movimiento.objects.filter(external_id="stripe:session:cs_2").count() == 1

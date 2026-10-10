@@ -79,7 +79,7 @@ def test_informe_listo_lleva_a_la_pagina_del_informe(interpretacion_completa, re
     interpretacion_completa.save()
     informe_service.avisar_informe_listo(interpretacion_completa)
     html = resend[0]["json"]["html"]
-    uuid = interpretacion_completa.chart.uuid
+    uuid = interpretacion_completa.sujeto.natal_de.uuid
     assert f'href="https://astraguia.com/pt/carta/{uuid}"' in html
 
 

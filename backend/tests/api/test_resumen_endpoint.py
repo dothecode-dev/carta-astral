@@ -51,7 +51,7 @@ def test_el_indice_muestra_el_arranque_de_lo_ya_generado(
 ):
     # `interpretacion_completa` cuelga de `chart`/`account`, igual que
     # `client_autenticado`: mismo motivo que el primer test de este archivo.
-    chart = interpretacion_completa.chart
+    chart = interpretacion_completa.sujeto.natal_de
     datos = client_autenticado.get(f"/api/charts/{chart.uuid}/informe/indice/?lang=es").json()
     assert len(datos) == 8
     assert datos[0]["parrafo"] == "Texto de la sección firma."

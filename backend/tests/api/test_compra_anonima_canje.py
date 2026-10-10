@@ -50,7 +50,7 @@ def _canje(client, nonce=NONCE, checkout_id=SESSION_ANONIMA):
 
 
 def _destino(anonima):
-    return f"/es/carta/{anonima.chart.uuid}"
+    return f"/es/carta/{anonima.sujeto.natal_de.uuid}"
 
 
 # --- RF10: la cuenta que creó la compra entra --------------------------------
@@ -78,7 +78,6 @@ def test_cuenta_nueva_y_nonce_correcto_abre_sesion(client, anonima, make_account
 def test_sin_carta_el_destino_es_la_cuenta(client, anonima, make_account):
     cuenta = make_account(email="sc@mail.com")
     _acreditada(anonima, cuenta, nueva=True)
-    anonima.chart = None
     anonima.sujeto = None
     anonima.save()
 
@@ -435,7 +434,7 @@ def _segunda_compra(make_chart, email):
 
     fila = PasarelaCheckout.objects.create(
         checkout_id=SESSION_VICTIMA, account=None, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=None)), sujeto=sujeto_natal(_carta), anonimo=True, nonce_hash=hash_token("otro-nonce"),
+        sujeto=sujeto_natal(make_chart(account=None)), anonimo=True, nonce_hash=hash_token("otro-nonce"),
         precio_centavos=2900,
     )
     cuenta = compra_anonima.adjudicar(SESSION_VICTIMA, email)
@@ -501,7 +500,7 @@ def test_la_duenia_entra_con_codigo_y_ve_su_carta(client, anonima, make_chart, e
     cuenta.refresh_from_db()
     assert cuenta.email_verified is True
     token = r.json()["token"]
-    carta = client.get(f"/api/charts/{fila.chart.uuid}/", HTTP_AUTHORIZATION=f"Bearer {token}")
+    carta = client.get(f"/api/charts/{fila.sujeto.natal_de.uuid}/", HTTP_AUTHORIZATION=f"Bearer {token}")
     assert carta.status_code == 200
 
 

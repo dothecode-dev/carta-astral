@@ -86,7 +86,7 @@ def test_el_post_cobra_y_crea_la_interpretacion_pendiente_sincronicamente(client
     )
     assert r.status_code == 202
 
-    interp = Interpretation.objects.get(chart=chart, lang="es", prompt_version=PROMPT_VERSION)
+    interp = Interpretation.objects.get(sujeto__natal_de=chart, lang="es", prompt_version=PROMPT_VERSION)
     assert interp.completa is False
     assert _derechos_de_cobro(account) == antes - 1
 
@@ -147,14 +147,14 @@ def test_el_estado_no_mezcla_el_progreso_de_otro_tier(client_autenticado, chart,
     from interpret.prompts import PROMPT_VERSION, SECCIONES
 
     largo = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, tier="largo",
         account=account, completa=True,
     )
     for orden, seccion in enumerate(SECCIONES):
         InterpretationSection.objects.create(interpretation=largo, slug=seccion.slug, orden=orden, texto="x")
 
     Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, tier="corto",
         account=account, completa=False,
     )
 
@@ -276,7 +276,7 @@ def test_si_la_generacion_muere_no_queda_una_interpretacion_vacia(chart, account
     monkeypatch.setattr("api.informe_service.generar_informe", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
     for _ in range(interpretation_service.INTENTOS_MAXIMOS):
         interpretation_service.generar_en_segundo_plano(sujeto_natal(chart), "es", account, tier="largo")
-    assert not Interpretation.objects.filter(chart=chart, lang="es", prompt_version=PROMPT_VERSION).exists()
+    assert not Interpretation.objects.filter(sujeto__natal_de=chart, lang="es", prompt_version=PROMPT_VERSION).exists()
 
 
 def test_si_falla_una_sola_vez_la_interpretacion_sigue_viva_para_reintentar(chart, account, monkeypatch):
@@ -292,7 +292,7 @@ def test_si_falla_una_sola_vez_la_interpretacion_sigue_viva_para_reintentar(char
     interpretation_service.generar_en_segundo_plano(sujeto_natal(chart), "es", account, tier="largo")
     assert _derechos_de_cobro(account) == antes - 1  # sigue cobrado
     assert Interpretation.objects.filter(
-        chart=chart, lang="es", prompt_version=PROMPT_VERSION, completa=False,
+        sujeto__natal_de=chart, lang="es", prompt_version=PROMPT_VERSION, completa=False,
     ).exists()
 
 
@@ -421,7 +421,7 @@ def test_completar_generacion_traduce_el_segundo_idioma_en_vez_de_regenerar(
     # test ejercitaba ese otro camino (el intento se descontaba).
     from api.models import Interpretation
 
-    en = Interpretation.objects.get(chart=chart, lang="en", tier="largo")
+    en = Interpretation.objects.get(sujeto__natal_de=chart, lang="en", tier="largo")
     assert en.intentos == 1
 
 
@@ -460,7 +460,7 @@ def test_pedir_el_segundo_idioma_con_el_primero_en_curso_no_cobra(chart, account
 
     assert _derechos_de_cobro(account) == antes  # no se perdió ningún crédito
     assert not Interpretation.objects.filter(
-        chart=chart, lang="en", prompt_version=PROMPT_VERSION
+        sujeto__natal_de=chart, lang="en", prompt_version=PROMPT_VERSION
     ).exists()  # no queda una fila "en" vacía y cobrada
 
 

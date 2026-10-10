@@ -190,7 +190,7 @@ def interpretacion(db, chart, account):
     from interpret.prompts import PROMPT_VERSION
 
     return Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, text="", account=account,
     )
 
 
@@ -206,7 +206,7 @@ def interpretacion_completa(db, chart, account):
     from interpret.prompts import PROMPT_VERSION, SECCIONES
 
     interpretacion = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, account=account, completa=True,
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, account=account, completa=True,
     )
     for orden, seccion in enumerate(SECCIONES):
         InterpretationSection.objects.create(

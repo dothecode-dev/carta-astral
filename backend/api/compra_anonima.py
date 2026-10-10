@@ -60,8 +60,7 @@ def abrir(datos: dict, locale: str):
         precio, descuento = cupones.precio_y_descuento(PRODUCTO, None)
         fila = PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=None, codigo_producto=PRODUCTO,
-            sujeto=sujeto, chart=carta,
-            locale=locale, descuento_centavos=descuento, url=url,
+            sujeto=sujeto, locale=locale, descuento_centavos=descuento, url=url,
             precio_centavos=precio, anonimo=True, nonce_hash=hash_token(nonce),
         )
     return fila, nonce
@@ -251,7 +250,7 @@ def descartar(checkout_id: str) -> bool:
             return False
         carta_id = fila.sujeto.natal_de_id
         birth_data_id = Chart.objects.values_list("birth_data_id", flat=True).get(pk=carta_id)
-        PasarelaCheckout.objects.filter(pk=fila.pk).update(chart=None, sujeto=None)
+        PasarelaCheckout.objects.filter(pk=fila.pk).update(sujeto=None)
         Chart.objects.filter(pk=carta_id).delete()
         if not Chart.objects.filter(birth_data_id=birth_data_id).exists():
             BirthData.objects.filter(pk=birth_data_id).delete()

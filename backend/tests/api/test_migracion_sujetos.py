@@ -222,8 +222,44 @@ def test_la_0047_suelta_los_consumos_que_desvinculo_el_devolver_viejo(en):
     assert Movimiento.objects.get(pk=vigente.pk).sujeto_id == s.pk
 
 
-def test_tras_la_0047_el_sujeto_es_obligatorio_y_la_carta_no():
-    from api.models import Interpretation
+def test_el_sujeto_es_obligatorio_y_la_carta_ya_no_esta_en_el_modelo():
+    """La 0048 hizo obligatorio el sujeto; la 0049 sacó `chart` del estado."""
+    from api.models import Interpretation, Movimiento, PasarelaCheckout
 
     assert Interpretation._meta.get_field("sujeto").null is False
-    assert Interpretation._meta.get_field("chart").null is True
+    for modelo in (Interpretation, Movimiento, PasarelaCheckout):
+        assert "chart" not in {f.name for f in modelo._meta.get_fields()}, modelo.__name__
+
+
+# --- 0049: `chart` sale del estado; la columna queda hasta la parte 3 ---
+
+
+def test_tras_la_0049_se_puede_borrar_una_carta_con_filas_que_la_nombran(en):
+    """Django ya no conoce `chart`, así que no pone el NULL del `SET_NULL` al
+    borrar la carta: si la FK siguiera en la base, borrar una carta con
+    consumos o checkouts viejos —el borrado de cuenta, la purga de compras
+    anónimas vencidas— fallaría por integridad."""
+    from django.db import transaction
+
+    apps = en("0048_contraer_sujeto")
+    Sujeto, Interpretation, Movimiento, PasarelaCheckout = _modelos(apps)
+    cuenta = _cuenta(apps)
+    c = _carta(apps, cuenta)
+    s = Sujeto.objects.create(producto="natal", natal_de=c, account_id=cuenta.pk)
+    Interpretation.objects.create(chart=c, sujeto=s, lang="es", prompt_version="v", text="")
+    mov = Movimiento.objects.create(
+        account=cuenta, codigo_producto="informe_natal", tipo="consumo",
+        origen="compra", cantidad=-1, chart=c, sujeto=s,
+    )
+    chk = PasarelaCheckout.objects.create(
+        checkout_id="cs_b", account=cuenta, codigo_producto="informe_natal", chart=c, sujeto=s,
+    )
+
+    _migrar(_ultima())
+    from api.models import Chart, Movimiento as M, PasarelaCheckout as P
+
+    with transaction.atomic():
+        Chart.objects.get(pk=c.pk).delete()
+
+    assert M.objects.filter(pk=mov.pk).exists()
+    assert P.objects.filter(pk=chk.pk).exists()

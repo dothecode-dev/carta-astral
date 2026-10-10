@@ -43,7 +43,7 @@ def test_cache_hit_served_with_zero_credits(settings):
     chart = _chart()
     from interpret.prompts import PROMPT_VERSION
     Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="cached", account=acc,
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, text="cached", account=acc,
         completa=True,  # una fila `completa=False` es "en curso", no una lectura servible
     )
     # 0 créditos pero ya existe: `iniciar_generacion` la encuentra
@@ -129,4 +129,4 @@ def test_la_interpretacion_vacia_se_borra_si_no_hay_credito(make_account):
     chart = _chart()
     with pytest.raises(SinDerecho):
         svc.iniciar_generacion(sujeto_natal(chart), "es", acc, tier="corto")
-    assert chart.interpretations.count() == 0
+    assert sujeto_natal(chart).interpretations.count() == 0

@@ -51,7 +51,7 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
     cuenta.save(update_fields=["deuda"])
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     sesion = {
         "id": "cs_deuda", "payment_status": "paid", "amount_subtotal": 2900,
@@ -81,7 +81,7 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
     assert fila.acreditado_at is not None
     assert cuenta.deuda == 0
     assert not Movimiento.objects.filter(account=cuenta, tipo="consumo").exists()
-    assert not Interpretation.objects.filter(chart=fila.chart).exists()
+    assert not Interpretation.objects.filter(sujeto=fila.sujeto).exists()
     # La unidad saldó la deuda y no hay informe: el aviso es el genérico.
     assert avisos == ["compra_acreditada"]
 
@@ -89,7 +89,7 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
 def _fila(cuenta, make_chart):
     return PasarelaCheckout.objects.create(
         checkout_id="cs_x", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
 
 

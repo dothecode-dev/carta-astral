@@ -146,7 +146,7 @@ def test_patch_sin_clave_o_null_es_sin_elegir(cuenta, carta, cuerpo):
 def test_patch_no_cambia_el_trato_de_una_interpretacion_existente(cuenta, carta):
     """RF3: el informe ya escrito conserva el trato con el que nació."""
     interp = Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", tier="largo", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), lang="es", tier="largo", prompt_version=PROMPT_VERSION,
         completa=True, trato="femenino",
     )
     r = _patch(_client(cuenta), carta, {"trato": "masculino"})

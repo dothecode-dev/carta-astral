@@ -56,7 +56,7 @@ def test_abre_sin_cuenta_y_guarda_carta_y_fila(client, stripe_responde):
     cuerpo = r.json()
     assert cuerpo["url"].startswith("https://checkout.stripe.com/")
     fila = PasarelaCheckout.objects.get(checkout_id=cuerpo["checkout_id"])
-    assert fila.anonimo and fila.account is None and fila.chart.account is None
+    assert fila.anonimo and fila.account is None and fila.sujeto.natal_de.account is None
     assert fila.codigo_producto == "informe_natal" and fila.url == cuerpo["url"]
     assert fila.nonce_hash == identity.hash_token(cuerpo["nonce"])
     assert cuerpo["nonce"] not in fila.nonce_hash and len(cuerpo["nonce"]) >= 32

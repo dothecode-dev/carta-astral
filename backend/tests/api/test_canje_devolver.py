@@ -68,4 +68,4 @@ def test_devolver_sin_carta_repone_y_no_toca_movimientos_de_consumo(make_account
 
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
     consumo = Movimiento.objects.get(tipo="consumo")
-    assert consumo.chart_id == carta.pk
+    assert consumo.sujeto.natal_de_id == carta.pk

@@ -100,7 +100,7 @@ def test_traduce_seccion_por_seccion_y_no_de_una(interpretacion):
 
     assert len(cliente.llamadas) == 8
     destino = Interpretation.objects.get(
-        chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
+        sujeto=interpretacion.sujeto, lang="en", prompt_version=PROMPT_VERSION,
     )
     assert destino.secciones.count() == 8
     assert destino.completa is True
@@ -117,7 +117,7 @@ def test_traduce_al_tier_correcto_cuando_hay_dos_productos_en_la_carta(chart, ac
     `largo/en` completo, se traduce un `corto/es` hacia "en" — tiene que
     crear/encontrar el `corto/en`, sin tocar el `largo/en`."""
     largo_en = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="en", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(chart), lang="en", prompt_version=PROMPT_VERSION, tier="largo",
         account=account, completa=True,
     )
     for i, s in enumerate(SECCIONES):
@@ -126,7 +126,7 @@ def test_traduce_al_tier_correcto_cuando_hay_dos_productos_en_la_carta(chart, ac
         )
 
     corto_es = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, tier="corto",
         account=account, completa=True,
     )
     InterpretationSection.objects.create(
@@ -136,7 +136,7 @@ def test_traduce_al_tier_correcto_cuando_hay_dos_productos_en_la_carta(chart, ac
     informe_service.traducir_informe(corto_es, "en", ClienteFalso(), TOKEN)
 
     corto_en = Interpretation.objects.get(
-        chart=chart, lang="en", tier="corto", prompt_version=PROMPT_VERSION,
+        sujeto__natal_de=chart, lang="en", tier="corto", prompt_version=PROMPT_VERSION,
     )
     assert corto_en.secciones.count() == 1
     assert corto_en.completa is True
@@ -165,7 +165,7 @@ def test_si_falla_a_mitad_conserva_lo_traducido_y_no_marca_completa(interpretaci
         informe_service.traducir_informe(interpretacion, "en", ClienteFalso(falla_en=5), TOKEN)
 
     destino = Interpretation.objects.get(
-        chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
+        sujeto=interpretacion.sujeto, lang="en", prompt_version=PROMPT_VERSION,
     )
     assert destino.secciones.count() == 4
     assert destino.completa is False
@@ -183,7 +183,7 @@ def test_al_reanudar_no_vuelve_a_traducir_lo_ya_hecho(interpretacion):
     # Cuatro ya estaban traducidas: sólo se piden las cuatro que faltan.
     assert len(segundo.llamadas) == 4
     destino = Interpretation.objects.get(
-        chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
+        sujeto=interpretacion.sujeto, lang="en", prompt_version=PROMPT_VERSION,
     )
     assert destino.secciones.count() == 8
     assert destino.completa is True
@@ -198,7 +198,7 @@ def test_traducir_dos_veces_no_duplica_secciones(interpretacion):
 
     assert len(segundo.llamadas) == 0
     destino = Interpretation.objects.get(
-        chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
+        sujeto=interpretacion.sujeto, lang="en", prompt_version=PROMPT_VERSION,
     )
     assert destino.secciones.count() == 8
 
@@ -232,7 +232,7 @@ def test_destino_hereda_el_estado_incompleto_del_origen(interpretacion):
     informe_service.traducir_informe(interpretacion, "en", ClienteFalso(), TOKEN)
 
     destino = Interpretation.objects.get(
-        chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
+        sujeto=interpretacion.sujeto, lang="en", prompt_version=PROMPT_VERSION,
     )
     assert destino.secciones.count() == 1
     assert destino.completa is False
@@ -276,7 +276,7 @@ def test_dos_traducciones_concurrentes_de_la_misma_carta_no_duplican_ni_explotan
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=acc)
     origen = Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=acc, completa=True,
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, text="", account=acc, completa=True,
     )
     for i, s in enumerate(SECCIONES):
         InterpretationSection.objects.create(
@@ -290,7 +290,7 @@ def test_dos_traducciones_concurrentes_de_la_misma_carta_no_duplican_ni_explotan
     assert not errores, f"una traducción concurrente terminó en excepción: {errores}"
     assert len(resultados) == 2
 
-    destino = Interpretation.objects.get(chart=chart, lang="en", prompt_version=PROMPT_VERSION)
+    destino = Interpretation.objects.get(sujeto__natal_de=chart, lang="en", prompt_version=PROMPT_VERSION)
     slugs = list(destino.secciones.values_list("slug", flat=True))
     assert len(slugs) == 8
     assert len(set(slugs)) == 8  # ninguna sección duplicada por slug
@@ -322,7 +322,7 @@ def test_si_pierde_el_lock_a_mitad_de_la_traduccion_aborta_sin_completar(interpr
     terminado = informe_service.traducir_informe(interpretacion, "en", cliente, "tok-x")
 
     destino = Interpretation.objects.get(
-        chart=interpretacion.chart, lang="en", prompt_version=PROMPT_VERSION,
+        sujeto=interpretacion.sujeto, lang="en", prompt_version=PROMPT_VERSION,
     )
     assert terminado is False
     assert len(cliente.llamadas) == 1

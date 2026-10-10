@@ -46,8 +46,8 @@ def test_delete_charts_preserva_ledger(monkeypatch, settings):
     `ledger.charge`, que `interpretation_service` dejó de usar) sino
     `Movimiento` (`canje.canjear`) — el invariante que importa es el mismo:
     el `Movimiento` de consumo sobrevive al borrado de la carta, sólo su FK
-    a `chart` queda en NULL (`SET_NULL`, igual que antes con
-    `CreditTransaction.interpretation`)."""
+    al sujeto (que cae con la carta) queda en NULL (`SET_NULL`, igual que
+    antes con `CreditTransaction.interpretation`)."""
     import api.interpretation_service as svc
 
     settings.INTERPRETATION_DAILY_CAP = 100
@@ -75,9 +75,9 @@ def test_delete_charts_preserva_ledger(monkeypatch, settings):
 
     assert Chart.objects.filter(account=a).count() == 0
     assert Movimiento.objects.count() == movs_antes
-    # el FK a la carta borrada queda en NULL, no arrastra el movimiento
+    # el FK al sujeto de la carta borrada queda en NULL, no arrastra el movimiento
     assert Movimiento.objects.filter(
-        tipo="consumo", codigo_producto="informe_natal", chart__isnull=True,
+        tipo="consumo", codigo_producto="informe_natal", sujeto__isnull=True,
     ).exists()
 
 

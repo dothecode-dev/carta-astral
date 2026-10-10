@@ -195,7 +195,7 @@ class MovimientoAdmin(SoloLectura):
     )
     list_filter = ("tipo", "origen", "codigo_producto")
     search_fields = ("external_id", "account__id", "account__email")
-    readonly_fields = list_display + ("chart", "note")
+    readonly_fields = list_display + ("sujeto", "note")
 
 
 @admin.register(PasarelaCheckout)
@@ -213,7 +213,7 @@ class PasarelaCheckoutAdmin(SoloLectura):
     list_filter = ("anonimo", "codigo_producto")
     search_fields = ("checkout_id", "account__email")
     readonly_fields = list_display + (
-        "chart", "locale", "cupon", "precio_centavos", "descuento_centavos",
+        "sujeto", "locale", "cupon", "precio_centavos", "descuento_centavos",
         "reembolsado_centavos", "payment_intent",
     )
     fields = readonly_fields

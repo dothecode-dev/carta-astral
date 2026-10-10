@@ -50,8 +50,8 @@ def test_mail_nuevo_crea_cuenta_sin_verificar_y_le_pasa_la_carta(entregar_anonim
     assert cuenta.email == "nueva@mail.com" and cuenta.email_verified is False
     assert anonima.cuenta_nueva is True and anonima.acreditado_at is not None
     assert ProviderIdentity.objects.filter(provider="email", sub="nueva@mail.com", account=cuenta).exists()
-    assert Chart.objects.get(pk=anonima.chart_id).account == cuenta
-    assert Sujeto.objects.get(natal_de_id=anonima.chart_id).account == cuenta
+    assert Chart.objects.get(pk=anonima.sujeto.natal_de_id).account == cuenta
+    assert Sujeto.objects.get(natal_de_id=anonima.sujeto.natal_de_id).account == cuenta
     # El informe comprado quedó canjeado contra la carta y escribiéndose.
     assert _restante(cuenta, "informe_natal") == 0
     assert len(sin_hilo) == 1
@@ -93,7 +93,7 @@ def test_cuenta_verificada_sin_identidad_recibe_la_compra_y_la_identidad(
     anonima.refresh_from_db()
     assert anonima.account == dueña and anonima.cuenta_nueva is False
     assert Account.objects.filter(email__iexact="ya@mail.com").count() == 1
-    assert Chart.objects.get(pk=anonima.chart_id).account == dueña
+    assert Chart.objects.get(pk=anonima.sujeto.natal_de_id).account == dueña
     assert ProviderIdentity.objects.filter(provider="email", sub="ya@mail.com", account=dueña).exists()
     # Sin regalo nuevo: la cuenta ya existía.
     assert _restante(dueña, "lectura_breve") == 0
@@ -115,8 +115,8 @@ def test_una_cuenta_con_el_mail_sin_verificar_no_recibe_nada(
     anonima.refresh_from_db()
     nueva = anonima.account
     assert nueva is not None and nueva != atacante and anonima.cuenta_nueva is True
-    assert Chart.objects.get(pk=anonima.chart_id).account == nueva
-    assert Sujeto.objects.get(natal_de_id=anonima.chart_id).account == nueva
+    assert Chart.objects.get(pk=anonima.sujeto.natal_de_id).account == nueva
+    assert Sujeto.objects.get(natal_de_id=anonima.sujeto.natal_de_id).account == nueva
     assert not Movimiento.objects.filter(account=atacante).exists()
     assert not ProviderIdentity.objects.filter(account=atacante, provider="email").exists()
     assert ProviderIdentity.objects.get(provider="email", sub="victima@mail.com").account == nueva
@@ -319,7 +319,6 @@ def test_cuenta_verificada_con_identidad_no_la_duplica(entregar_anonima, anonima
 def test_la_carta_se_adjudica_por_el_sujeto_del_checkout(entregar_anonima, anonima, sin_hilo):
     """CONTRAER: adjudicar busca la carta por `fila.sujeto`, no por `fila.chart`."""
     carta_id = anonima.sujeto.natal_de_id
-    PasarelaCheckout.objects.filter(pk=anonima.pk).update(chart=None)
 
     assert entregar_anonima(con_mail("otra@mail.com")).status_code == 200
 

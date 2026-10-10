@@ -16,7 +16,7 @@ EXPIRED = "checkout.session.expired"
 
 
 def test_vencida_sin_pagar_borra_la_carta_anonima(entregar_anonima, anonima):
-    carta_id, bd_id = anonima.chart_id, anonima.chart.birth_data_id
+    carta_id, bd_id = anonima.sujeto.natal_de_id, anonima.sujeto.natal_de.birth_data_id
     assert Sujeto.objects.filter(natal_de_id=carta_id).exists()
 
     assert entregar_anonima(sesion_anonima(), tipo=EXPIRED).status_code == 200
@@ -26,7 +26,7 @@ def test_vencida_sin_pagar_borra_la_carta_anonima(entregar_anonima, anonima):
     assert not Sujeto.objects.filter(natal_de_id=carta_id).exists()
     anonima.refresh_from_db()
     assert anonima.vencido_at is not None
-    assert anonima.chart_id is None and anonima.sujeto_id is None
+    assert anonima.sujeto_id is None
 
 
 def test_el_mismo_evento_dos_veces_es_idempotente(entregar_anonima, anonima):
@@ -40,40 +40,40 @@ def test_vencida_con_cuenta_no_borra_nada(entregar_anonima, anonima, make_accoun
     pendiente): la carta es de alguien y no se toca."""
     anonima.account = make_account()
     anonima.save()
-    carta_id = anonima.chart_id
+    carta_id = anonima.sujeto.natal_de_id
 
     entregar_anonima(sesion_anonima(), tipo=EXPIRED)
 
     assert Chart.objects.filter(pk=carta_id).exists()
     anonima.refresh_from_db()
-    assert anonima.chart_id == carta_id
+    assert anonima.sujeto.natal_de_id == carta_id
 
 
 def test_acreditada_no_se_borra_aunque_llegue_expired(entregar_anonima, anonima):
     anonima.acreditado_at = timezone.now()
     anonima.save()
-    carta_id = anonima.chart_id
+    carta_id = anonima.sujeto.natal_de_id
 
     entregar_anonima(sesion_anonima(), tipo=EXPIRED)
 
     assert Chart.objects.filter(pk=carta_id).exists()
     assert Sujeto.objects.filter(natal_de_id=carta_id).exists()
     anonima.refresh_from_db()
-    assert anonima.chart_id == carta_id
+    assert anonima.sujeto.natal_de_id == carta_id
 
 
 def test_una_fila_con_cuenta_no_anonima_no_se_descarta(make_account, make_chart):
     cuenta = make_account()
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_con_cuenta", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     assert compra_anonima.descartar("cs_con_cuenta") is False
-    assert Chart.objects.filter(pk=fila.chart_id).exists()
+    assert Chart.objects.filter(pk=fila.sujeto.natal_de_id).exists()
 
 
 def test_el_birth_data_se_conserva_si_otra_carta_lo_usa(anonima):
-    bd = anonima.chart.birth_data
+    bd = anonima.sujeto.natal_de.birth_data
     otra = Chart.objects.create(birth_data=bd, data={}, engine_version="test")
 
     assert compra_anonima.descartar(SESSION_ANONIMA) is True
@@ -96,7 +96,7 @@ FAILED = "checkout.session.async_payment_failed"
 
 
 def test_pago_asincronico_fallido_borra_la_carta_anonima(entregar_anonima, anonima):
-    carta_id, bd_id = anonima.chart_id, anonima.chart.birth_data_id
+    carta_id, bd_id = anonima.sujeto.natal_de_id, anonima.sujeto.natal_de.birth_data_id
 
     assert entregar_anonima(sesion_anonima(payment_status="unpaid"), tipo=FAILED).status_code == 200
 
@@ -104,7 +104,7 @@ def test_pago_asincronico_fallido_borra_la_carta_anonima(entregar_anonima, anoni
     assert not BirthData.objects.filter(pk=bd_id).exists()
     anonima.refresh_from_db()
     assert anonima.vencido_at is not None
-    assert anonima.chart_id is None
+    assert anonima.sujeto_id is None
 
 
 def test_pago_asincronico_fallido_con_cuenta_no_borra_nada(entregar_anonima, make_account, make_chart):
@@ -115,34 +115,33 @@ def test_pago_asincronico_fallido_con_cuenta_no_borra_nada(entregar_anonima, mak
     cuenta = make_account()
     carta = make_chart(account=cuenta)
     fila = PasarelaCheckout.objects.create(
-        checkout_id=SID, account=cuenta, codigo_producto="informe_natal", sujeto=sujeto_natal(carta), chart=carta,
+        checkout_id=SID, account=cuenta, codigo_producto="informe_natal", sujeto=sujeto_natal(carta),
     )
 
     assert entregar_anonima(sesion_anonima(payment_status="unpaid"), tipo=FAILED).status_code == 200
 
     assert Chart.objects.filter(pk=carta.pk).exists()
     fila.refresh_from_db()
-    assert fila.chart_id == carta.pk and fila.account_id == cuenta.pk
+    assert fila.sujeto.natal_de_id == carta.pk and fila.account_id == cuenta.pk
     assert fila.acreditado_at is None
 
 
 def test_pago_asincronico_fallido_no_toca_una_fila_acreditada(entregar_anonima, anonima):
     anonima.acreditado_at = timezone.now()
     anonima.save()
-    carta_id = anonima.chart_id
+    carta_id = anonima.sujeto.natal_de_id
 
     entregar_anonima(sesion_anonima(), tipo=FAILED)
 
     assert Chart.objects.filter(pk=carta_id).exists()
     anonima.refresh_from_db()
-    assert anonima.chart_id == carta_id and anonima.vencido_at is None
+    assert anonima.sujeto.natal_de_id == carta_id and anonima.vencido_at is None
 
 
 def test_descartar_encuentra_la_carta_por_el_sujeto(anonima):
     """CONTRAER: la carta de la compra se busca por `fila.sujeto.natal_de_id`.
     Tras borrarla el sujeto cae por CASCADE y una segunda llamada no hace nada."""
     carta_id = anonima.sujeto.natal_de_id
-    PasarelaCheckout.objects.filter(pk=anonima.pk).update(chart=None)
 
     assert compra_anonima.descartar(SESSION_ANONIMA) is True
 

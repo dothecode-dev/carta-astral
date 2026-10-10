@@ -231,7 +231,7 @@ def test_dos_entregas_de_la_misma_compra_suelta_dejan_un_otorgamiento_y_un_consu
     assert resultados.count(True) == 1
     assert _restante() == 0  # el único derecho otorgado se canjeó
     assert Movimiento.objects.filter(tipo="otorgamiento").count() == 1
-    assert Movimiento.objects.filter(tipo="consumo", chart=carta).count() == 1
+    assert Movimiento.objects.filter(tipo="consumo", sujeto__natal_de=carta).count() == 1
 
 
 @requiere_postgres

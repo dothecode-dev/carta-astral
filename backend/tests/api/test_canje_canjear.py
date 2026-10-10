@@ -17,7 +17,7 @@ def test_canjear_descuenta_uno_y_deja_el_movimiento_atado_a_la_carta(make_accoun
     assert codigo == "informe_natal"
     assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 0
     mov = Movimiento.objects.get(tipo="consumo")
-    assert (mov.cantidad, mov.chart_id, mov.codigo_producto) == (-1, carta.id, "informe_natal")
+    assert (mov.cantidad, mov.sujeto.natal_de_id, mov.codigo_producto) == (-1, carta.id, "informe_natal")
 
 
 def test_sin_derecho_falla_y_no_toca_el_otro_producto(make_account, make_chart):

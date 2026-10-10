@@ -87,11 +87,11 @@ def test_la_carta_expone_los_tiers_completos(client_autenticado, chart, account)
     tal cual estaba escrito no podía pasar nunca, con o sin el fix.
     """
     Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, tier="corto",
         text="x", completa=True, account=account,
     )
     Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="largo",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, tier="largo",
         text="", completa=False, account=account,      # en curso: no se anuncia
     )
     datos = client_autenticado.get(f"/api/charts/{chart.uuid}/").json()
@@ -104,7 +104,7 @@ def test_un_tier_completo_en_un_idioma_no_se_filtra_a_otro(client_autenticado, c
     estructura con un solo set/list compartido entre idiomas en vez de un
     dict por idioma, este test lo detecta."""
     Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, tier="corto",
         text="x", completa=True, account=account,
     )
     datos = client_autenticado.get(f"/api/charts/{chart.uuid}/").json()
@@ -128,7 +128,7 @@ def test_listar_cartas_no_agrega_una_consulta_por_carta(client_autenticado, acco
         for _ in range(n):
             c = create_chart(PAYLOAD, account=account)
             Interpretation.objects.create(
-                sujeto=sujeto_natal(c), chart=c, lang="es", prompt_version=PROMPT_VERSION, tier="corto",
+                sujeto=sujeto_natal(c), lang="es", prompt_version=PROMPT_VERSION, tier="corto",
                 text="x", completa=True, account=account,
             )
 
@@ -151,7 +151,7 @@ def test_una_version_vieja_del_prompt_no_se_anuncia_como_lista(client_autenticad
     no es lo que el sistema generaría hoy y no cuenta como lectura lista,
     aunque `completa=True`."""
     Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version="viejo", tier="corto",
+        sujeto=sujeto_natal(chart), lang="es", prompt_version="viejo", tier="corto",
         text="x", completa=True, account=account,
     )
     datos = client_autenticado.get(f"/api/charts/{chart.uuid}/").json()
@@ -171,7 +171,7 @@ def test_la_lista_de_cartas_no_hace_una_consulta_por_informe(
         s = sujeto_natal(carta)
         for lang in ("es", "en"):
             Interpretation.objects.create(
-                sujeto=s, chart=carta, lang=lang, prompt_version=PROMPT_VERSION,
+                sujeto=s, lang=lang, prompt_version=PROMPT_VERSION,
                 text="", completa=True,
             )
     with django_assert_num_queries(CONSULTAS_LISTA):

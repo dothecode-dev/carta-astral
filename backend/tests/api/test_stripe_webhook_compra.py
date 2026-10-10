@@ -73,7 +73,7 @@ def compra(make_account, make_chart):
     cuenta = make_account()
     return PasarelaCheckout.objects.create(
         checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
 
 

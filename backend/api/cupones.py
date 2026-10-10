@@ -103,7 +103,7 @@ def canjear_gratis(account, cupon: Cupon, codigo_producto: str, carta, locale: s
         )
         fila = PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=account, codigo_producto=codigo_producto,
-            sujeto=sujeto, chart=carta, locale=locale, acreditado_at=timezone.now(),
+            sujeto=sujeto, locale=locale, acreditado_at=timezone.now(),
             cupon=cupon, descuento_centavos=prod.precio_centavos,
             precio_centavos=prod.precio_centavos,
         )

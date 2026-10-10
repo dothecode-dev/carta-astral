@@ -266,7 +266,7 @@ def canjear(account, capacidad: str, objetivo, build=None):
         construido = build() if build is not None else None
         Movimiento.objects.create(
             account=acc, codigo_producto=derecho.codigo_producto, tipo="consumo",
-            cantidad=-1, origen="compra", sujeto=sujeto, chart=sujeto.natal_de,
+            cantidad=-1, origen="compra", sujeto=sujeto,
         )
     return construido, derecho.codigo_producto
 
@@ -285,7 +285,7 @@ def devolver(account, codigo_producto, external_id, sujeto=None, note="") -> boo
         s = a_sujeto(sujeto) if sujeto is not None else None
         if not _movimiento_idempotente(
             account=acc, codigo_producto=codigo_producto, tipo="devolucion",
-            cantidad=1, origen="ajuste", sujeto=s, chart=s.natal_de if s is not None else None,
+            cantidad=1, origen="ajuste", sujeto=s,
             external_id=external_id, note=note,
         ):
             logger.info("devolución duplicada ignorada (external_id=%s)", external_id)
@@ -307,7 +307,7 @@ def devolver(account, codigo_producto, external_id, sujeto=None, note="") -> boo
         if s is not None:
             Movimiento.objects.filter(
                 account=acc, sujeto=s, tipo="consumo", codigo_producto=codigo_producto,
-            ).update(sujeto=None, chart=None)
+            ).update(sujeto=None)
         else:
             # Rastro para diagnosticar una carta que quedó bloqueada porque
             # quien llamó a `devolver` se olvidó de pasar la carta.

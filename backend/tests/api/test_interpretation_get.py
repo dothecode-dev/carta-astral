@@ -37,7 +37,7 @@ def cliente(cuenta):
 @pytest.mark.django_db
 def test_devuelve_la_interpretacion_existente(cliente, carta):
     Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="Un texto ya escrito.", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), lang="es", text="Un texto ya escrito.", prompt_version=PROMPT_VERSION,
         content_key="x", completa=True,
     )
 
@@ -60,11 +60,11 @@ def test_con_dos_productos_en_el_mismo_idioma_el_tier_del_query_param_decide(cli
     del query param (RF20): pedir "corto" sirve la breve, pedir "largo" sirve
     el informe completo, sobre la MISMA carta y el MISMO idioma."""
     Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="Lectura breve.", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), lang="es", text="Lectura breve.", prompt_version=PROMPT_VERSION,
         tier="corto", completa=True,
     )
     Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="Informe completo.", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), lang="es", text="Informe completo.", prompt_version=PROMPT_VERSION,
         tier="largo", completa=True,
     )
 
@@ -86,7 +86,7 @@ def test_no_devuelve_200_vacio_mientras_se_genera(cliente, carta):
     reintento. Un error acá lo puede manejar el cliente; un éxito vacío lo
     deja en un estado terminal sin salida."""
     Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), lang="es", text="", prompt_version=PROMPT_VERSION,
         content_key="x", completa=False,
     )
 
@@ -94,7 +94,7 @@ def test_no_devuelve_200_vacio_mientras_se_genera(cliente, carta):
 
     assert resp.status_code == 404
     # No la borra ni la toca: el hilo de fondo sigue escribiéndola.
-    assert Interpretation.objects.filter(chart=carta, lang="es").exists()
+    assert Interpretation.objects.filter(sujeto__natal_de=carta, lang="es").exists()
 
 
 @pytest.mark.django_db
@@ -103,13 +103,13 @@ def test_si_no_existe_devuelve_404_y_no_la_genera(cliente, carta):
     resp = cliente.get(f"/api/charts/{carta.uuid}/interpretation/?lang=es&tier=largo")
 
     assert resp.status_code == 404
-    assert Interpretation.objects.filter(chart=carta).count() == 0
+    assert Interpretation.objects.filter(sujeto__natal_de=carta).count() == 0
 
 
 @pytest.mark.django_db
 def test_no_devuelve_la_de_otro_idioma(cliente, carta):
     Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="En español.", prompt_version=PROMPT_VERSION,
+        sujeto=sujeto_natal(carta), lang="es", text="En español.", prompt_version=PROMPT_VERSION,
         content_key="x"
     )
 
@@ -143,7 +143,7 @@ def test_ignora_una_version_vieja_del_prompt(cliente, carta):
     # Si el prompt cambió, el texto guardado ya no corresponde a lo que hoy
     # generaría el sistema: para la web es como si no existiera.
     Interpretation.objects.create(
-        sujeto=sujeto_natal(carta), chart=carta, lang="es", text="Escrita con otro prompt.", prompt_version="viejo",
+        sujeto=sujeto_natal(carta), lang="es", text="Escrita con otro prompt.", prompt_version="viejo",
         content_key="x"
     )
 

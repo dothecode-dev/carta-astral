@@ -434,4 +434,4 @@ def test_un_error_inesperado_al_canjear_devuelve_el_cupo_y_no_deja_la_fila(make_
     with pytest.raises(RuntimeError):
         svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="corto")
     assert CupoDiario.objects.get(fecha=timezone.now().date(), ambito="cuenta").usados == 0
-    assert not Interpretation.objects.filter(chart=carta).exists()
+    assert not Interpretation.objects.filter(sujeto__natal_de=carta).exists()

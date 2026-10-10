@@ -73,7 +73,7 @@ def anonima(make_chart):
     carta = make_chart(account=None)
     return PasarelaCheckout.objects.create(
         checkout_id=SESSION_ANONIMA, account=None, codigo_producto="informe_natal",
-        sujeto=sujeto_natal(carta), chart=carta, anonimo=True, nonce_hash="x" * 64,
+        sujeto=sujeto_natal(carta), anonimo=True, nonce_hash="x" * 64,
         precio_centavos=2900,
     )
 

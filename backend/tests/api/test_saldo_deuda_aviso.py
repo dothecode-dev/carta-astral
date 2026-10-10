@@ -92,7 +92,7 @@ def test_webhook_con_deuda_marca_la_fila(entregar, account_client, make_chart, s
     cuenta = _con_deuda(account_client.account)
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
 
     assert entregar("cs_deuda").status_code == 200
@@ -100,7 +100,7 @@ def test_webhook_con_deuda_marca_la_fila(entregar, account_client, make_chart, s
     fila.refresh_from_db()
     assert fila.acreditado_at is not None
     assert fila.saldo_deuda is True
-    assert not Interpretation.objects.filter(chart=fila.chart).exists()
+    assert not Interpretation.objects.filter(sujeto=fila.sujeto).exists()
     assert sin_hilo == []
 
 
@@ -108,7 +108,7 @@ def test_el_estado_devuelve_saldo_pendiente(entregar, account_client, make_chart
     cuenta = _con_deuda(account_client.account)
     PasarelaCheckout.objects.create(
         checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     entregar("cs_deuda")
 
@@ -122,7 +122,7 @@ def test_sin_deuda_ni_la_fila_ni_el_estado_lo_dicen(entregar, account_client, ma
     cuenta = account_client.account
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_ok", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     entregar("cs_ok")
 
@@ -140,7 +140,7 @@ def test_un_reintento_no_borra_la_marca(entregar, account_client, make_chart, si
     cuenta = _con_deuda(account_client.account)
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     entregar("cs_deuda")
     assert entregar("cs_deuda").status_code == 200
@@ -157,7 +157,7 @@ def test_los_dos_logs_son_error_y_sin_mail(
     cuenta = _con_deuda(account_client.account)
     PasarelaCheckout.objects.create(
         checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     with caplog.at_level(logging.WARNING):
         entregar("cs_deuda")
@@ -186,7 +186,7 @@ def test_con_deuda_y_saldo_de_un_pack_el_informe_se_escribe_y_no_se_avisa_deuda(
     )
     fila = PasarelaCheckout.objects.create(
         checkout_id="cs_pack", account=cuenta, codigo_producto="informe_natal",
-        chart=(_carta := make_chart(account=cuenta)), sujeto=sujeto_natal(_carta),
+        sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
 
     with caplog.at_level(logging.ERROR):

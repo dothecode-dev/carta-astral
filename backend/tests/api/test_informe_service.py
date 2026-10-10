@@ -139,7 +139,7 @@ def _interpretacion(tier):
     bd = BirthData.objects.create(date="2000-01-01", lat=0, lng=0, tz_name="UTC")
     chart = Chart.objects.create(birth_data=bd, data={}, engine_version="test", account=account)
     return Interpretation.objects.create(
-        sujeto=sujeto_natal(chart), chart=chart, lang="es", prompt_version=PROMPT_VERSION, text="", account=account, tier=tier,
+        sujeto=sujeto_natal(chart), lang="es", prompt_version=PROMPT_VERSION, text="", account=account, tier=tier,
     )
 
 
@@ -196,8 +196,8 @@ def test_la_breve_pasa_una_sola_vez_por_el_juez(monkeypatch):
 
 
 def test_sin_hora_de_nacimiento_se_omite_la_seccion_de_casas(interpretacion):
-    interpretacion.chart.data["time_known"] = False
-    interpretacion.chart.save()
+    interpretacion.sujeto.natal_de.data["time_known"] = False
+    interpretacion.sujeto.natal_de.save()
     informe_service.generar_informe(interpretacion, ClienteFalso(), TOKEN)
     slugs = [s.slug for s in interpretacion.secciones.all()]
     assert "casas" not in slugs
@@ -323,8 +323,8 @@ def test_cada_seccion_recibe_su_parte_del_reparto(interpretacion):
     «tensiones» (viene después) y la síntesis no explica nada propio."""
     from tests.interpret.test_reparto import CARTA
 
-    interpretacion.chart.data = CARTA
-    interpretacion.chart.save()
+    interpretacion.sujeto.natal_de.data = CARTA
+    interpretacion.sujeto.natal_de.save()
     cliente = ClienteFalso()
     informe_service.generar_informe(interpretacion, cliente, TOKEN)
     pedidos = [ll["messages"][0]["content"] for ll in cliente.llamadas]
@@ -336,8 +336,8 @@ def test_cada_seccion_recibe_su_parte_del_reparto(interpretacion):
 def test_sin_hora_el_reparto_no_inventa_casas_ni_cumulos(interpretacion):
     from tests.interpret.test_reparto import CARTA_SIN_HORA
 
-    interpretacion.chart.data = CARTA_SIN_HORA
-    interpretacion.chart.save()
+    interpretacion.sujeto.natal_de.data = CARTA_SIN_HORA
+    interpretacion.sujeto.natal_de.save()
     cliente = ClienteFalso()
     informe_service.generar_informe(interpretacion, cliente, TOKEN)
     pedidos = "\n".join(ll["messages"][0]["content"] for ll in cliente.llamadas)
