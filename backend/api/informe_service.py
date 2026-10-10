@@ -21,6 +21,7 @@ from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_COR
 from interpret.reparto import bloque as bloque_de_reparto
 from interpret.reparto import parte_de
 from interpret.revision_trato import revisar_trato
+from interpret.vinculo import build_seccion_vinculo, secciones_vinculo
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +44,11 @@ _PUNTUACION_COLGANTE = " ,;:.!?¡¿-—"
 
 def _datos(sujeto) -> dict:
     """El cálculo sobre el que se escribe el informe. El natal lo tiene en su
-    carta; el vínculo lo traerá en `sujeto.data` (parte 3)."""
-    if sujeto.producto != Sujeto.NATAL:
-        raise NotImplementedError("el informe de vínculo todavía no existe")
+    carta; el vínculo, en sus dos copias y en `sujeto.data` (sin alias, RF22)."""
+    if sujeto.producto == Sujeto.VINCULO:
+        from api.vinculo_service import datos_prompt
+
+        return datos_prompt(sujeto)
     return sujeto.natal_de.data
 
 
@@ -62,6 +65,12 @@ def secciones_aplicables(sujeto, tier: str) -> list[Seccion]:
     silencio. Los llamadores son `secciones_pendientes`, `resumen_gratis`
     (siempre `largo`: describe el informe completo), `generar_informe`,
     `pdf_payload` y la vista de estado."""
+    if sujeto.producto == Sujeto.VINCULO:
+        datos = _datos(sujeto)
+        hay_hora = any(
+            datos[p]["carta"].get("time_known", True) for p in ("persona_a", "persona_b")
+        )
+        return secciones_vinculo(datos["tipo"], hay_hora)
     if tier == TIER_CORTO:
         return [SECCION_BREVE]
     hora = _datos(sujeto).get("time_known", True)
@@ -263,11 +272,15 @@ def avisar_informe_listo(interpretacion: Interpretation) -> None:
     if marcadas != 1:
         return
     # El informe vive en la página de la carta (web/app/[locale]/carta/[id],
-    # `id` = uuid), no en la cuenta: el mail lleva directo a leerlo.
-    uuid = str(interpretacion.sujeto.natal_de.uuid)
+    # `id` = uuid) o del vínculo, no en la cuenta: el mail lleva directo a leerlo.
+    sujeto = interpretacion.sujeto
+    if sujeto.producto == Sujeto.VINCULO:
+        contexto = {"vinculo": str(sujeto.uuid), "ruta": f"/vinculo/{sujeto.uuid}"}
+    else:
+        uuid = str(sujeto.natal_de.uuid)
+        contexto = {"chart": uuid, "ruta": f"/carta/{uuid}"}
     notificaciones.notificar(
-        interpretacion.account, "informe_listo",
-        {"chart": uuid, "ruta": f"/carta/{uuid}"}, lang=interpretacion.lang,
+        interpretacion.account, "informe_listo", contexto, lang=interpretacion.lang,
     )
 
 
@@ -339,7 +352,13 @@ def generar_informe(interpretacion, client, token: str) -> bool:
 
     pendientes = secciones_pendientes(interpretacion)
     for indice, seccion in enumerate(pendientes):
-        if seccion.slug == SECCION_BREVE.slug:
+        if interpretacion.sujeto.producto == Sujeto.VINCULO:
+            # Sin reparto ni juez de trato: el reparto sabe de UNA carta, y el
+            # trato es la segunda persona del lector, que el vínculo no usa.
+            texto = build_seccion_vinculo(
+                datos, seccion, interpretacion.lang, resumen_previo(interpretacion), client,
+            )
+        elif seccion.slug == SECCION_BREVE.slug:
             # La breve es un informe entero corto, no un recorte del largo:
             # SYSTEM_PROMPTS_SECCION le diría al modelo que está escribiendo
             # una parte de algo mayor y produciría un texto que remite a
@@ -482,7 +501,10 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
         )
         # La traducción también puede escapar el género: se revisa con el
         # trato y el idioma del destino (el trato ya quedó alineado arriba).
-        texto = revisar_trato(texto, destino.trato, destino_lang, client)
+        if origen.sujeto.producto == Sujeto.NATAL:
+            # El vínculo se escribe en tercera persona: el juez del trato
+            # (segunda persona del lector) no tiene nada que revisar ahí.
+            texto = revisar_trato(texto, destino.trato, destino_lang, client)
         try:
             with transaction.atomic():
                 InterpretationSection.objects.create(

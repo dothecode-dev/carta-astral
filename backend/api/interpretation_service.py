@@ -31,7 +31,21 @@ from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 # lectura breve canjea la capacidad regalada, el informe completo la capacidad
 # paga. Con dos productos la capacidad ES el producto — de acá sale lo que
 # `canje.canjear` busca entre los derechos de la cuenta.
-CAPACIDAD_POR_TIER = {TIER_CORTO: "leer_breve", TIER_LARGO: "leer_informe"}
+_CAPACIDAD = {
+    (Sujeto.NATAL, TIER_CORTO): "leer_breve",
+    (Sujeto.NATAL, TIER_LARGO): "leer_informe",
+    (Sujeto.VINCULO, TIER_LARGO): "leer_vinculo",
+}
+
+
+def capacidad(sujeto, tier: str) -> str:
+    """Qué capacidad canjea pedir este tier de este sujeto. Con dos productos
+    y un vínculo, la capacidad ES el producto: canjear otra sería cobrar el que
+    no corresponde. El vínculo no tiene lectura breve."""
+    try:
+        return _CAPACIDAD[(sujeto.producto, tier)]
+    except KeyError:
+        raise ValueError(f"el {sujeto.producto} no tiene el tier {tier}") from None
 
 # Import diferido (no al tope del módulo): `informe_service` importa
 # `renovar_lock` DESDE acá, así que un `import` a nivel de módulo en ambas
@@ -311,11 +325,23 @@ def content_key(chart_data: dict, lang: str, prompt_version: str, tier: str) -> 
     pagado reciba el texto de una lectura breve de otra carta con los mismos
     datos de nacimiento.
 
-    INACTIVA: ningún camino la llama desde que el informe se genera por
-    secciones (28-08-2026); las filas nuevas quedan con `content_key=""`.
+    El natal no la usa desde que el informe se genera por secciones
+    (28-08-2026): sus filas nuevas quedan con `content_key=""`. La usa el
+    vínculo para fijar su input (RF14, `_clave_del_sujeto`); no hay reuso de
+    texto entre compras (decisión del 10-10-2026).
     """
     canonical = json.dumps(chart_data, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(f"{prompt_version}:{lang}:{tier}:{canonical}".encode()).hexdigest()
+
+
+def _clave_del_sujeto(sujeto, lang: str, tier: str) -> str:
+    """RF14: para el vínculo, el hash del input del modelo (cartas en orden,
+    con su rol, sin alias). El natal sigue sin usarla."""
+    if sujeto.producto != Sujeto.VINCULO:
+        return ""
+    from api.vinculo_service import datos_prompt
+
+    return content_key(datos_prompt(sujeto), lang, PROMPT_VERSION, tier)
 
 
 def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretation:
@@ -328,7 +354,7 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
     `informe_service.secciones_aplicables`): un default silencioso
     convertiría "me olvidé de pasar el tier" en "le cobro/entrego el
     producto equivocado" en vez de un `TypeError` inmediato. Decide, vía
-    `CAPACIDAD_POR_TIER`, qué capacidad se canjea — leer_breve para la
+    `capacidad(sujeto, tier)`, qué capacidad se canjea — leer_breve para la
     lectura breve, leer_informe para el informe completo (Task 11) —
     porque con dos productos la capacidad ES el producto: canjear la otra
     sería cobrar el que no corresponde.
@@ -371,14 +397,13 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
     esperar). Se lanza `GenerationInProgress` ANTES de cobrar: no hay nada
     que devolver porque nunca se llega a tocar ningún derecho."""
     sujeto = a_sujeto(objetivo)
-    if sujeto.producto != Sujeto.NATAL:
-        # El informe de vínculo es la parte 3: sin su prompt y sus secciones,
-        # generar acá escribiría un informe natal sobre datos vacíos.
-        raise NotImplementedError("el informe de vínculo todavía no existe")
+    # Antes de crear nada: un vínculo con `corto` no existe (ValueError).
+    cap = capacidad(sujeto, tier)
     interpretacion, creada = Interpretation.objects.get_or_create(
         sujeto=sujeto, lang=lang, prompt_version=PROMPT_VERSION, tier=tier,
         defaults={
             "text": "", "account": account,
+            "content_key": _clave_del_sujeto(sujeto, lang, tier),
             # RF5: el informe fija el trato al nacer; cambiar la carta después
             # no lo toca.
             "trato": sujeto.natal_de.birth_data.trato if sujeto.natal_de else "",
@@ -397,14 +422,13 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
             "reintentá en unos segundos"
         )
 
-    capacidad = CAPACIDAD_POR_TIER[tier]
     # El tope protege el gasto de LLM sin ingreso: aplica sólo a lo regalado,
     # que es la lectura breve. Se reserva ANTES de canjear con un UPDATE
     # atómico (`cupo_diario`): `cache.incr` leía y escribía, y dos pedidos
     # simultáneos pasaban el mismo lugar (spec 2026-10-08, RF11). Un tope
     # pensado para eso no puede frenar un informe que alguien pagó.
     fecha_cupo = None
-    if capacidad == "leer_breve":
+    if cap == "leer_breve":
         fecha_cupo = cupo_diario.reservar(cupo_diario.CUENTA, settings.INTERPRETATION_DAILY_CAP)
         if fecha_cupo is None:
             interpretacion.delete()
@@ -414,7 +438,7 @@ def iniciar_generacion(objetivo, lang: str, account, tier: str) -> Interpretatio
             raise CapReached()
 
     try:
-        canjear(account, capacidad, sujeto, build=lambda: interpretacion)
+        canjear(account, cap, sujeto, build=lambda: interpretacion)
     except BaseException:
         # No sólo `SinDerecho`: cualquier excepción de `canjear` sale de su
         # `atomic()` y revierte el canje, así que no se cobró nada. El lugar
@@ -623,7 +647,7 @@ def completar_generacion(interpretacion: Interpretation, account) -> None:
         # Mismo principio que tenía el ledger viejo al leer `consumo.
         # lot` en vez de asumirlo — el refactor había cambiado ese
         # read-back por una constante, y esto lo repone.
-        codigos = codigos_otorgados_por(CAPACIDAD_POR_TIER[interpretacion.tier])
+        codigos = codigos_otorgados_por(capacidad(sujeto, interpretacion.tier))
         consumo = Movimiento.objects.filter(
             account=account, sujeto=sujeto, tipo="consumo", codigo_producto__in=codigos,
         ).first()

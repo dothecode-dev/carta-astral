@@ -8,7 +8,7 @@ import pytest
 from django.core.cache import cache
 
 from api import interpretation_service as svc
-from api.canje import otorgar
+from api.canje import SinDerecho, otorgar
 from api.exceptions import GenerationInProgress
 from api.models import Derecho, Interpretation, Movimiento, Sujeto
 from api.sujetos import sujeto_natal
@@ -86,12 +86,17 @@ def test_un_hermano_en_curso_por_sujeto_da_409_y_no_cobra(cuenta, carta):
     assert _restante(cuenta) == 1
 
 
-def test_un_sujeto_que_no_es_natal_no_se_genera_todavia(cuenta):
-    """Hasta la parte 3 no hay prompt ni secciones de vínculo: error explícito,
-    nunca un informe natal escrito sobre datos vacíos, y sin cobrar."""
+def test_un_vinculo_no_se_paga_con_un_derecho_natal(cuenta):
+    """Desde la parte 3 el vínculo se genera, pero con SU producto (RF18): con
+    sólo un derecho natal no hay con qué, no queda fila y el natal no se toca."""
+    from api.vinculo_service import crear_vinculo
+
     otorgar(cuenta, "informe_natal", 1, origen="compra", external_id="p:5")
-    s = Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
-    with pytest.raises(NotImplementedError):
+    s = crear_vinculo(cuenta, "amistad", [
+        {"date": "1985-03-14", "time_known": False, "lat": -32.95, "lng": -60.65},
+        {"date": "1988-09-09", "time_known": False, "lat": -31.42, "lng": -64.18},
+    ])
+    with pytest.raises(SinDerecho):
         svc.iniciar_generacion(s, "es", cuenta, TIER_LARGO)
     assert not Interpretation.objects.filter(sujeto=s).exists()
     assert _restante(cuenta) == 1
