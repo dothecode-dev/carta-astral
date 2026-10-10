@@ -17,6 +17,7 @@ export const legalPt: LegalContent = {
         kind: "ul",
         items: [
           "**Conta:** ao entrar com Google recebemos seu identificador do Google e seu email; com o código por email, seu email. Nunca vemos nem guardamos sua senha.",
+          "**Avisos por e-mail:** escrevemos para o seu e-mail para enviar o código de acesso e avisar sobre a sua compra e que o seu relatório está pronto. Esse último e-mail pode incluir o nome do mapa, o seu Sol, a sua Lua e o seu Ascendente, e o início do relatório.",
           "**Dados de nascimento:** os que você informa para calcular um mapa — nome (opcional), data, hora e lugar de nascimento.",
           "**Compras:** o pagamento é processado pela **Stripe**, que atua como vendedora registrada. Não vemos nem guardamos os dados do seu cartão: da Stripe recebemos a confirmação do pagamento e o identificador da compra, para liberar o que você comprou.",
           "**Comprar sem conta:** se você abrir o pagamento do relatório sem ter entrado, guardamos os dados desse mapa para poder entregar o relatório quando o pagamento for confirmado. Se o pagamento não for concluído, o mapa é apagado quando o checkout expira (uma hora depois de aberto). Você informa seu e-mail no **Stripe**, que nos repassa quando o pagamento é confirmado: usamos esse e-mail para criar sua conta, ou para creditar a compra na conta que você já tinha com ele, e para enviar o código de acesso.",
@@ -30,6 +31,7 @@ export const legalPt: LegalContent = {
           "Calcular seu mapa astral e mostrá-lo no site.",
           "Gerar a leitura interpretativa: os dados astronômicos do mapa são processados pela **Anthropic** (provedora de IA) para redigir o texto. Não são usados para treinar modelos.",
           "Controlar os relatórios que você tem disponíveis para ler.",
+          "Enviar esses e-mails: o envio é feito pela **Resend**, um provedor de envio de e-mails que os processa por nossa conta e apenas para entregá-los a você.",
           "**Detectar falhas e entender o uso do site.** Usamos **Sentry** (relatórios de erro) e **PostHog** (analítica de produto). Eles registram ações como entrar, criar um mapa, gerar uma leitura, baixá-la ou concluir uma compra, junto com o identificador interno da sua conta. **Nunca enviamos a eles seu nome, sua data, hora ou local de nascimento, nem o texto das suas leituras**, tampouco seu email. Seu endereço IP é usado apenas para deduzir o país de onde você acessa e não é armazenado. No site a analítica só é ativada se você aceitar, e você pode mudar de ideia quando quiser pelo link no rodapé. **O registro de uma compra concluída é a exceção: quem faz isso é o nosso servidor quando o pagamento é confirmado, então não depende dessa preferência.** É um dado da operação —qual produto e por quanto—, não da sua navegação, e viaja como o resto: com o identificador interno da sua conta e sem o seu email. Ambos os serviços processam esses dados nos Estados Unidos.",
         ],
       },

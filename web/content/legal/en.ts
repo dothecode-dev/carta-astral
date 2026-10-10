@@ -17,6 +17,7 @@ export const legalEn: LegalContent = {
         kind: "ul",
         items: [
           "**Account:** when you sign in with Google we receive your Google identifier and your email; with the email code, your email. We never see or store your password.",
+          "**Email notices:** we write to your email to send you the access code and to let you know about your purchase and that your report is ready. That last email may include the chart's name, your Sun, Moon and Ascendant signs, and the opening of the report.",
           "**Birth data:** what you enter to compute a chart — name (optional), date, time and place of birth.",
           "**Purchases:** payments are processed by **Stripe**, acting as merchant of record. We never see or store your card details: from Stripe we receive the payment confirmation and the purchase identifier, so we can give you access to what you bought.",
           "**Buying without an account:** if you open the payment for the report without signing in, we store that chart's data so we can deliver the report once the payment is confirmed. If the payment isn't completed, the chart is deleted when the checkout expires (one hour after opening it). You enter your email in **Stripe**, which passes it to us when the payment is confirmed: we use it to create your account, or to credit the purchase to the account you already had with that email, and to send you the access code.",
@@ -30,6 +31,7 @@ export const legalEn: LegalContent = {
           "To compute your natal chart and show it on the site.",
           "To generate the written reading: the chart's astronomical data is processed by **Anthropic** (our AI provider) to produce the text. It is not used to train models.",
           "To keep track of the reports you have available to read.",
+          "To send you those emails: they are delivered by **Resend**, an email delivery provider that processes them on our behalf and only to deliver them to you.",
           "**To detect failures and understand how the site is used.** We use **Sentry** (error reporting) and **PostHog** (product analytics). They record actions such as signing in, creating a chart, generating a reading, downloading it or completing a purchase, along with your internal account identifier. **We never send them your name, your birth date, time or place, or the text of your readings**, nor your email. Your IP address is used only to infer the country you are visiting from and is not stored. On the website analytics only run if you accept them, and you can change your mind at any time from the link in the footer. **Recording a completed purchase is the exception: our server does it when the payment is confirmed, so it does not depend on that preference.** It is data about the transaction —which product and for how much—, not about your browsing, and it travels like the rest: with your internal account identifier and without your email. Both services process this data in the United States.",
         ],
       },

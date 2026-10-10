@@ -18,6 +18,7 @@ export const legalEs: LegalContent = {
         kind: "ul",
         items: [
           "**Cuenta:** al entrar con Google recibimos tu identificador de Google y tu email; con el código por mail, tu email. No vemos ni guardamos tu contraseña.",
+          "**Avisos por mail:** te escribimos a tu email para mandarte el código de acceso y para avisarte de tu compra y de que tu informe está listo. Ese último mail puede incluir el nombre de la carta, tu Sol, tu Luna y tu Ascendente, y el arranque del informe.",
           "**Datos de nacimiento:** los que cargás para calcular una carta — nombre (opcional), fecha, hora y lugar de nacimiento.",
           "**Compras:** el cobro lo procesa **Stripe**, que actúa como vendedor registrado. No vemos ni guardamos los datos de tu tarjeta: de Stripe recibimos la confirmación del pago y el identificador de la compra, para darte acceso a lo que compraste.",
           "**Comprar sin cuenta:** si abrís el pago del informe sin haber entrado, guardamos los datos de esa carta para poder entregarte el informe cuando se confirme el pago. Si el pago no se completa, la carta se borra cuando vence (a la hora de abrirlo). El email lo cargás en **Stripe**, que nos lo pasa al confirmar el pago: lo usamos para crear tu cuenta, o para acreditar la compra en la que ya tenías con ese email, y para mandarte el código de acceso.",
@@ -31,6 +32,7 @@ export const legalEs: LegalContent = {
           "Calcular tu carta astral y mostrarla en el sitio.",
           "Generar la lectura interpretativa: los datos astronómicos de la carta se procesan con **Anthropic** (el proveedor de IA) para redactar el texto. No se usan para entrenar modelos.",
           "Llevar la cuenta de los informes que tenés disponibles para leer.",
+          "Enviarte esos mails: el envío lo hace **Resend**, un proveedor de envío de mails que los procesa por cuenta nuestra y sólo para entregártelos.",
           "**Detectar fallas y entender el uso del sitio.** Usamos **Sentry** (reportes de errores) y **PostHog** (analítica de producto). Registran acciones como iniciar sesión, crear una carta, generar una lectura, descargarla o completar una compra, junto con el identificador interno de tu cuenta. **Nunca les enviamos tu nombre, tu fecha, hora o lugar de nacimiento, ni el texto de tus lecturas**, y tampoco tu email. Tu dirección IP se usa únicamente para deducir el país desde el que entrás y no se almacena. En el sitio web la analítica sólo se activa si la aceptás, y podés cambiar de opinión cuando quieras desde el enlace del pie de página. **El registro de una compra completada es la excepción: lo hace nuestro servidor cuando el pago se confirma, así que no depende de esa preferencia.** Es un dato de la operación —qué producto y por cuánto—, no de tu navegación, y viaja igual que el resto: con el identificador interno de tu cuenta y sin tu email. Ambos servicios procesan estos datos en Estados Unidos.",
         ],
       },
