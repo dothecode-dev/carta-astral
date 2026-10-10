@@ -88,17 +88,72 @@ def test_el_aviso_de_listo_lleva_a_la_pagina_del_vinculo(vinculo, monkeypatch):
     assert enviados[-1]["ruta"] == f"/vinculo/{vinculo.uuid}"
 
 
-def test_la_traduccion_del_vinculo_va_por_el_traductor_sin_trato(vinculo, monkeypatch):
+@pytest.mark.parametrize("generos,modelo", [
+    (("femenino", "masculino"), "barato"),
+    (("femenino", "neutro"), "caro"),
+])
+def test_la_traduccion_del_vinculo_va_por_el_traductor_sin_trato(
+    make_account, settings, db_cache, monkeypatch, generos, modelo,
+):
     """El vínculo está en tercera persona: la instrucción de trato (segunda
-    persona del lector) no aplica, y con ella la traducción iba al modelo caro."""
-    from interpret.prompts import TRANSLATE_MODEL
+    persona del lector) no aplica. Con los dos géneros conocidos va al modelo
+    barato; con alguien en neutro, al caro, como el trato neutro del natal
+    (medido en staging: Haiku no respeta el neutro)."""
+    from interpret.prompts import MODEL, TRANSLATE_MODEL
 
+    settings.VINCULO_ENABLED = True
+    acc = make_account()
+    otorgar(acc, "informe_vinculo", 1, origen="compra", external_id="v:m")
+    s = crear_vinculo(acc, "pareja", [{**A, "genero": generos[0]}, {**B, "genero": generos[1]}])
+    monkeypatch.setattr(informe_service, "revisar_personas", lambda texto, *a: texto)
     cliente = ClienteFalso()
     monkeypatch.setattr(svc, "_build_client", lambda: cliente)
-    es = svc.iniciar_generacion(vinculo, "es", vinculo.account, tier="largo")
-    svc.completar_generacion(es, vinculo.account)
+    es = svc.iniciar_generacion(s, "es", acc, tier="largo")
+    svc.completar_generacion(es, acc)
     antes = len(cliente.llamadas)
-    pt = svc.iniciar_generacion(vinculo, "pt", vinculo.account, tier="largo")
-    svc.completar_generacion(pt, vinculo.account)
+    pt = svc.iniciar_generacion(s, "pt", acc, tier="largo")
+    svc.completar_generacion(pt, acc)
     traducciones = cliente.llamadas[antes:]
-    assert traducciones and all(c["model"] == TRANSLATE_MODEL for c in traducciones)
+    esperado = TRANSLATE_MODEL if modelo == "barato" else MODEL
+    assert traducciones and all(c["model"] == esperado for c in traducciones)
+
+
+def test_cada_seccion_pasa_por_el_juez_de_las_dos_personas(make_account, settings, db_cache, monkeypatch):
+    settings.VINCULO_ENABLED = True
+    acc = make_account()
+    otorgar(acc, "informe_vinculo", 1, origen="compra", external_id="v:g")
+    s = crear_vinculo(acc, "familia", [
+        {**A, "rol": "progenitor", "genero": "neutro"}, {**B, "rol": "hijo", "genero": "masculino"},
+    ])
+    vistos = []
+    monkeypatch.setattr(informe_service, "revisar_personas",
+                        lambda texto, generos, lang, client: vistos.append((generos, lang)) or texto)
+    monkeypatch.setattr(svc, "_build_client", lambda: ClienteFalso())
+    es = svc.iniciar_generacion(s, "es", acc, tier="largo")
+    svc.completar_generacion(es, acc)
+    assert vistos == [(("neutro", "masculino"), "es")] * 8
+
+    vistos.clear()
+    pt = svc.iniciar_generacion(s, "pt", acc, tier="largo")
+    svc.completar_generacion(pt, acc)
+    assert vistos == [(("neutro", "masculino"), "pt")] * 8
+
+
+def test_la_traduccion_del_vinculo_lleva_el_genero_de_las_dos(make_account, settings, db_cache, monkeypatch):
+    from interpret.trato import instruccion_persona
+
+    settings.VINCULO_ENABLED = True
+    acc = make_account()
+    otorgar(acc, "informe_vinculo", 1, origen="compra", external_id="v:t")
+    s = crear_vinculo(acc, "pareja", [{**A, "genero": "femenino"}, B])
+    monkeypatch.setattr(informe_service, "revisar_personas", lambda texto, *a: texto)
+    cliente = ClienteFalso()
+    monkeypatch.setattr(svc, "_build_client", lambda: cliente)
+    es = svc.iniciar_generacion(s, "es", acc, tier="largo")
+    svc.completar_generacion(es, acc)
+    antes = len(cliente.llamadas)
+    pt = svc.iniciar_generacion(s, "pt", acc, tier="largo")
+    svc.completar_generacion(pt, acc)
+    system = "\n".join(b["text"] for b in cliente.llamadas[antes]["system"])
+    assert instruccion_persona("femenino", "pt", "Pessoa A") in system
+    assert instruccion_persona("", "pt", "Pessoa B") in system

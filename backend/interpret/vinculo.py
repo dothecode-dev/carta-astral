@@ -8,6 +8,7 @@ import json
 
 from interpret.generator import _MARGEN_TOPE_SECCION, _stream_text
 from interpret.prompts import MODEL, SECCION_TOKENS_POR_PALABRA, Seccion
+from interpret.trato import instruccion_personas, nombre_persona
 
 # El rol con el género de la persona, artículo incluido (decisión del
 # 10-10-2026: el género se pregunta por persona y es opcional). La clave "" es
@@ -61,26 +62,6 @@ def _por_genero(tabla: dict[str, str], genero: str) -> str:
     return tabla.get(genero, tabla[""])
 
 
-# Cómo concordar al hablar de cada persona. Va siempre (con o sin rol): en
-# castellano y portugués casi todo adjetivo y participio lleva género.
-_GENERO = {
-    "es": {
-        "femenino": "{p} es mujer: usá concordancia femenina al hablar de ella.",
-        "masculino": "{p} es varón: usá concordancia masculina al hablar de él.",
-        "": "No se sabe el género de {p}: redactá de forma neutra al hablar de esa persona.",
-    },
-    "en": {
-        "femenino": "{p} is a woman: use she/her.",
-        "masculino": "{p} is a man: use he/him.",
-        "": "{p}'s gender is unknown: use neutral language (they/them).",
-    },
-    "pt": {
-        "femenino": "{p} é mulher: use concordância feminina ao falar dela.",
-        "masculino": "{p} é homem: use concordância masculina ao falar dele.",
-        "": "Não se sabe o gênero de {p}: escreva de forma neutra ao falar dessa pessoa.",
-    },
-}
-
 TIPO: dict[str, dict[str, str]] = {
     "pareja": {"es": "pareja", "en": "romantic partners", "pt": "casal"},
     "trabajo": {"es": "trabajo", "en": "work", "pt": "trabalho"},
@@ -88,7 +69,6 @@ TIPO: dict[str, dict[str, str]] = {
     "amistad": {"es": "amistad", "en": "friendship", "pt": "amizade"},
 }
 
-_PERSONA = {"es": "Persona {}", "en": "Person {}", "pt": "Pessoa {}"}
 
 
 def _s(slug, titulo, foco, palabras, requiere_hora=False) -> Seccion:
@@ -210,14 +190,13 @@ def contenido_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str) -> 
     personas = (("A", datos["persona_a"]), ("B", datos["persona_b"]))
     roles = " ".join(
         _ES_ROL[lang].format(
-            p=_PERSONA[lang].format(letra),
+            p=nombre_persona(letra, lang),
             rol=_por_genero(ETIQUETAS_ROL[p["rol"]][lang], p.get("genero", "")),
         )
         for letra, p in personas if p["rol"]
     )
-    generos = " ".join(
-        _por_genero(_GENERO[lang], p.get("genero", "")).format(p=_PERSONA[lang].format(letra))
-        for letra, p in personas
+    generos = instruccion_personas(
+        (datos["persona_a"].get("genero", ""), datos["persona_b"].get("genero", "")), lang,
     )
     roles = f"{roles} {generos}".strip()
     texto = _PEDIDO[lang].format(
@@ -235,7 +214,7 @@ def contenido_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str) -> 
     texto += "\n\n" + json.dumps(sin_genero, ensure_ascii=False)
     for letra, p in personas:
         if not p["carta"].get("time_known", True):
-            texto += _SIN_HORA[lang].format(p=_PERSONA[lang].format(letra))
+            texto += _SIN_HORA[lang].format(p=nombre_persona(letra, lang))
     if previo:
         texto += _PREVIO[lang].format(previo=previo)
     return texto
@@ -243,7 +222,11 @@ def contenido_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str) -> 
 
 def build_seccion_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str, client) -> str:
     system = [{"type": "text", "text": _SYSTEM[lang]}]
+    # Sin razonar (decisión del 10-10-2026): Sonnet 5 razona por defecto, y
+    # con la guía neutra larga una sección se gastó en pensar los 8.400 tokens
+    # de su techo y el informe falló. El techo mide texto; el género lo
+    # revisa el juez de cada persona después.
     return _stream_text(
         client, MODEL, system, contenido_vinculo(datos, seccion, lang, previo),
-        seccion.palabras * SECCION_TOKENS_POR_PALABRA,
+        seccion.palabras * SECCION_TOKENS_POR_PALABRA, thinking={"type": "disabled"},
     )

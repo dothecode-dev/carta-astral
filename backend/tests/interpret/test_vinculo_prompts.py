@@ -84,3 +84,28 @@ def test_neutro_se_redacta_igual_que_sin_genero():
     sec = secciones_vinculo("familia", hay_hora=True)[0]
     assert (contenido_vinculo(_con_generos("neutro", "neutro"), sec, "es", "")
             == contenido_vinculo(_con_generos("", ""), sec, "es", ""))
+
+
+def test_el_prompt_lleva_la_guia_larga_de_cada_persona():
+    from interpret.trato import instruccion_persona
+
+    sec = secciones_vinculo("familia", hay_hora=True)[0]
+    texto = contenido_vinculo(_con_generos("neutro", "femenino"), sec, "es", "")
+    assert instruccion_persona("neutro", "es", "Persona A") in texto
+    assert instruccion_persona("femenino", "es", "Persona B") in texto
+
+
+def test_la_seccion_del_vinculo_no_razona(monkeypatch):
+    """Medido en staging el 10-10: con la guía neutra larga, Sonnet razonaba
+    hasta agotar el techo de la sección (8.400 de 8.400 tokens) y el informe
+    fallaba. El techo mide texto; el género lo cubre el juez."""
+    from interpret import vinculo
+
+    vistos = []
+    monkeypatch.setattr(
+        vinculo, "_stream_text",
+        lambda client, model, system, content, max_tokens, thinking=None: vistos.append(thinking) or "ok",
+    )
+    sec = secciones_vinculo("familia", hay_hora=True)[0]
+    vinculo.build_seccion_vinculo(_con_generos("neutro", ""), sec, "es", "", object())
+    assert vistos == [{"type": "disabled"}]

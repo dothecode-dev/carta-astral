@@ -31,16 +31,21 @@ import json
 import logging
 import re
 from collections import Counter
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from interpret.exceptions import InterpretationError
 from interpret.generator import _stream_text
 from interpret.prompts import MODEL
-from interpret.trato import instruccion
+from interpret.trato import instruccion, instruccion_persona, nombre_persona
 
 logger = logging.getLogger(__name__)
 
-# Idiomas donde hay género que marcar. En inglés el texto no lo marca.
+# Idiomas donde hay género que marcar. En inglés la segunda persona no lo
+# marca; la tercera sí (he/she), por eso las personas del vínculo se revisan
+# también en inglés.
 _IDIOMAS_CON_GENERO = ("es", "pt")
+_IDIOMAS_CON_GENERO_PERSONA = ("es", "pt", "en")
 
 # El juez sólo devuelve una lista corta de fragmentos.
 JUEZ_MAX_TOKENS = 1000
@@ -83,6 +88,17 @@ _FORMAS_PROHIBIDAS = {
     "neutro": re.compile(r"\b(mismo|misma|mesmo|mesma)\b", re.IGNORECASE),
     "femenino": re.compile(r"\b(vos\s+mismo|você\s+mesmo)\b", re.IGNORECASE),
     "masculino": re.compile(r"\b(vos\s+misma|você\s+mesma)\b", re.IGNORECASE),
+}
+
+# Lo mismo para una persona de la que el texto habla. El neutro suma los
+# pronombres con género: «mirar a él» no corrige «mirarlo».
+_FORMAS_PROHIBIDAS_PERSONA = {
+    "neutro": re.compile(
+        r"\b(mismo|misma|mesmo|mesma|él|ella|ele|ela|he|him|his|himself|she|her|hers|herself)\b",
+        re.IGNORECASE,
+    ),
+    "femenino": re.compile(r"\b(s[ií]\s+mismo|si\s+mesmo|él|ele|he|him|his|himself)\b", re.IGNORECASE),
+    "masculino": re.compile(r"\b(s[ií]\s+misma|si\s+mesma|ella|ela|she|her|hers|herself)\b", re.IGNORECASE),
 }
 
 _DESCRIPCION_TRATO = {
@@ -146,6 +162,50 @@ _SYSTEM_REPARACION = (
     "Cómo reformular:\n{guia}"
 )
 
+_QUE_LISTAR_PERSONA = {
+    "femenino": "las formas MASCULINAS referidas a {p} (por ejemplo «a sí mismo», «seguro», "
+                "«él», «mirarlo», «el padre», «si mesmo», «ele», «he», «him»)",
+    "masculino": "las formas FEMENINAS referidas a {p} (por ejemplo «a sí misma», «segura», "
+                 "«ella», «mirarla», «la madre», «si mesma», «ela», «she», «her»)",
+    "neutro": "CUALQUIER marca de género referida a {p}: adjetivos y participios terminados en "
+              "-o/-a («seguro», «dispuesta»), «a sí mismo/misma», «si mesmo/mesma», los pronombres "
+              "«él», «ella», «ele», «ela», «he», «she», «him», «her», los enclíticos «lo»/«la» "
+              "(«mirarlo», «cuidarla», «olhá-lo»), los roles con género («progenitor», «madre o "
+              "padre», «hijo o hija», «mother», «son») y «ellos»/«ellas» cuando incluye a {p}",
+}
+
+_SYSTEM_JUEZ_PERSONA = (
+    "Sos un corrector que revisa el género gramatical con que un texto habla de una persona. El "
+    "texto es una interpretación astrológica, en español, portugués o inglés, sobre el vínculo "
+    "entre dos personas que se nombran {p} y {otra}. A {p} hay que nombrarla {trato}.\n\n"
+    "Listá los fragmentos del texto donde un adjetivo, participio, pronombre o rol referido a "
+    "{p} marca un género que no corresponde. Hay que listar {que_listar}.\n\n"
+    "NO listes lo referido a {otra}, ni lo que concuerda con otra cosa: un planeta («la Luna es "
+    "protectora»), un signo, un lugar, un sustantivo («una persona capaz», la palabra «persona» "
+    "misma). Ante la duda sobre a quién se refiere una palabra, no la listes.\n\n"
+    "Cada fragmento tiene que estar copiado EXACTAMENTE como aparece en el texto, carácter por "
+    "carácter, con unas pocas palabras alrededor para que sea único. Si no hay ninguno, la "
+    'lista va vacía. Respondé sólo con un JSON de la forma {{"fragmentos": ["...", "..."]}}.'
+)
+
+_SYSTEM_REPARACION_PERSONA = (
+    "Sos un corrector. El texto habla de dos personas, {p} y {otra}, y a {p} hay que nombrarla "
+    "{trato}. Te paso fragmentos donde se escapó un género que no corresponde para {p}, cada uno "
+    "con unas palabras de contexto alrededor para que sepas a quién se refiere. Para cada "
+    "fragmento devolvé un par: «original», el fragmento copiado EXACTAMENTE como te lo pasé, y "
+    "«corregido», el mismo fragmento reformulado lo mínimo. Corregí sólo lo que está dentro "
+    "del fragmento; el contexto es para entender, no para cambiar.\n\n"
+    "Corregir significa reformular para que la palabra con género DESAPAREZCA o cambie: "
+    "agregar palabras alrededor no corrige nada. Nunca uses barras («confundido/a»), «x», «@» "
+    "ni «e» como terminación inclusiva.\n\n"
+    "Cada «{p}» y «{otra}» del original tiene que seguir estando: no los reemplaces por un "
+    "pronombre, un rol ni un nombre. Cambiá la menor cantidad de palabras posible, idealmente "
+    "sólo la que marca género.\n\n"
+    "Respondé sólo con un JSON "
+    'de la forma {{"reemplazos": [{{"original": "...", "corregido": "..."}}]}}.\n\n'
+    "Cómo reformular:\n{guia}"
+)
+
 _SCHEMA_REPARACION = {
     "type": "object",
     "properties": {
@@ -172,6 +232,57 @@ def describir_trato(trato: str) -> str:
 
 def _clave(trato: str) -> str:
     return trato if trato in _DESCRIPCION_TRATO else "neutro"
+
+
+@dataclass(frozen=True)
+class _Referente:
+    """A quién se le revisa el género: quien lee (el trato del natal, en
+    segunda persona) o una de las dos personas del vínculo (tercera). La
+    maquinaria es la misma; cambian los prompts, las formas que una
+    corrección no puede traer y qué marca que la corrección despersonalizó."""
+
+    nombre: str  # para el log: «lector» o «persona A»
+    clave: str
+    system_juez: str
+    system_reparacion: str
+    prohibidas: re.Pattern[str]
+    marcas: Callable[[str], int]
+
+
+def _referente_lector(trato: str, lang: str) -> _Referente:
+    clave = _clave(trato)
+    descripcion = describir_trato(clave)
+    return _Referente(
+        nombre="lector", clave=clave,
+        system_juez=_SYSTEM_JUEZ.format(trato=descripcion, que_listar=_QUE_LISTAR[clave]),
+        system_reparacion=_SYSTEM_REPARACION.format(trato=descripcion, guia=instruccion(clave, lang)),
+        prohibidas=_FORMAS_PROHIBIDAS[clave],
+        marcas=lambda texto: _marcas_segunda_persona(texto, lang),
+    )
+
+
+_MENCION_PERSONA = re.compile(r"\b(?:Persona|Person|Pessoa) [AB]\b")
+
+
+def _referente_persona(genero: str, letra: str, lang: str) -> _Referente:
+    clave = _clave(genero)
+    descripcion = describir_trato(clave)
+    p = nombre_persona(letra, lang)
+    otra = nombre_persona("B" if letra == "A" else "A", lang)
+    return _Referente(
+        nombre=f"persona {letra}", clave=clave,
+        system_juez=_SYSTEM_JUEZ_PERSONA.format(
+            p=p, otra=otra, trato=descripcion,
+            que_listar=_QUE_LISTAR_PERSONA[clave].format(p=p),
+        ),
+        system_reparacion=_SYSTEM_REPARACION_PERSONA.format(
+            p=p, otra=otra, trato=descripcion, guia=instruccion_persona(clave, lang, p),
+        ),
+        prohibidas=_FORMAS_PROHIBIDAS_PERSONA[clave],
+        # Una corrección que saca un «Persona A» despersonalizó: el alias se
+        # muestra sólo donde está esa marca (RF22).
+        marcas=lambda texto: len(_MENCION_PERSONA.findall(texto)),
+    )
 
 
 def _cargar_json(crudo: str):
@@ -307,6 +418,7 @@ _DETERMINANTES_CON_GENERO = frozenset({
     "um", "uma", "uns", "umas", "o", "a", "os", "as",
     "aquel", "aquella", "este", "esta", "ese", "esa",
     "ele", "ela", "él", "ella",
+    "he", "him", "his", "himself", "she", "her", "hers", "herself",
 })
 _PUNTUACION_PEGADA = re.compile(r"^\W+|\W+$")
 
@@ -339,7 +451,7 @@ def _solo_agrega_palabras(original: str, corregido: str) -> bool:
 
 
 def _motivo_de_rechazo(
-    original: str, corregido: str, texto: str, listados: set[str], clave: str, lang: str
+    original: str, corregido: str, texto: str, listados: set[str], ref: _Referente
 ) -> str | None:
     """Por qué un par no se aplica, o None si se aplica. Los motivos son
     claves fijas: van al log como contadores, nunca el texto."""
@@ -364,9 +476,9 @@ def _motivo_de_rechazo(
         return "salto_de_linea"
     if _marca_inclusiva(original, corregido):
         return "marca_inclusiva"
-    if _FORMAS_PROHIBIDAS[clave].search(corregido):
+    if ref.prohibidas.search(corregido):
         return "forma_prohibida"
-    if _marcas_segunda_persona(corregido, lang) < _marcas_segunda_persona(original, lang):
+    if ref.marcas(corregido) < ref.marcas(original):
         return "despersonaliza"
     if _palabras_cambiadas(original, corregido) > MAX_PALABRAS_CAMBIADAS:
         return "cambio_grande"
@@ -388,20 +500,38 @@ def revisar_trato(texto: str, trato: str, lang: str, client) -> str:
     verificada par por par, se conserva)."""
     if lang not in _IDIOMAS_CON_GENERO:
         return texto
-    clave = _clave(trato)
+    return _revisar(texto, _referente_lector(trato, lang), lang, client)
+
+
+def revisar_persona(texto: str, genero: str, letra: str, lang: str, client) -> str:
+    """Lo mismo que `revisar_trato` para una persona del vínculo («Persona
+    A» si `letra` es "A"), en tercera persona y con su género."""
+    if lang not in _IDIOMAS_CON_GENERO_PERSONA:
+        return texto
+    return _revisar(texto, _referente_persona(genero, letra, lang), lang, client)
+
+
+def revisar_personas(texto: str, generos: tuple[str, str], lang: str, client) -> str:
+    """Las dos personas del vínculo, primero A y después B."""
+    for letra, genero in zip("AB", generos, strict=True):
+        texto = revisar_persona(texto, genero, letra, lang, client)
+    return texto
+
+
+def _revisar(texto: str, ref: _Referente, lang: str, client) -> str:
     resultado = texto
     for vuelta in range(1, MAX_VUELTAS + 1):
-        resultado, aplicados = _vuelta(resultado, clave, lang, client, vuelta)
+        resultado, aplicados = _vuelta(resultado, ref, lang, client, vuelta)
         if not aplicados:
             break
     return resultado
 
 
-def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str, int]:
+def _vuelta(texto: str, ref: _Referente, lang: str, client, vuelta: int) -> tuple[str, int]:
     """Un juez y, si lista algo, una reparación. Devuelve el texto (reparado
     o tal cual) y cuántos pares se aplicaron."""
-    descripcion = describir_trato(clave)
-    system_juez = [{"type": "text", "text": _SYSTEM_JUEZ.format(trato=descripcion, que_listar=_QUE_LISTAR[clave])}]
+    clave = ref.clave
+    system_juez = [{"type": "text", "text": ref.system_juez}]
     try:
         crudo = _stream_text(
             client, MODEL, system_juez, texto, JUEZ_MAX_TOKENS,
@@ -447,10 +577,7 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
     if not presentes:
         return texto, 0
 
-    system_reparacion = [{
-        "type": "text",
-        "text": _SYSTEM_REPARACION.format(trato=descripcion, guia=instruccion(clave, lang)),
-    }]
+    system_reparacion = [{"type": "text", "text": ref.system_reparacion}]
     contenido = "\n".join(_con_contexto(texto, f) for f in presentes)
     try:
         crudo = _stream_text(
@@ -478,7 +605,7 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
     aplicados = 0
     resultado = texto
     for original, corregido in pares:
-        if motivo := _motivo_de_rechazo(original, corregido, resultado, listados, clave, lang):
+        if motivo := _motivo_de_rechazo(original, corregido, resultado, listados, ref):
             rechazos[motivo] += 1
             continue
         resultado = _reemplazar(resultado, original, corregido)
@@ -489,7 +616,7 @@ def _vuelta(texto: str, clave: str, lang: str, client, vuelta: int) -> tuple[str
     nivel = logging.WARNING if rechazos else logging.INFO
     logger.log(
         nivel,
-        "revisión del trato: vuelta=%s listados=%s aplicados=%s rechazados=%s %s trato=%s lang=%s",
-        vuelta, len(presentes), aplicados, sum(rechazos.values()), detalle, clave, lang,
+        "revisión del trato: vuelta=%s listados=%s aplicados=%s rechazados=%s %s trato=%s lang=%s referente=%s",
+        vuelta, len(presentes), aplicados, sum(rechazos.values()), detalle, clave, lang, ref.nombre,
     )
     return resultado, aplicados

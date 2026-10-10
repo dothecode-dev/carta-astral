@@ -20,7 +20,7 @@ from interpret.generator import build_interpretation, build_seccion, translate_i
 from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO, Seccion
 from interpret.reparto import bloque as bloque_de_reparto
 from interpret.reparto import parte_de
-from interpret.revision_trato import revisar_trato
+from interpret.revision_trato import revisar_personas, revisar_trato
 from interpret.vinculo import build_seccion_vinculo, secciones_vinculo
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,11 @@ def _datos(sujeto) -> dict:
 
         return datos_prompt(sujeto)
     return sujeto.natal_de.data
+
+
+def _generos(datos: dict) -> tuple[str, str]:
+    """El género de las dos personas del vínculo, del dato que ve el modelo."""
+    return datos["persona_a"]["genero"], datos["persona_b"]["genero"]
 
 
 def secciones_aplicables(sujeto, tier: str) -> list[Seccion]:
@@ -355,9 +360,12 @@ def generar_informe(interpretacion, client, token: str) -> bool:
         if interpretacion.sujeto.producto == Sujeto.VINCULO:
             # Sin reparto ni juez de trato: el reparto sabe de UNA carta, y el
             # trato es la segunda persona del lector, que el vínculo no usa.
+            # Sí el juez del género de cada persona (medido en staging el
+            # 10-10: «se percibe a sí mismo» con las dos en neutro).
             texto = build_seccion_vinculo(
                 datos, seccion, interpretacion.lang, resumen_previo(interpretacion), client,
             )
+            texto = revisar_personas(texto, _generos(datos), interpretacion.lang, client)
         elif seccion.slug == SECCION_BREVE.slug:
             # La breve es un informe entero corto, no un recorte del largo:
             # SYSTEM_PROMPTS_SECCION le diría al modelo que está escribiendo
@@ -495,17 +503,19 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
             destino.save(update_fields=["traducido_de", "trato"])
     hechas = set(destino.secciones.values_list("slug", flat=True))
     pendientes = [s for s in origen.secciones.all() if s.slug not in hechas]
+    generos = _generos(_datos(origen.sujeto)) if origen.sujeto.producto == Sujeto.VINCULO else None
     for indice, seccion in enumerate(pendientes):
-        texto = translate_interpretation(
-            seccion.texto, destino_lang, client,
-            trato=origen.trato if origen.sujeto.producto == Sujeto.NATAL else None,
-        )
         # La traducción también puede escapar el género: se revisa con el
-        # trato y el idioma del destino (el trato ya quedó alineado arriba).
+        # idioma del destino. El natal, con el trato del lector (ya alineado
+        # arriba); el vínculo, en tercera persona, con el de cada persona.
         if origen.sujeto.producto == Sujeto.NATAL:
-            # El vínculo se escribe en tercera persona: el juez del trato
-            # (segunda persona del lector) no tiene nada que revisar ahí.
+            texto = translate_interpretation(seccion.texto, destino_lang, client, trato=origen.trato)
             texto = revisar_trato(texto, destino.trato, destino_lang, client)
+        else:
+            texto = translate_interpretation(
+                seccion.texto, destino_lang, client, trato=None, generos=generos,
+            )
+            texto = revisar_personas(texto, generos, destino_lang, client)
         try:
             with transaction.atomic():
                 InterpretationSection.objects.create(

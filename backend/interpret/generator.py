@@ -21,7 +21,7 @@ from interpret.prompts import (
     TRANSLATE_MODEL,
     Seccion,
 )
-from interpret.trato import instruccion
+from interpret.trato import instruccion, instruccion_personas
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,10 @@ _TRANSLATE_SYSTEM = (
 )
 
 
-def translate_interpretation(text: str, target_lang: str, client, trato: str | None = "") -> str:
+def translate_interpretation(
+    text: str, target_lang: str, client, trato: str | None = "",
+    generos: tuple[str, str] | None = None,
+) -> str:
     """Traduce una lectura ya generada. Modelo barato: el contenido ya está
     escrito, solo cambia el idioma."""
     system = [{"type": "text", "text": _TRANSLATE_SYSTEM.format(target=_TRANSLATE_TARGETS[target_lang])}]
@@ -143,6 +146,14 @@ def translate_interpretation(text: str, target_lang: str, client, trato: str | N
             # Sin `thinking`, Sonnet 5 razona de forma adaptativa: medido en
             # staging, una sección de 895 palabras costó 7248 tokens de salida
             # para ~2043 de texto. Traducir no necesita razonar.
+            thinking = {"type": "disabled"}
+    # `generos`: el vínculo, en tercera persona. Cada persona con su género;
+    # sin esto el traductor elegía uno (del inglés al castellano, el
+    # masculino). Mismo criterio de modelo que el trato neutro de arriba.
+    if generos is not None:
+        system.append({"type": "text", "text": instruccion_personas(generos, target_lang)})
+        if target_lang in ("es", "pt") and any(g in ("", "neutro") for g in generos):
+            modelo, techo = MODEL, TRANSLATE_MAX_TOKENS_GENERACION
             thinking = {"type": "disabled"}
     if thinking is None:
         return _stream_text(client, modelo, system, text, techo)
