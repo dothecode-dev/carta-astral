@@ -209,11 +209,15 @@ def secciones(sujeto, params, transformar: Transformar = None) -> Response:
     })
 
 
-def indice(sujeto, params) -> Response:
+def indice(sujeto, params, transformar: Transformar = None) -> Response:
     """El índice del informe completo (RF3): títulos de sus secciones y, si
     ya hay algo generado, el arranque de cada una. Se puede pedir sin haber
     comprado — es justamente lo que decide la compra."""
-    return Response(informe_service.indice_informe(sujeto, params.get("lang", "es")))
+    t = transformar or _igual
+    return Response([
+        {**item, "parrafo": t(item["parrafo"])}
+        for item in informe_service.indice_informe(sujeto, params.get("lang", "es"))
+    ])
 
 
 def _con(secciones_: list[dict], t: Callable[[str], str]) -> list[dict]:

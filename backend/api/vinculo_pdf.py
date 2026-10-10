@@ -50,9 +50,9 @@ def build_vinculo_html(sujeto: Sujeto, data: dict) -> str:
         f'<div class="section eyebrow">{_esc(labels["aspects"])}</div><table>{filas_aspectos}</table>'
         if data["aspects"] else ""
     )
-    alias_ = alias(sujeto)
+    alias_, lang = alias(sujeto), data.get("reading_lang")
     lectura = _reading_for(
-        sujeto, data.get("reading_lang"), transformar=lambda t: sustituir_alias(t, alias_),
+        sujeto, lang, transformar=lambda t: sustituir_alias(t, alias_, lang or "es"),
     )
     bloque_lectura = (
         _reading_html(lectura[0], lectura[1], labels["reading"]) if lectura else ""

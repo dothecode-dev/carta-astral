@@ -24,18 +24,27 @@ from api.permissions import HasAccount
 from api.vinculo_service import alias, cartas, crear_vinculo
 from api.vinculo_tipos import VinculoInvalido
 
-_PERSONA = re.compile(r"\b(?:Persona|Person|Pessoa) ([AB])\b")
+# La marca que escribe el modelo en cada idioma, con el artículo que puede
+# llevar delante a mitad de frase («la persona A», «a pessoa A», «the person
+# A»): se reemplaza el grupo entero para que no quede «la Ana». El artículo
+# depende del idioma: en castellano «a» es preposición («le habla a Persona
+# A») y no se toca. La letra va en mayúscula siempre: «la persona a quien…»
+# no es una marca.
+_PERSONA = {
+    "es": re.compile(r"\b(?:[Ll]a )?[Pp]ersona ([AB])\b"),
+    "en": re.compile(r"\b(?:[Tt]he )?[Pp]erson ([AB])\b"),
+    "pt": re.compile(r"\b(?:[Aa] )?[Pp]essoa ([AB])\b"),
+}
 
 
-def sustituir_alias(texto: str, alias_: tuple[str, str]) -> str:
+def sustituir_alias(texto: str, alias_: tuple[str, str], lang: str) -> str:
     """RF22: el modelo escribe «Persona A»; se muestra el alias, si lo hay.
-    Sensible a mayúsculas: «la persona a quien…» no es una marca. El alias
-    sale tal cual: escaparlo es de quien lo dibuja (React en la web, `_esc`
-    en el PDF)."""
+    El alias sale tal cual: escaparlo es de quien lo dibuja (React en la web,
+    `_esc` en el PDF)."""
     def _reemplazo(m: re.Match) -> str:
         nombre = alias_[0 if m.group(1) == "A" else 1]
         return nombre or m.group(0)
-    return _PERSONA.sub(_reemplazo, texto)
+    return _PERSONA[lang].sub(_reemplazo, texto)
 
 
 class _Base(APIView):
@@ -82,9 +91,9 @@ def _repr(sujeto: Sujeto) -> dict:
     }
 
 
-def _con_alias(sujeto: Sujeto):
-    alias_ = alias(sujeto)
-    return lambda texto: sustituir_alias(texto, alias_)
+def _con_alias(sujeto: Sujeto, params):
+    alias_, lang = alias(sujeto), params.get("lang", "es")
+    return lambda texto: sustituir_alias(texto, alias_, lang)
 
 
 class VinculosView(_Base):
@@ -133,7 +142,7 @@ class VinculoInformeView(_Base):
         if (error := informe_api.validar(request.query_params)) is not None:
             return error
         sujeto = self._vinculo(request, uuid)
-        return informe_api.leer(sujeto, request.query_params, transformar=_con_alias(sujeto))
+        return informe_api.leer(sujeto, request.query_params, transformar=_con_alias(sujeto, request.query_params))
 
     def post(self, request, uuid):
         if (error := informe_api.chequear_pedido(request.data)) is not None:
@@ -153,11 +162,14 @@ class VinculoSeccionesView(_Base):
         if (error := informe_api.validar(request.query_params)) is not None:
             return error
         sujeto = self._vinculo(request, uuid)
-        return informe_api.secciones(sujeto, request.query_params, transformar=_con_alias(sujeto))
+        return informe_api.secciones(sujeto, request.query_params, transformar=_con_alias(sujeto, request.query_params))
 
 
 class VinculoIndiceView(_Base):
     def get(self, request, uuid):
         if (error := informe_api.validar_lang(request.query_params)) is not None:
             return error
-        return informe_api.indice(self._vinculo(request, uuid), request.query_params)
+        sujeto = self._vinculo(request, uuid)
+        return informe_api.indice(
+            sujeto, request.query_params, transformar=_con_alias(sujeto, request.query_params),
+        )

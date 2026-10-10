@@ -52,3 +52,12 @@ def test_las_secciones_llegan_con_los_alias(interpretacion_vinculo_completa):
     r = _cliente(s.account).get(f"/api/vinculos/{s.uuid}/informe/secciones/?lang=es&tier=largo")
     assert r.status_code == 200
     assert r.data["secciones"][0]["texto"] == "<b>Ana</b> conoce a Leo."
+
+
+def test_el_indice_llega_con_los_alias(interpretacion_vinculo_completa):
+    """El arranque de cada sección del índice es texto del modelo: RF22 también."""
+    s = interpretacion_vinculo_completa.sujeto
+    r = _cliente(s.account).get(f"/api/vinculos/{s.uuid}/informe/indice/?lang=es")
+    assert r.status_code == 200
+    textos = " ".join(str(v) for item in r.data for v in item.values())
+    assert "Persona A" not in textos and "<b>Ana</b>" in textos

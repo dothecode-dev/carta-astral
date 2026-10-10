@@ -50,6 +50,9 @@ def test_carta_de_otra_cuenta_no_existe(make_account):
     ([{**A, "alias": "x" * 41}, B], "alias_invalido"),
     ([A], "personas"),
     (["no es una persona", B], "personas"),
+    ([{"carta": ""}, B], "datos_invalidos"),
+    ([{"carta": "abc"}, B], "datos_invalidos"),
+    ([{"carta": {"x": 1}}, B], "datos_invalidos"),
 ])
 def test_rechazos(make_account, personas, motivo):
     with pytest.raises(VinculoInvalido) as e:

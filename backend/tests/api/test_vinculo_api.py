@@ -49,9 +49,24 @@ def test_con_el_flag_apagado_todo_es_404(client_autenticado, settings):
     assert client_autenticado.get(f"/api/vinculos/{vid}/").status_code == 404
 
 
-def test_sustituye_los_alias_en_los_tres_idiomas():
-    texto = "Persona A y Persona B. Person A, Pessoa B. La persona a quien quiere."
-    assert sustituir_alias(texto, ("Ana", "Leo")) == (
-        "Ana y Leo. Ana, Leo. La persona a quien quiere."
+def test_sustituye_los_alias_tambien_en_minuscula_y_sin_el_articulo():
+    """A mitad de frase el modelo escribe «la persona A»: se reemplaza el
+    grupo entero, para que no quede «la Ana»."""
+    assert sustituir_alias("Entre la persona A y la persona B.", ("Ana", "Leo"), "es") == (
+        "Entre Ana y Leo."
     )
-    assert sustituir_alias(texto, ("", "")) == texto
+    assert sustituir_alias("Le habla a la persona B.", ("Ana", "Leo"), "es") == "Le habla a Leo."
+    assert sustituir_alias("Entre a pessoa A e a Pessoa B.", ("Ana", "Leo"), "pt") == "Entre Ana e Leo."
+    assert sustituir_alias("The person A and Person B.", ("Ana", "Leo"), "en") == "Ana and Leo."
+
+
+def test_sustituye_los_alias_en_los_tres_idiomas():
+    assert sustituir_alias("Persona A y Persona B.", ("Ana", "Leo"), "es") == "Ana y Leo."
+    assert sustituir_alias("Person A, Person B.", ("Ana", "Leo"), "en") == "Ana, Leo."
+    assert sustituir_alias("Pessoa A, Pessoa B.", ("Ana", "Leo"), "pt") == "Ana, Leo."
+
+
+def test_no_toca_la_preposicion_ni_un_alias_vacio():
+    texto = "La persona a quien quiere. Persona A habla."
+    assert sustituir_alias(texto, ("", ""), "es") == texto
+    assert sustituir_alias(texto, ("Ana", "Leo"), "es") == "La persona a quien quiere. Ana habla."

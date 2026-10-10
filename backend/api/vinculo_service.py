@@ -6,6 +6,7 @@ o se borra la carta original, y que ningún camino de carta alcanza (RF12).
 Sin nombre: lo único que identifica a cada persona es su alias, que vive en
 `sujeto.parametros` y NO entra al prompt (RF22)."""
 
+import uuid
 from dataclasses import asdict
 
 from django.db import transaction
@@ -24,7 +25,12 @@ _CAMPOS = ("date", "time", "time_known", "lat", "lng", "place_label")
 
 def _payload(persona: dict, account):
     if "carta" in persona:
-        original = Chart.objects.get(uuid=persona["carta"], account=account)
+        try:
+            carta_uuid = uuid.UUID(str(persona["carta"]))
+        except ValueError:
+            # «abc», "" o un objeto: un pedido mal armado (400), no un 500.
+            raise VinculoInvalido("datos_invalidos") from None
+        original = Chart.objects.get(uuid=carta_uuid, account=account)
         bd = original.birth_data
         return {
             "date": bd.date.isoformat(),
