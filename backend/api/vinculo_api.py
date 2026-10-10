@@ -21,7 +21,7 @@ from api.auth import AccountTokenAuthentication
 from api.firma_frases import firma
 from api.models import Chart, Sujeto
 from api.permissions import HasAccount
-from api.vinculo_service import alias, cartas, crear_vinculo
+from api.vinculo_service import alias, cartas, crear_vinculo, generos
 from api.vinculo_tipos import VinculoInvalido
 
 # La marca que escribe el modelo en cada idioma, con el artículo que puede
@@ -91,8 +91,7 @@ def _repr(sujeto: Sujeto) -> dict:
     return {
         "id": str(sujeto.uuid), "tipo": sujeto.parametros["tipo"],
         "roles": sujeto.parametros["roles"], "alias": list(alias(sujeto)),
-        # Los vínculos de antes del 10-10 no lo tienen: neutro.
-        "generos": sujeto.parametros.get("generos", ["", ""]),
+        "generos": list(generos(sujeto)),
         "personas": [_persona_repr(a), _persona_repr(b)],
         "created_at": sujeto.created_at.isoformat(),
     }

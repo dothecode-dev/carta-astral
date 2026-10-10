@@ -107,3 +107,23 @@ def test_un_vinculo_viejo_sin_generos_sigue_andando(make_account):
     del s.parametros["generos"]
     s.save()
     assert datos_prompt(s)["persona_a"]["genero"] == ""
+
+
+@pytest.mark.parametrize("valor,guardado", [("neutro", "neutro"), (None, ""), ("", "")])
+def test_el_genero_usa_el_vocabulario_del_trato(make_account, valor, guardado):
+    """El mismo que el trato del natal (`interpret.trato.TRATOS`): la web manda
+    lo mismo en los dos formularios, y `null` es «sin elegir»."""
+    s = crear_vinculo(make_account(), "amistad", [{**A, "genero": valor}, B])
+    assert s.parametros["generos"] == [guardado, ""]
+
+
+def test_un_vinculo_viejo_sin_generos_genera_su_prompt(make_account):
+    from interpret.vinculo import contenido_vinculo, secciones_vinculo
+
+    s = crear_vinculo(make_account(), "familia", [
+        {**A, "rol": "progenitor"}, {**B, "rol": "hijo"},
+    ])
+    del s.parametros["generos"]
+    s.save()
+    sec = secciones_vinculo("familia", hay_hora=True)[0]
+    assert "madre o padre" in contenido_vinculo(datos_prompt(s), sec, "es", "")

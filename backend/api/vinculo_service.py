@@ -11,10 +11,10 @@ from dataclasses import asdict
 
 from django.db import transaction
 
-from api.chart_service import calcular
+from api.chart_service import TratoInvalido, calcular, validar_trato
 from api.models import BirthData, Chart, Sujeto, SujetoCarta
 from api.serializers import serialize_chart_data
-from api.vinculo_tipos import GENEROS, VinculoInvalido, validar
+from api.vinculo_tipos import VinculoInvalido, validar
 from api.versioning import engine_version
 from core.exceptions import CoreError
 from core.sinastria import aspectos_cruzados, superposicion
@@ -51,10 +51,14 @@ def _alias(persona: dict) -> str:
 
 
 def _genero(persona: dict) -> str:
-    valor = persona.get("genero", "")
-    if valor not in GENEROS:
-        raise VinculoInvalido("genero_invalido")
-    return valor
+    """Decisión del 10-10-2026: el género se pregunta por persona y es
+    opcional. El vocabulario es el del trato del natal —la web manda lo mismo
+    en los dos formularios—, con `null` y `""` como «sin elegir». Lista
+    cerrada: entra al prompt."""
+    try:
+        return validar_trato(persona.get("genero"))
+    except TratoInvalido:
+        raise VinculoInvalido("genero_invalido") from None
 
 
 def _copia(calc, account) -> Chart:
@@ -115,13 +119,18 @@ def alias(sujeto: Sujeto) -> tuple[str, str]:
     return a, b
 
 
+def generos(sujeto: Sujeto) -> tuple[str, str]:
+    # Los vínculos creados antes del 10-10 no tienen el dato: sin elegir.
+    a, b = sujeto.parametros.get("generos", ["", ""])
+    return a, b
+
+
 def datos_prompt(sujeto: Sujeto) -> dict:
     """Lo que ve el modelo. Sin alias (RF22); las cartas en orden y con su rol
     (RF14)."""
     a, b = cartas(sujeto)
     rol_a, rol_b = sujeto.parametros["roles"]
-    # Los vínculos creados antes del 10-10 no tienen el dato: neutro.
-    gen_a, gen_b = sujeto.parametros.get("generos", ["", ""])
+    gen_a, gen_b = generos(sujeto)
     return {
         "tipo": sujeto.parametros["tipo"],
         "persona_a": {"rol": rol_a, "genero": gen_a, "carta": a.data},

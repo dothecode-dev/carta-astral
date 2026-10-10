@@ -10,50 +10,56 @@ from interpret.generator import _MARGEN_TOPE_SECCION, _stream_text
 from interpret.prompts import MODEL, SECCION_TOKENS_POR_PALABRA, Seccion
 
 # El rol con el género de la persona, artículo incluido (decisión del
-# 10-10-2026: el género se pregunta por persona y es opcional). La clave ""
-# es quien no lo dijo: el rol en forma doble y la redacción neutra.
+# 10-10-2026: el género se pregunta por persona y es opcional). La clave "" es
+# la forma neutra —la de quien no lo dijo o eligió «neutro»— y la única cuando
+# el género no cambia la etiqueta.
 ETIQUETAS_ROL: dict[str, dict[str, dict[str, str]]] = {
     "jefe": {
-        "es": {"femenino": "la jefa", "masculino": "el jefe", "": "jefe o jefa"},
-        "en": {"femenino": "the manager", "masculino": "the manager", "": "the manager"},
-        "pt": {"femenino": "a chefe", "masculino": "o chefe", "": "chefe"},
+        "es": {"": "jefe o jefa", "femenino": "la jefa", "masculino": "el jefe"},
+        "en": {"": "the manager"},
+        "pt": {"": "chefe", "femenino": "a chefe", "masculino": "o chefe"},
     },
     "equipo": {
-        "es": {"femenino": "integrante del equipo", "masculino": "integrante del equipo", "": "integrante del equipo"},
-        "en": {"femenino": "the team member", "masculino": "the team member", "": "the team member"},
-        "pt": {"femenino": "integrante da equipe", "masculino": "integrante da equipe", "": "integrante da equipe"},
+        "es": {"": "integrante del equipo"},
+        "en": {"": "the team member"},
+        "pt": {"": "integrante da equipe"},
     },
     "socio": {
-        "es": {"femenino": "la socia", "masculino": "el socio", "": "socio o socia"},
-        "en": {"femenino": "the business partner", "masculino": "the business partner", "": "the business partner"},
-        "pt": {"femenino": "a sócia", "masculino": "o sócio", "": "sócio ou sócia"},
+        "es": {"": "socio o socia", "femenino": "la socia", "masculino": "el socio"},
+        "en": {"": "the business partner"},
+        "pt": {"": "sócio ou sócia", "femenino": "a sócia", "masculino": "o sócio"},
     },
     "colega": {
-        "es": {"femenino": "la colega", "masculino": "el colega", "": "colega"},
-        "en": {"femenino": "the colleague", "masculino": "the colleague", "": "the colleague"},
-        "pt": {"femenino": "a colega", "masculino": "o colega", "": "colega"},
+        "es": {"": "colega", "femenino": "la colega", "masculino": "el colega"},
+        "en": {"": "the colleague"},
+        "pt": {"": "colega", "femenino": "a colega", "masculino": "o colega"},
     },
     "progenitor": {
-        "es": {"femenino": "la madre", "masculino": "el padre", "": "madre o padre"},
-        "en": {"femenino": "the mother", "masculino": "the father", "": "the parent"},
-        "pt": {"femenino": "a mãe", "masculino": "o pai", "": "mãe ou pai"},
+        "es": {"": "madre o padre", "femenino": "la madre", "masculino": "el padre"},
+        "en": {"": "the parent", "femenino": "the mother", "masculino": "the father"},
+        "pt": {"": "mãe ou pai", "femenino": "a mãe", "masculino": "o pai"},
     },
     "hijo": {
-        "es": {"femenino": "la hija", "masculino": "el hijo", "": "hijo o hija"},
-        "en": {"femenino": "the daughter", "masculino": "the son", "": "the child"},
-        "pt": {"femenino": "a filha", "masculino": "o filho", "": "filho ou filha"},
+        "es": {"": "hijo o hija", "femenino": "la hija", "masculino": "el hijo"},
+        "en": {"": "the child", "femenino": "the daughter", "masculino": "the son"},
+        "pt": {"": "filho ou filha", "femenino": "a filha", "masculino": "o filho"},
     },
     "hermano": {
-        "es": {"femenino": "la hermana", "masculino": "el hermano", "": "hermano o hermana"},
-        "en": {"femenino": "the sister", "masculino": "the brother", "": "the sibling"},
-        "pt": {"femenino": "a irmã", "masculino": "o irmão", "": "irmão ou irmã"},
+        "es": {"": "hermano o hermana", "femenino": "la hermana", "masculino": "el hermano"},
+        "en": {"": "the sibling", "femenino": "the sister", "masculino": "the brother"},
+        "pt": {"": "irmão ou irmã", "femenino": "a irmã", "masculino": "o irmão"},
     },
     "otro_familiar": {
-        "es": {"femenino": "una familiar", "masculino": "un familiar", "": "familiar"},
-        "en": {"femenino": "a relative", "masculino": "a relative", "": "a relative"},
-        "pt": {"femenino": "uma familiar", "masculino": "um familiar", "": "familiar"},
+        "es": {"": "familiar", "femenino": "una familiar", "masculino": "un familiar"},
+        "en": {"": "a relative"},
+        "pt": {"": "familiar", "femenino": "uma familiar", "masculino": "um familiar"},
     },
 }
+
+
+def _por_genero(tabla: dict[str, str], genero: str) -> str:
+    return tabla.get(genero, tabla[""])
+
 
 # Cómo concordar al hablar de cada persona. Va siempre (con o sin rol): en
 # castellano y portugués casi todo adjetivo y participio lleva género.
@@ -205,12 +211,12 @@ def contenido_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str) -> 
     roles = " ".join(
         _ES_ROL[lang].format(
             p=_PERSONA[lang].format(letra),
-            rol=ETIQUETAS_ROL[p["rol"]][lang][p.get("genero", "")],
+            rol=_por_genero(ETIQUETAS_ROL[p["rol"]][lang], p.get("genero", "")),
         )
         for letra, p in personas if p["rol"]
     )
     generos = " ".join(
-        _GENERO[lang][p.get("genero", "")].format(p=_PERSONA[lang].format(letra))
+        _por_genero(_GENERO[lang], p.get("genero", "")).format(p=_PERSONA[lang].format(letra))
         for letra, p in personas
     )
     roles = f"{roles} {generos}".strip()
@@ -219,7 +225,14 @@ def contenido_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str) -> 
         foco=seccion.foco[lang], palabras=seccion.palabras,
         maximo=int(seccion.palabras * _MARGEN_TOPE_SECCION),
     )
-    texto += "\n\n" + json.dumps(datos, ensure_ascii=False)
+    # El género ya está dicho en la instrucción de concordancia: repetirlo en
+    # el JSON no le suma nada al modelo.
+    sin_genero = {
+        **datos,
+        **{k: {c: v for c, v in datos[k].items() if c != "genero"}
+           for k in ("persona_a", "persona_b")},
+    }
+    texto += "\n\n" + json.dumps(sin_genero, ensure_ascii=False)
     for letra, p in personas:
         if not p["carta"].get("time_known", True):
             texto += _SIN_HORA[lang].format(p=_PERSONA[lang].format(letra))

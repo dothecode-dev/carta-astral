@@ -115,3 +115,13 @@ def test_un_genero_invalido_por_la_api_es_400(client_autenticado):
         "tipo": "pareja", "personas": [{**A, "genero": "x"}, B],
     }, format="json")
     assert r.status_code == 400 and r.data["error"] == "genero_invalido"
+
+
+def test_el_detalle_de_un_vinculo_viejo_sin_generos(client_autenticado):
+    from api.models import Sujeto
+
+    vid = _crear(client_autenticado).data["id"]
+    s = Sujeto.objects.get(uuid=vid)
+    del s.parametros["generos"]
+    s.save()
+    assert client_autenticado.get(f"/api/vinculos/{vid}/").data["generos"] == ["", ""]

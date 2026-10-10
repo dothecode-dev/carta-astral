@@ -78,3 +78,9 @@ def test_el_genero_se_pide_tambien_sin_rol():
              "persona_b": {"rol": "", "carta": {"time_known": True}, "genero": "masculino"}}
     texto = contenido_vinculo(datos, sec, "es", "")
     assert "Persona A es mujer" in texto and "Persona B es varón" in texto
+
+
+def test_neutro_se_redacta_igual_que_sin_genero():
+    sec = secciones_vinculo("familia", hay_hora=True)[0]
+    assert (contenido_vinculo(_con_generos("neutro", "neutro"), sec, "es", "")
+            == contenido_vinculo(_con_generos("", ""), sec, "es", ""))
