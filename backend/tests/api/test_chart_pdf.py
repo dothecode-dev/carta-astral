@@ -1,6 +1,6 @@
 """El PDF de la carta.
 
-El endpoint recibe DATOS, nunca markup: la geometría que ya calculó `astra-wheel`
+El endpoint recibe DATOS, nunca markup: la geometría que ya calculó `astra_dependencias`
 en el cliente y los rótulos ya traducidos. El backend construye el SVG y el HTML.
 Por eso acá no hay tests de "sanear tags": no hay tags que sanear. Lo que sí se
 prueba es que nada que venga de afuera pueda salirse de su casillero —ni por tipo,

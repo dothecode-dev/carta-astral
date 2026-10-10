@@ -13,7 +13,7 @@ function token(name: string): string {
  * La rueda natal.
  *
  * Este componente ya no calcula nada ni dibuja nada: la geometría la resuelve el
- * paquete `astra-wheel` —compartido con la app y con el PDF a través de un set de
+ * paquete `astra_dependencias` —compartido con la app y con el PDF a través de un set de
  * casos de prueba— y el pintado vive en `lib/drawWheel`, porque la imagen para
  * redes dibuja la misma rueda en otro canvas. Acá quedan los colores del tema y
  * el redibujado cuando cambian.

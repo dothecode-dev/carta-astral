@@ -123,7 +123,7 @@ def _esc(texto: str) -> str:
 
 
 def _svg(wheel: dict) -> str:
-    """La rueda, pintada a partir de la geometría que calculó `astra-wheel`.
+    """La rueda, pintada a partir de la geometría que calculó `astra_dependencias`.
 
     Acá no hay trigonometría y no debe haberla: si el backend empezara a calcular
     dónde va un glifo, habría dos geometrías que mantener sincronizadas y la que

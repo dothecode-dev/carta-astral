@@ -1,4 +1,4 @@
-import { buildMatrix } from "astra-wheel";
+import { buildMatrix } from "astra_dependencias";
 
 import type { ApiChart } from "@/lib/chart";
 import { toWheel } from "@/lib/chart";

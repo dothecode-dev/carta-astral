@@ -1,4 +1,4 @@
-import { buildWheel } from "astra-wheel";
+import { buildWheel } from "astra_dependencias";
 
 import type { SampleChart } from "@/content/sample-chart";
 import { toWheelInput } from "@/lib/chart";

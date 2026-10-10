@@ -34,7 +34,7 @@ el patrón — nunca en `views.py`.
 saber antes de tocarlo:
 
 - **El backend no sabe dibujar la rueda y no tiene que aprender.** La geometría la calcula
-  `astra-wheel` en el navegador y viaja en el cuerpo del pedido, junto con los rótulos ya
+  `astra_dependencias` en el navegador y viaja en el cuerpo del pedido, junto con los rótulos ya
   traducidos: acá no hay trigonometría ni diccionario de nombres. Lo que entra son números
   y texto, validados por `api/pdf_payload.py`; el SVG y el HTML los construye
   `chart_pdf_service.py`. Generar markup es seguro, filtrarlo no.

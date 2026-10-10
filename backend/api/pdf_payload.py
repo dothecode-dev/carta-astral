@@ -1,7 +1,7 @@
 """El contrato del PDF: qué le puede mandar el cliente al generador.
 
 La decisión de fondo es que acá no entra markup. Entran números —la geometría que
-`astra-wheel` ya calculó en el navegador— y texto ya traducido, porque el
+`astra_dependencias` ya calculó en el navegador— y texto ya traducido, porque el
 diccionario de nombres vive en `web/lib/i18n.ts` y duplicarlo en Python sería una
 tercera copia de la misma verdad.
 
@@ -168,7 +168,7 @@ class _MatrixRow(_Strict):
 class _AspectMatrix(_Strict):
     """La matriz triangular, la misma que muestra la web.
 
-    Llega armada por `buildMatrix` de `astra-wheel` —el mismo paquete que
+    Llega armada por `buildMatrix` de `astra_dependencias` —el mismo paquete que
     resuelve la rueda—, así que acá tampoco se decide qué va en cada cruce.
     """
 

@@ -1,4 +1,4 @@
-import { buildMatrix } from "astra-wheel";
+import { buildMatrix } from "astra_dependencias";
 
 import {
   ASPECT_ANGLE,
@@ -41,7 +41,7 @@ function rotulo(nombre: string): string {
  * —dieciocho columnas necesitan más de 600px— y se muestra la lista, que
  * además dice el orbe y se lee sin saber leer una matriz.
  *
- * Los pares los arma `astra-wheel`, el mismo paquete que dibuja la rueda: acá
+ * Los pares los arma `astra_dependencias`, el mismo paquete que dibuja la rueda: acá
  * no se decide qué va en cada cruce, sólo cómo se ve.
  */
 export function AspectMatrix({

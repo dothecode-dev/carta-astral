@@ -2,12 +2,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
-import { buildWheel } from "astra-wheel";
+import { buildWheel } from "astra_dependencias";
 import { describe, expect, it } from "vitest";
 
-// Los casos compartidos que tambien corren la app (jest) y el backend (pytest).
-// Si esto falla, la web se separo de las otras dos superficies.
-const DIR = join(dirname(createRequire(import.meta.url).resolve("astra-wheel")), "..", "cases");
+// Los casos compartidos que tambien corre la app (jest). El backend no los corre:
+// no calcula la rueda, recibe la geometria ya armada en el navegador.
+// Si esto falla, la web se separo de la app.
+const DIR = join(dirname(createRequire(import.meta.url).resolve("astra_dependencias")), "..", "cases");
 const TOL = 0.1;
 
 function compare(actual: unknown, expected: unknown, path: string): void {

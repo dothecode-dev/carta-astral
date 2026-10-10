@@ -5,7 +5,7 @@ mientras corre un deploy puede tumbar producción.
 
 `pdf_payload.build()` sólo arma la lectura (título y texto de cada sección):
 la geometría de la rueda y las tablas de posiciones/aspectos las calcula el
-cliente (`astra-wheel`) y no vive en la base. Acá se arma una mínima pero
+cliente (`astra_dependencias`) y no vive en la base. Acá se arma una mínima pero
 completa —lo que se quiere medir es el costo de renderizar ocho secciones de
 verdad, no el de dibujar la rueda, que ya se mide aparte.
 """

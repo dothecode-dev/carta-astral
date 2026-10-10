@@ -1,6 +1,6 @@
 import type { Trato } from "@/lib/datosCarta";
 import type { Locale } from "@/lib/i18n";
-import type { WheelInput } from "astra-wheel";
+import type { WheelInput } from "astra_dependencias";
 
 import type { SampleChart } from "@/content/sample-chart";
 
@@ -89,7 +89,7 @@ const HOUSE_ORDER = [
 ];
 
 /**
- * Adapta la carta al formato que entiende `astra-wheel`.
+ * Adapta la carta al formato que entiende `astra_dependencias`.
  *
  * La orientación sale de `angles.Ascendant`, nunca de la primera cúspide:
  * coinciden en Placidus, pero en Whole Sign la casa 1 empieza en 0° del signo
