@@ -63,7 +63,8 @@ def _apps_previas():
 
 @pytest.fixture
 def columnas_viejas(db):
-    """Repone `free_balance`/`paid_balance` en la tabla mientras dura el test.
+    """Repone `free_balance`/`paid_balance` (y `api_movimiento.chart_id`) en la
+    tabla mientras dura el test.
 
     `DEFAULT 0` en las dos para que cualquier otro `INSERT` de la suite que
     caiga en el medio (una fixture que cree cuentas con el modelo de hoy, que
@@ -80,6 +81,9 @@ def columnas_viejas(db):
     with connection.cursor() as cur:
         cur.execute("ALTER TABLE api_account ADD COLUMN free_balance integer NOT NULL DEFAULT 0")
         cur.execute("ALTER TABLE api_account ADD COLUMN paid_balance integer NOT NULL DEFAULT 0")
+        # Por lo mismo: el `Movimiento` de la 0024 todavía tiene `chart`, que la
+        # 0050 borró de la base (parte 2 de Vínculo). Nullable, sin FK.
+        cur.execute("ALTER TABLE api_movimiento ADD COLUMN chart_id bigint NULL")
     return _apps_previas().get_model("api", "Account")
 
 
