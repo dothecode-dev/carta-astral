@@ -202,3 +202,23 @@ def test_la_purga_borra_checkouts_y_sujetos_sin_carta(make_account, capsys):
     assert "PasarelaCheckout: 1" in salida
     assert PasarelaCheckout.objects.count() == 0
     assert Sujeto.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_la_purga_borra_los_codigos_de_acceso(make_account, capsys):
+    """Guardan el mail y no tienen FK a la cuenta: nada los cascadea."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from api.models import CodigoAcceso
+
+    make_account()
+    CodigoAcceso.objects.create(
+        email="persona@mail.com", codigo_hash="h" * 64, expira_en=timezone.now() + timedelta(minutes=10),
+    )
+
+    call_command("purgar_produccion", "--si-estoy-seguro")
+
+    assert "CodigoAcceso: 1" in capsys.readouterr().out
+    assert CodigoAcceso.objects.count() == 0

@@ -106,11 +106,12 @@ def test_acepta_sólo_instantes_con_zona_horaria():
         moon_state(datetime.datetime(2026, 10, 1))
 
 
-# Las fases del USNO de arriba, más una consulta un poco después de cada una:
-# kerykeion devolvía como «próxima» el instante consultado durante 11 a 23
-# horas después de cada fase (medido el 10-10-2026: a las 16:00 decía que la
-# próxima luna nueva era a las 16:00, y era el 09-11). La referencia es la
-# misma fase consultada una semana después, fuera de esa ventana.
+# Las fases del USNO de arriba, consultadas un poco antes y un poco después.
+# Cuando las buscaba kerykeion, hasta ~23 h después de una luna nueva devolvía
+# como «próxima» el instante consultado (medido el 10-10-2026: a las 16:00
+# decía que la próxima era a las 16:00, y era el 09-11). Los cuartos y la
+# llena no fallaban, pero se prueban igual: el cálculo es el mismo para las
+# cuatro. La referencia es la misma fase consultada una semana después.
 RECIEN_PASADA = [
     ("new_moon", _utc(2026, 10, 10, 15, 50)),
     ("first_quarter", _utc(2026, 10, 18, 16, 12)),
@@ -132,3 +133,12 @@ def test_justo_despues_de_una_fase_la_proxima_es_la_siguiente(phase, fase_pasada
 
     assert found > moment
     assert abs((found - referencia).total_seconds()) <= 60
+
+
+@pytest.mark.parametrize(("phase", "fase"), RECIEN_PASADA)
+@pytest.mark.parametrize("antes", [datetime.timedelta(minutes=2), datetime.timedelta(hours=12)])
+def test_justo_antes_de_una_fase_la_proxima_es_esa(phase, fase, antes):
+    found = next(p.moment for p in moon_state(fase - antes).next_phases if p.phase == phase)
+
+    # USNO redondea al minuto.
+    assert abs((found - fase).total_seconds()) <= 60

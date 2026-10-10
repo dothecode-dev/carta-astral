@@ -15,7 +15,7 @@ from django.utils import timezone
 from api import stripe_client
 from api.canje import aplicar_compra
 from api.catalogo import producto
-from api.models import Cupon, CuponUso, PasarelaCheckout
+from api.models import Cupon, CuponUso, PasarelaCheckout, Sujeto
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,9 @@ def _chequear(cupon: Cupon, codigo_producto: str, account, ahora) -> None:
         raise CuponInvalido("agotado")
 
 
-def canjear_gratis(account, cupon: Cupon, codigo_producto: str, sujeto, locale: str) -> PasarelaCheckout:
+def canjear_gratis(
+    account, cupon: Cupon, codigo_producto: str, sujeto: Sujeto | None, locale: str,
+) -> PasarelaCheckout:
     """El cupón del 100 %: otorga, deja el checkout acreditado y registra el
     uso, todo en una transacción y sin Stripe.
 

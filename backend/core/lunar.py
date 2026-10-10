@@ -1,15 +1,13 @@
 """La Luna de un instante: fase, próximas fases y próximo cambio de signo.
 
-Las fases las calcula kerykeion (`MoonPhaseDetailsFactory`), que busca con
-Swiss Ephemeris el instante exacto en que el ángulo Sol-Luna llega a 0°, 90°,
-180° y 270°: coincide al minuto con el U.S. Naval Observatory. Lo que kerykeion
-no da es cuándo la Luna cambia de signo; eso sale de `swe.mooncross_ut`, que
-busca el cruce de una longitud con la misma efeméride que dibuja las cartas.
-"""
+El nombre de la fase y la iluminación los da kerykeion. Los instantes salen de
+Swiss Ephemeris, la misma efeméride que dibuja las cartas: las próximas fases,
+del cruce del ángulo Luna − Sol por 0°, 90°, 180° y 270° (coinciden al minuto
+con el U.S. Naval Observatory), y el cambio de signo, de `swe.mooncross_ut`."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import swisseph as swe
 from kerykeion import AstrologicalSubjectFactory
@@ -50,21 +48,41 @@ def _moon(utc: datetime) -> MoonPhaseMoonSummaryModel:
     return MoonPhaseDetailsFactory.from_subject(subject).moon
 
 
-def _next_phase(moon: MoonPhaseMoonSummaryModel, phase: str) -> datetime:
-    upcoming = moon.detailed.upcoming_phases if moon.detailed else None
-    if upcoming is None:
-        raise RuntimeError("kerykeion no devolvió las próximas fases")
-    window = getattr(upcoming, phase)
-    if window is None or window.next is None or window.next.timestamp is None:
-        raise RuntimeError(f"kerykeion no encontró la próxima {phase}")
-    return datetime.fromtimestamp(window.next.timestamp, tz=timezone.utc)
+# Ángulo Luna − Sol de cada fase.
+_ANGULOS = {"new_moon": 0.0, "first_quarter": 90.0, "full_moon": 180.0, "last_quarter": 270.0}
+# Velocidad media de la elongación (°/día): sólo para el primer tanteo.
+_VELOCIDAD_MEDIA = 360.0 / 29.530588
 
 
-# Medido el 10-10-2026: hasta ~23 h después de una luna nueva, kerykeion
-# devuelve como «próxima» el mismo instante consultado (los cuartos y la llena
-# no fallan). Preguntarle desde dos días después sale de esa ventana y no se
-# saltea nada: la misma fase no vuelve antes de ~29 días.
-_SALTO = timedelta(days=2)
+def _elongacion(jd: float) -> tuple[float, float]:
+    """El ángulo Luna − Sol en `jd`, en [0, 360), y cuánto cambia por día."""
+    luna = swe.calc_ut(jd, swe.MOON, swe.FLG_SWIEPH | swe.FLG_SPEED)[0]
+    sol = swe.calc_ut(jd, swe.SUN, swe.FLG_SWIEPH | swe.FLG_SPEED)[0]
+    return (float(luna[0]) - float(sol[0])) % 360.0, float(luna[3]) - float(sol[3])
+
+
+def _proxima_fase(angulo: float, jd: float) -> float:
+    """El primer instante estrictamente posterior a `jd` en que la elongación
+    llega a `angulo`.
+
+    Antes lo buscaba kerykeion, y hasta ~23 h después de una luna nueva
+    devolvía como «próxima» el mismo instante consultado (medido el
+    10-10-2026). Acá es Newton sobre la elongación, que siempre crece (11 a
+    15 °/día): el tanteo con la velocidad media cae a menos de ±4 días del
+    cruce bueno, y las fases iguales están a 29,5 días, así que converge al
+    que corresponde."""
+    actual, _ = _elongacion(jd)
+    falta = (angulo - actual) % 360.0 or 360.0
+    t = jd + falta / _VELOCIDAD_MEDIA
+    for _ in range(30):
+        e, velocidad = _elongacion(t)
+        error = (angulo - e + 180.0) % 360.0 - 180.0
+        t += error / velocidad
+        if abs(error) < 1e-7:
+            break
+    else:
+        raise RuntimeError(f"la fase de {angulo}° no convergió")
+    return t
 
 
 def moon_state(moment: datetime) -> MoonState:
@@ -74,12 +92,15 @@ def moon_state(moment: datetime) -> MoonState:
     utc = moment.astimezone(timezone.utc)
 
     moon = _moon(utc)
-    events = []
-    for phase in _MAJOR_PHASES:
-        when = _next_phase(moon, phase)
-        if when <= utc:
-            when = _next_phase(_moon(utc + _SALTO), phase)
-        events.append(PhaseEvent(phase=phase, moment=when))
+    configure_ephemeris_path()
+    jd = datetime_to_julian(utc)
+    events = [
+        PhaseEvent(
+            phase=phase,
+            moment=julian_to_datetime(_proxima_fase(_ANGULOS[phase], jd)).replace(tzinfo=timezone.utc),
+        )
+        for phase in _MAJOR_PHASES
+    ]
     events.sort(key=lambda e: e.moment)
 
     if moon.phase_name is None:

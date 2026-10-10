@@ -5,6 +5,7 @@ from api.models import (
     Account,
     BirthData,
     Chart,
+    CodigoAcceso,
     CreditTransaction,
     CuponUso,
     Derecho,
@@ -81,6 +82,9 @@ MODELOS_A_BORRAR = (
     ("SubTombstone", SubTombstone),
     ("Device", Device),
     ("Session", Session),
+    # Sin FK a Account: guarda el mail al que se mandó el código, y nada lo
+    # cascadea.
+    ("CodigoAcceso", CodigoAcceso),
     ("Account", Account),
 )
 
