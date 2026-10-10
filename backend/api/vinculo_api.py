@@ -91,6 +91,8 @@ def _repr(sujeto: Sujeto) -> dict:
     return {
         "id": str(sujeto.uuid), "tipo": sujeto.parametros["tipo"],
         "roles": sujeto.parametros["roles"], "alias": list(alias(sujeto)),
+        # Los vínculos de antes del 10-10 no lo tienen: neutro.
+        "generos": sujeto.parametros.get("generos", ["", ""]),
         "personas": [_persona_repr(a), _persona_repr(b)],
         "created_at": sujeto.created_at.isoformat(),
     }

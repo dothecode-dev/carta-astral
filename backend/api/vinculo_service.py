@@ -14,7 +14,7 @@ from django.db import transaction
 from api.chart_service import calcular
 from api.models import BirthData, Chart, Sujeto, SujetoCarta
 from api.serializers import serialize_chart_data
-from api.vinculo_tipos import VinculoInvalido, validar
+from api.vinculo_tipos import GENEROS, VinculoInvalido, validar
 from api.versioning import engine_version
 from core.exceptions import CoreError
 from core.sinastria import aspectos_cruzados, superposicion
@@ -50,6 +50,13 @@ def _alias(persona: dict) -> str:
     return valor.strip()
 
 
+def _genero(persona: dict) -> str:
+    valor = persona.get("genero", "")
+    if valor not in GENEROS:
+        raise VinculoInvalido("genero_invalido")
+    return valor
+
+
 def _copia(calc, account) -> Chart:
     bi = calc.birth_input
     bd = BirthData.objects.create(
@@ -70,6 +77,7 @@ def crear_vinculo(account, tipo: str, personas: list[dict]) -> Sujeto:
         raise VinculoInvalido("personas")
     rol_a, rol_b = validar(tipo, personas[0].get("rol", ""), personas[1].get("rol", ""))
     alias_ = [_alias(p) for p in personas]
+    generos = [_genero(p) for p in personas]
     try:
         calc_a, calc_b = (calcular(_payload(p, account)) for p in personas)
     except Chart.DoesNotExist:
@@ -83,7 +91,9 @@ def crear_vinculo(account, tipo: str, personas: list[dict]) -> Sujeto:
         a, b = _copia(calc_a, account), _copia(calc_b, account)
         sujeto = Sujeto.objects.create(
             producto=Sujeto.VINCULO, account=account, engine_version=engine_version(),
-            parametros={"tipo": tipo, "roles": [rol_a, rol_b], "alias": alias_},
+            parametros={
+                "tipo": tipo, "roles": [rol_a, rol_b], "alias": alias_, "generos": generos,
+            },
             data={
                 "aspectos": [asdict(x) for x in aspectos_cruzados(calc_a.data, calc_b.data)],
                 "a_en_b": superposicion(calc_a.data, calc_b.data),
@@ -110,10 +120,12 @@ def datos_prompt(sujeto: Sujeto) -> dict:
     (RF14)."""
     a, b = cartas(sujeto)
     rol_a, rol_b = sujeto.parametros["roles"]
+    # Los vínculos creados antes del 10-10 no tienen el dato: neutro.
+    gen_a, gen_b = sujeto.parametros.get("generos", ["", ""])
     return {
         "tipo": sujeto.parametros["tipo"],
-        "persona_a": {"rol": rol_a, "carta": a.data},
-        "persona_b": {"rol": rol_b, "carta": b.data},
+        "persona_a": {"rol": rol_a, "genero": gen_a, "carta": a.data},
+        "persona_b": {"rol": rol_b, "genero": gen_b, "carta": b.data},
         "aspectos_cruzados": sujeto.data["aspectos"],
         "planetas_de_a_en_casas_de_b": sujeto.data["a_en_b"],
         "planetas_de_b_en_casas_de_a": sujeto.data["b_en_a"],

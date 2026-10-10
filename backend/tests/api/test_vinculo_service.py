@@ -22,7 +22,9 @@ def test_crea_sujeto_con_dos_copias_y_parametros(make_account):
     a, b = cartas(s)
     assert not a.en_lista and not b.en_lista and a.account == acc
     assert a.birth_data.name is None and b.birth_data.name is None
-    assert s.parametros == {"tipo": "familia", "roles": ["progenitor", "hijo"], "alias": ["Mamá", "Leo"]}
+    assert s.parametros == {
+        "tipo": "familia", "roles": ["progenitor", "hijo"], "alias": ["Mamá", "Leo"], "generos": ["", ""],
+    }
     assert s.data["a_en_b"] is None  # B no tiene hora: no hay casas de B (RF2)
     assert isinstance(s.data["b_en_a"], dict)
     assert alias(s) == ("Mamá", "Leo")
@@ -76,3 +78,32 @@ def test_intercambiar_roles_cambia_el_input(make_account):
     uno = crear_vinculo(acc, "trabajo", [{**A, "rol": "jefe"}, {**B, "rol": "equipo"}])
     otro = crear_vinculo(acc, "trabajo", [{**A, "rol": "equipo"}, {**B, "rol": "jefe"}])
     assert datos_prompt(uno) != datos_prompt(otro)
+
+
+def test_el_genero_de_cada_persona_se_guarda_y_llega_al_prompt(make_account):
+    """Decisión del 10-10: el género se pregunta por persona y es opcional.
+    Es una lista cerrada, así que puede entrar al prompt (no es texto libre)."""
+    s = crear_vinculo(make_account(), "familia", [
+        {**A, "rol": "progenitor", "genero": "femenino"}, {**B, "rol": "hijo", "genero": "masculino"},
+    ])
+    assert s.parametros["generos"] == ["femenino", "masculino"]
+    datos = datos_prompt(s)
+    assert datos["persona_a"]["genero"] == "femenino" and datos["persona_b"]["genero"] == "masculino"
+
+
+def test_sin_genero_queda_vacio(make_account):
+    s = crear_vinculo(make_account(), "amistad", [A, B])
+    assert s.parametros["generos"] == ["", ""]
+
+
+def test_un_genero_fuera_de_la_lista_es_400(make_account):
+    with pytest.raises(VinculoInvalido) as e:
+        crear_vinculo(make_account(), "amistad", [{**A, "genero": "otro texto"}, B])
+    assert e.value.motivo == "genero_invalido"
+
+
+def test_un_vinculo_viejo_sin_generos_sigue_andando(make_account):
+    s = crear_vinculo(make_account(), "amistad", [A, B])
+    del s.parametros["generos"]
+    s.save()
+    assert datos_prompt(s)["persona_a"]["genero"] == ""

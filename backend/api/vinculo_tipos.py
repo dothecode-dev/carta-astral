@@ -6,6 +6,10 @@ Los roles se guardan como claves; las etiquetas en cada idioma viven en
 
 TIPOS: tuple[str, ...] = ("pareja", "trabajo", "familia", "amistad")
 
+# Decisión del 10-10-2026: el género se pregunta por persona y es opcional
+# ("" = no lo dijo → redacción neutra). Lista cerrada: entra al prompt.
+GENEROS: tuple[str, ...] = ("femenino", "masculino", "")
+
 ROLES: dict[str, tuple[str, ...]] = {
     "pareja": (),
     "amistad": (),

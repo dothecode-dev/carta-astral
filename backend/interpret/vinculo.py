@@ -9,15 +9,70 @@ import json
 from interpret.generator import _MARGEN_TOPE_SECCION, _stream_text
 from interpret.prompts import MODEL, SECCION_TOKENS_POR_PALABRA, Seccion
 
-ETIQUETAS_ROL: dict[str, dict[str, str]] = {
-    "jefe": {"es": "jefe o jefa", "en": "manager", "pt": "chefe"},
-    "equipo": {"es": "integrante del equipo", "en": "team member", "pt": "integrante da equipe"},
-    "socio": {"es": "socio o socia", "en": "business partner", "pt": "sócio ou sócia"},
-    "colega": {"es": "colega", "en": "colleague", "pt": "colega"},
-    "progenitor": {"es": "madre o padre", "en": "parent", "pt": "mãe ou pai"},
-    "hijo": {"es": "hijo o hija", "en": "child", "pt": "filho ou filha"},
-    "hermano": {"es": "hermano o hermana", "en": "sibling", "pt": "irmão ou irmã"},
-    "otro_familiar": {"es": "familiar", "en": "relative", "pt": "familiar"},
+# El rol con el género de la persona, artículo incluido (decisión del
+# 10-10-2026: el género se pregunta por persona y es opcional). La clave ""
+# es quien no lo dijo: el rol en forma doble y la redacción neutra.
+ETIQUETAS_ROL: dict[str, dict[str, dict[str, str]]] = {
+    "jefe": {
+        "es": {"femenino": "la jefa", "masculino": "el jefe", "": "jefe o jefa"},
+        "en": {"femenino": "the manager", "masculino": "the manager", "": "the manager"},
+        "pt": {"femenino": "a chefe", "masculino": "o chefe", "": "chefe"},
+    },
+    "equipo": {
+        "es": {"femenino": "integrante del equipo", "masculino": "integrante del equipo", "": "integrante del equipo"},
+        "en": {"femenino": "the team member", "masculino": "the team member", "": "the team member"},
+        "pt": {"femenino": "integrante da equipe", "masculino": "integrante da equipe", "": "integrante da equipe"},
+    },
+    "socio": {
+        "es": {"femenino": "la socia", "masculino": "el socio", "": "socio o socia"},
+        "en": {"femenino": "the business partner", "masculino": "the business partner", "": "the business partner"},
+        "pt": {"femenino": "a sócia", "masculino": "o sócio", "": "sócio ou sócia"},
+    },
+    "colega": {
+        "es": {"femenino": "la colega", "masculino": "el colega", "": "colega"},
+        "en": {"femenino": "the colleague", "masculino": "the colleague", "": "the colleague"},
+        "pt": {"femenino": "a colega", "masculino": "o colega", "": "colega"},
+    },
+    "progenitor": {
+        "es": {"femenino": "la madre", "masculino": "el padre", "": "madre o padre"},
+        "en": {"femenino": "the mother", "masculino": "the father", "": "the parent"},
+        "pt": {"femenino": "a mãe", "masculino": "o pai", "": "mãe ou pai"},
+    },
+    "hijo": {
+        "es": {"femenino": "la hija", "masculino": "el hijo", "": "hijo o hija"},
+        "en": {"femenino": "the daughter", "masculino": "the son", "": "the child"},
+        "pt": {"femenino": "a filha", "masculino": "o filho", "": "filho ou filha"},
+    },
+    "hermano": {
+        "es": {"femenino": "la hermana", "masculino": "el hermano", "": "hermano o hermana"},
+        "en": {"femenino": "the sister", "masculino": "the brother", "": "the sibling"},
+        "pt": {"femenino": "a irmã", "masculino": "o irmão", "": "irmão ou irmã"},
+    },
+    "otro_familiar": {
+        "es": {"femenino": "una familiar", "masculino": "un familiar", "": "familiar"},
+        "en": {"femenino": "a relative", "masculino": "a relative", "": "a relative"},
+        "pt": {"femenino": "uma familiar", "masculino": "um familiar", "": "familiar"},
+    },
+}
+
+# Cómo concordar al hablar de cada persona. Va siempre (con o sin rol): en
+# castellano y portugués casi todo adjetivo y participio lleva género.
+_GENERO = {
+    "es": {
+        "femenino": "{p} es mujer: usá concordancia femenina al hablar de ella.",
+        "masculino": "{p} es varón: usá concordancia masculina al hablar de él.",
+        "": "No se sabe el género de {p}: redactá de forma neutra al hablar de esa persona.",
+    },
+    "en": {
+        "femenino": "{p} is a woman: use she/her.",
+        "masculino": "{p} is a man: use he/him.",
+        "": "{p}'s gender is unknown: use neutral language (they/them).",
+    },
+    "pt": {
+        "femenino": "{p} é mulher: use concordância feminina ao falar dela.",
+        "masculino": "{p} é homem: use concordância masculina ao falar dele.",
+        "": "Não se sabe o gênero de {p}: escreva de forma neutra ao falar dessa pessoa.",
+    },
 }
 
 TIPO: dict[str, dict[str, str]] = {
@@ -132,7 +187,7 @@ _PEDIDO = {
            "Cerca de {palabras} palavras; não passe de {maximo}. Dados dos dois mapas e de "
            "como se olham:"),
 }
-_ES_ROL = {"es": "{p} es {rol}.", "en": "{p} is the {rol}.", "pt": "{p} é {rol}."}
+_ES_ROL = {"es": "{p} es {rol}.", "en": "{p} is {rol}.", "pt": "{p} é {rol}."}
 _SIN_HORA = {
     "es": "\n\nSin hora de nacimiento para {p}: no interpretes su Ascendente ni sus casas.",
     "en": "\n\nNo birth time for {p}: do not interpret their Ascendant or houses.",
@@ -148,9 +203,17 @@ _PREVIO = {
 def contenido_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str) -> str:
     personas = (("A", datos["persona_a"]), ("B", datos["persona_b"]))
     roles = " ".join(
-        _ES_ROL[lang].format(p=_PERSONA[lang].format(letra), rol=ETIQUETAS_ROL[p["rol"]][lang])
+        _ES_ROL[lang].format(
+            p=_PERSONA[lang].format(letra),
+            rol=ETIQUETAS_ROL[p["rol"]][lang][p.get("genero", "")],
+        )
         for letra, p in personas if p["rol"]
     )
+    generos = " ".join(
+        _GENERO[lang][p.get("genero", "")].format(p=_PERSONA[lang].format(letra))
+        for letra, p in personas
+    )
+    roles = f"{roles} {generos}".strip()
     texto = _PEDIDO[lang].format(
         tipo=TIPO[datos["tipo"]][lang], roles=roles, titulo=seccion.titulo[lang],
         foco=seccion.foco[lang], palabras=seccion.palabras,

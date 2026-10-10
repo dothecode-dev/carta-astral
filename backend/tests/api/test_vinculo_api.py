@@ -100,3 +100,18 @@ def test_cada_persona_trae_las_claves_que_la_web_ya_dibuja(client_autenticado):
     assert persona["interpretations"] == {} and persona["en_curso"] == {}
     assert persona["interpretation_langs"] == [] and "engine_version" in persona
     assert persona["birth"]["name"] is None
+
+
+def test_el_detalle_devuelve_el_genero_de_cada_persona(client_autenticado):
+    r = client_autenticado.post("/api/vinculos/", {
+        "tipo": "pareja", "personas": [{**A, "genero": "femenino"}, B],
+    }, format="json")
+    assert r.status_code == 201 and r.data["generos"] == ["femenino", ""]
+    assert client_autenticado.get(f"/api/vinculos/{r.data['id']}/").data["generos"] == ["femenino", ""]
+
+
+def test_un_genero_invalido_por_la_api_es_400(client_autenticado):
+    r = client_autenticado.post("/api/vinculos/", {
+        "tipo": "pareja", "personas": [{**A, "genero": "x"}, B],
+    }, format="json")
+    assert r.status_code == 400 and r.data["error"] == "genero_invalido"

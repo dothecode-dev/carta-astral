@@ -50,3 +50,31 @@ def test_el_rol_no_reemplaza_a_la_persona():
     assert "por su rol" not in _SYSTEM["es"]
     assert "by their role" not in _SYSTEM["en"]
     assert "pelo papel" not in _SYSTEM["pt"]
+
+
+def _con_generos(ga, gb):
+    return {**DATOS, "persona_a": {**DATOS["persona_a"], "genero": ga},
+            "persona_b": {**DATOS["persona_b"], "genero": gb}}
+
+
+def test_el_rol_se_escribe_con_el_genero_de_cada_persona():
+    sec = secciones_vinculo("familia", hay_hora=True)[0]
+    texto = contenido_vinculo(_con_generos("femenino", "masculino"), sec, "es", "")
+    assert "Persona A es la madre" in texto and "Persona B es el hijo" in texto
+    assert "madre o padre" not in texto
+
+
+def test_sin_genero_el_rol_queda_neutro_y_se_pide_redaccion_neutra():
+    sec = secciones_vinculo("familia", hay_hora=True)[0]
+    texto = contenido_vinculo(_con_generos("", ""), sec, "es", "")
+    assert "madre o padre" in texto and "neutr" in texto.lower()
+
+
+def test_el_genero_se_pide_tambien_sin_rol():
+    sec = secciones_vinculo("pareja", hay_hora=True)[0]
+    datos = {**_con_generos("femenino", "masculino"),
+             "tipo": "pareja",
+             "persona_a": {"rol": "", "carta": {"time_known": True}, "genero": "femenino"},
+             "persona_b": {"rol": "", "carta": {"time_known": True}, "genero": "masculino"}}
+    texto = contenido_vinculo(datos, sec, "es", "")
+    assert "Persona A es mujer" in texto and "Persona B es varón" in texto
