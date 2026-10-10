@@ -80,8 +80,7 @@ _TEXTOS = {
             "asunto": "Estamos escribiendo tu informe", "eyebrow": "Pago recibido",
             "titulo": "Ya estamos escribiendo tu informe",
             "parrafos": (
-                "Tarda unos minutos. Cuando esté listo te mandamos otro mail; mientras "
-                "tanto, podés verlo avanzar desde tu cuenta.",
+                "Tarda unos minutos: te mandamos otro mail cuando esté listo.",
             ),
             "boton": "Ver mi cuenta",
             "motivo": "Recibís este mail porque compraste un informe en astraguia.com.",
@@ -90,8 +89,7 @@ _TEXTOS = {
             "asunto": "We're writing your report", "eyebrow": "Payment received",
             "titulo": "We're already writing your report",
             "parrafos": (
-                "It takes a few minutes. We'll email you again when it's ready; in the "
-                "meantime, you can watch it progress from your account.",
+                "It takes a few minutes: we'll email you again when it's ready.",
             ),
             "boton": "Go to my account",
             "motivo": "You're receiving this email because you bought a report on astraguia.com.",
@@ -100,8 +98,7 @@ _TEXTOS = {
             "asunto": "Estamos escrevendo seu relatório", "eyebrow": "Pagamento recebido",
             "titulo": "Já estamos escrevendo seu relatório",
             "parrafos": (
-                "Leva alguns minutos. Mandamos outro e-mail quando estiver pronto; "
-                "enquanto isso, você pode acompanhar pela sua conta.",
+                "Leva alguns minutos: mandamos outro e-mail quando estiver pronto.",
             ),
             "boton": "Ver minha conta",
             "motivo": "Você recebe este e-mail porque comprou um relatório em astraguia.com.",
@@ -114,7 +111,7 @@ _TEXTOS = {
             "asunto": "Tu informe está listo", "asunto_nombre": "Tu informe está listo, {nombre}",
             "eyebrow": "Informe natal · listo",
             "parrafos": ("Terminamos de escribir tu informe. Ya podés leerlo y bajarlo en PDF.",),
-            "cita_rotulo": "Así empieza", "boton": "Seguir leyendo",
+            "cita_rotulo": "Así empieza", "boton": "Seguir leyendo", "boton_simple": "Leer mi informe",
             "nota": "Ahí mismo también podés bajarlo en PDF.",
             "vinculo_asunto": "Tu informe de vínculo está listo",
             "vinculo_asunto_alias": "El informe de {a} y {b} está listo",
@@ -125,7 +122,7 @@ _TEXTOS = {
             "asunto": "Your report is ready", "asunto_nombre": "Your report is ready, {nombre}",
             "eyebrow": "Natal report · ready",
             "parrafos": ("We've finished writing your report. You can read it and download the PDF now.",),
-            "cita_rotulo": "How it begins", "boton": "Keep reading",
+            "cita_rotulo": "How it begins", "boton": "Keep reading", "boton_simple": "Read my report",
             "nota": "Right there you can also download it as a PDF.",
             "vinculo_asunto": "Your relationship report is ready",
             "vinculo_asunto_alias": "The report for {a} and {b} is ready",
@@ -136,7 +133,7 @@ _TEXTOS = {
             "asunto": "Seu relatório está pronto", "asunto_nombre": "Seu relatório está pronto, {nombre}",
             "eyebrow": "Relatório natal · pronto",
             "parrafos": ("Terminamos de escrever seu relatório. Você já pode lê-lo e baixar o PDF.",),
-            "cita_rotulo": "Assim começa", "boton": "Continuar lendo",
+            "cita_rotulo": "Assim começa", "boton": "Continuar lendo", "boton_simple": "Ler meu relatório",
             "nota": "Lá mesmo você também pode baixá-lo em PDF.",
             "vinculo_asunto": "Seu relatório de vínculo está pronto",
             "vinculo_asunto_alias": "O relatório de {a} e {b} está pronto",
@@ -427,7 +424,8 @@ def _mail_informe_listo(contexto: dict, lang: str, url: str) -> tuple[str, Mail]
         # Con arranque, el arranque ES el cuerpo; sin él, el aviso simple.
         parrafos=() if arranque else t["parrafos"],
         cita_rotulo=t["cita_rotulo"] if arranque else "", cita=arranque,
-        boton=t["boton"], url=url,
+        # Sin arranque no hay nada que «seguir»: el botón de siempre.
+        boton=t["boton"] if arranque else t["boton_simple"], url=url,
         nota=t["nota"], motivo=t["motivo"],
     )
     return asunto, mail

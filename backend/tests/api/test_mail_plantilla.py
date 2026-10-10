@@ -87,3 +87,8 @@ def test_el_texto_plano_no_tiene_html_y_trae_el_enlace():
     assert "<" not in texto and ">" not in texto
     for esperado in ("Sol: Piscis", "Luna: Leo", "Hay en tu carta", "Seguir leyendo: https://astraguia.com/es/carta/x"):
         assert esperado in texto
+
+
+def test_una_cita_sin_signos_ni_parrafos_no_queda_pegada_al_titulo():
+    html = render_html(_mail(cita_rotulo="Así empieza", cita="Algo"), "es", LOGO)
+    assert html.index("height:14px") < html.index("Así empieza")

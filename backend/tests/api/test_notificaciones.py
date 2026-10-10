@@ -281,3 +281,15 @@ def test_notificar_de_los_otros_eventos_sigue_tragandose_la_falla(cuenta, monkey
     notificaciones.notificar(cuenta, "compra_acreditada", {"producto": "informe_natal"}, "es")
 
     assert "fallo el aviso" in caplog.text
+
+
+def test_informe_en_curso_promete_lo_que_prometia_y_nada_mas():
+    """El aviso dice que tarda y que llega otro mail; no promete ver el avance
+    desde la cuenta, algo que la web no garantiza."""
+    for lang, promesa, no_promete in (
+        ("es", "te mandamos otro mail", "avanzar"),
+        ("en", "email you again", "progress"),
+        ("pt", "mandamos outro e-mail", "acompanhar"),
+    ):
+        html = notificaciones._armar("informe_en_curso", {}, lang, "https://x.example/c")[1]
+        assert promesa in html and no_promete not in html, lang

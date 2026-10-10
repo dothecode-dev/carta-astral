@@ -104,7 +104,7 @@ def _cuerpo(m: Mail) -> str:
         partes.append(f'<div style="font:400 14px/1.5 {_SANS};color:{_SUAVE}">{_e(m.detalle)}</div>')
     if m.signos:
         partes.append(_signos(m.signos))
-    elif m.parrafos or m.codigo:
+    elif m.parrafos or m.codigo or m.cita:
         partes.append('<div style="height:14px;line-height:14px">&nbsp;</div>')
     if m.cita:
         partes.append(

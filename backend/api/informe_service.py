@@ -8,6 +8,7 @@ el mismo párrafo.
 """
 
 import logging
+import re
 import unicodedata
 
 from django.db import IntegrityError, transaction
@@ -297,6 +298,16 @@ def avisar_informe_listo(interpretacion: Interpretation) -> None:
 _ARRANQUE_PALABRAS = 45
 
 
+# Énfasis y código en línea del markdown: asteriscos, comillas invertidas y
+# guiones bajos que abren o cierran una palabra («_tensión_»); el de
+# `snake_case` no se toca.
+_MARCAS_MARKDOWN = re.compile(r"[*`]|(?<!\w)_|_(?!\w)")
+
+
+def _sin_markdown(texto: str) -> str:
+    return _MARCAS_MARKDOWN.sub("", texto)
+
+
 def _contexto_de_la_carta(interpretacion: Interpretation) -> dict:
     """Lo que el mail de «informe listo» muestra de la carta: nombre, fecha y
     lugar, Sol/Luna/Ascendente y el arranque del informe (decisión del
@@ -306,7 +317,7 @@ def _contexto_de_la_carta(interpretacion: Interpretation) -> dict:
         sujeto = interpretacion.sujeto
         primera = secciones_escritas(interpretacion)
         arranque, _ = _abrir(
-            _primer_parrafo(primera[0]["texto"]).replace("*", ""), _ARRANQUE_PALABRAS,
+            _sin_markdown(_primer_parrafo(primera[0]["texto"])), _ARRANQUE_PALABRAS,
         ) if primera else ("", 0)
         if sujeto.producto == Sujeto.VINCULO:
             from api.vinculo_api import sustituir_alias

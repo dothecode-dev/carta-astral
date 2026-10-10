@@ -187,3 +187,31 @@ def test_el_vinculo_sin_alias_dice_vinculo(vinculo_listo, resend):
     informe_service.avisar_informe_listo(vinculo_listo)
     assert resend[0]["json"]["subject"] == "Tu informe de vínculo está listo"
     assert "Persona A y Persona B comparten" in resend[0]["json"]["html"]
+
+
+# --- hallazgos del code review de de699b0 ---
+
+
+def test_sin_arranque_el_boton_vuelve_a_decir_leer_mi_informe(lista, resend, monkeypatch):
+    """Si el contexto no trae nada que mostrar, «Seguir leyendo» no continúa
+    nada: el aviso simple conserva su botón de siempre."""
+    monkeypatch.setattr(informe_service, "secciones_escritas", lambda *a: (_ for _ in ()).throw(RuntimeError()))
+    informe_service.avisar_informe_listo(lista)
+    html = resend[0]["json"]["html"]
+    assert "Leer mi informe" in html and "Seguir leyendo" not in html
+
+
+def test_el_markdown_del_arranque_no_llega_al_mail(lista, resend):
+    primera = lista.secciones.order_by("orden").first()
+    primera.texto = "Una _tensión_ con `código` y **negrita**, y snake_case intacto."
+    primera.save()
+    informe_service.avisar_informe_listo(lista)
+    html = resend[0]["json"]["html"]
+    assert "Una tensión con código y negrita" in html
+    assert "_tensión_" not in html and "`" not in html and "snake_case" in html
+
+
+def test_el_vinculo_deja_aire_entre_el_titulo_y_la_cita(vinculo_listo, resend):
+    informe_service.avisar_informe_listo(vinculo_listo)
+    html = resend[0]["json"]["html"]
+    assert "height:14px" in html
