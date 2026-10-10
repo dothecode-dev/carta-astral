@@ -50,10 +50,15 @@ def test_si_resend_falla_no_rompe(interpretacion_completa, resend, monkeypatch, 
     assert interpretacion_completa.text == texto_antes
 
 
-def test_compra_acreditada_ya_no_promete_el_informe_disponible():
-    from api.notificaciones import _TEXTOS
+def _html(evento, lang):
+    from api import notificaciones
 
-    for lang, (_, html) in _TEXTOS["compra_acreditada"].items():
+    return notificaciones._armar(evento, {}, lang, f"https://astraguia.com/{lang}/cuenta")[1]
+
+
+def test_compra_acreditada_ya_no_promete_el_informe_disponible():
+    for lang in ("es", "en", "pt"):
+        html = _html("compra_acreditada", lang)
         assert "disponible" not in html and "available" not in html and "disponível" not in html, lang
 
 
@@ -61,12 +66,11 @@ def test_compra_acreditada_es_generica_e_informe_en_curso_promete_el_mail():
     """Spec §11, RF24 v3: `compra_acreditada` sale para cualquier producto (un
     pack, una compra que saldó deuda) y no puede prometer un informe que no
     se está escribiendo; eso lo dice `informe_en_curso`."""
-    from api.notificaciones import EVENTOS, _TEXTOS
+    from api.notificaciones import EVENTOS
 
     assert "informe_en_curso" in EVENTOS
     for lang in ("es", "en", "pt"):
-        _, generico = _TEXTOS["compra_acreditada"][lang]
-        _, en_curso = _TEXTOS["informe_en_curso"][lang]
+        generico, en_curso = _html("compra_acreditada", lang), _html("informe_en_curso", lang)
         assert not any(p in generico for p in ("escribiendo", "writing", "escrevendo")), lang
         assert any(p in en_curso for p in ("escribiendo", "writing", "escrevendo")), lang
 

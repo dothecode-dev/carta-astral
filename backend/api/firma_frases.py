@@ -13,8 +13,23 @@ CUERPOS: tuple[str, ...] = ("Sun", "Moon", "Ascendant")
 SIGNOS: tuple[str, ...] = ("Ari", "Tau", "Gem", "Can", "Leo", "Vir", "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis")
 IDIOMAS: tuple[str, ...] = ("es", "en", "pt")
 
+# Los nombres de los signos, en el orden de `SIGNOS`. Para el mail de «tu
+# informe está listo», que muestra Sol, Luna y Ascendente sin glifos.
+NOMBRES_SIGNO: dict[str, tuple[str, ...]] = {
+    "es": ("Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo", "Libra", "Escorpio",
+           "Sagitario", "Capricornio", "Acuario", "Piscis"),
+    "en": ("Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio",
+           "Sagittarius", "Capricorn", "Aquarius", "Pisces"),
+    "pt": ("Áries", "Touro", "Gêmeos", "Câncer", "Leão", "Virgem", "Libra", "Escorpião",
+           "Sagitário", "Capricórnio", "Aquário", "Peixes"),
+}
+
 _RUTA = pathlib.Path(__file__).parent / "data" / "firma_frases.json"
 _FRASES: dict[str, dict[str, str]] = json.loads(_RUTA.read_text(encoding="utf-8"))
+
+
+def nombre_signo(signo: str, lang: str) -> str:
+    return NOMBRES_SIGNO[lang][SIGNOS.index(signo)]
 
 
 def frase(cuerpo: str, signo: str, lang: str) -> str:

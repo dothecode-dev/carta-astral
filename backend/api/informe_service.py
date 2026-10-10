@@ -14,6 +14,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from api import notificaciones
+from api.firma_frases import firma
 from api.interpretation_service import renovar_lock
 from api.models import Interpretation, InterpretationSection, Sujeto
 from interpret.generator import build_interpretation, build_seccion, translate_interpretation
@@ -285,9 +286,49 @@ def avisar_informe_listo(interpretacion: Interpretation) -> None:
     else:
         uuid = str(sujeto.natal_de.uuid)
         contexto = {"chart": uuid, "ruta": f"/carta/{uuid}"}
+    contexto.update(_contexto_de_la_carta(interpretacion))
     notificaciones.notificar(
         interpretacion.account, "informe_listo", contexto, lang=interpretacion.lang,
     )
+
+
+# Cuánto del informe viaja en el mail: el arranque, no la sección. Unas 45
+# palabras son tres o cuatro renglones; leerlo entero es entrar a la página.
+_ARRANQUE_PALABRAS = 45
+
+
+def _contexto_de_la_carta(interpretacion: Interpretation) -> dict:
+    """Lo que el mail de «informe listo» muestra de la carta: nombre, fecha y
+    lugar, Sol/Luna/Ascendente y el arranque del informe (decisión del
+    10-10-2026). Es adorno sobre un aviso que ya está decidido: si algo acá
+    falla se loguea con traceback y el mail sale igual, sin adornos."""
+    try:
+        sujeto = interpretacion.sujeto
+        primera = secciones_escritas(interpretacion)
+        arranque, _ = _abrir(
+            _primer_parrafo(primera[0]["texto"]).replace("*", ""), _ARRANQUE_PALABRAS,
+        ) if primera else ("", 0)
+        if sujeto.producto == Sujeto.VINCULO:
+            from api.vinculo_api import sustituir_alias
+            from api.vinculo_service import alias
+
+            alias_ = alias(sujeto)
+            return {
+                "alias": list(alias_),
+                "arranque": sustituir_alias(arranque, alias_, interpretacion.lang) if arranque else "",
+            }
+        carta = sujeto.natal_de
+        nacimiento = carta.birth_data
+        return {
+            "nombre": nacimiento.name or "",
+            "fecha": nacimiento.date.isoformat(),
+            "lugar": nacimiento.place_label or "",
+            "signos": [[f["cuerpo"], f["signo"]] for f in firma(carta.data)],
+            "arranque": arranque,
+        }
+    except Exception:
+        logger.exception("no se pudo armar la carta del mail de informe listo (%s)", interpretacion.pk)
+        return {}
 
 
 def generar_informe(interpretacion, client, token: str) -> bool:
