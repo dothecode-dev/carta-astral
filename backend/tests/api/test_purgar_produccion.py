@@ -180,3 +180,25 @@ def test_la_purga_borra_los_usos_de_cupon_y_no_los_cupones(make_account, capsys)
     assert "CuponUso: 1" in capsys.readouterr().out
     assert CuponUso.objects.count() == 0
     assert Cupon.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_la_purga_borra_checkouts_y_sujetos_sin_carta(make_account, capsys):
+    """Los dos cuelgan de la cuenta con SET_NULL: sin nombrarlos sobreviven a
+    la «purga total» sin dueño —el checkout con su `payment_intent`, el sujeto
+    de un vínculo con sus datos— porque ninguno cascadea desde una carta."""
+    from api.models import PasarelaCheckout, Sujeto
+
+    cuenta = make_account()
+    _sembrar_cuenta_con_cartas_y_ledger(cuenta)
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_purga", account=cuenta, codigo_producto="informe_natal", payment_intent="pi_x",
+    )
+    Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
+
+    call_command("purgar_produccion", "--si-estoy-seguro")
+
+    salida = capsys.readouterr().out
+    assert "PasarelaCheckout: 1" in salida
+    assert PasarelaCheckout.objects.count() == 0
+    assert Sujeto.objects.count() == 0

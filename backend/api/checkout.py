@@ -110,7 +110,7 @@ class CheckoutView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if cupon.porcentaje >= 100:
-                return self._canjear_gratis(request, cupon, codigo, carta, idioma)
+                return self._canjear_gratis(request, cupon, codigo, sujeto, idioma)
 
         try:
             checkout_id, url = stripe_client.crear_checkout(
@@ -136,7 +136,7 @@ class CheckoutView(APIView):
         )
         return Response({"url": url})
 
-    def _canjear_gratis(self, request, cupon, codigo, carta, idioma):
+    def _canjear_gratis(self, request, cupon, codigo, sujeto, idioma):
         """El cupón del 100 % no pasa por Stripe: se resuelve acá, en la
         misma request, y la página de retorno lo encuentra ya acreditado.
 
@@ -153,7 +153,7 @@ class CheckoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            fila = cupones.canjear_gratis(cuenta, cupon, codigo, carta, idioma)
+            fila = cupones.canjear_gratis(cuenta, cupon, codigo, sujeto, idioma)
         except cupones.CuponInvalido as exc:
             # Perdió la carrera bajo el lock: otro se llevó el último lugar.
             return Response(

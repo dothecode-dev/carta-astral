@@ -16,7 +16,6 @@ from api import stripe_client
 from api.canje import aplicar_compra
 from api.catalogo import producto
 from api.models import Cupon, CuponUso, PasarelaCheckout
-from api.sujetos import sujeto_natal
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +76,7 @@ def _chequear(cupon: Cupon, codigo_producto: str, account, ahora) -> None:
         raise CuponInvalido("agotado")
 
 
-def canjear_gratis(account, cupon: Cupon, codigo_producto: str, carta, locale: str) -> PasarelaCheckout:
+def canjear_gratis(account, cupon: Cupon, codigo_producto: str, sujeto, locale: str) -> PasarelaCheckout:
     """El cupón del 100 %: otorga, deja el checkout acreditado y registra el
     uso, todo en una transacción y sin Stripe.
 
@@ -91,7 +90,6 @@ def canjear_gratis(account, cupon: Cupon, codigo_producto: str, carta, locale: s
     llama, fuera de la transacción, igual que `_acreditar` en el webhook.
     """
     prod = producto(codigo_producto)
-    sujeto = sujeto_natal(carta) if carta is not None else None
     with transaction.atomic():
         cupon = Cupon.objects.select_for_update().get(pk=cupon.pk)
         _chequear(cupon, codigo_producto, account, timezone.now())

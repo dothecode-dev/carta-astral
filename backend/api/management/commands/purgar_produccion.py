@@ -12,9 +12,11 @@ from api.models import (
     Interpretation,
     InterpretationSection,
     Movimiento,
+    PasarelaCheckout,
     ProviderIdentity,
     Session,
     SubTombstone,
+    Sujeto,
 )
 
 # De hoja a raíz: los FK a Account son SET_NULL (Chart, Interpretation,
@@ -39,7 +41,7 @@ from api.models import (
 #
 # Movimiento y Derecho son el ledger del modelo de canje y caen del mismo
 # lado, por el mismo motivo que Device:
-# - Movimiento.account es SET_NULL (y Movimiento.chart también): sin borrado
+# - Movimiento.account es SET_NULL (y Movimiento.sujeto también): sin borrado
 #   explícito sobrevive a la purga con account_id=NULL y con el historial de
 #   qué compró, qué consumió y con qué external_id una cuenta que ya no
 #   existe. Es el agujero exacto que este archivo ya documenta haber tapado
@@ -62,11 +64,17 @@ from api.models import (
 # y espejo de un objeto en Stripe, borrarlo acá no lo borra allá.
 MODELOS_A_BORRAR = (
     ("CuponUso", CuponUso),
+    # Después de CuponUso, que lo referencia. Cuelga de Account con SET_NULL:
+    # sin nombrarlo sobrevive sin dueño, con su `payment_intent`.
+    ("PasarelaCheckout", PasarelaCheckout),
     ("InterpretationSection", InterpretationSection),
     ("Movimiento", Movimiento),
     ("Derecho", Derecho),
     ("CreditTransaction", CreditTransaction),
     ("Interpretation", Interpretation),
+    # Después de todo lo que cuelga de él, antes de Chart. El natal caería con
+    # su carta, pero el de un vínculo no tiene carta: SET_NULL a Account.
+    ("Sujeto", Sujeto),
     ("Chart", Chart),
     ("BirthData", BirthData),
     ("ProviderIdentity", ProviderIdentity),
