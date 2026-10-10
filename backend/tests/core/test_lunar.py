@@ -104,3 +104,31 @@ def test_acepta_sólo_instantes_con_zona_horaria():
     # Un datetime sin zona es ambiguo, y la Luna se mueve medio grado por hora.
     with pytest.raises(ValueError):
         moon_state(datetime.datetime(2026, 10, 1))
+
+
+# Las fases del USNO de arriba, más una consulta un poco después de cada una:
+# kerykeion devolvía como «próxima» el instante consultado durante 11 a 23
+# horas después de cada fase (medido el 10-10-2026: a las 16:00 decía que la
+# próxima luna nueva era a las 16:00, y era el 09-11). La referencia es la
+# misma fase consultada una semana después, fuera de esa ventana.
+RECIEN_PASADA = [
+    ("new_moon", _utc(2026, 10, 10, 15, 50)),
+    ("first_quarter", _utc(2026, 10, 18, 16, 12)),
+    ("full_moon", _utc(2026, 10, 26, 4, 12)),
+    ("last_quarter", _utc(2024, 1, 4, 3, 30)),
+]
+
+
+@pytest.mark.parametrize(("phase", "fase_pasada"), RECIEN_PASADA)
+@pytest.mark.parametrize("despues", [datetime.timedelta(minutes=2), datetime.timedelta(hours=12)])
+def test_justo_despues_de_una_fase_la_proxima_es_la_siguiente(phase, fase_pasada, despues):
+    moment = fase_pasada + despues
+
+    found = next(p.moment for p in moon_state(moment).next_phases if p.phase == phase)
+    referencia = next(
+        p.moment for p in moon_state(fase_pasada + datetime.timedelta(days=7)).next_phases
+        if p.phase == phase
+    )
+
+    assert found > moment
+    assert abs((found - referencia).total_seconds()) <= 60

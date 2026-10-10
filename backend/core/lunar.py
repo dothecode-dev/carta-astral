@@ -9,12 +9,13 @@ busca el cruce de una longitud con la misma efeméride que dibuja las cartas.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import swisseph as swe
 from kerykeion import AstrologicalSubjectFactory
 from kerykeion.moon_phase_details.factory import MoonPhaseDetailsFactory
 from kerykeion.moon_phase_details.utils import configure_ephemeris_path
+from kerykeion.schemas.kr_models import MoonPhaseMoonSummaryModel
 from kerykeion.utilities import datetime_to_julian, julian_to_datetime
 
 from core.models import MoonState, PhaseEvent, SignChange
@@ -41,27 +42,43 @@ def _next_sign_change(moment: datetime) -> SignChange:
     return SignChange(sign=_SIGNS[index], moment=when)
 
 
+def _moon(utc: datetime) -> MoonPhaseMoonSummaryModel:
+    subject = AstrologicalSubjectFactory.from_birth_data(
+        "Sky", utc.year, utc.month, utc.day, utc.hour, utc.minute,
+        lng=0.0, lat=0.0, tz_str="UTC", online=False,
+    )
+    return MoonPhaseDetailsFactory.from_subject(subject).moon
+
+
+def _next_phase(moon: MoonPhaseMoonSummaryModel, phase: str) -> datetime:
+    upcoming = moon.detailed.upcoming_phases if moon.detailed else None
+    if upcoming is None:
+        raise RuntimeError("kerykeion no devolvió las próximas fases")
+    window = getattr(upcoming, phase)
+    if window is None or window.next is None or window.next.timestamp is None:
+        raise RuntimeError(f"kerykeion no encontró la próxima {phase}")
+    return datetime.fromtimestamp(window.next.timestamp, tz=timezone.utc)
+
+
+# Medido el 10-10-2026: hasta ~23 h después de una luna nueva, kerykeion
+# devuelve como «próxima» el mismo instante consultado (los cuartos y la llena
+# no fallan). Preguntarle desde dos días después sale de esa ventana y no se
+# saltea nada: la misma fase no vuelve antes de ~29 días.
+_SALTO = timedelta(days=2)
+
+
 def moon_state(moment: datetime) -> MoonState:
     """La Luna en `moment`, que tiene que traer zona horaria."""
     if moment.tzinfo is None:
         raise ValueError("moon_state necesita un datetime con zona horaria")
     utc = moment.astimezone(timezone.utc)
 
-    subject = AstrologicalSubjectFactory.from_birth_data(
-        "Sky", utc.year, utc.month, utc.day, utc.hour, utc.minute,
-        lng=0.0, lat=0.0, tz_str="UTC", online=False,
-    )
-    moon = MoonPhaseDetailsFactory.from_subject(subject).moon
-
-    upcoming = moon.detailed.upcoming_phases if moon.detailed else None
-    if upcoming is None:
-        raise RuntimeError("kerykeion no devolvió las próximas fases")
+    moon = _moon(utc)
     events = []
     for phase in _MAJOR_PHASES:
-        window = getattr(upcoming, phase)
-        if window is None or window.next is None or window.next.timestamp is None:
-            raise RuntimeError(f"kerykeion no encontró la próxima {phase}")
-        when = datetime.fromtimestamp(window.next.timestamp, tz=timezone.utc)
+        when = _next_phase(moon, phase)
+        if when <= utc:
+            when = _next_phase(_moon(utc + _SALTO), phase)
         events.append(PhaseEvent(phase=phase, moment=when))
     events.sort(key=lambda e: e.moment)
 
