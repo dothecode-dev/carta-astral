@@ -72,7 +72,12 @@ def _persona_repr(carta: Chart) -> dict:
     return {
         "house_system": carta.house_system, "zodiac": carta.zodiac, "data": carta.data,
         "firma": firma(carta.data),
+        "engine_version": carta.engine_version,
+        # Vacías y no ausentes, como en `_preview_repr`: los componentes de la
+        # carta no distinguen este caso del de una carta propia sin informes.
+        "interpretation_langs": [], "interpretations": {}, "en_curso": {},
         "birth": {
+            "name": None,
             "date": bd.date.isoformat(),
             "time": bd.time.strftime("%H:%M") if bd.time else None,
             "time_known": bd.time_known, "lat": bd.lat, "lng": bd.lng,

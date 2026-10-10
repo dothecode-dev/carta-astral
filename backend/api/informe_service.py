@@ -497,7 +497,8 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
     pendientes = [s for s in origen.secciones.all() if s.slug not in hechas]
     for indice, seccion in enumerate(pendientes):
         texto = translate_interpretation(
-            seccion.texto, destino_lang, client, trato=origen.trato,
+            seccion.texto, destino_lang, client,
+            trato=origen.trato if origen.sujeto.producto == Sujeto.NATAL else None,
         )
         # La traducción también puede escapar el género: se revisa con el
         # trato y el idioma del destino (el trato ya quedó alineado arriba).

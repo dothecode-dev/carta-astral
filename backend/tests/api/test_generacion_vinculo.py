@@ -86,3 +86,19 @@ def test_el_aviso_de_listo_lleva_a_la_pagina_del_vinculo(vinculo, monkeypatch):
     interp = svc.iniciar_generacion(vinculo, "es", vinculo.account, tier="largo")
     svc.completar_generacion(interp, vinculo.account)
     assert enviados[-1]["ruta"] == f"/vinculo/{vinculo.uuid}"
+
+
+def test_la_traduccion_del_vinculo_va_por_el_traductor_sin_trato(vinculo, monkeypatch):
+    """El vínculo está en tercera persona: la instrucción de trato (segunda
+    persona del lector) no aplica, y con ella la traducción iba al modelo caro."""
+    from interpret.prompts import TRANSLATE_MODEL
+
+    cliente = ClienteFalso()
+    monkeypatch.setattr(svc, "_build_client", lambda: cliente)
+    es = svc.iniciar_generacion(vinculo, "es", vinculo.account, tier="largo")
+    svc.completar_generacion(es, vinculo.account)
+    antes = len(cliente.llamadas)
+    pt = svc.iniciar_generacion(vinculo, "pt", vinculo.account, tier="largo")
+    svc.completar_generacion(pt, vinculo.account)
+    traducciones = cliente.llamadas[antes:]
+    assert traducciones and all(c["model"] == TRANSLATE_MODEL for c in traducciones)

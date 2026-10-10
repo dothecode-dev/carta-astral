@@ -22,7 +22,7 @@ from api import chart_service
 from api.chart_service import CartaCalculada, calcular, create_chart, mensaje_de_datos_invalidos
 from api.canje import derechos_de
 from api.firma_frases import firma
-from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
+from interpret.prompts import PROMPT_VERSION
 from api import apple
 from api.models import Chart, ProviderIdentity, Sujeto
 from api.permissions import HasAccount
@@ -32,14 +32,6 @@ from api.versioning import engine_version
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
 logger = logging.getLogger(__name__)
-
-_INTERPRETATION_LANGS = ("es", "en", "pt")
-# Sin default a propósito (RF9, RF20): adivinar el tier es gastar el lote de
-# crédito equivocado (free para la breve, paid para el informe completo), y
-# un default silencioso convertiría un olvido del cliente en un cobro de
-# US$ 29 sin que nadie lo haya pedido.
-_TIERS = (TIER_CORTO, TIER_LARGO)
-
 
 class AccountView(APIView):
     authentication_classes = [AccountTokenAuthentication]

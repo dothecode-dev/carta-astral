@@ -40,3 +40,13 @@ def test_avisa_quien_no_tiene_hora():
     texto = contenido_vinculo(DATOS, sec, "es", "")
     assert "Sin hora de nacimiento para Persona B" in texto
     assert "Sin hora de nacimiento para Persona A" not in texto
+
+
+def test_el_rol_no_reemplaza_a_la_persona():
+    """El alias sólo se puede mostrar donde el modelo escribió «Persona A»: si
+    la nombra por su rol («la jefa»), el alias no aparece nunca (RF22)."""
+    from interpret.vinculo import _SYSTEM
+
+    assert "por su rol" not in _SYSTEM["es"]
+    assert "by their role" not in _SYSTEM["en"]
+    assert "pelo papel" not in _SYSTEM["pt"]

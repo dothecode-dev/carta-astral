@@ -25,6 +25,9 @@ from api.models import Interpretation
 from interpret.prompts import PROMPT_VERSION, TIER_CORTO, TIER_LARGO
 
 LANGS = ("es", "en", "pt")
+# Sin default a propósito (RF9, RF20): adivinar el tier es canjear el
+# derecho equivocado (la breve regalada o el informe pago), y un default
+# silencioso convertiría un olvido del cliente en un cobro que nadie pidió.
 TIERS = (TIER_CORTO, TIER_LARGO)
 
 Transformar = Callable[[str], str] | None
@@ -148,9 +151,10 @@ def pedir(sujeto, data, account) -> Response:
             {"error": "generación en curso para esta carta en otro idioma"},
             status=status.HTTP_409_CONFLICT,
         )
-    except ValueError:
+    except interpretation_service.TierInvalido:
         # Un tier que este producto no tiene (el vínculo no tiene lectura
         # breve): `capacidad()` lo rechaza antes de crear ni cobrar nada.
+        # Sólo ése: cualquier otro ValueError es un bug y tiene que subir.
         return Response(
             {"error": "tier inválido para este producto"}, status=status.HTTP_400_BAD_REQUEST,
         )

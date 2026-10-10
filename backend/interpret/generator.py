@@ -125,12 +125,14 @@ _TRANSLATE_SYSTEM = (
 )
 
 
-def translate_interpretation(text: str, target_lang: str, client, trato: str = "") -> str:
+def translate_interpretation(text: str, target_lang: str, client, trato: str | None = "") -> str:
     """Traduce una lectura ya generada. Modelo barato: el contenido ya está
     escrito, solo cambia el idioma."""
     system = [{"type": "text", "text": _TRANSLATE_SYSTEM.format(target=_TRANSLATE_TARGETS[target_lang])}]
     modelo, techo, thinking = TRANSLATE_MODEL, TRANSLATE_MAX_TOKENS, None
-    if nota := instruccion(trato, target_lang):
+    # `None`: un texto sin lector a quien tratar (el vínculo, en tercera
+    # persona): ni instrucción de trato ni el modelo caro que ésta exige.
+    if trato is not None and (nota := instruccion(trato, target_lang)):
         # Segundo elemento del system y no parte del contenido: el contenido es
         # el texto a traducir, y una nota ahí podría traducirse y quedar pegada.
         system.append({"type": "text", "text": nota})

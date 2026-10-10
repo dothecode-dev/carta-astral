@@ -70,3 +70,33 @@ def test_no_toca_la_preposicion_ni_un_alias_vacio():
     texto = "La persona a quien quiere. Persona A habla."
     assert sustituir_alias(texto, ("", ""), "es") == texto
     assert sustituir_alias(texto, ("Ana", "Leo"), "es") == "La persona a quien quiere. Ana habla."
+
+
+def test_un_error_que_no_es_de_tier_no_se_disfraza_de_400(client_autenticado, monkeypatch):
+    """`pedir` traduce a 400 sólo el tier que el producto no tiene; cualquier
+    otro ValueError es un bug y tiene que subir (500, Sentry)."""
+    from api import interpretation_service
+    from api.canje import CapacidadAjena
+
+    vid = _crear(client_autenticado).data["id"]
+
+    def _explota(*a, **k):
+        raise CapacidadAjena("bug")
+
+    monkeypatch.setattr(interpretation_service, "iniciar_generacion", _explota)
+    client_autenticado.raise_request_exception = True
+    with pytest.raises(CapacidadAjena):
+        client_autenticado.post(f"/api/vinculos/{vid}/informe/", {"lang": "es", "tier": "largo"}, format="json")
+
+
+def test_el_vinculo_no_tiene_lectura_breve_por_la_api(client_autenticado):
+    vid = _crear(client_autenticado).data["id"]
+    r = client_autenticado.post(f"/api/vinculos/{vid}/informe/", {"lang": "es", "tier": "corto"}, format="json")
+    assert r.status_code == 400
+
+
+def test_cada_persona_trae_las_claves_que_la_web_ya_dibuja(client_autenticado):
+    persona = _crear(client_autenticado).data["personas"][0]
+    assert persona["interpretations"] == {} and persona["en_curso"] == {}
+    assert persona["interpretation_langs"] == [] and "engine_version" in persona
+    assert persona["birth"]["name"] is None

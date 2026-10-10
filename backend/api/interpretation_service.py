@@ -38,6 +38,11 @@ _CAPACIDAD = {
 }
 
 
+class TierInvalido(ValueError):
+    """Un tier que el producto del sujeto no tiene (el vínculo no tiene
+    lectura breve). Es un pedido mal armado: la vista lo responde 400."""
+
+
 def capacidad(sujeto, tier: str) -> str:
     """Qué capacidad canjea pedir este tier de este sujeto. Con dos productos
     y un vínculo, la capacidad ES el producto: canjear otra sería cobrar el que
@@ -45,7 +50,7 @@ def capacidad(sujeto, tier: str) -> str:
     try:
         return _CAPACIDAD[(sujeto.producto, tier)]
     except KeyError:
-        raise ValueError(f"el {sujeto.producto} no tiene el tier {tier}") from None
+        raise TierInvalido(f"el {sujeto.producto} no tiene el tier {tier}") from None
 
 # Import diferido (no al tope del módulo): `informe_service` importa
 # `renovar_lock` DESDE acá, así que un `import` a nivel de módulo en ambas

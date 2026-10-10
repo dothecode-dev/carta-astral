@@ -106,18 +106,18 @@ def secciones_vinculo(tipo: str, hay_hora: bool) -> list[Seccion]:
 _SYSTEM = {
     "es": ("Sos un astrólogo que escribe sobre la relación entre dos personas a partir de "
            "sus cartas natales: la interacción, no cada carta por separado. Claro, cálido, "
-           "sin jerga sin explicar. Nombrá a cada persona SÓLO como «Persona A» o «Persona B», "
-           "o por su rol si lo tiene; nunca inventes nombres. No incluyas disclaimers. "
+           "sin jerga sin explicar. Nombrá a cada persona SIEMPRE como «Persona A» o «Persona B»: "
+           "el rol es contexto («Persona A, como madre, …»), no un nombre; nunca inventes nombres. No incluyas disclaimers. "
            "Escribís una sección de un informe más largo: andá directo a su foco."),
     "en": ("You are an astrologer writing about the relationship between two people from "
            "their natal charts: the interaction, not each chart on its own. Clear, warm, no "
-           "unexplained jargon. Refer to each person ONLY as “Person A” or “Person B”, or by "
-           "their role if they have one; never invent names. No disclaimers. You are writing "
+           "unexplained jargon. ALWAYS refer to each person as “Person A” or “Person B”: the role "
+           "is context (“Person A, as the parent, …”), not a name; never invent names. No disclaimers. You are writing "
            "one section of a longer report: go straight to its focus."),
     "pt": ("Você é um astrólogo que escreve sobre a relação entre duas pessoas a partir de "
            "seus mapas natais: a interação, não cada mapa separado. Claro, acolhedor, sem "
-           "jargão sem explicar. Chame cada pessoa SÓ de «Pessoa A» ou «Pessoa B», ou pelo "
-           "papel se tiver; nunca invente nomes. Sem disclaimers. Você escreve uma seção de "
+           "jargão sem explicar. Chame cada pessoa SEMPRE de «Pessoa A» ou «Pessoa B»: o papel "
+           "é contexto («Pessoa A, como mãe, …»), não um nome; nunca invente nomes. Sem disclaimers. Você escreve uma seção de "
            "um relatório mais longo: vá direto ao foco."),
 }
 
