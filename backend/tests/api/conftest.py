@@ -117,3 +117,29 @@ def entregar_anonima(client, monkeypatch, settings):
         )
 
     return _entregar
+
+
+@pytest.fixture
+def interpretacion_vinculo_completa(make_account, settings):
+    """Un vínculo con su informe largo terminado en español; el alias de A
+    trae HTML, para probar que se escapa al dibujarlo."""
+    from api.models import Interpretation, InterpretationSection
+    from api.vinculo_service import crear_vinculo
+    from interpret.prompts import PROMPT_VERSION
+
+    settings.VINCULO_ENABLED = True
+    acc = make_account()
+    sujeto = crear_vinculo(acc, "amistad", [
+        {"date": "1985-03-14", "time": "08:30", "time_known": True,
+         "lat": -32.95, "lng": -60.65, "alias": "<b>Ana</b>"},
+        {"date": "1988-09-09", "time_known": False, "lat": -31.42, "lng": -64.18, "alias": "Leo"},
+    ])
+    interp = Interpretation.objects.create(
+        sujeto=sujeto, account=acc, lang="es", prompt_version=PROMPT_VERSION,
+        tier="largo", completa=True, text="Persona A y Persona B.",
+    )
+    InterpretationSection.objects.create(
+        interpretation=interp, slug="encuentro", orden=0,
+        texto="Persona A conoce a Persona B.",
+    )
+    return interp

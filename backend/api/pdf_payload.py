@@ -192,6 +192,25 @@ class ChartPdfSerializer(_Strict):
     )
 
 
+class _LabelsVinculo(_Labels):
+    persona_a = serializers.CharField(max_length=80, allow_blank=True)
+    persona_b = serializers.CharField(max_length=80, allow_blank=True)
+
+
+class VinculoPdfSerializer(_Strict):
+    """El PDF del vínculo (RF24, decisión del 10-10: dos ruedas, una por
+    persona). Como en la carta, la geometría la calcula el navegador y el
+    texto del informe lo lee el backend de su base."""
+
+    labels = _LabelsVinculo()
+    # Sin hora de una persona su rueda no se puede orientar: va `null`.
+    wheels = serializers.ListField(child=_Wheel(allow_null=True), min_length=2, max_length=2)
+    aspects = serializers.ListField(child=_Aspect(), max_length=600)
+    reading_lang = serializers.ChoiceField(
+        choices=["es", "en", "pt"], required=False, allow_null=True
+    )
+
+
 def build(sujeto: Sujeto, reading_lang: str | None) -> dict[str, Any] | None:
     """La lectura para el PDF: título y texto de cada sección ya escrita, más
     el índice completo del informe. `None` si no hay ningún informe

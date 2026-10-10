@@ -1,15 +1,15 @@
-from api.checkout import CheckoutEstadoView, CheckoutView
-from api.compra_anonima_api import CheckoutAnonimoView, CheckoutCanjeView
-from api.mantenimiento import EstadoView
-from api.catalogo_api import CatalogoView
-from api.lectura_anonima_api import LecturaAnonimaView
-from api.cupones_api import CuponPublicoView
-from api.compras_api import ComprasView
-from api.webhooks_resend import ResendWebhookView
-from api.webhooks_stripe import StripeWebhookView
 from django.urls import path
 
+from api.catalogo_api import CatalogoView
+from api.checkout import CheckoutEstadoView, CheckoutView
+from api.compra_anonima_api import CheckoutAnonimoView, CheckoutCanjeView
+from api.compras_api import ComprasView
+from api.cupones_api import CuponPublicoView
+from api.lectura_anonima_api import LecturaAnonimaView
+from api.mantenimiento import EstadoView
+from api.pdf import ChartPdfView
 from api.sessions import CanjearCodigoView, LogoutView, PedirCodigoView
+from api.sky import SkyMoonView, SkyView
 from api.views import (
     AccountView,
     AppleAuthView,
@@ -19,17 +19,23 @@ from api.views import (
     GeocodeView,
     GoogleAuthView,
     IndiceInformeView,
-    InterpretationEstadoView, InterpretationSeccionesView,
+    InterpretationEstadoView,
+    InterpretationSeccionesView,
     InterpretationView,
 )
-from api.pdf import ChartPdfView
-from api.sky import SkyMoonView, SkyView
 from api.vinculo import VinculoEstadoView, VinculoPreviewView
 from api.vinculo_api import (
-    VinculoDetalleView, VinculoIndiceView, VinculoInformeEstadoView, VinculoInformeView,
-    VinculosView, VinculoSeccionesView,
+    VinculoDetalleView,
+    VinculoIndiceView,
+    VinculoInformeEstadoView,
+    VinculoInformeView,
+    VinculoSeccionesView,
+    VinculosView,
 )
+from api.vinculo_pdf import VinculoPdfView
 from api.webhooks import RevenueCatWebhookView
+from api.webhooks_resend import ResendWebhookView
+from api.webhooks_stripe import StripeWebhookView
 
 urlpatterns = [
     path("account/", AccountView.as_view()),
@@ -57,6 +63,7 @@ urlpatterns = [
     path("vinculos/<uuid:uuid>/informe/estado/", VinculoInformeEstadoView.as_view()),
     path("vinculos/<uuid:uuid>/informe/secciones/", VinculoSeccionesView.as_view()),
     path("vinculos/<uuid:uuid>/informe/indice/", VinculoIndiceView.as_view()),
+    path("vinculos/<uuid:uuid>/pdf/", VinculoPdfView.as_view()),
     path("charts/<uuid:uuid>/", ChartDetailView.as_view()),
     path("charts/<uuid:uuid>/interpretation/", InterpretationView.as_view()),
     path("charts/<uuid:uuid>/interpretation/estado/", InterpretationEstadoView.as_view()),

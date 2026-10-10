@@ -301,7 +301,7 @@ def _reading_html(reading: dict, disclaimer: str, titulo: str) -> str:
     )
 
 
-def _reading_for(chart: Chart, lang: str | None) -> tuple[dict, str] | None:
+def _reading_for(sujeto, lang: str | None, transformar=None) -> tuple[dict, str] | None:
     """El informe pedido, si está escrito y terminado.
 
     Una interpretación con `completa=False` no se sirve —mismo criterio que
@@ -309,10 +309,16 @@ def _reading_for(chart: Chart, lang: str | None) -> tuple[dict, str] | None:
     salir en un PDF como si estuviera terminado. Cuál de los dos tiers gana
     si hay más de uno lo decide `pdf_payload.build`.
     """
-    resultado = pdf_payload.build(sujeto_natal(chart), lang)
+    resultado = pdf_payload.build(sujeto, lang)
     if resultado is None:
         # No es un error: la carta se baja igual, sin la lectura.
         return None
+    if transformar is not None:
+        # El vínculo muestra los alias donde el modelo escribió «Persona A».
+        lectura = resultado["reading"]
+        lectura["secciones"] = [
+            {**s, "texto": transformar(s["texto"])} for s in lectura["secciones"]
+        ]
     # `lang` no puede ser None acá: pdf_payload.build ya devolvió algo, y con
     # `reading_lang=None` devuelve siempre None (ver su docstring).
     return resultado["reading"], DISCLAIMERS[lang]
@@ -339,7 +345,7 @@ def build_document_html(chart: Chart, data: dict) -> str:
     wheel = data.get("wheel")
     rueda = f'<div class="wheel-big">{_svg(wheel)}</div>' if wheel else ""
 
-    lectura = _reading_for(chart, data.get("reading_lang"))
+    lectura = _reading_for(sujeto_natal(chart), data.get("reading_lang"))
     bloque_lectura = (
         _reading_html(lectura[0], lectura[1], labels["reading"]) if lectura else ""
     )
@@ -385,17 +391,19 @@ def render_pdf(chart: Chart, data: dict) -> bytes:
     Son unos 300 ms de CPU en el worker. El techo de frecuencia lo pone el
     throttle de la view; el de duración, el `--timeout 60` de gunicorn.
     """
+    return render_html(build_document_html(chart, data), f"la carta {chart.uuid}")
+
+
+def render_html(html: str, etiqueta: str) -> bytes:
+    """Cualquier documento armado acá (carta o vínculo), en bytes.
+    `etiqueta` sólo va al log, para saber qué documento falló."""
     from weasyprint import HTML
 
     try:
-        return HTML(
-            string=build_document_html(chart, data),
-            url_fetcher=pdf_url_fetcher(),
-        ).write_pdf()
+        return HTML(string=html, url_fetcher=pdf_url_fetcher()).write_pdf()
     except Exception as exc:
         logger.error(
-            "pdf: no se pudo generar el documento de la carta %s: %s",
-            chart.uuid, exc, exc_info=True,
+            "pdf: no se pudo generar el documento de %s: %s", etiqueta, exc, exc_info=True,
         )
         raise PdfGenerationError(str(exc)) from exc
 
