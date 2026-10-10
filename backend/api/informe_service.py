@@ -309,9 +309,10 @@ def _sin_markdown(texto: str) -> str:
 
 
 def _contexto_de_la_carta(interpretacion: Interpretation) -> dict:
-    """Lo que el mail de «informe listo» muestra de la carta: nombre, fecha y
-    lugar, Sol/Luna/Ascendente y el arranque del informe (decisión del
-    10-10-2026). Es adorno sobre un aviso que ya está decidido: si algo acá
+    """Lo que el mail de «informe listo» muestra de la carta: el nombre,
+    Sol/Luna/Ascendente y el arranque del informe (decisión del 10-10-2026).
+    La fecha y el lugar de nacimiento NO viajan: menos datos personales por
+    mail, y quien lo recibe ya los sabe. Es adorno sobre un aviso que ya está decidido: si algo acá
     falla se loguea con traceback y el mail sale igual, sin adornos."""
     try:
         sujeto = interpretacion.sujeto
@@ -332,8 +333,6 @@ def _contexto_de_la_carta(interpretacion: Interpretation) -> dict:
         nacimiento = carta.birth_data
         return {
             "nombre": nacimiento.name or "",
-            "fecha": nacimiento.date.isoformat(),
-            "lugar": nacimiento.place_label or "",
             "signos": [[f["cuerpo"], f["signo"]] for f in firma(carta.data)],
             "arranque": arranque,
         }

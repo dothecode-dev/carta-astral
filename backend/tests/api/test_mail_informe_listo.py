@@ -67,8 +67,17 @@ def test_sin_nombre_el_asunto_es_el_de_siempre(lista, resend):
 def test_muestra_sol_luna_y_ascendente_en_palabras(lista, resend):
     informe_service.avisar_informe_listo(lista)
     html = resend[0]["json"]["html"]
-    for esperado in ("Piscis", "Leo", "Escorpio", "Ascendente", "14 de marzo de 1985", "Rosario, Argentina"):
+    for esperado in ("Piscis", "Leo", "Escorpio", "Ascendente"):
         assert esperado in html, esperado
+
+
+def test_no_lleva_la_fecha_ni_el_lugar_de_nacimiento(lista, resend):
+    """Decisión del 10-10-2026: menos datos personales por mail. Quien lo
+    recibe ya sabe cuándo y dónde nació; el mail no lo repite."""
+    informe_service.avisar_informe_listo(lista)
+    cuerpo = resend[0]["json"]
+    for campo in ("html", "text", "subject"):
+        assert "1985" not in cuerpo[campo] and "Rosario" not in cuerpo[campo], campo
 
 
 def test_sin_hora_no_hay_ascendente(lista, resend):
@@ -126,13 +135,13 @@ def test_un_nombre_con_saltos_o_larguisimo_no_ensucia_el_asunto(lista, resend):
     assert "\n" not in asunto and "\r" not in asunto and len(asunto) <= len("Tu informe está listo, ") + 40
 
 
-def test_en_ingles_los_signos_y_la_fecha_van_en_ingles(lista, resend):
+def test_en_ingles_los_signos_van_en_ingles(lista, resend):
     lista.lang = "en"
     lista.save()
     informe_service.avisar_informe_listo(lista)
     cuerpo = resend[0]["json"]
     assert cuerpo["subject"] == "Your report is ready, Ana"
-    assert "Pisces" in cuerpo["html"] and "Scorpio" in cuerpo["html"] and "March 14, 1985" in cuerpo["html"]
+    assert "Pisces" in cuerpo["html"] and "Scorpio" in cuerpo["html"]
 
 
 def test_si_armar_el_enriquecimiento_falla_el_aviso_sale_igual(lista, resend, monkeypatch, caplog):

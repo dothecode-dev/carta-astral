@@ -21,7 +21,6 @@ fallo del proveedor no puede revertir la devolución ni dejar el webhook de
 Stripe en 5xx, que haría que Stripe reintente una compra ya acreditada.
 """
 
-import datetime
 import logging
 
 import httpx
@@ -214,17 +213,6 @@ _TEXTOS_CODIGO = {
     },
 }
 
-# Para la fecha de nacimiento del mail de «informe listo».
-_MESES = {
-    "es": ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
-           "septiembre", "octubre", "noviembre", "diciembre"),
-    "en": ("January", "February", "March", "April", "May", "June", "July", "August",
-           "September", "October", "November", "December"),
-    "pt": ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
-           "setembro", "outubro", "novembro", "dezembro"),
-}
-_FECHA = {"es": "{d} de {m} de {a}", "en": "{m} {d}, {a}", "pt": "{d} de {m} de {a}"}
-
 _ROTULOS_SIGNO = {
     "es": {"Sun": "Sol", "Moon": "Luna", "Ascendant": "Ascendente"},
     "en": {"Sun": "Sun", "Moon": "Moon", "Ascendant": "Rising"},
@@ -232,10 +220,9 @@ _ROTULOS_SIGNO = {
 }
 _GLIFOS = {"Sun": "☉", "Moon": "☽", "Ascendant": "AC"}
 
-# Cuánto se queda de lo que escribió una persona (el nombre de la carta, el
-# lugar, un alias) en el asunto y en el cuerpo: lo justo para saludar.
+# Cuánto se queda de lo que escribió una persona (el nombre de la carta, un
+# alias) en el asunto y en el cuerpo: lo justo para saludar.
 _NOMBRE_MAX = 40
-_LUGAR_MAX = 80
 _PREHEADER_MAX = 110
 
 
@@ -376,16 +363,6 @@ def _limpio(valor, tope: int) -> str:
     return texto if len(texto) <= tope else texto[: tope - 1].rstrip() + "…"
 
 
-def _fecha(valor, lang: str) -> str:
-    if not isinstance(valor, str):
-        return ""
-    try:
-        d = datetime.date.fromisoformat(valor)
-    except ValueError:
-        return ""
-    return _FECHA[lang].format(d=d.day, m=_MESES[lang][d.month - 1], a=d.year)
-
-
 def _signos(contexto: dict, lang: str) -> tuple[Signo, ...]:
     """Sol, Luna y Ascendente en palabras. Lo que no sea un cuerpo y un signo
     conocidos se descarta: el contexto no es de fiar sólo por venir de adentro."""
@@ -413,10 +390,7 @@ def _mail_informe_listo(contexto: dict, lang: str, url: str) -> tuple[str, Mail]
     else:
         nombre = _limpio(contexto.get("nombre"), _NOMBRE_MAX)
         asunto = t["asunto_nombre"].format(nombre=nombre) if nombre else t["asunto"]
-        eyebrow, signos = t["eyebrow"], _signos(contexto, lang)
-        detalle = " · ".join(
-            x for x in (_fecha(contexto.get("fecha"), lang), _limpio(contexto.get("lugar"), _LUGAR_MAX)) if x
-        )
+        eyebrow, signos, detalle = t["eyebrow"], _signos(contexto, lang), ""
     mail = Mail(
         # La bandeja muestra unos 100 caracteres al lado del asunto.
         preheader=_limpio(arranque, _PREHEADER_MAX) or t["parrafos"][0], eyebrow=eyebrow, titulo=asunto, detalle=detalle,
