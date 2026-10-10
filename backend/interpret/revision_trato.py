@@ -247,6 +247,15 @@ class _Referente:
     system_reparacion: str
     prohibidas: re.Pattern[str]
     marcas: Callable[[str], int]
+    # Tercera persona: los fragmentos traen contexto que nombra a la otra
+    # persona («cuando ella lo mira», con «ella» = B) o frases sin género
+    # («al mismo tiempo»). Ahí una forma prohibida sólo cuenta si la
+    # corrección la AGREGA. Para el lector, cualquiera (como siempre).
+    solo_agregadas: bool = False
+    # Palabras con género además de las de castellano y portugués: el
+    # inglés de las personas (he/she). Aparte para que el lector no cambie
+    # («he» es también el verbo haber).
+    con_genero_extra: frozenset[str] = frozenset()
 
 
 def _referente_lector(trato: str, lang: str) -> _Referente:
@@ -279,6 +288,8 @@ def _referente_persona(genero: str, letra: str, lang: str) -> _Referente:
             p=p, otra=otra, trato=descripcion, guia=instruccion_persona(clave, lang, p),
         ),
         prohibidas=_FORMAS_PROHIBIDAS_PERSONA[clave],
+        solo_agregadas=True,
+        con_genero_extra=_PRONOMBRES_INGLES,
         # Una corrección que saca un «Persona A» despersonalizó: el alias se
         # muestra sólo donde está esa marca (RF22).
         marcas=lambda texto: len(_MENCION_PERSONA.findall(texto)),
@@ -418,12 +429,14 @@ _DETERMINANTES_CON_GENERO = frozenset({
     "um", "uma", "uns", "umas", "o", "a", "os", "as",
     "aquel", "aquella", "este", "esta", "ese", "esa",
     "ele", "ela", "él", "ella",
-    "he", "him", "his", "himself", "she", "her", "hers", "herself",
 })
+_PRONOMBRES_INGLES = frozenset({"he", "him", "his", "himself", "she", "her", "hers", "herself"})
 _PUNTUACION_PEGADA = re.compile(r"^\W+|\W+$")
 
 
-def _cambia_palabra_con_genero(original: str, corregido: str) -> bool:
+def _cambia_palabra_con_genero(
+    original: str, corregido: str, extra: frozenset[str] = frozenset(),
+) -> bool:
     """Alguna de las palabras del ORIGINAL que la corrección borra o
     reemplaza termina en género. Medido en staging (9a22a6e): el juez marcó
     frases sin género y la reparación las retocó igual («Vivís» →
@@ -432,7 +445,7 @@ def _cambia_palabra_con_genero(original: str, corregido: str) -> bool:
     for _, i1, i2, _, _ in distintas:
         for palabra in a[i1:i2]:
             limpia = _PUNTUACION_PEGADA.sub("", palabra.lower())
-            if limpia in _DETERMINANTES_CON_GENERO or _GENERO.search(limpia):
+            if limpia in _DETERMINANTES_CON_GENERO or limpia in extra or _GENERO.search(limpia):
                 return True
     return False
 
@@ -448,6 +461,17 @@ def _solo_agrega_palabras(original: str, corregido: str) -> bool:
     por dentro: la manera» no contiene al original como substring."""
     restantes = iter(_TOKEN.findall(corregido.lower()))
     return all(token in restantes for token in _TOKEN.findall(original.lower()))
+
+
+def _formas(patron: re.Pattern[str], texto: str) -> Counter[str]:
+    return Counter(" ".join(m.group(0).lower().split()) for m in patron.finditer(texto))
+
+
+def _trae_prohibida(original: str, corregido: str, ref: _Referente) -> bool:
+    if not ref.solo_agregadas:
+        return bool(ref.prohibidas.search(corregido))
+    # Por forma: «mismo» → «misma» agrega una «misma» aunque el total no suba.
+    return bool(_formas(ref.prohibidas, corregido) - _formas(ref.prohibidas, original))
 
 
 def _motivo_de_rechazo(
@@ -476,7 +500,7 @@ def _motivo_de_rechazo(
         return "salto_de_linea"
     if _marca_inclusiva(original, corregido):
         return "marca_inclusiva"
-    if ref.prohibidas.search(corregido):
+    if _trae_prohibida(original, corregido, ref):
         return "forma_prohibida"
     if ref.marcas(corregido) < ref.marcas(original):
         return "despersonaliza"
@@ -485,7 +509,7 @@ def _motivo_de_rechazo(
     # Al final: si además trae una forma prohibida, ese motivo es más preciso.
     if _solo_agrega_palabras(original, corregido):
         return "solo_agrego_palabras"
-    if not _cambia_palabra_con_genero(original, corregido):
+    if not _cambia_palabra_con_genero(original, corregido, ref.con_genero_extra):
         return "sin_genero"
     return None
 

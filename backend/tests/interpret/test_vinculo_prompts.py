@@ -1,3 +1,5 @@
+import pytest
+
 from interpret.vinculo import contenido_vinculo, secciones_vinculo
 
 DATOS = {
@@ -24,7 +26,8 @@ def test_en_trabajo_la_cuarta_es_confianza_y_reconocimiento():
 def test_el_contenido_nombra_los_roles_y_el_tipo():
     sec = secciones_vinculo("familia", hay_hora=True)[0]
     texto = contenido_vinculo(DATOS, sec, "es", "")
-    assert "Persona A" in texto and "madre o padre" in texto and "hijo o hija" in texto
+    assert "Persona A es quien tiene el rol de crianza" in texto
+    assert "Persona B es quien recibió la crianza de la otra persona" in texto
     assert "familia" in texto.lower()
 
 
@@ -67,7 +70,7 @@ def test_el_rol_se_escribe_con_el_genero_de_cada_persona():
 def test_sin_genero_el_rol_queda_neutro_y_se_pide_redaccion_neutra():
     sec = secciones_vinculo("familia", hay_hora=True)[0]
     texto = contenido_vinculo(_con_generos("", ""), sec, "es", "")
-    assert "madre o padre" in texto and "neutr" in texto.lower()
+    assert "Persona A es quien tiene el rol de crianza" in texto and "neutra" in texto
 
 
 def test_el_genero_se_pide_tambien_sin_rol():
@@ -109,3 +112,15 @@ def test_la_seccion_del_vinculo_no_razona(monkeypatch):
     sec = secciones_vinculo("familia", hay_hora=True)[0]
     vinculo.build_seccion_vinculo(_con_generos("neutro", ""), sec, "es", "", object())
     assert vistos == [{"type": "disabled"}]
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_sin_genero_el_rol_no_trae_las_formas_que_la_guia_prohibe(lang):
+    """La guía neutra prohíbe «madre o padre»; el rol neutro no puede traerlo."""
+    from interpret.vinculo import ETIQUETAS_ROL
+
+    for rol, por_idioma in ETIQUETAS_ROL.items():
+        etiqueta = por_idioma[lang][""]
+        doble = " o " if lang == "es" else " ou "  # en pt « o » es artículo
+        assert doble not in etiqueta, (rol, etiqueta)
+        assert "progenitor" not in etiqueta

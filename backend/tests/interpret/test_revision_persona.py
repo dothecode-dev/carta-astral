@@ -93,3 +93,35 @@ def test_revisar_personas_revisa_a_las_dos_en_orden():
     a, b = (_system(c) for c in cliente.llamadas)
     assert "Persona A" in a and "en neutro" in a
     assert "Persona B" in b and "en femenino" in b
+
+
+# --- hallazgos del code review de a2429eb ---
+
+
+def test_un_pronombre_de_la_otra_persona_en_el_contexto_no_rechaza():
+    """A neutra, B mujer: «ella» es B y ya estaba en el original."""
+    texto = "Persona A se siente seguro cuando ella lo mira."
+    frag, ok = "Persona A se siente seguro cuando ella", "Persona A se siente con seguridad cuando ella"
+    cliente = ClienteFalso(_juez(frag), _reemplazos((frag, ok)), _juez())
+    assert revisar_persona(texto, "neutro", "A", "es", cliente) == texto.replace(frag, ok)
+
+
+def test_al_mismo_tiempo_en_el_contexto_no_rechaza():
+    texto = "Al mismo tiempo Persona A queda expuesto."
+    frag, ok = "Al mismo tiempo Persona A queda expuesto", "Al mismo tiempo Persona A queda a la vista"
+    cliente = ClienteFalso(_juez(frag), _reemplazos((frag, ok)), _juez())
+    assert revisar_persona(texto, "neutro", "A", "es", cliente) == texto.replace(frag, ok)
+
+
+def test_cambiar_mismo_por_misma_sigue_rechazado_en_neutro():
+    frag = "se percibe a sí mismo"
+    cliente = ClienteFalso(_juez(frag), _reemplazos((frag, "se percibe a sí misma")))
+    assert revisar_persona(TEXTO, "neutro", "A", "es", cliente) == TEXTO
+
+
+def test_el_camino_del_lector_no_cuenta_he_como_genero():
+    """«he» (de haber) no es una palabra con género en castellano: el
+    lector no cambió por sumar el inglés a las personas."""
+    from interpret.revision_trato import _cambia_palabra_con_genero
+
+    assert not _cambia_palabra_con_genero("he aquí", "aquí está")

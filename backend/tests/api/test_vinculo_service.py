@@ -126,4 +126,4 @@ def test_un_vinculo_viejo_sin_generos_genera_su_prompt(make_account):
     del s.parametros["generos"]
     s.save()
     sec = secciones_vinculo("familia", hay_hora=True)[0]
-    assert "madre o padre" in contenido_vinculo(datos_prompt(s), sec, "es", "")
+    assert "Persona A es quien tiene el rol de crianza" in contenido_vinculo(datos_prompt(s), sec, "es", "")

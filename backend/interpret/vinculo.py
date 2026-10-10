@@ -13,12 +13,13 @@ from interpret.trato import instruccion_personas, nombre_persona
 # El rol con el género de la persona, artículo incluido (decisión del
 # 10-10-2026: el género se pregunta por persona y es opcional). La clave "" es
 # la forma neutra —la de quien no lo dijo o eligió «neutro»— y la única cuando
-# el género no cambia la etiqueta.
+# el género no cambia la etiqueta. La neutra no lleva sustantivo con género
+# («madre o padre»): es lo que la guía neutra le prohíbe al modelo.
 ETIQUETAS_ROL: dict[str, dict[str, dict[str, str]]] = {
     "jefe": {
-        "es": {"": "jefe o jefa", "femenino": "la jefa", "masculino": "el jefe"},
+        "es": {"": "quien dirige el trabajo de la otra persona", "femenino": "la jefa", "masculino": "el jefe"},
         "en": {"": "the manager"},
-        "pt": {"": "chefe", "femenino": "a chefe", "masculino": "o chefe"},
+        "pt": {"": "quem dirige o trabalho da outra pessoa", "femenino": "a chefe", "masculino": "o chefe"},
     },
     "equipo": {
         "es": {"": "integrante del equipo"},
@@ -26,9 +27,9 @@ ETIQUETAS_ROL: dict[str, dict[str, dict[str, str]]] = {
         "pt": {"": "integrante da equipe"},
     },
     "socio": {
-        "es": {"": "socio o socia", "femenino": "la socia", "masculino": "el socio"},
+        "es": {"": "parte de la misma sociedad", "femenino": "la socia", "masculino": "el socio"},
         "en": {"": "the business partner"},
-        "pt": {"": "sócio ou sócia", "femenino": "a sócia", "masculino": "o sócio"},
+        "pt": {"": "parte da mesma sociedade", "femenino": "a sócia", "masculino": "o sócio"},
     },
     "colega": {
         "es": {"": "colega", "femenino": "la colega", "masculino": "el colega"},
@@ -36,19 +37,19 @@ ETIQUETAS_ROL: dict[str, dict[str, dict[str, str]]] = {
         "pt": {"": "colega", "femenino": "a colega", "masculino": "o colega"},
     },
     "progenitor": {
-        "es": {"": "madre o padre", "femenino": "la madre", "masculino": "el padre"},
+        "es": {"": "quien tiene el rol de crianza", "femenino": "la madre", "masculino": "el padre"},
         "en": {"": "the parent", "femenino": "the mother", "masculino": "the father"},
-        "pt": {"": "mãe ou pai", "femenino": "a mãe", "masculino": "o pai"},
+        "pt": {"": "quem tem o papel de criação", "femenino": "a mãe", "masculino": "o pai"},
     },
     "hijo": {
-        "es": {"": "hijo o hija", "femenino": "la hija", "masculino": "el hijo"},
+        "es": {"": "quien recibió la crianza de la otra persona", "femenino": "la hija", "masculino": "el hijo"},
         "en": {"": "the child", "femenino": "the daughter", "masculino": "the son"},
-        "pt": {"": "filho ou filha", "femenino": "a filha", "masculino": "o filho"},
+        "pt": {"": "quem recebeu a criação da outra pessoa", "femenino": "a filha", "masculino": "o filho"},
     },
     "hermano": {
-        "es": {"": "hermano o hermana", "femenino": "la hermana", "masculino": "el hermano"},
+        "es": {"": "quien comparte la familia de origen", "femenino": "la hermana", "masculino": "el hermano"},
         "en": {"": "the sibling", "femenino": "the sister", "masculino": "the brother"},
-        "pt": {"": "irmão ou irmã", "femenino": "a irmã", "masculino": "o irmão"},
+        "pt": {"": "quem compartilha a família de origem", "femenino": "a irmã", "masculino": "o irmão"},
     },
     "otro_familiar": {
         "es": {"": "familiar", "femenino": "una familiar", "masculino": "un familiar"},

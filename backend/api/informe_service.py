@@ -52,9 +52,10 @@ def _datos(sujeto) -> dict:
     return sujeto.natal_de.data
 
 
-def _generos(datos: dict) -> tuple[str, str]:
-    """El género de las dos personas del vínculo, del dato que ve el modelo."""
-    return datos["persona_a"]["genero"], datos["persona_b"]["genero"]
+def _generos(sujeto) -> tuple[str, str]:
+    from api.vinculo_service import generos
+
+    return generos(sujeto)
 
 
 def secciones_aplicables(sujeto, tier: str) -> list[Seccion]:
@@ -365,7 +366,9 @@ def generar_informe(interpretacion, client, token: str) -> bool:
             texto = build_seccion_vinculo(
                 datos, seccion, interpretacion.lang, resumen_previo(interpretacion), client,
             )
-            texto = revisar_personas(texto, _generos(datos), interpretacion.lang, client)
+            texto = revisar_personas(
+                texto, _generos(interpretacion.sujeto), interpretacion.lang, client,
+            )
         elif seccion.slug == SECCION_BREVE.slug:
             # La breve es un informe entero corto, no un recorte del largo:
             # SYSTEM_PROMPTS_SECCION le diría al modelo que está escribiendo
@@ -503,7 +506,7 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
             destino.save(update_fields=["traducido_de", "trato"])
     hechas = set(destino.secciones.values_list("slug", flat=True))
     pendientes = [s for s in origen.secciones.all() if s.slug not in hechas]
-    generos = _generos(_datos(origen.sujeto)) if origen.sujeto.producto == Sujeto.VINCULO else None
+    generos = _generos(origen.sujeto) if origen.sujeto.producto == Sujeto.VINCULO else None
     for indice, seccion in enumerate(pendientes):
         # La traducción también puede escapar el género: se revisa con el
         # idioma del destino. El natal, con el trato del lector (ya alineado

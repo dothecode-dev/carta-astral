@@ -49,7 +49,7 @@ def test_el_prompt_es_el_del_vinculo(vinculo, monkeypatch):
     svc.completar_generacion(interp, vinculo.account)
     primera = cliente.llamadas[0]
     assert "Persona A" in primera["system"][0]["text"]
-    assert "jefe o jefa" in primera["messages"][0]["content"]
+    assert "quien dirige el trabajo de la otra persona" in primera["messages"][0]["content"]
 
 
 def test_el_vinculo_no_tiene_lectura_breve(vinculo):
