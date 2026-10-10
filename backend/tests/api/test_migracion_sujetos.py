@@ -263,3 +263,12 @@ def test_tras_la_0049_se_puede_borrar_una_carta_con_filas_que_la_nombran(en):
 
     assert M.objects.filter(pk=mov.pk).exists()
     assert P.objects.filter(pk=chk.pk).exists()
+
+
+def test_tras_la_0050_no_quedan_columnas_chart():
+    from django.db import connection
+
+    with connection.cursor() as cursor:
+        for tabla in ("api_interpretation", "api_movimiento", "api_pasarelacheckout"):
+            columnas = {c.name for c in connection.introspection.get_table_description(cursor, tabla)}
+            assert "chart_id" not in columnas, tabla
