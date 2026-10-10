@@ -9,7 +9,7 @@ from django.db.models import Sum
 
 from api import apple
 from api.identity import sub_hash
-from api.models import BirthData, Movimiento, SubTombstone
+from api.models import BirthData, Chart, Movimiento, SubTombstone, Sujeto
 
 logger = logging.getLogger(__name__)
 
@@ -65,15 +65,31 @@ def free_consumidas(account) -> int:
 
 
 def delete_charts(account) -> None:
-    """Borra todas las cartas de la cuenta y sus datos de nacimiento.
+    """Borra las cartas de la lista de la cuenta y sus datos de nacimiento.
 
-    Las interpretations cascadean con la carta. BirthData no cascadea solo
-    (el FK va de Chart a BirthData), así que se barren los que quedan sin
-    ninguna carta: contienen nombre, fecha y coordenadas de nacimiento.
+    Sólo las de la lista: es «borrar mis cartas», no «borrar lo que compré».
+    Las copias de un vínculo no son cartas de la lista (RF12) y el vínculo es
+    otro producto; los borra `delete_account`. Las interpretations cascadean
+    con la carta. BirthData no cascadea solo (el FK va de Chart a BirthData),
+    así que se barren los que quedan sin ninguna carta: contienen nombre,
+    fecha y coordenadas de nacimiento.
     """
     with transaction.atomic():
         birth_ids = list(account.charts.values_list("birth_data_id", flat=True))
         account.charts.all().delete()
+        BirthData.objects.filter(id__in=birth_ids, charts__isnull=True).delete()
+
+
+def _delete_vinculos(account) -> None:
+    """Los vínculos de la cuenta y sus copias (spec de Vínculo, §4 privacidad):
+    datos de nacimiento de terceros que se van con la cuenta. El sujeto tiene
+    la cuenta con SET_NULL, así que no cae solo; las copias van por
+    `Chart.todas` porque el manager por defecto las esconde."""
+    with transaction.atomic():
+        Sujeto.objects.filter(account=account, producto=Sujeto.VINCULO).delete()
+        copias = Chart.todas.filter(account=account, en_lista=False)
+        birth_ids = list(copias.values_list("birth_data_id", flat=True))
+        copias.delete()
         BirthData.objects.filter(id__in=birth_ids, charts__isnull=True).delete()
 
 
@@ -114,6 +130,7 @@ def delete_account(account) -> None:
                 defaults={"free_credits_consumed": consumed},
             )
         delete_charts(account)
+        _delete_vinculos(account)
         account.sessions.all().delete()
         account.devices.update(account=None)
         account.identities.all().delete()

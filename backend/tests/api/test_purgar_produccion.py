@@ -222,3 +222,19 @@ def test_la_purga_borra_los_codigos_de_acceso(make_account, capsys):
 
     assert "CodigoAcceso: 1" in capsys.readouterr().out
     assert CodigoAcceso.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_la_purga_borra_las_copias_de_los_vinculos(make_account, capsys):
+    from api.models import Chart
+    from api.vinculo_service import crear_vinculo
+
+    crear_vinculo(make_account(), "amistad", [
+        {"date": "1985-03-14", "time_known": False, "lat": -32.95, "lng": -60.65},
+        {"date": "1988-09-09", "time_known": False, "lat": -31.42, "lng": -64.18},
+    ])
+
+    call_command("purgar_produccion", "--si-estoy-seguro")
+
+    assert "Chart: 2" in capsys.readouterr().out
+    assert not Chart.todas.exists()

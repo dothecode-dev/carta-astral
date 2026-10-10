@@ -106,7 +106,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        conteos = {nombre: modelo.objects.count() for nombre, modelo in MODELOS_A_BORRAR}
+        # `_base_manager`: el manager por defecto de `Chart` esconde las copias de
+        # los vínculos; una purga que cuente o borre con él diría «Chart: 0» y
+        # dejaría la cuenta de lo borrado mintiendo.
+        conteos = {nombre: modelo._base_manager.count() for nombre, modelo in MODELOS_A_BORRAR}
 
         if not options["confirmado"]:
             self.stdout.write("Sin --si-estoy-seguro no se borró nada. Esto es lo que se borraría:")
@@ -116,7 +119,7 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             for _, modelo in MODELOS_A_BORRAR:
-                modelo.objects.all().delete()
+                modelo._base_manager.all().delete()
 
         self.stdout.write(self.style.SUCCESS("Purga completa. Se borró:"))
         for nombre, n in conteos.items():

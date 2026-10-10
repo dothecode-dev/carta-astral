@@ -175,3 +175,42 @@ def test_delete_con_identidad_email_y_sin_tombstone_hmac_key_da_503_no_500(setti
     # medio borrar (el `update_or_create` del tombstone corre dentro del
     # mismo atomic que el resto del borrado).
     assert Account.objects.filter(pk=acc.pk).exists()
+
+
+_PERSONAS_VINCULO = [
+    {"date": "1985-03-14", "time_known": False, "lat": -32.95, "lng": -60.65},
+    {"date": "1988-09-09", "time_known": False, "lat": -31.42, "lng": -64.18},
+]
+
+
+@pytest.mark.django_db
+def test_borrar_la_cuenta_borra_sus_vinculos_y_las_copias(make_account):
+    """Privacidad (spec de Vínculo §4): el manager por defecto de `Chart`
+    esconde las copias, así que `account.charts` ya no las alcanza."""
+    from api.deletion import delete_account
+    from api.models import BirthData, Chart, Sujeto
+    from api.vinculo_service import crear_vinculo
+
+    acc = make_account()
+    s = crear_vinculo(acc, "amistad", _PERSONAS_VINCULO)
+    copias = [sc.carta_id for sc in s.cartas.all()]
+    datos = list(Chart.todas.filter(pk__in=copias).values_list("birth_data_id", flat=True))
+    delete_account(acc)
+    assert not Sujeto.objects.filter(pk=s.pk).exists()
+    assert not Chart.todas.filter(pk__in=copias).exists()
+    assert not BirthData.objects.filter(pk__in=datos).exists()
+
+
+@pytest.mark.django_db
+def test_borrar_todas_las_cartas_no_borra_los_vinculos(make_account):
+    """`DELETE /api/charts/` es «borrar mis cartas», no «borrar lo que compré»:
+    un vínculo es otro producto y sus copias no son cartas de la lista."""
+    from api.deletion import delete_charts
+    from api.models import Chart, Sujeto
+    from api.vinculo_service import crear_vinculo
+
+    acc = make_account()
+    s = crear_vinculo(acc, "amistad", _PERSONAS_VINCULO)
+    delete_charts(acc)
+    assert Sujeto.objects.filter(pk=s.pk).exists()
+    assert Chart.todas.filter(en_sujetos__sujeto=s).count() == 2
