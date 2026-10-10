@@ -25,6 +25,17 @@ class BirthData(models.Model):
     trato = models.CharField(max_length=10, blank=True, default="")
 
 
+class _CartasDeLista(models.Manager):
+    """Las cartas que la persona ve y usa como cartas. Las copias de un
+    vínculo (`en_lista=False`, RF15) no existen para ningún camino de carta
+    (RF12): es el manager por defecto, así que `get_object_or_404(Chart, …)`,
+    `account.charts` y el admin las excluyen sin acordarse. Quien necesita
+    todas —el vínculo, el borrado de cuenta, la purga— usa `Chart.todas`."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(en_lista=True)
+
+
 class Chart(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     account = models.ForeignKey(
@@ -37,6 +48,13 @@ class Chart(models.Model):
     svg = models.TextField(null=True, blank=True)
     engine_version = models.CharField(max_length=120)
     created_at = models.DateTimeField(auto_now_add=True)
+    # RF12/RF15: False en las copias de un vínculo. `db_default` y no sólo
+    # `default`: durante el deploy el contenedor anterior crea cartas sin
+    # conocer la columna, y sin valor en la base cada INSERT fallaría.
+    en_lista = models.BooleanField(default=True, db_default=True)
+
+    objects = _CartasDeLista()
+    todas = models.Manager()
 
 
 class Sujeto(models.Model):
@@ -80,6 +98,23 @@ class Sujeto(models.Model):
 
     def __str__(self):
         return f"{self.producto} {self.uuid}"
+
+
+class SujetoCarta(models.Model):
+    """Las cartas de un sujeto que no es natal (RF5): para un vínculo, dos
+    copias con su orden (A=0, B=1) y el rol de cada persona (RF13). El natal
+    no la usa: su carta está en `Sujeto.natal_de`."""
+
+    sujeto = models.ForeignKey(Sujeto, on_delete=models.CASCADE, related_name="cartas")
+    carta = models.ForeignKey(Chart, on_delete=models.CASCADE, related_name="en_sujetos")
+    orden = models.PositiveSmallIntegerField()
+    rol = models.CharField(max_length=20, blank=True, default="")
+
+    class Meta:
+        ordering = ["orden"]
+        constraints = [
+            models.UniqueConstraint(fields=["sujeto", "orden"], name="sujeto_carta_orden_unico"),
+        ]
 
 
 class GeoName(models.Model):
