@@ -222,9 +222,10 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     if nota := instruccion(trato, lang):
         content += f"\n\n{nota}"
 
-    # Sin razonar (decisión del 10-10-2026, spec informe-rapido): Sonnet 5
-    # razona por defecto y eso suma ~26 % de tokens y ~30 s por sección. El
-    # vínculo ya iba así. Se vuelve a razonar quitando esta línea.
+    # Razona (Sonnet 5 lo hace por defecto): el 10-10-2026 se probó sin razonar
+    # (spec informe-rapido) y Gustavo prefirió dejarlo como estaba, a costa de
+    # ~26 % de tokens y ~30 s por sección. El vínculo es otro caso: ahí no
+    # razona por decisión propia (ver interpret/vinculo.py).
     # SYSTEM_PROMPTS_SECCION, no SYSTEM_PROMPTS: éste no fija un largo (lo fija
     # el pedido, que varía por sección) y aclara que es una sección de un
     # informe más largo, no una pieza autónoma. SYSTEM_PROMPTS sigue siendo de
@@ -235,7 +236,4 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     # Holgura sobre el objetivo: un tope justo corta la sección a la mitad
     # (HALLAZGO 1 de code review — ver la justificación del factor en
     # interpret/prompts.py, junto a SECCION_TOKENS_POR_PALABRA).
-    return _stream_text(
-        client, MODEL, system, content, seccion.palabras * SECCION_TOKENS_POR_PALABRA,
-        thinking={"type": "disabled"},
-    )
+    return _stream_text(client, MODEL, system, content, seccion.palabras * SECCION_TOKENS_POR_PALABRA)

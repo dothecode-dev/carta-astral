@@ -191,14 +191,13 @@ def test_traduccion_con_haiku_no_manda_thinking():
     assert "thinking" not in client.calls[0]
 
 
-def test_la_breve_no_manda_thinking_y_la_seccion_del_informe_lo_apaga():
-    """El natal deja de razonar al escribir cada sección (decisión del 10-10,
-    spec informe-rapido); la lectura breve no cambió."""
+def test_la_generacion_no_manda_thinking():
+    """El natal razona al escribir cada sección: se probó sin razonar el 10-10
+    (spec informe-rapido) y se decidió dejarlo como estaba."""
     from interpret.generator import build_seccion
     from interpret.prompts import SECCIONES
 
     client = FakeClient()
     build_interpretation(CHART, "es", "v1", client)
-    assert "thinking" not in client.calls[0]
     build_seccion({"time_known": True}, SECCIONES[0], "es", "", client)
-    assert client.calls[1]["thinking"] == {"type": "disabled"}
+    assert all("thinking" not in c for c in client.calls)
