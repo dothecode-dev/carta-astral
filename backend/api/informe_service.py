@@ -481,6 +481,13 @@ def generar_informe(interpretacion, client, token: str) -> bool:
     hacía falta. Por eso el resultado de `renovar_lock` sólo aborta cuando
     `secciones_pendientes` diga que falta al menos una más.
 
+    Desde el 10-10-2026 las secciones se escriben a la vez (spec
+    `2026-10-10-spec-informe-rapido`): un intento ya no es «una sección tras
+    otra». Si una falla, las que estaban en vuelo igual se persisten y el
+    intento cuenta como uno; el reintento retoma sólo las que faltan. La
+    síntesis, que habla de «todo lo anterior», va sola en una segunda ola.
+    El lock se renueva tras cada sección persistida, con el mismo contrato.
+
     Contrato de crédito para quien llama (hoy nadie; la Tarea 10 es quien
     decide si cobra y si devuelve, no esta función):
 
@@ -538,6 +545,8 @@ def generar_informe(interpretacion, client, token: str) -> bool:
     duraciones: dict[str, float] = {}
     primera_s = None
     for numero_de_ola, ola in enumerate(olas):
+        if not ola:
+            continue
         previo = resumen_previo(interpretacion) if numero_de_ola else ""
         for seccion, resultado, fallo in _en_paralelo(
             ola, lambda s: _escribir_seccion(s, ctx, previo, client), paralelismo,
@@ -577,7 +586,7 @@ def generar_informe(interpretacion, client, token: str) -> bool:
         # qué sección manda. Sin texto del informe.
         logger.info(
             "informe generado: interpretation=%s lang=%s tier=%s secciones=%s "
-            "paralelismo=%s total_s=%.1f primera_s=%.1f por_seccion=%s",
+            "paralelismo_max=%s total_s=%.1f primera_s=%.1f por_seccion=%s",
             interpretacion.pk, interpretacion.lang, interpretacion.tier, persistidas,
             paralelismo, time.monotonic() - inicio, primera_s or 0.0,
             ",".join(f"{slug}:{seg:.0f}" for slug, seg in duraciones.items()),
@@ -678,22 +687,27 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
     generos = None if es_natal else _generos(origen.sujeto)
     trato_origen, trato_destino = origen.trato, destino.trato
 
-    def _traducir(seccion) -> str:
+    # Datos planos para los hilos: un objeto del ORM con un campo diferido
+    # abriría una conexión a la base desde un hilo de trabajo.
+    a_traducir = [(s.slug, s.orden, s.texto) for s in pendientes]
+
+    def _traducir(pieza: tuple[str, int, str]) -> str:
         """Sólo llamadas al modelo (ver `_en_paralelo`). La traducción también
         puede escapar el género: se revisa con el idioma del destino. El natal,
         con el trato del lector (ya alineado arriba); el vínculo, en tercera
         persona, con el de cada persona."""
+        original = pieza[2]
         if es_natal:
-            texto = translate_interpretation(seccion.texto, destino_lang, client, trato=trato_origen)
+            texto = translate_interpretation(original, destino_lang, client, trato=trato_origen)
             return revisar_trato(texto, trato_destino, destino_lang, client)
         texto = translate_interpretation(
-            seccion.texto, destino_lang, client, trato=None, generos=generos,
+            original, destino_lang, client, trato=None, generos=generos,
         )
         return revisar_personas(texto, generos, destino_lang, client)
 
     persistidas, error = 0, None
-    for seccion, resultado, fallo in _en_paralelo(
-        pendientes, _traducir, settings.INFORME_PARALELISMO,
+    for (slug, orden, _), resultado, fallo in _en_paralelo(
+        a_traducir, _traducir, settings.INFORME_PARALELISMO,
     ):
         if fallo is not None:
             error = error or fallo
@@ -702,7 +716,7 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
         try:
             with transaction.atomic():
                 InterpretationSection.objects.create(
-                    interpretation=destino, slug=seccion.slug, orden=seccion.orden, texto=texto,
+                    interpretation=destino, slug=slug, orden=orden, texto=texto,
                 )
         except IntegrityError:
             # Carrera: otra llamada concurrente ya tradujo y persistió esta
@@ -710,12 +724,12 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
             # idempotente`, que también distingue el duplicado real). Sólo es
             # "ya hecha" si la fila realmente está — cualquier otro
             # IntegrityError no es esta carrera y se relanza.
-            if not destino.secciones.filter(slug=seccion.slug).exists():
+            if not destino.secciones.filter(slug=slug).exists():
                 raise
             logger.info(
                 "traducción concurrente de la sección %s (interpretation=%s, lang=%s) "
                 "ya la había persistido otra llamada; se descarta la traducción repetida",
-                seccion.slug, destino.pk, destino_lang,
+                slug, destino.pk, destino_lang,
             )
         persistidas += 1
         # Fix round 2: mismo patrón que `generar_informe` — las traducciones

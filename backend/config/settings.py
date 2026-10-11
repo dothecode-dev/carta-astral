@@ -421,10 +421,14 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 INTERPRETATION_DAILY_CAP = int(os.environ.get("INTERPRETATION_DAILY_CAP", "40"))
 
 # Cuántas secciones de un informe se escriben a la vez (spec 2026-10-10). 1 =
-# en serie, como antes: es el rollback sin desplegar. El límite de Anthropic
-# (10.000 pedidos y 2.000.000 tokens de salida por minuto, medido en staging)
-# no es lo que lo acota: lo acota lo que un informe tiene, ocho secciones.
-INFORME_PARALELISMO = max(1, int(os.environ.get("INFORME_PARALELISMO", "8")))
+# en serie: sirve para descartar la concurrencia como causa de un problema sin
+# desplegar. NO vuelve el prompt de antes (el resumen de lo escrito sólo llega
+# a la síntesis y el natal ya no razona): eso se revierte con el código. El
+# límite de Anthropic (10.000 pedidos y 2.000.000 tokens de salida por minuto,
+# medido en staging) no es lo que lo acota: lo acota lo que un informe tiene.
+# Vacío vale el default: un ARG sin valor en el Dockerfile no puede tirar el
+# arranque.
+INFORME_PARALELISMO = max(1, int(os.environ.get("INFORME_PARALELISMO") or "8"))
 # Tope diario de lecturas breves SIN cuenta, separado del de cuentas: un abuso
 # anónimo no deja sin lectura a quien ya tiene cuenta (spec 2026-10-08, RF10).
 INTERPRETATION_ANON_DAILY_CAP = int(os.environ.get("INTERPRETATION_ANON_DAILY_CAP", "40"))

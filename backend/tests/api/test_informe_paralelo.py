@@ -216,7 +216,7 @@ def test_loguea_cuanto_tardo_cada_informe_sin_el_texto(interpretacion, caplog):
         informe_service.generar_informe(interpretacion, ClienteConcurrente(), TOKEN)
     lineas = [r.getMessage() for r in caplog.records if "informe generado" in r.getMessage()]
     assert len(lineas) == 1
-    for esperado in ("secciones=8", "paralelismo=", "total_s=", "primera_s="):
+    for esperado in ("secciones=8", "paralelismo_max=", "total_s=", "primera_s="):
         assert esperado in lineas[0], esperado
     assert "TEXTO-" not in lineas[0]
 
@@ -236,3 +236,52 @@ def test_la_traduccion_tambien_va_a_la_vez_y_conserva_el_orden(interpretacion_co
     destino = Interpretation.objects.get(sujeto=origen.sujeto, lang="en", tier=origen.tier)
     assert destino.completa and destino.secciones.count() == 8
     assert list(destino.secciones.values_list("slug", flat=True)) == [s.slug for s in SECCIONES]
+
+
+# --- hallazgos del code review de d398708 ---
+
+
+def test_la_segunda_ola_vacia_no_consulta_el_resumen(interpretacion, monkeypatch):
+    """Si la síntesis ya estaba escrita no hay segunda ola: no se arma un
+    resumen que nadie va a usar."""
+    from api.models import InterpretationSection
+
+    InterpretationSection.objects.create(
+        interpretation=interpretacion, slug="sintesis", orden=len(SECCIONES) - 1, texto="ya estaba",
+    )
+    consultas = []
+    original = informe_service.resumen_previo
+    monkeypatch.setattr(
+        informe_service, "resumen_previo", lambda i: consultas.append(1) or original(i),
+    )
+    informe_service.generar_informe(interpretacion, ClienteConcurrente(), TOKEN)
+    assert consultas == []
+
+
+def test_generar_no_modifica_los_datos_que_comparten_los_hilos(interpretacion):
+    """`_Contexto` es inmutable sólo de superficie: los hilos comparten el dict
+    de la carta. Ninguna función de interpret/ puede mutarlo."""
+    import copy
+
+    carta = interpretacion.sujeto.natal_de
+    antes = copy.deepcopy(carta.data)
+    informe_service.generar_informe(interpretacion, ClienteConcurrente(), TOKEN)
+    assert carta.data == antes
+
+
+def test_ningun_hilo_toca_la_base_tampoco_al_traducir(interpretacion_completa, monkeypatch):
+    import django.db.backends.base.base as base
+
+    origen = interpretacion_completa
+    cache.set(interpretation_service._lock_key(origen.sujeto, origen.tier), TOKEN, timeout=600)
+    original = base.BaseDatabaseWrapper.ensure_connection
+    hilos = []
+
+    def espia(self):
+        if threading.current_thread().name.startswith("informe"):
+            hilos.append(threading.current_thread().name)
+        return original(self)
+
+    monkeypatch.setattr(base.BaseDatabaseWrapper, "ensure_connection", espia)
+    informe_service.traducir_informe(origen, "en", ClienteConcurrente(), TOKEN)
+    assert hilos == []
