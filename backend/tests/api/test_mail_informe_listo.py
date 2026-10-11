@@ -128,7 +128,7 @@ def test_el_nombre_y_el_arranque_se_escapan(lista, resend):
 
 def test_un_nombre_con_saltos_o_larguisimo_no_ensucia_el_asunto(lista, resend):
     bd = _chart(lista).birth_data
-    bd.name = "Ana\r\nBcc: otro@example.com " + "x" * 300
+    bd.name = "Ana\r\nBcc: otro@example.com " + "x" * 150  # cabe en varchar(200)
     bd.save()
     informe_service.avisar_informe_listo(lista)
     asunto = resend[0]["json"]["subject"]

@@ -9,8 +9,13 @@ el mismo párrafo.
 
 import logging
 import re
+import time
 import unicodedata
+from collections.abc import Callable, Iterator, Sequence
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -341,6 +346,109 @@ def _contexto_de_la_carta(interpretacion: Interpretation) -> dict:
         return {}
 
 
+# Las secciones que hablan de «todo lo anterior»: no pueden escribirse a la vez
+# que las demás porque su pedido es el resumen de lo ya escrito. Hoy es la
+# síntesis, en el natal y en el vínculo. Se escriben en una segunda ola.
+_DEPENDEN_DE_LO_ESCRITO = frozenset({"sintesis"})
+
+
+def _en_paralelo(
+    items: Sequence, trabajo: Callable, paralelismo: int,
+) -> Iterator[tuple]:
+    """Corre `trabajo(item)` en hilos y entrega `(item, (resultado, segundos),
+    error)` a medida que terminan.
+
+    El trabajo tiene que ser SÓLO llamadas al modelo: devuelve texto y no toca
+    la base. Quien consume este iterador es el único que persiste, así que
+    ningún hilo abre una conexión que nadie cierra.
+
+    Hay a lo sumo `paralelismo` items en vuelo, y el siguiente se lanza recién
+    cuando quien consume terminó con el anterior. Por eso un corte es
+    determinista: si el coordinador deja de iterar (perdió el lock) o hubo un
+    error, no se arranca nada nuevo —con `paralelismo=1` es exactamente el
+    comportamiento en serie de antes— y lo que ya estaba en vuelo se entrega
+    (ya se pagó) o, si se cortó la iteración, termina solo y se descarta.
+    """
+    if not items:
+        return
+
+    def _medido(item):
+        t0 = time.monotonic()
+        return trabajo(item), time.monotonic() - t0
+
+    por_lanzar = iter(items)
+    en_vuelo: dict = {}
+    fallo = False
+    maximo = max(1, min(paralelismo, len(items)))
+    pool = ThreadPoolExecutor(max_workers=maximo, thread_name_prefix="informe")
+    try:
+        while True:
+            while not fallo and len(en_vuelo) < maximo:
+                item = next(por_lanzar, None)
+                if item is None:
+                    break
+                en_vuelo[pool.submit(_medido, item)] = item
+            if not en_vuelo:
+                return
+            terminados, _ = wait(en_vuelo, return_when=FIRST_COMPLETED)
+            for futuro in terminados:
+                item = en_vuelo.pop(futuro)
+                try:
+                    resultado, error = futuro.result(), None
+                except Exception as exc:  # se entrega al coordinador, que decide
+                    resultado, error = None, exc
+                    fallo = True
+                yield item, resultado, error
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
+@dataclass(frozen=True)
+class _Contexto:
+    """Todo lo que una sección necesita para escribirse, ya leído de la base:
+    los hilos de trabajo no tocan el ORM."""
+
+    producto: str
+    datos: dict
+    lang: str
+    trato: str
+    slugs: list[str]
+    titulos: dict[str, str]
+    aplicables: tuple[Seccion, ...]
+    generos: tuple[str, str] | None
+
+
+def _escribir_seccion(seccion: Seccion, ctx: _Contexto, previo: str, client) -> str:
+    """El texto de una sección, con su revisión de género. Sólo llamadas al
+    modelo (ver `_en_paralelo`)."""
+    if ctx.producto == Sujeto.VINCULO:
+        # Sin reparto de aspectos ni juez del lector: el vínculo va en tercera
+        # persona. Sí un mapa de las demás secciones, para que no se pisen, y
+        # el juez del género de cada persona (medido en staging el 10-10:
+        # «se percibe a sí mismo» con las dos en neutro).
+        otras = tuple(o for o in ctx.aplicables if o.slug != seccion.slug)
+        texto = build_seccion_vinculo(ctx.datos, seccion, ctx.lang, previo, client, otras)
+        return revisar_personas(texto, ctx.generos, ctx.lang, client)
+    if seccion.slug == SECCION_BREVE.slug:
+        # La breve es un informe entero corto, no un recorte del largo:
+        # SYSTEM_PROMPTS_SECCION le diría al modelo que está escribiendo
+        # una parte de algo mayor y produciría un texto que remite a
+        # secciones que nadie va a leer (ver interpret/prompts.py).
+        # `escribir_breve` ya la pasa por el juez del trato.
+        return escribir_breve(ctx.datos, ctx.lang, ctx.trato, client)
+    texto = build_seccion(
+        ctx.datos, seccion, ctx.lang, previo, client,
+        reparto=bloque_de_reparto(
+            parte_de(ctx.datos, seccion.slug, ctx.slugs), ctx.lang, ctx.titulos,
+        ),
+        trato=ctx.trato,
+    )
+    # El modelo no cumple el trato al 100% (medido en staging el 08-10:
+    # «vos misma» en un informe neutro). Un juez lo revisa y, si hace
+    # falta, se repara; ante cualquier duda devuelve el texto tal cual.
+    return revisar_trato(texto, ctx.trato, ctx.lang, client)
+
+
 def generar_informe(interpretacion, client, token: str) -> bool:
     """Genera las secciones que falten. Reanudable: llamarla dos veces sobre un
     informe a medio hacer completa el resto sin repetir lo ya escrito.
@@ -403,68 +511,77 @@ def generar_informe(interpretacion, client, token: str) -> bool:
     """
     aplicables = secciones_aplicables(interpretacion.sujeto, interpretacion.tier)
     orden_por_slug = {seccion.slug: indice for indice, seccion in enumerate(aplicables)}
-    slugs = [seccion.slug for seccion in aplicables]
-    titulos = {seccion.slug: seccion.titulo[interpretacion.lang] for seccion in aplicables}
-    datos = _datos(interpretacion.sujeto)
+    ctx = _Contexto(
+        producto=interpretacion.sujeto.producto,
+        datos=_datos(interpretacion.sujeto),
+        lang=interpretacion.lang,
+        trato=interpretacion.trato,
+        slugs=[seccion.slug for seccion in aplicables],
+        titulos={seccion.slug: seccion.titulo[interpretacion.lang] for seccion in aplicables},
+        aplicables=tuple(aplicables),
+        generos=(
+            _generos(interpretacion.sujeto)
+            if interpretacion.sujeto.producto == Sujeto.VINCULO else None
+        ),
+    )
 
     pendientes = secciones_pendientes(interpretacion)
-    for indice, seccion in enumerate(pendientes):
-        if interpretacion.sujeto.producto == Sujeto.VINCULO:
-            # Sin reparto ni juez de trato: el reparto sabe de UNA carta, y el
-            # trato es la segunda persona del lector, que el vínculo no usa.
-            # Sí el juez del género de cada persona (medido en staging el
-            # 10-10: «se percibe a sí mismo» con las dos en neutro).
-            texto = build_seccion_vinculo(
-                datos, seccion, interpretacion.lang, resumen_previo(interpretacion), client,
+    # Dos olas: todo lo que no depende de lo escrito, a la vez; después la
+    # síntesis, con el resumen de lo que acaba de quedar en la base.
+    olas = [
+        [s for s in pendientes if s.slug not in _DEPENDEN_DE_LO_ESCRITO],
+        [s for s in pendientes if s.slug in _DEPENDEN_DE_LO_ESCRITO],
+    ]
+    paralelismo = settings.INFORME_PARALELISMO
+    inicio = time.monotonic()
+    persistidas, error = 0, None
+    duraciones: dict[str, float] = {}
+    primera_s = None
+    for numero_de_ola, ola in enumerate(olas):
+        previo = resumen_previo(interpretacion) if numero_de_ola else ""
+        for seccion, resultado, fallo in _en_paralelo(
+            ola, lambda s: _escribir_seccion(s, ctx, previo, client), paralelismo,
+        ):
+            if fallo is not None:
+                error = error or fallo
+                continue
+            texto, segundos = resultado
+            InterpretationSection.objects.create(
+                interpretation=interpretacion,
+                slug=seccion.slug,
+                orden=orden_por_slug[seccion.slug],
+                texto=texto,
             )
-            texto = revisar_personas(
-                texto, _generos(interpretacion.sujeto), interpretacion.lang, client,
-            )
-        elif seccion.slug == SECCION_BREVE.slug:
-            # La breve es un informe entero corto, no un recorte del largo:
-            # SYSTEM_PROMPTS_SECCION le diría al modelo que está escribiendo
-            # una parte de algo mayor y produciría un texto que remite a
-            # secciones que nadie va a leer (ver interpret/prompts.py).
-            # `escribir_breve` ya la pasa por el juez del trato.
-            texto = escribir_breve(
-                datos, interpretacion.lang, interpretacion.trato, client,
-            )
-        else:
-            texto = build_seccion(
-                datos,
-                seccion,
-                interpretacion.lang,
-                resumen_previo(interpretacion),
-                client,
-                reparto=bloque_de_reparto(
-                    parte_de(datos, seccion.slug, slugs),
-                    interpretacion.lang,
-                    titulos,
-                ),
-                trato=interpretacion.trato,
-            )
-            # El modelo no cumple el trato al 100% (medido en staging el 08-10:
-            # «vos misma» en un informe neutro). Un juez lo revisa y, si hace
-            # falta, se repara; ante cualquier duda devuelve el texto tal cual.
-            texto = revisar_trato(texto, interpretacion.trato, interpretacion.lang, client)
-        InterpretationSection.objects.create(
-            interpretation=interpretacion,
-            slug=seccion.slug,
-            orden=orden_por_slug[seccion.slug],
-            texto=texto,
+            persistidas += 1
+            duraciones[seccion.slug] = segundos
+            if seccion.slug == pendientes[0].slug:
+                primera_s = time.monotonic() - inicio
+            lock_renovado = renovar_lock(interpretacion.sujeto, interpretacion.tier, token)
+            # El lock se renueva siempre (arriba), pero sólo importa su
+            # resultado cuando falta al menos otra sección (HALLAZGO 4): perder
+            # el lock justo tras la última no tiene nada más que proteger.
+            if not lock_renovado and persistidas < len(pendientes):
+                logger.warning(
+                    "se perdió el lock del informe (interpretation=%s) a mitad de "
+                    "generación; otro proceso lo tomó, se aborta sin tocar el ledger",
+                    interpretacion.pk,
+                )
+                return False
+        if error is not None:
+            # Lo que ya estaba en vuelo quedó persistido; el intento cuenta
+            # como uno y el reintento retoma sólo lo que falta.
+            raise error
+
+    if pendientes:
+        # Observabilidad (spec informe-rapido, RF11): cuánto tarda un informe y
+        # qué sección manda. Sin texto del informe.
+        logger.info(
+            "informe generado: interpretation=%s lang=%s tier=%s secciones=%s "
+            "paralelismo=%s total_s=%.1f primera_s=%.1f por_seccion=%s",
+            interpretacion.pk, interpretacion.lang, interpretacion.tier, persistidas,
+            paralelismo, time.monotonic() - inicio, primera_s or 0.0,
+            ",".join(f"{slug}:{seg:.0f}" for slug, seg in duraciones.items()),
         )
-        lock_renovado = renovar_lock(interpretacion.sujeto, interpretacion.tier, token)
-        queda_trabajo = indice < len(pendientes) - 1
-        # El lock se renueva siempre (arriba), pero sólo importa su
-        # resultado cuando falta al menos otra sección (HALLAZGO 4): perder
-        # el lock justo tras la última no tiene nada más que proteger.
-        if not lock_renovado and queda_trabajo:
-            logger.warning(
-                "se perdió el lock del informe (interpretation=%s) a mitad de "
-                "generación; otro proceso lo tomó, se aborta sin tocar el ledger",
-                interpretacion.pk,
-            )
-            return False
 
     with transaction.atomic():
         interpretacion.text = "\n\n".join(
@@ -557,19 +674,31 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
             destino.save(update_fields=["traducido_de", "trato"])
     hechas = set(destino.secciones.values_list("slug", flat=True))
     pendientes = [s for s in origen.secciones.all() if s.slug not in hechas]
-    generos = _generos(origen.sujeto) if origen.sujeto.producto == Sujeto.VINCULO else None
-    for indice, seccion in enumerate(pendientes):
-        # La traducción también puede escapar el género: se revisa con el
-        # idioma del destino. El natal, con el trato del lector (ya alineado
-        # arriba); el vínculo, en tercera persona, con el de cada persona.
-        if origen.sujeto.producto == Sujeto.NATAL:
-            texto = translate_interpretation(seccion.texto, destino_lang, client, trato=origen.trato)
-            texto = revisar_trato(texto, destino.trato, destino_lang, client)
-        else:
-            texto = translate_interpretation(
-                seccion.texto, destino_lang, client, trato=None, generos=generos,
-            )
-            texto = revisar_personas(texto, generos, destino_lang, client)
+    es_natal = origen.sujeto.producto == Sujeto.NATAL
+    generos = None if es_natal else _generos(origen.sujeto)
+    trato_origen, trato_destino = origen.trato, destino.trato
+
+    def _traducir(seccion) -> str:
+        """Sólo llamadas al modelo (ver `_en_paralelo`). La traducción también
+        puede escapar el género: se revisa con el idioma del destino. El natal,
+        con el trato del lector (ya alineado arriba); el vínculo, en tercera
+        persona, con el de cada persona."""
+        if es_natal:
+            texto = translate_interpretation(seccion.texto, destino_lang, client, trato=trato_origen)
+            return revisar_trato(texto, trato_destino, destino_lang, client)
+        texto = translate_interpretation(
+            seccion.texto, destino_lang, client, trato=None, generos=generos,
+        )
+        return revisar_personas(texto, generos, destino_lang, client)
+
+    persistidas, error = 0, None
+    for seccion, resultado, fallo in _en_paralelo(
+        pendientes, _traducir, settings.INFORME_PARALELISMO,
+    ):
+        if fallo is not None:
+            error = error or fallo
+            continue
+        texto, _ = resultado
         try:
             with transaction.atomic():
                 InterpretationSection.objects.create(
@@ -588,18 +717,21 @@ def traducir_informe(origen: Interpretation, destino_lang: str, client, token: s
                 "ya la había persistido otra llamada; se descarta la traducción repetida",
                 seccion.slug, destino.pk, destino_lang,
             )
-        # Fix round 2: mismo patrón que `generar_informe` — ocho traducciones
-        # seguidas pueden superar `LOCK_TTL`, así que el lock se renueva tras
-        # cada sección y, si se perdió con trabajo pendiente, se aborta sin
-        # marcar nada: otro proceso lo tiene y va a terminar este informe.
+        persistidas += 1
+        # Fix round 2: mismo patrón que `generar_informe` — las traducciones
+        # pueden superar `LOCK_TTL`, así que el lock se renueva tras cada
+        # sección y, si se perdió con trabajo pendiente, se aborta sin marcar
+        # nada: otro proceso lo tiene y va a terminar este informe.
         lock_renovado = renovar_lock(origen.sujeto, origen.tier, token)
-        if not lock_renovado and indice < len(pendientes) - 1:
+        if not lock_renovado and persistidas < len(pendientes):
             logger.warning(
                 "se perdió el lock de la traducción (interpretation=%s, lang=%s) a "
                 "mitad; otro proceso lo tomó, se aborta",
                 destino.pk, destino_lang,
             )
             return False
+    if error is not None:
+        raise error
 
     with transaction.atomic():
         destino.text = "\n\n".join(s.texto for s in destino.secciones.all())

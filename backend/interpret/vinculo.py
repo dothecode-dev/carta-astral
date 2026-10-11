@@ -187,7 +187,24 @@ _PREVIO = {
 }
 
 
-def contenido_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str) -> str:
+# Las demás secciones del informe, para que esta no desarrolle lo que es de otra.
+# Reemplaza al resumen de lo ya escrito (spec informe-rapido, RF6): las secciones
+# se escriben a la vez, así que ninguna puede ver el texto de las otras.
+_MAPA = {
+    "es": ("\n\nEl informe tiene también estas secciones, que se escriben aparte. No "
+           "desarrolles acá lo que es de ellas: mencionalo sólo si hace falta para entender "
+           "esta sección.\n{lista}"),
+    "en": ("\n\nThe report also has these sections, written separately. Don't develop here "
+           "what belongs to them: mention it only if it is needed to understand this "
+           "section.\n{lista}"),
+    "pt": ("\n\nO relatório também tem estas seções, escritas à parte. Não desenvolva aqui o "
+           "que é delas: mencione só se for preciso para entender esta seção.\n{lista}"),
+}
+
+
+def contenido_vinculo(
+    datos: dict, seccion: Seccion, lang: str, previo: str, otras: tuple[Seccion, ...] = (),
+) -> str:
     personas = (("A", datos["persona_a"]), ("B", datos["persona_b"]))
     roles = " ".join(
         _ES_ROL[lang].format(
@@ -216,18 +233,24 @@ def contenido_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str) -> 
     for letra, p in personas:
         if not p["carta"].get("time_known", True):
             texto += _SIN_HORA[lang].format(p=nombre_persona(letra, lang))
+    if otras:
+        lista = "\n".join(f"- {o.titulo[lang]}: {o.foco[lang]}" for o in otras)
+        texto += _MAPA[lang].format(lista=lista)
     if previo:
         texto += _PREVIO[lang].format(previo=previo)
     return texto
 
 
-def build_seccion_vinculo(datos: dict, seccion: Seccion, lang: str, previo: str, client) -> str:
+def build_seccion_vinculo(
+    datos: dict, seccion: Seccion, lang: str, previo: str, client,
+    otras: tuple[Seccion, ...] = (),
+) -> str:
     system = [{"type": "text", "text": _SYSTEM[lang]}]
     # Sin razonar (decisión del 10-10-2026): Sonnet 5 razona por defecto, y
     # con la guía neutra larga una sección se gastó en pensar los 8.400 tokens
     # de su techo y el informe falló. El techo mide texto; el género lo
     # revisa el juez de cada persona después.
     return _stream_text(
-        client, MODEL, system, contenido_vinculo(datos, seccion, lang, previo),
+        client, MODEL, system, contenido_vinculo(datos, seccion, lang, previo, otras),
         seccion.palabras * SECCION_TOKENS_POR_PALABRA, thinking={"type": "disabled"},
     )

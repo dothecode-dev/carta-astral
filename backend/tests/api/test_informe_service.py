@@ -12,6 +12,14 @@ TOKEN = "tok-test"
 
 
 @pytest.fixture(autouse=True)
+def _en_serie(settings):
+    """Estos tests cuentan llamadas y cortes en orden: prueban la mecánica del
+    informe con `INFORME_PARALELISMO=1`, que es también el camino de rollback
+    (spec informe-rapido). El modo paralelo vive en test_informe_paralelo.py."""
+    settings.INFORME_PARALELISMO = 1
+
+
+@pytest.fixture(autouse=True)
 def _sin_revision_del_trato(monkeypatch):
     """La revisión del trato (interpret/revision_trato.py) suma llamadas al
     mismo cliente falso, y estos tests cuentan llamadas para probar la
@@ -313,9 +321,14 @@ def test_al_reanudar_el_contexto_previo_viaja_desde_la_base_no_desde_memoria(int
     cliente = ClienteFalso()
     informe_service.generar_informe(recargada, cliente, TOKEN)
 
-    enviado = cliente.llamadas[0]["messages"][0]["content"]
-    assert "MARCA-FIRMA-7b2c" in enviado
-    assert "MARCA-MENTE-91af" in enviado
+    # Sólo la síntesis —que habla de «todo lo anterior»— recibe el resumen
+    # (spec informe-rapido, RF6): las demás se escriben a la vez y no lo ven.
+    sintesis = cliente.llamadas[-1]["messages"][0]["content"]
+    assert "MARCA-FIRMA-7b2c" in sintesis
+    assert "MARCA-MENTE-91af" in sintesis
+    assert all(
+        "MARCA-FIRMA-7b2c" not in ll["messages"][0]["content"] for ll in cliente.llamadas[:-1]
+    )
 
 
 def test_cada_seccion_recibe_su_parte_del_reparto(interpretacion):

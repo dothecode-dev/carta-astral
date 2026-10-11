@@ -15,6 +15,14 @@ TOKEN = "tok-test"
 
 
 @pytest.fixture(autouse=True)
+def _en_serie(settings):
+    """Estos tests cuentan llamadas y cortes en orden: prueban la mecánica del
+    informe con `INFORME_PARALELISMO=1`, que es también el camino de rollback
+    (spec informe-rapido). El modo paralelo vive en test_informe_paralelo.py."""
+    settings.INFORME_PARALELISMO = 1
+
+
+@pytest.fixture(autouse=True)
 def _lock_vigente(monkeypatch):
     """Estos tests llaman a `traducir_informe` directo, sin el lock que toma
     `completar_generacion`: sin esto el `renovar_lock` real devuelve False y

@@ -19,6 +19,14 @@ pytestmark = pytest.mark.django_db
 TOKEN = "tok-test"
 
 
+@pytest.fixture(autouse=True)
+def _en_serie(settings):
+    """Estos tests cuentan llamadas y cortes en orden: prueban la mecánica del
+    informe con `INFORME_PARALELISMO=1`, que es también el camino de rollback
+    (spec informe-rapido). El modo paralelo vive en test_informe_paralelo.py."""
+    settings.INFORME_PARALELISMO = 1
+
+
 @pytest.fixture
 def lock_vigente(monkeypatch):
     """Sólo para los tests que llaman a `traducir_informe` directo, sin el lock
@@ -456,11 +464,13 @@ def test_completar_generacion_usa_el_lock_real(make_chart, cuenta, llamadas, mon
     carta = _con_trato(make_chart, cuenta, "femenino")
     interp = svc.iniciar_generacion(sujeto_natal(carta), "es", cuenta, tier="largo")
     escritas = []
+    # Afuera del doble: corre en un hilo de trabajo, que no toca la base.
+    clave_del_lock = svc._lock_key(sujeto_natal(carta), "largo")
 
     def _seccion(chart_data, seccion, lang, previo, client, reparto="", trato=""):
         escritas.append(seccion.slug)
         if len(escritas) == 2:
-            cache.set(svc._lock_key(sujeto_natal(carta), "largo"), "otro-proceso", timeout=600)
+            cache.set(clave_del_lock, "otro-proceso", timeout=600)
         return f"texto de {seccion.slug}"
 
     monkeypatch.setattr(informe_service, "build_seccion", _seccion)

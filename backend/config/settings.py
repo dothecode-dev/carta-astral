@@ -419,6 +419,12 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 # no los ~US$0,03 de la lectura vieja. Con el cap anterior de 500 el techo de
 # gasto diario en informes regalados pasaba de US$15 a más de US$200.
 INTERPRETATION_DAILY_CAP = int(os.environ.get("INTERPRETATION_DAILY_CAP", "40"))
+
+# Cuántas secciones de un informe se escriben a la vez (spec 2026-10-10). 1 =
+# en serie, como antes: es el rollback sin desplegar. El límite de Anthropic
+# (10.000 pedidos y 2.000.000 tokens de salida por minuto, medido en staging)
+# no es lo que lo acota: lo acota lo que un informe tiene, ocho secciones.
+INFORME_PARALELISMO = max(1, int(os.environ.get("INFORME_PARALELISMO", "8")))
 # Tope diario de lecturas breves SIN cuenta, separado del de cuentas: un abuso
 # anónimo no deja sin lectura a quien ya tiene cuenta (spec 2026-10-08, RF10).
 INTERPRETATION_ANON_DAILY_CAP = int(os.environ.get("INTERPRETATION_ANON_DAILY_CAP", "40"))
