@@ -246,8 +246,8 @@ def test_el_mail_muestra_las_campanas(monkeypatch):
     html = informe._html("lectura", datos, [])
 
     assert "medicion-oct26" in html
-    assert "pagina_vista: 9 (7 personas)" in html
-    assert "pagina_vista: 20 (15 personas)" in html
+    assert "pagina_vista: 7 personas (9 veces)" in html
+    assert "pagina_vista: 15 personas (20 veces)" in html
     assert "anuncios" in html.lower()
 
 
@@ -333,6 +333,6 @@ def test_el_escape_no_rompe_lo_que_se_muestra_normal():
 
     html = informe._html("Todo tranquilo.\nUna visita nueva.", datos, [])
 
-    assert "carta_calculada: 3 (2 personas)" in html
-    assert "/carta/[id]: 4" in html
+    assert "carta_calculada: 2 personas (3 veces)" in html
+    assert "/carta/[id]: 4 vistas" in html
     assert "Todo tranquilo.\nUna visita nueva." in html  # los saltos de línea quedan

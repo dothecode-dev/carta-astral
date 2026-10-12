@@ -101,9 +101,17 @@ def _consultar_posthog(sql: str) -> list[list]:
 # llevan, así que también se descarta lo que venga de `localhost`. Una sola
 # definición para todas las consultas a PostHog: con una copia por función, la
 # próxima que se escriba se olvida de excluirlo.
+#
+# También saca a la persona interna (`$internal_or_test_user`, la misma que
+# excluyen el embudo y el dashboard de PostHog). El 12-10-2026 el mail decía 129
+# cartas y el embudo 62: esta consulta no la excluía y contaba eventos por
+# `distinct_id`. Mientras las dos fuentes no cuenten igual, ninguna sirve para
+# nada. `is null` y no `= false`: el dashboard lo documenta —un booleano no
+# matchea un `equals true`—, y a quien nunca se marcó la propiedad le falta.
 _FILTRO_ENTORNO = (
     "and coalesce(properties.entorno, 'produccion') = 'produccion' "
-    "and not like(coalesce(properties.$current_url, ''), '%localhost%')"
+    "and not like(coalesce(properties.$current_url, ''), '%localhost%') "
+    "and person.properties.$internal_or_test_user is null"
 )
 
 
@@ -111,7 +119,7 @@ def actividad_del_sitio(dias: int = 1) -> dict:
     """Eventos por tipo, y de dónde salieron."""
     filtro_entorno = _FILTRO_ENTORNO
     eventos = _consultar_posthog(f"""
-        select event, count() as n, count(distinct distinct_id) as personas
+        select event, count() as n, count(distinct person_id) as personas
         from events
         where timestamp > now() - interval {int(dias)} day {filtro_entorno}
         group by event order by n desc
@@ -125,12 +133,19 @@ def actividad_del_sitio(dias: int = 1) -> dict:
     """)
     # La base contra la que se lee el día. Sin ella el modelo marca como raro
     # cualquier día en cero, que a esta escala es lo normal.
+    #
+    # Siete días de CALENDARIO completos, que terminan a la medianoche anterior
+    # al comienzo de las últimas 24 h. Con una ventana móvil de 168 h, contar
+    # fechas distintas daba 8 (las dos puntas parciales) y el mail decía «los 7
+    # días anteriores… en 8 días con actividad» (12-10-2026). A cambio queda sin
+    # cubrir el tramo de hoy anterior a esa medianoche: no se compara con nada.
+    inicio_dia = f"toStartOfDay(now() - interval {int(dias)} day)"
     ventana_previa = (
-        f"timestamp > now() - interval {int(dias) + 7} day "
-        f"and timestamp <= now() - interval {int(dias)} day {filtro_entorno}"
+        f"timestamp >= {inicio_dia} - interval 7 day "
+        f"and timestamp < {inicio_dia} {filtro_entorno}"
     )
     previo = _consultar_posthog(f"""
-        select event, count() as n, count(distinct distinct_id) as personas
+        select event, count() as n, count(distinct person_id) as personas
         from events where {ventana_previa}
         group by event order by n desc
     """)
@@ -187,7 +202,7 @@ def campanas() -> dict:
     def por_campana(dias: int) -> list[dict]:
         filas = _consultar_posthog(f"""
             select properties.$session_entry_utm_campaign as campana, event,
-                   count() as n, count(distinct distinct_id) as personas
+                   count() as n, count(distinct person_id) as personas
             from events
             where timestamp > now() - interval {int(dias)} day {_FILTRO_ENTORNO}
               and coalesce(properties.$session_entry_utm_campaign, '') != ''
@@ -436,7 +451,7 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
         f"<p style='white-space:pre-wrap'>{e(cuerpo)}</p>",
         "<hr>",
         tabla("En el sitio (últimas 24 h)", [
-            f"{e(ev['evento'])}: {ev['veces']} ({ev['personas']} personas)"
+            f"{e(ev['evento'])}: {ev['personas']} personas ({ev['veces']} veces)"
             for ev in sitio.get("eventos", [])
         ]),
         "<p>Los 7 días anteriores: "
@@ -444,7 +459,7 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
         f"eventos, en {(sitio.get('previo') or {}).get('dias_con_actividad', 0)} "
         "días con actividad.</p>" if sitio else "",
         tabla("Páginas más vistas", [
-            f"{e(p['ruta'])}: {p['veces']}" for p in sitio.get("paginas", [])
+            f"{e(p['ruta'])}: {p['veces']} vistas" for p in sitio.get("paginas", [])
         ]),
     ]
     anuncios = datos.get("campanas") or {}
@@ -453,7 +468,7 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
     if ultimas or acumulado.get("campanas"):
         def _linea(campana: dict) -> str:
             eventos = " · ".join(
-                f"{e(ev['evento'])}: {ev['veces']} ({ev['personas']} personas)"
+                f"{e(ev['evento'])}: {ev['personas']} personas ({ev['veces']} veces)"
                 for ev in campana["eventos"]
             )
             return f"<b>{e(campana['campana'])}</b> — {eventos}"

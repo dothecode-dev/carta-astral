@@ -285,7 +285,88 @@ def test_el_sitio_trae_la_semana_anterior_para_comparar(monkeypatch):
         "dias_con_actividad": 2,
         "eventos": [{"evento": "pagina_vista", "veces": 3, "personas": 2}],
     }
-    previas = [sql for sql in consultas if "interval 8 day" in sql]
+    previas = [sql for sql in consultas if "toStartOfDay" in sql]
     assert len(previas) == 2
     for sql in previas:
         assert "interval 1 day" in sql and "produccion" in sql
+
+
+def test_la_semana_anterior_son_siete_dias_de_calendario_completos(monkeypatch):
+    """El 12-10-2026 el mail decía «7 días anteriores… en 8 días con actividad».
+    Una ventana móvil de 168 h toca ocho fechas de calendario (las dos puntas,
+    parciales), y contar `toDate` distintos daba 8 de 7. La ventana tiene que
+    ser de días enteros: empieza a medianoche, 7 días antes, y termina a la
+    medianoche anterior al comienzo de las últimas 24 h."""
+    consultas = []
+
+    def consultar(sql):
+        consultas.append(sql)
+        return []
+
+    monkeypatch.setattr(informe, "_consultar_posthog", consultar)
+
+    informe.actividad_del_sitio(dias=1)
+
+    previas = [sql for sql in consultas if "toStartOfDay" in sql]
+    assert len(previas) == 2
+    for sql in previas:
+        assert "timestamp >= toStartOfDay(now() - interval 1 day) - interval 7 day" in sql
+        assert "timestamp < toStartOfDay(now() - interval 1 day)" in sql
+        # Sin el borde móvil de antes: `now() - interval 8 day` es la causa.
+        assert "interval 8 day" not in sql
+
+
+@pytest.fixture
+def sql_enviado(monkeypatch):
+    """Todas las consultas que el informe le hace a PostHog, sin red."""
+    enviadas = []
+
+    def consultar(sql):
+        enviadas.append(sql)
+        return []
+
+    monkeypatch.setattr(informe, "_consultar_posthog", consultar)
+    return enviadas
+
+
+def test_el_sitio_cuenta_personas_y_no_identidades_ni_internos(sql_enviado):
+    """El 12-10-2026 el mail decía 129 cartas y el embudo 62: el mail contaba
+    eventos, por `distinct_id` (una persona con dos identidades eran dos) y sin
+    sacar al dueño, que es el 14% de las vistas. Las dos fuentes tienen que
+    contar lo mismo: personas, y sin la persona interna."""
+    informe.actividad_del_sitio()
+
+    assert sql_enviado
+    for sql in sql_enviado:
+        assert "$internal_or_test_user" in sql
+        assert "distinct_id" not in sql
+    # Las que devuelven `personas` la sacan de la persona, no de otra columna.
+    con_personas = [sql for sql in sql_enviado if "as personas" in sql]
+    assert con_personas
+    for sql in con_personas:
+        assert "count(distinct person_id) as personas" in sql
+
+
+def test_las_campanas_cuentan_personas_y_no_identidades_ni_internos(sql_enviado):
+    informe.campanas()
+
+    assert sql_enviado
+    for sql in sql_enviado:
+        assert "$internal_or_test_user" in sql
+        assert "distinct_id" not in sql
+        assert "count(distinct person_id) as personas" in sql
+
+
+def test_el_mail_pone_las_personas_primero_y_nombra_las_veces():
+    """«carta_calculada: 18» sin más se lee como 18 cartas de 18 personas. El
+    número que compara con el embudo es el de personas: va primero, y el de
+    eventos dice qué es."""
+    datos = {"sitio": {
+        "eventos": [{"evento": "carta_calculada", "veces": 18, "personas": 11}],
+        "previo": {"dias": 7, "dias_con_actividad": 1, "eventos": []},
+        "paginas": [],
+    }}
+
+    cuerpo = informe._html("lectura", datos, [])
+
+    assert "carta_calculada: 11 personas (18 veces)" in cuerpo
