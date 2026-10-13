@@ -181,14 +181,19 @@ def test_el_uso_del_cupon_y_la_analitica_llevan_la_moneda(client, monkeypatch, m
     assert medidos[0]["moneda"] == "brl" and medidos[0]["monto_centavos"] == 10430
 
 
-def test_el_medio_de_pago_llega_al_aviso(client, monkeypatch, compra_brl, sin_hilo):
+@pytest.mark.parametrize("pi", [
+    # El tipo del PaymentMethod usado gana sobre `payment_method_types[0]`.
+    {"id": "pi_brl", "payment_method_types": ["card", "pix"], "payment_method": {"id": "pm_1", "type": "pix"}},
+    # Respaldo: PI sin el PaymentMethod expandido.
+    {"id": "pi_brl", "payment_method_types": ["pix"]},
+])
+def test_el_medio_de_pago_llega_al_aviso(client, monkeypatch, compra_brl, sin_hilo, pi):
     from api import notificaciones
 
     avisados = []
     monkeypatch.setattr(notificaciones, "notificar", lambda cuenta, evento, ctx, lang: avisados.append(ctx))
-    sesion = _sesion(payment_intent={"id": "pi_brl", "payment_method_types": ["pix"]})
 
-    _entregar(client, monkeypatch, sesion)
+    _entregar(client, monkeypatch, _sesion(payment_intent=pi))
 
     assert avisados[0]["medio"] == "pix"
     compra_brl.refresh_from_db()

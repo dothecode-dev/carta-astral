@@ -446,12 +446,17 @@ def _payment_intent_id(sesion: dict) -> str:
 
 
 def _medio_de_pago(sesion: dict) -> str:
-    """`pix`, `card`, ... según el PaymentIntent; vacío si no vino expandido."""
+    """El `type` del PaymentMethod usado (`pix`, `card`, ...); vacío si el PI no
+    vino expandido. `payment_method_types[0]` sólo de respaldo (medido el
+    13-10-2026: Checkout deja el PI con un solo tipo, el usado)."""
     pi = sesion.get("payment_intent")
-    if isinstance(pi, dict):
-        tipos = pi.get("payment_method_types") or []
-        return tipos[0] if tipos else ""
-    return ""
+    if not isinstance(pi, dict):
+        return ""
+    pm = pi.get("payment_method")
+    if isinstance(pm, dict) and pm.get("type"):
+        return pm["type"]
+    tipos = pi.get("payment_method_types") or []
+    return tipos[0] if tipos else ""
 
 
 def _otorgar_y_marcar(sesion, cuenta, fila, codigo, pagado, descuento, external_id, a_mano) -> bool:
