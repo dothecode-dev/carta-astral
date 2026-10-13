@@ -438,7 +438,7 @@ def cambio_brl() -> dict:
         respuesta = httpx.get(_CAMBIO_URL, timeout=httpx.Timeout(10.0, connect=5.0))
         respuesta.raise_for_status()
         brl_por_usd = float(respuesta.json()["rates"]["BRL"])
-        if brl_por_usd <= 0:
+        if not brl_por_usd > 0:  # también atrapa NaN
             raise ValueError("cambio no positivo")
     except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
         raise FuenteCaida(f"open.er-api: {type(exc).__name__}") from None

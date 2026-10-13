@@ -207,6 +207,15 @@ def fuentes_sin_red(monkeypatch):
     monkeypatch.setattr(informe, "busquedas", lambda: {"impresiones": 0})
     monkeypatch.setattr(indexacion, "estado_de_indexacion", lambda: {"indexadas": 0})
     monkeypatch.setattr(bing, "busquedas", lambda *a, **k: {"clics": 0})
+    monkeypatch.setattr(informe, "cambio_brl", lambda: {
+        "brl_por_usd": 5.0, "informe_brl_en_usd": 4.98, "informe_usd": 5.0,
+        "desvio": -0.004, "alerta": False,
+    })
+    # Guarda: si alguna fuente se escapa sin reemplazar, el test se cae en vez
+    # de salir a internet.
+    monkeypatch.setattr(
+        informe.httpx, "get", lambda *a, **k: pytest.fail("una fuente salió a internet"),
+    )
 
 
 def test_juntar_fuentes_incluye_las_campanas(monkeypatch, fuentes_sin_red):

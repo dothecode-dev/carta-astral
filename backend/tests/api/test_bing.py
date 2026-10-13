@@ -189,9 +189,15 @@ def _fijo() -> dict:
 def test_juntar_fuentes_incluye_bing_y_lo_que_falla_se_nombra(monkeypatch):
     monkeypatch.setattr(bing, "busquedas", lambda *a, **k: _fijo())
 
+    def sin_red():
+        raise informe.FuenteCaida("sin red")
+
+    monkeypatch.setattr(informe, "cambio_brl", sin_red)
+
     datos, fallas = informe.juntar_fuentes()
 
     assert datos["bing"]["clics"] == 3
+    assert "Cambio BRL: sin red" in fallas
     # Sin credenciales de PostHog ni de Search Console, esas fuentes se nombran.
     assert any(f.startswith("PostHog") for f in fallas)
     assert any(f.startswith("Search Console") for f in fallas)

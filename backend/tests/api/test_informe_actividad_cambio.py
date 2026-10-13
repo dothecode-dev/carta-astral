@@ -35,3 +35,11 @@ def test_sin_respuesta_es_una_fuente_caida(monkeypatch):
 
     with pytest.raises(informe_actividad.FuenteCaida):
         informe_actividad.cambio_brl()
+
+
+@pytest.mark.parametrize("brl", ["NaN", 0, -1])
+def test_un_cambio_que_no_es_positivo_es_una_fuente_caida(monkeypatch, brl):
+    monkeypatch.setattr(informe_actividad.httpx, "get", _rates(brl))
+
+    with pytest.raises(informe_actividad.FuenteCaida):
+        informe_actividad.cambio_brl()
