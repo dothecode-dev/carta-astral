@@ -422,6 +422,35 @@ def redactar(datos: dict) -> str:
     return "".join(bloque.text for bloque in respuesta.content if bloque.type == "text")
 
 
+# --- Tipo de cambio ----------------------------------------------------------
+
+_CAMBIO_URL = "https://open.er-api.com/v6/latest/USD"
+
+
+def cambio_brl() -> dict:
+    """Cuánto vale hoy, en dólares, el informe en reales (RNF4). El precio BRL
+    es fijo y nadie corre tests cuando el real se mueve: esto lo dice en el
+    mail de todos los días, y marca `alerta` si se aleja ±15 % del precio USD."""
+    from api.catalogo import producto
+
+    natal = producto("informe_natal")
+    try:
+        respuesta = httpx.get(_CAMBIO_URL, timeout=httpx.Timeout(10.0, connect=5.0))
+        respuesta.raise_for_status()
+        brl_por_usd = float(respuesta.json()["rates"]["BRL"])
+        if brl_por_usd <= 0:
+            raise ValueError("cambio no positivo")
+    except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+        raise FuenteCaida(f"open.er-api: {type(exc).__name__}") from None
+    en_usd = round(natal.precio_en("brl") / 100 / brl_por_usd, 2)
+    usd = natal.precio_en("usd") / 100
+    desvio = round(en_usd / usd - 1, 3)
+    return {
+        "brl_por_usd": brl_por_usd, "informe_brl_en_usd": en_usd, "informe_usd": usd,
+        "desvio": desvio, "alerta": abs(desvio) > 0.15,
+    }
+
+
 # --- El mail ----------------------------------------------------------------
 
 
@@ -515,6 +544,18 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
         partes.append(tabla("Todavía sin indexar", [
             f"{e(f['url'])}: {e(f['estado'])}" for f in indexacion.get("sin_indexar", [])
         ]))
+    cambio = datos.get("cambio")
+    if cambio:
+        from api.catalogo import producto
+
+        producto_brl = producto("informe_natal").precio_en("brl")
+        # Todo numérico: no hay texto externo que escapar.
+        partes.append(
+            f"<p>{'⚠️ ' if cambio['alerta'] else ''}Informe en reales: R$ {producto_brl / 100:.2f} "
+            f"= US$ {cambio['informe_brl_en_usd']} al cambio de hoy "
+            f"({cambio['brl_por_usd']} BRL/USD), contra US$ {cambio['informe_usd']} "
+            f"({cambio['desvio']:+.1%}).</p>"
+        )
     if fallas:
         partes.append(tabla("No se pudo consultar", [e(f) for f in fallas]))
     partes.append("</div>")
@@ -543,6 +584,7 @@ def juntar_fuentes() -> tuple[dict, list[str]]:
         # `lambda` y no `bing.busquedas` directo: busca el atributo al llamar, y
         # así los tests pueden reemplazarla.
         ("Bing", "bing", lambda: bing.busquedas()),
+        ("Cambio BRL", "cambio", cambio_brl),
     ):
         try:
             datos[clave] = fn()
