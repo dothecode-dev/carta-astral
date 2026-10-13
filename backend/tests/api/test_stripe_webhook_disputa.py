@@ -69,7 +69,9 @@ def test_funds_withdrawn_revoca_anota_bloquea_y_avisa(client, compra_acreditada,
     assert compra_acreditada.reembolsado_centavos == 14900
     assert _restante(compra_acreditada.account) == 0
     assert MailBloqueado.bloqueado("ana@mail.com")
-    assert any("du_1" in a and "brl" in a and "ana@mail.com" in a for a in avisos_enviados)
+    # El mail va enmascarado: el aviso sale a Telegram y, sin token, al log.
+    assert any("du_1" in a and "cs_du" in a and "brl" in a and "a***@mail.com" in a for a in avisos_enviados)
+    assert not any("ana@mail.com" in a for a in avisos_enviados)
 
 
 def test_la_misma_disputa_dos_veces_es_un_no_op(client, compra_acreditada, avisos_enviados):
@@ -152,7 +154,8 @@ def test_una_compra_anonima_de_un_mail_bloqueado_se_acredita_y_avisa(client, ano
 
     assert r.status_code == 200
     assert PasarelaCheckout.objects.get(checkout_id=anonima.checkout_id).acreditado_at is not None
-    assert any("bloqueado" in a.lower() for a in avisos_enviados)
+    assert any("bloqueado" in a.lower() and anonima.checkout_id in a and "a***@mail.com" in a for a in avisos_enviados)
+    assert not any("ana@mail.com" in a for a in avisos_enviados)
 
 
 def test_un_fallo_a_mitad_del_retiro_no_deja_la_disputa_marcada(client, monkeypatch, compra_acreditada, avisos_enviados):

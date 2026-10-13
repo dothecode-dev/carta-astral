@@ -181,7 +181,11 @@ def _adjudicar_si_es_anonima(session_id: str, sesion: dict) -> None:
     if MailBloqueado.bloqueado(email):
         # R8: la plata entró, se entrega igual; pero se mira.
         logger.warning("sesión %s: compra sin cuenta de un mail bloqueado; se acredita igual", session_id)
-        avisar_admin(f"Stripe {session_id}: compra sin cuenta de un mail BLOQUEADO ({email}). Se acredita igual.")
+        # Enmascarado: el texto va a Telegram y, sin token, al log.
+        avisar_admin(
+            f"Stripe {session_id}: compra sin cuenta de un mail BLOQUEADO "
+            f"({compra_anonima.enmascarar(email)}). Se acredita igual.",
+        )
 
 
 def _product_de(sesion: dict) -> str:
@@ -757,7 +761,7 @@ def _retirar_por_disputa(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> 
     logger.warning("disputa %s aplicada sobre %s", dispute_id, fila.checkout_id)
     return (
         f"⚠️ Disputa {dispute_id} ({motivo}): {fila.codigo_producto} {fila.checkout_id}, "
-        f"{monto} {moneda}. Revocado y mail bloqueado: {mail or 'sin mail'}."
+        f"{monto} {moneda}. Revocado y mail bloqueado: {compra_anonima.enmascarar(mail) if mail else 'sin mail'}."
     )
 
 
