@@ -102,7 +102,7 @@ def canjear_gratis(
         external_id = f"cupon:{checkout_id}"
         aplicar_compra(
             account, codigo_producto, 0, external_id, sujeto=sujeto,
-            descuento_centavos=precio, origen="cupon",
+            descuento_centavos=precio, origen="cupon", precio_centavos=precio,
         )
         fila = PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=account, codigo_producto=codigo_producto,
