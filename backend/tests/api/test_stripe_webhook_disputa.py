@@ -7,7 +7,7 @@ import json
 import pytest
 
 from api import stripe_client, webhooks_stripe
-from api.models import Derecho, MailBloqueado, PasarelaCheckout
+from api.models import Derecho, MailBloqueado, Movimiento, PasarelaCheckout
 from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
 
@@ -89,13 +89,65 @@ def test_funds_reinstated_devuelve_lo_revocado_y_desbloquea(client, compra_acred
 
     assert _restante(compra_acreditada.account) == 1
     assert not MailBloqueado.bloqueado("ana@mail.com")
+    compra_acreditada.refresh_from_db()
+    assert compra_acreditada.disputa_id is None
+    assert len(avisos_enviados) == 2
+
+    # Stripe reentrega el `reinstated`: no repone de nuevo ni avisa otra vez.
+    assert _disputa(client, tipo="charge.dispute.funds_reinstated").status_code == 200
+
+    assert _restante(compra_acreditada.account) == 1
+    assert len(avisos_enviados) == 2
 
 
 def test_reinstated_sin_retiro_previo_solo_avisa(client, compra_acreditada, avisos_enviados):
     _disputa(client, tipo="charge.dispute.funds_reinstated")
 
     assert _restante(compra_acreditada.account) == 1
-    assert avisos_enviados
+    assert len(avisos_enviados) == 1
+    assert "sin retiro previo" in avisos_enviados[0]
+
+
+def test_el_completed_reentregado_tras_el_reinstate_no_entrega_ni_avisa_disputa(
+    client, monkeypatch, compra_acreditada, avisos_enviados,
+):
+    """Después del `reinstated` la fila ya no está disputada: una reentrega
+    del pago no puede decir «compra ya disputada», y tampoco otorgar otra vez."""
+    _disputa(client)
+    _disputa(client, tipo="charge.dispute.funds_reinstated")
+    antes = len(avisos_enviados)
+    sesion = {
+        "id": "cs_du", "payment_status": "paid", "currency": "brl", "amount_subtotal": 14900,
+        "amount_total": 14900, "total_details": {"amount_tax": 0, "amount_discount": 0},
+        "payment_intent": "pi_1", "metadata": {},
+        "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
+    }
+    monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _sid: sesion)
+    cuerpo = json.dumps({"id": "evt_c", "type": "checkout.session.completed", "data": {"object": {"id": "cs_du"}}}).encode()
+
+    r = client.post(URL, data=cuerpo, content_type="application/json", HTTP_STRIPE_SIGNATURE=firmar(cuerpo))
+
+    assert r.status_code == 200
+    assert _restante(compra_acreditada.account) == 1
+    assert not any("disputada" in a for a in avisos_enviados[antes:])
+
+
+def test_una_disputa_sobre_una_compra_ya_reembolsada_no_revoca_de_nuevo(client, compra_acreditada, avisos_enviados):
+    """Reembolso total primero, disputa después: revocar otra vez dejaría
+    deuda por un producto que ya se devolvió, y el contador sumaría dos."""
+    from api.canje import revocar
+
+    revocar(compra_acreditada.account, "informe_natal", 1, external_id="stripe:refund:re_1")
+    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(reembolsado_centavos=14900)
+
+    assert _disputa(client).status_code == 200
+
+    compra_acreditada.refresh_from_db()
+    assert compra_acreditada.disputa_id == "du_1"
+    assert compra_acreditada.reembolsado_centavos == 14900
+    assert not Movimiento.objects.filter(external_id="stripe:dispute:du_1").exists()
+    assert MailBloqueado.bloqueado("ana@mail.com")
+    assert any("ya reembolsada" in a and "du_1" in a for a in avisos_enviados)
 
 
 def test_una_disputa_en_otra_moneda_no_revoca_y_avisa(client, compra_acreditada, avisos_enviados):
@@ -255,3 +307,20 @@ def test_una_compra_anonima_disputada_antes_de_completed_bloquea_el_mail_del_pag
     fila.refresh_from_db()
     assert fila.disputa_id == "du_1"
     assert MailBloqueado.bloqueado("ana@mail.com")
+
+
+def test_el_reinstated_de_una_disputa_sobre_compra_reembolsada_no_repone(client, compra_acreditada, avisos_enviados):
+    """El retiro no revocó (ya estaba reembolsada): reponer regalaría el
+    producto a quien ya tiene la plata de vuelta."""
+    from api.canje import revocar
+
+    revocar(compra_acreditada.account, "informe_natal", 1, external_id="stripe:refund:re_1")
+    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(reembolsado_centavos=14900)
+    _disputa(client)
+
+    assert _disputa(client, tipo="charge.dispute.funds_reinstated").status_code == 200
+
+    assert _restante(compra_acreditada.account) == 0
+    assert not Movimiento.objects.filter(external_id="stripe:dispute:du_1:reinstated").exists()
+    assert not MailBloqueado.bloqueado("ana@mail.com")
+    assert any("no se repone" in a for a in avisos_enviados)
