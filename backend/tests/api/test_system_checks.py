@@ -10,7 +10,12 @@ import pytest
 from django.core.checks import run_checks
 
 
-def test_no_quedan_avisos_sin_accionar():
+def test_no_quedan_avisos_sin_accionar(settings):
+    # Producción tiene STRIPE_PRODUCTOS completo; acá se simula, o `api.W001`
+    # sería un aviso permanente del entorno de tests y no un hallazgo.
+    from api.catalogo import a_la_venta
+
+    settings.STRIPE_PRODUCTOS = {p.codigo: f"prod_{p.codigo}" for p in a_la_venta()}
     sin_silenciar = [aviso for aviso in run_checks() if not aviso.is_silenced()]
 
     assert sin_silenciar == []

@@ -13,6 +13,10 @@ fi
 # NOTA: el dataset GeoNames NO se carga acá (trunca+recarga ~234k filas y tarda).
 # Correr una sola vez, manualmente, post-deploy:  python manage.py import_geonames
 
+# Chequeo de STRIPE_PRODUCTOS: devuelve warnings (exit 0) y avisa por Telegram
+# una vez, acá. El `||` es para que `set -e` no aborte por cualquier otra cosa.
+AVISAR_CHECKS=1 python manage.py check --tag stripe || echo "check de Stripe con avisos; ver arriba"
+
 # La base de países para la moneda inicial (RF3). Si falla —sin clave, sin
 # red— el sitio arranca igual y cobra en USD; el Scheduled Task semanal
 # reintenta. El `||` porque arriba hay `set -e`.
