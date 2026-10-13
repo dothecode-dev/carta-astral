@@ -92,6 +92,10 @@ class PedirCodigoView(APIView):
         return Response({}, status=status.HTTP_202_ACCEPTED)
 
 
+class _MailBloqueadoAlCanjear(Exception):
+    """El código era válido, pero el mail está bloqueado (RF16)."""
+
+
 class CanjearCodigoView(APIView):
     """Canjea el código de acceso por una sesión — RF7.
 
@@ -113,13 +117,6 @@ class CanjearCodigoView(APIView):
             return Response(
                 {"error": "email y codigo requeridos"}, status=status.HTTP_400_BAD_REQUEST
             )
-        if MailBloqueado.bloqueado(email):
-            # RF16: un código pedido antes del bloqueo no abre la puerta
-            # después. Antes de `canjear()`, así no se quema el código ni se
-            # crea nada. Por el mail del request, que `canjear()` normaliza
-            # igual que `MailBloqueado` (minúsculas y trim).
-            logger.warning("canje de código de un mail bloqueado")
-            return Response({"error": "cuenta bloqueada", "motivo": "bloqueado"}, status=status.HTTP_403_FORBIDDEN)
 
         if not tombstone_hmac_configurada():
             # Chequeo ANTES de tocar la fila del código (C2, revisión de
@@ -140,6 +137,14 @@ class CanjearCodigoView(APIView):
             # por `codigos_acceso.pedir`/`canjear`), nunca con el string
             # crudo del request (Ruling 11b): si no, dos casings de la misma
             # dirección terminan en dos cuentas.
+            if MailBloqueado.bloqueado(fila.email):
+                # RF16: un código pedido antes del bloqueo no abre la puerta
+                # después. Recién acá, con el código ya validado: chequearlo
+                # antes respondería distinto a un código cualquiera y
+                # revelaría quién disputó un pago. Levantar adentro del
+                # atomic de `canjear()` deshace el canje: el código no se
+                # quema y no se crea ni cuenta ni sesión.
+                raise _MailBloqueadoAlCanjear
             vid = VerifiedIdentity(
                 provider="email", sub=fila.email, email=fila.email, email_verified=True,
             )
@@ -166,6 +171,9 @@ class CanjearCodigoView(APIView):
             )
         except codigos_acceso.CodigoInvalido:
             return Response({"error": "código inválido"}, status=status.HTTP_401_UNAUTHORIZED)
+        except _MailBloqueadoAlCanjear:
+            logger.warning("canje de código de un mail bloqueado")
+            return Response({"error": "cuenta bloqueada", "motivo": "bloqueado"}, status=status.HTTP_403_FORBIDDEN)
         except ImproperlyConfigured as exc:
             # Defensa en profundidad ante un TOCTOU con el precheck de
             # arriba (la clave se cae justo entre medio) — la única causa

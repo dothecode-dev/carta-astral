@@ -153,3 +153,102 @@ def test_una_compra_anonima_de_un_mail_bloqueado_se_acredita_y_avisa(client, ano
     assert r.status_code == 200
     assert PasarelaCheckout.objects.get(checkout_id=anonima.checkout_id).acreditado_at is not None
     assert any("bloqueado" in a.lower() for a in avisos_enviados)
+
+
+def test_un_fallo_a_mitad_del_retiro_no_deja_la_disputa_marcada(client, monkeypatch, compra_acreditada, avisos_enviados):
+    """Todo el retiro es un átomo: si `revocar` falla, la marca `disputa_id`
+    se deshace con él y el reintento de Stripe aplica la disputa entera."""
+    revocar_real = webhooks_stripe.revocar
+    llamadas = []
+
+    def revocar_que_falla_una_vez(*args, **kwargs):
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            raise RuntimeError("la base se cayó")
+        return revocar_real(*args, **kwargs)
+
+    monkeypatch.setattr(webhooks_stripe, "revocar", revocar_que_falla_una_vez)
+
+    assert _disputa(client).status_code == 500
+    compra_acreditada.refresh_from_db()
+    assert compra_acreditada.disputa_id is None
+    assert not MailBloqueado.bloqueado("ana@mail.com")
+
+    assert _disputa(client).status_code == 200
+    compra_acreditada.refresh_from_db()
+    assert compra_acreditada.disputa_id == "du_1"
+    assert _restante(compra_acreditada.account) == 0
+    assert MailBloqueado.bloqueado("ana@mail.com")
+    assert len([a for a in avisos_enviados if "Revocado" in a]) == 1
+
+
+def test_una_disputa_procesada_mientras_se_acredita_no_se_entrega(client, monkeypatch, make_account, avisos_enviados):
+    """La marca se vuelve a mirar con la fila bloqueada, justo antes de
+    otorgar: una disputa que entró entre el primer chequeo y la entrega no
+    se pierde."""
+    cuenta = make_account(email="ana@mail.com")
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
+        precio_centavos=14900,
+    )
+    sesion = {
+        "id": "cs_du", "payment_status": "paid", "currency": "brl", "amount_subtotal": 14900,
+        "amount_total": 14900, "total_details": {"amount_tax": 0, "amount_discount": 0},
+        "payment_intent": "pi_1", "metadata": {},
+        "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
+    }
+    monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _sid: sesion)
+
+    def disputa_en_el_medio(*_args):
+        PasarelaCheckout.objects.filter(pk=fila.pk).update(disputa_id="du_1")
+
+    monkeypatch.setattr(webhooks_stripe, "_avisar_si_el_precio_no_lleva_el_impuesto_incluido", disputa_en_el_medio)
+    cuerpo = json.dumps({"id": "evt_c", "type": "checkout.session.completed", "data": {"object": {"id": "cs_du"}}}).encode()
+    r = client.post(URL, data=cuerpo, content_type="application/json", HTTP_STRIPE_SIGNATURE=firmar(cuerpo))
+
+    assert r.status_code == 200
+    assert _restante(cuenta) == 0
+    fila.refresh_from_db()
+    assert fila.acreditado_at is None
+    assert any("du_1" in a for a in avisos_enviados)
+
+
+def test_reinstated_con_la_cuenta_borrada_avisa_y_no_reintenta(client, compra_acreditada, avisos_enviados):
+    _disputa(client)
+    compra_acreditada.account.delete()
+
+    r = _disputa(client, tipo="charge.dispute.funds_reinstated")
+
+    assert r.status_code == 200
+    assert any("cuenta" in a.lower() and "du_1" in a for a in avisos_enviados[1:])
+    assert not MailBloqueado.bloqueado("ana@mail.com")
+
+
+def test_reinstated_desbloquea_aunque_la_cuenta_haya_cambiado_de_mail(client, compra_acreditada, avisos_enviados):
+    _disputa(client)
+    compra_acreditada.account.email = "nueva@mail.com"
+    compra_acreditada.account.save(update_fields=["email"])
+
+    _disputa(client, tipo="charge.dispute.funds_reinstated")
+
+    assert not MailBloqueado.bloqueado("ana@mail.com")
+
+
+def test_una_compra_anonima_disputada_antes_de_completed_bloquea_el_mail_del_pago(client, monkeypatch, make_chart, avisos_enviados):
+    """EC16 sin cuenta: la fila todavía no tiene a quién; el mail sale de la
+    sesión que Stripe devuelve para ese PaymentIntent."""
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_du", account=None, codigo_producto="informe_natal", moneda="brl",
+        precio_centavos=14900, anonimo=True, nonce_hash="x" * 64,
+        sujeto=sujeto_natal(make_chart(account=None)),
+    )
+    monkeypatch.setattr(
+        webhooks_stripe, "sesion_por_payment_intent",
+        lambda pi: {"id": "cs_du", "customer_details": {"email": " Ana@Mail.com "}},
+    )
+
+    assert _disputa(client).status_code == 200
+
+    fila.refresh_from_db()
+    assert fila.disputa_id == "du_1"
+    assert MailBloqueado.bloqueado("ana@mail.com")

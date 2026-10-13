@@ -65,9 +65,10 @@ def test_el_checkout_con_cuenta_bloqueada_es_403(account_client, settings):
     assert r.json()["motivo"] == "bloqueado"
 
 
+
 def test_un_codigo_pedido_antes_del_bloqueo_no_entra(client):
     """El código se pidió antes de la disputa: no abre la puerta después, y no
-    se quema (el canje no llega a tocar la fila)."""
+    se quema (el rechazo deshace el canje entero)."""
     from api import codigos_acceso
     from api.models import Account, CodigoAcceso, Session
 
@@ -83,3 +84,26 @@ def test_un_codigo_pedido_antes_del_bloqueo_no_entra(client):
     assert not Session.objects.exists()
     assert not Account.objects.exists()
     assert CodigoAcceso.objects.get(pk=fila.pk).usado_en is None
+
+
+def test_con_un_codigo_equivocado_el_bloqueo_no_se_revela(client):
+    """Sin un código válido, un mail bloqueado responde lo mismo que uno que
+    no lo está: si no, cualquiera averigua quién disputó un pago."""
+    from api import codigos_acceso
+
+    codigos_acceso.pedir("ana@mail.com")
+    codigos_acceso.pedir("otra@mail.com")
+    MailBloqueado.bloquear("ana@mail.com", motivo="disputa")
+
+    bloqueado = client.post(
+        "/api/auth/email", {"email": "ana@mail.com", "codigo": "000000"}, content_type="application/json",
+    )
+    libre = client.post(
+        "/api/auth/email", {"email": "otra@mail.com", "codigo": "000000"}, content_type="application/json",
+    )
+    sin_codigo = client.post(
+        "/api/auth/email", {"email": "nadie@mail.com", "codigo": "000000"}, content_type="application/json",
+    )
+
+    assert bloqueado.status_code == libre.status_code == sin_codigo.status_code == 401
+    assert bloqueado.json() == libre.json() == sin_codigo.json()
