@@ -1,13 +1,13 @@
 """`cupones.precio_final`: la única fuente del precio con cupón.
 
 La consumen el admin (preview), el endpoint público, el checkout y el webhook.
-Devuelve centavos exactos, sin redondear al dólar: es lo que Stripe cobra con
-`percent_off`, y como los precios del catálogo son múltiplos de 100, con un
-porcentaje entero nunca hay fracción de centavo.
+Devuelve centavos enteros, redondeados como Stripe con `percent_off` (al más
+cercano, mitad hacia arriba): es lo que cobra, y el webhook exige igualdad.
 """
 import pytest
 
 from api.catalogo import CATALOGO
+from api import cupones
 from api.cupones import precio_final
 
 
@@ -15,20 +15,35 @@ from api.cupones import precio_final
     "precio,porcentaje,final,descuento",
     [
         (2900, 30, 2030, 870),
-        (7900, 30, 5530, 2370),
-        (12500, 30, 8750, 3750),
         (2900, 50, 1450, 1450),
-        (7900, 50, 3950, 3950),
-        (12500, 50, 6250, 6250),
+        (12500, 30, 8750, 3750),
         (2900, 100, 0, 2900),
-        (7900, 100, 0, 7900),
-        (12500, 100, 0, 12500),
-        (2900, 1, 2871, 29),
-        (2900, 99, 29, 2871),
+        # BRL, MEDIDO en sandbox el 13-10-2026: Stripe redondea al más
+        # cercano con la mitad hacia arriba (373,5 → 374; 124,5 → 125).
+        (2490, 15, 2116, 374),
+        (2490, 5, 2365, 125),
+        (2490, 30, 1743, 747),
     ],
 )
-def test_tabla_de_precios_con_cupon(precio, porcentaje, final, descuento):
+def test_precio_final_redondea_como_stripe(precio, porcentaje, final, descuento):
     assert precio_final(precio, porcentaje) == (final, descuento)
+    assert final + descuento == precio
+
+
+@pytest.fixture
+def cupon_30(db):
+    from api.models import Cupon
+
+    return Cupon.objects.create(
+        codigo="TREINTA", porcentaje=30, productos=["informe_natal"], usos_maximos=10,
+    )
+
+
+def test_precio_y_descuento_en_la_moneda_pedida(cupon_30):
+    """`cupon_30`: 30 % sobre informe_natal (fixture de este archivo)."""
+    assert cupones.precio_y_descuento("informe_natal", cupon_30, "brl") == (14900, 4470)
+    assert cupones.precio_y_descuento("informe_natal", cupon_30, "usd") == (2900, 870)
+    assert cupones.precio_y_descuento("informe_natal", None, "brl") == (14900, 0)
 
 
 def test_para_todo_porcentaje_y_producto_el_descuento_cabe_en_aplicar_compra():

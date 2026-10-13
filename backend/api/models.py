@@ -536,6 +536,12 @@ class PasarelaCheckout(models.Model):
     # momento le cobraría a alguien sin darle nada. Nulo en las filas
     # anteriores a este campo, que siguen validando contra el catálogo.
     precio_centavos = models.PositiveIntegerField(null=True, blank=True)
+    # En qué moneda se abrió (ISO 4217 en minúscula, como la manda Stripe en
+    # `currency`). `precio_centavos`, `descuento_centavos` y
+    # `reembolsado_centavos` están en ESTA moneda. El webhook exige que la
+    # sesión venga en la misma: un monto sin su moneda no se puede comparar
+    # con nada (spec cobro-brl-pix, RF9/RF11).
+    moneda = models.CharField(max_length=3, default="usd")
     # Cuánto devolvió Stripe de esta compra, sumando reembolsos. Es lo que
     # deja que la pantalla de cuenta diga «reembolsada» sin sumar movimientos.
     reembolsado_centavos = models.PositiveIntegerField(default=0)
@@ -570,13 +576,14 @@ class PasarelaCheckout(models.Model):
 
 
     def precio_de_lista(self) -> int:
-        """El precio con el que se abrió. Las filas sin él caen al catálogo,
-        pero la migración `0037` se lo completó a todas las anteriores."""
+        """El precio con el que se abrió, en `self.moneda`. Las filas sin él
+        caen al catálogo EN SU MONEDA; la migración `0037` se lo completó a
+        todas las anteriores (que son `usd`)."""
         if self.precio_centavos is not None:
             return self.precio_centavos
         from api.catalogo import producto
 
-        return producto(self.codigo_producto).precio_en("usd")
+        return producto(self.codigo_producto).precio_en(self.moneda)
 
     def __str__(self):
         return f"{self.checkout_id} ({self.codigo_producto})"
@@ -692,6 +699,8 @@ class CuponUso(models.Model):
     codigo_producto = models.CharField(max_length=40)
     descuento_centavos = models.PositiveIntegerField()
     monto_pagado_centavos = models.PositiveIntegerField()
+    #: La moneda de los dos montos de arriba.
+    moneda = models.CharField(max_length=3, default="usd")
     checkout = models.ForeignKey(
         "PasarelaCheckout", on_delete=models.SET_NULL, null=True, blank=True, related_name="usos_cupon",
     )
