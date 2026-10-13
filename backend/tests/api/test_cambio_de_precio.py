@@ -49,7 +49,7 @@ def _cambiar_precio(monkeypatch, centavos):
 
 def _stripe_avisa_el_pago(client, monkeypatch, subtotal):
     sesion = {
-        "id": SESSION, "payment_status": "paid",
+        "id": SESSION, "payment_status": "paid", "currency": "usd",
         "amount_subtotal": subtotal, "amount_total": subtotal,
         "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": "pi_1", "metadata": {},

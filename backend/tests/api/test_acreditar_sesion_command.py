@@ -20,7 +20,7 @@ SESSION = "cs_manual"
 def _configurado(settings, monkeypatch):
     settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal"}
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda sid: {
-        "id": SESSION, "payment_status": "paid", "amount_subtotal": 2900, "amount_total": 2320,
+        "id": SESSION, "payment_status": "paid", "currency": "usd", "amount_subtotal": 2900, "amount_total": 2320,
         "total_details": {"amount_discount": 580}, "discounts": [{"promotion_code": "promo_1"}],
         "payment_intent": "pi_manual", "metadata": {},
         "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},

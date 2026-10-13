@@ -249,3 +249,39 @@ def test_el_reembolso_se_mide_contra_lo_que_se_pago_no_contra_el_precio_de_hoy(
 
     assert r.status_code == 200
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 2
+
+
+# --- La moneda del reembolso (cobro-brl-pix) ---------------------------------
+
+
+def test_un_reembolso_en_otra_moneda_no_toca_nada(client, comprado, monkeypatch):
+    """Un refund de 2900 `brl` sobre una compra `usd` no son 2900 de nada."""
+    from api import webhooks_stripe
+
+    avisos_ = []
+    monkeypatch.setattr(webhooks_stripe, "avisar_admin", avisos_.append)
+
+    r = _entregar(client, _refund(amount=2900, currency="brl"))
+
+    assert r.status_code == 200
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
+    assert not Movimiento.objects.filter(tipo="revocacion").exists()
+    assert avisos_
+
+
+def test_un_reembolso_parcial_en_reales_revoca_por_proporcion(client, make_account):
+    """EC9: medio pack pagado en reales revoca 3 de 5, como en dólares. La
+    proporción se mide contra lo congelado en la fila, en su moneda."""
+    cuenta = make_account()
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
+        payment_intent=PI, moneda="brl", precio_centavos=14900,
+    )
+    aplicar_compra(
+        cuenta, "pack_5_natal", 14900, external_id="stripe:session:cs_pack", precio_centavos=14900,
+    )
+
+    r = _entregar(client, _refund(amount=7450, currency="brl"))
+
+    assert r.status_code == 200
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 2

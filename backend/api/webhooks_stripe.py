@@ -36,6 +36,7 @@ from rest_framework.views import APIView
 from django.db import IntegrityError, models
 
 from api import analitica, catalogo, compra_anonima, notificaciones
+from api.avisos import avisar_admin
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
 from api.models import Account, CuponUso, PasarelaCheckout
@@ -205,23 +206,50 @@ def _acreditar(session_id: str) -> None:
     cuenta, fila = _resolver_cuenta_y_fila(sesion)
     if cuenta is None:
         logger.error("sesión %s sin cuenta que la reclame: no se acredita", session_id)
+        avisar_admin(f"Stripe {session_id}: pagada y sin cuenta que la reclame. No se acreditó.")
         return
 
+    # El Product de la sesión dice qué cobró Stripe; la fila dice qué abrimos.
+    # Los dos tienen que coincidir: elegir uno solo es entregar de más o de menos.
+    product_id = _product_de(sesion)
     try:
-        codigo = codigo_de_product(_product_de(sesion))
+        codigo_sesion = codigo_de_product(product_id)
     except KeyError:
-        logger.error("sesión %s con un Product que no mapeamos: no se acredita", session_id)
+        logger.error("sesión %s con un Product que no mapeamos (%s): no se acredita", session_id, product_id)
+        avisar_admin(f"Stripe {session_id}: Product {product_id} no está en STRIPE_PRODUCTOS. No se acreditó.")
         return
-
-    if fila is not None and fila.codigo_producto != codigo:
-        # El checkout se abrió para un producto y la sesión dice otro. No es un
-        # caso que sepamos resolver, y elegir mal significa entregar de más o
-        # de menos: se registra y no se acredita.
+    if fila is not None and fila.codigo_producto != codigo_sesion:
         logger.error(
-            "sesión %s: el checkout era de %s y la sesión dice %s",
-            session_id, fila.codigo_producto, codigo,
+            "sesión %s: el checkout era de %s y la sesión dice %s", session_id, fila.codigo_producto, codigo_sesion,
+        )
+        avisar_admin(
+            f"Stripe {session_id}: la fila es de {fila.codigo_producto} y la sesión trae {product_id} "
+            f"({codigo_sesion}). No se acreditó.",
         )
         return
+    codigo = fila.codigo_producto if fila is not None else codigo_sesion
+
+    # La moneda de la sesión tiene que ser la congelada: 14900 centavos de
+    # dólar no son 14900 de real, y `aplicar_compra` sólo compara enteros.
+    # Sin fila sólo se acepta la base, que es la única con la que el catálogo
+    # puede comparar (RF10).
+    moneda_sesion = (sesion.get("currency") or "").lower()
+    moneda_fila = fila.moneda if fila is not None else "usd"
+    if moneda_sesion != moneda_fila:
+        logger.error(
+            "sesión %s en %s y la fila en %s: no se acredita", session_id, moneda_sesion, moneda_fila,
+        )
+        avisar_admin(
+            f"Stripe {session_id}: la sesión vino en {moneda_sesion} y la fila está en {moneda_fila} "
+            f"(subtotal {sesion.get('amount_subtotal')}). No se acreditó.",
+        )
+        return
+
+    if fila is not None and fila.vencido_at is not None and fila.acreditado_at is None:
+        # EC15: un Pix pagado después de que la sesión venció. La plata entró
+        # y manda; se entrega, y se mira por qué llegó tarde.
+        logger.warning("sesión %s pagada sobre una fila vencida: se acredita igual", session_id)
+        avisar_admin(f"Stripe {session_id}: pago sobre una fila vencida; se acreditó igual.")
 
     monto = sesion.get("amount_subtotal")
     if monto is None:
@@ -229,6 +257,7 @@ def _acreditar(session_id: str) -> None:
         # se lee como "el monto no coincide", que es otro problema con otro
         # arreglo. Se rechaza acá, con su propio log.
         logger.error("sesión %s sin monto (amount_subtotal nulo): no se acredita", session_id)
+        avisar_admin(f"Stripe {session_id}: sin amount_subtotal. No se acreditó.")
         return
 
     _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto)
@@ -277,6 +306,10 @@ def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
                 "sesión %s trae un descuento que no abrimos nosotros (promos=%s, "
                 "amount_discount=%s): no se acredita", session_id, promos, reportado,
             )
+            avisar_admin(
+                f"Stripe {session_id}: el descuento no cierra (promos={promos}, reportado={reportado}). "
+                "No se acreditó.",
+            )
             raise DescuentoNoCierra
         return 0, None
 
@@ -295,6 +328,10 @@ def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
             "promos=%s descuento esperado=%s reportado=%s: no se acredita",
             session_id, cupon.codigo, cupon.stripe_promotion_code_id, promos, esperado, reportado,
         )
+        avisar_admin(
+            f"Stripe {session_id}: el descuento no cierra (promos={promos}, reportado={reportado}). "
+            "No se acreditó.",
+        )
         raise DescuentoNoCierra
     return esperado, cupon
 
@@ -308,10 +345,11 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
         # `amount_subtotal` y no `amount_total`: MEDIDO el 03-09-2026 contra una
         # sesión pagada de verdad con dirección española. Con Managed Payments
         # el subtotal NO baja —los dos campos llegan en el precio de lista y el
-        # impuesto va aparte, en `total_details`—, así que el subtotal vale 2900
-        # con impuesto incluido y también con impuesto encima. `amount_total`
-        # sólo coincide con el catálogo mientras el precio esté en `inclusive`.
-        # Con cupón (medido el 06-09-2026) tampoco baja: el descuento va en
+        # impuesto va aparte, en `total_details`—, así que el subtotal vale el
+        # precio de lista en la moneda de la sesión con impuesto incluido y
+        # también con impuesto encima. `amount_total` sólo coincide con el
+        # catálogo mientras el precio esté en `inclusive`. Con cupón (medido el
+        # 06-09-2026) tampoco baja: el descuento va en
         # `total_details.amount_discount`, y acá se resta el congelado.
         aplicado = aplicar_compra(
             cuenta, codigo, pagado,
@@ -324,6 +362,10 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
     except MontoInvalido:
         # Ya lo logueó `aplicar_compra` con los dos montos: acá no se repite.
         # Reintentar no lo arregla, así que la entrega se da por buena.
+        avisar_admin(
+            f"Stripe {session_id}: el monto no coincide (pagado {pagado} {fila.moneda if fila else 'usd'}, "
+            f"lista {fila.precio_de_lista() if fila else '?'}). No se acreditó.",
+        )
         return
 
     if fila is not None:
@@ -356,6 +398,7 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
             {
                 "producto": codigo, "monto_centavos": pagado, "locale": lang,
                 "cupon": cupon.codigo if cupon is not None else None,
+                "moneda": fila.moneda if fila is not None else "usd",
             },
         )
 
@@ -403,6 +446,7 @@ def _registrar_uso(cupon, cuenta, fila, codigo, descuento, pagado, external_id) 
             defaults=dict(
                 cupon=cupon, account=cuenta, codigo_producto=codigo, checkout=fila,
                 descuento_centavos=descuento, monto_pagado_centavos=pagado,
+                moneda=fila.moneda if fila is not None else "usd",
             ),
         )
     except IntegrityError:
@@ -481,6 +525,19 @@ def _reembolsar(refund: dict) -> None:
         raise ReembolsoSinCompra(
             f"reembolso {refund_id}: ninguna compra con payment_intent {payment_intent}",
         )
+
+    # Los montos sólo se comparan en la moneda de la compra: un reembolso de
+    # 2900 `brl` sobre una compra en `usd` no son 2900 de nada.
+    moneda_refund = (refund.get("currency") or "").lower()
+    if moneda_refund != fila.moneda:
+        logger.error(
+            "reembolso %s en %s sobre una compra en %s: no se revoca", refund_id, moneda_refund, fila.moneda,
+        )
+        avisar_admin(
+            f"Stripe refund {refund_id}: vino en {moneda_refund} y la compra {fila.checkout_id} está en "
+            f"{fila.moneda}. No se revocó nada.",
+        )
+        return
 
     # `fila.account` puede ser None si la cuenta se borró después de comprar
     # (RF22): `revocar` lo contempla y registra el movimiento igual, para que

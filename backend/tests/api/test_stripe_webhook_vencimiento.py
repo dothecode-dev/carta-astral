@@ -102,7 +102,7 @@ def test_un_pago_que_llega_despues_del_vencimiento_acredita_igual(client, monkey
 
     def falsa(session_id):
         return {
-            "id": SESSION, "payment_status": "paid", "amount_subtotal": 2900,
+            "id": SESSION, "payment_status": "paid", "currency": "usd", "amount_subtotal": 2900,
             "amount_total": 2900, "total_details": {"amount_tax": 0, "amount_discount": 0},
             "payment_intent": "pi_1", "metadata": {},
             "line_items": {"data": [{"price": {"product": PRECIO}, "quantity": 1}]},

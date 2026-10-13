@@ -33,7 +33,7 @@ def acreditar(client, monkeypatch):
     """Hace llegar el `checkout.session.completed` que acredita esa compra."""
     def _acreditar(checkout_id="cs_1", price="prod_natal", monto=2900):
         sesion = {
-            "id": checkout_id, "payment_status": "paid",
+            "id": checkout_id, "payment_status": "paid", "currency": "usd",
             "amount_subtotal": monto, "amount_total": monto,
             "total_details": {"amount_tax": 0, "amount_discount": 0},
             "payment_intent": f"pi_{checkout_id}", "metadata": {},

@@ -44,7 +44,7 @@ def sin_hilo(monkeypatch):
 
 def _entregar(client, monkeypatch, precio="prod_natal", monto=2900):
     sesion = {
-        "id": SESSION, "payment_status": "paid",
+        "id": SESSION, "payment_status": "paid", "currency": "usd",
         "amount_subtotal": monto, "amount_total": monto,
         "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": "pi_1", "metadata": {},

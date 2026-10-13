@@ -28,7 +28,7 @@ NONCE = "n0nce-deuda"
 
 def _sesion(checkout_id):
     return {
-        "id": checkout_id, "payment_status": "paid", "amount_subtotal": 2900,
+        "id": checkout_id, "payment_status": "paid", "currency": "usd", "amount_subtotal": 2900,
         "amount_total": 2900, "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": f"pi_{checkout_id}", "metadata": {},
         "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},

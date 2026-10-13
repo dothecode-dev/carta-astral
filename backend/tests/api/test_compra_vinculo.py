@@ -48,7 +48,7 @@ def _post_firmado(client, evento: dict):
 
 def _pagar(client, monkeypatch):
     sesion = {
-        "id": SESSION, "payment_status": "paid", "amount_subtotal": 900, "amount_total": 900,
+        "id": SESSION, "payment_status": "paid", "currency": "usd", "amount_subtotal": 900, "amount_total": 900,
         "total_details": {"amount_tax": 0, "amount_discount": 0}, "payment_intent": PI,
         "metadata": {}, "line_items": {"data": [{"price": {"product": PRECIO}, "quantity": 1}]},
     }

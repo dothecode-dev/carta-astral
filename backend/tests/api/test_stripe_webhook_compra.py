@@ -39,6 +39,7 @@ def _sesion(**cambios) -> dict:
     sesion = {
         "id": SESSION,
         "payment_status": "paid",
+        "currency": "usd",
         "amount_subtotal": 2900,
         "amount_total": 2900,
         "total_details": {"amount_tax": 0, "amount_discount": 0},

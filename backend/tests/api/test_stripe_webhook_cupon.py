@@ -40,7 +40,7 @@ def _sesion(**cambios) -> dict:
     """Una sesión pagada con el 30 % sobre informe_natal, como la devolvió el
     sandbox el 06-09-2026."""
     sesion = {
-        "id": SESSION, "payment_status": "paid",
+        "id": SESSION, "payment_status": "paid", "currency": "usd",
         "amount_subtotal": 2900, "amount_total": 2030,
         "total_details": {"amount_tax": 0, "amount_discount": 870, "amount_shipping": 0},
         "discounts": [{"coupon": None, "promotion_code": "promo_1"}],
