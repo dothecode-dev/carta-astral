@@ -93,3 +93,20 @@ def test_el_checkout_desde_brasil_puede_pedir_usd(account_client, base, settings
     account_client.post("/api/checkout/", {"producto": "informe_natal", "moneda": "usd"}, HTTP_X_FORWARDED_FOR="200.1.2.3")
 
     assert PasarelaCheckout.objects.get(checkout_id="cs_geo2").moneda == "usd"
+
+
+def test_una_base_invalida_no_tumba_nada_y_avisa_una_sola_vez(client, settings, tmp_path, caplog):
+    """Un archivo que no es una base (descarga cortada, HTML) es «no sé», no
+    un 500, y no se reintenta ni se loguea en cada request."""
+    ruta = tmp_path / "x.mmdb"
+    ruta.write_bytes(b"no es una base")
+    settings.GEOIP_PATH = str(ruta)
+    geo.recargar()
+
+    with caplog.at_level("WARNING", logger="api.geo"):
+        assert geo.pais_de("200.1.2.3") is None
+        r = client.get("/api/moneda/", HTTP_X_FORWARDED_FOR="200.1.2.3")
+
+    assert r.status_code == 200
+    assert r.json() == {"moneda": "usd", "pais": None}
+    assert len([x for x in caplog.records if "inválida" in x.getMessage()]) == 1

@@ -43,9 +43,24 @@ def _lector():
         if _cargado != (ruta, mtime):
             import maxminddb
 
+            try:
+                nuevo = maxminddb.open_database(ruta)
+            except (maxminddb.InvalidDatabaseError, OSError, ValueError) as exc:
+                # Se recuerda el mtime: sin esto cada request reintenta (y
+                # loguea) hasta que alguien reemplace el archivo.
+                logger.warning(
+                    "base GeoLite2 inválida en %s (%s): la moneda inicial es usd para todos",
+                    ruta,
+                    type(exc).__name__,
+                )
+                if _reader is not None:
+                    _reader.close()
+                _reader = None
+                _cargado = (ruta, mtime)
+                return None
             if _reader is not None:
                 _reader.close()
-            _reader = maxminddb.open_database(ruta)
+            _reader = nuevo
             _cargado = (ruta, mtime)
             _avisado = False
             logger.info("base GeoLite2 cargada: %s", ruta)

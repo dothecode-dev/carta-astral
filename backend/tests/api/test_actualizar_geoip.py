@@ -5,6 +5,7 @@ import io
 import tarfile
 
 import httpx
+import maxminddb
 import pytest
 from django.core.management import CommandError, call_command
 
@@ -19,6 +20,24 @@ def _targz(contenido: bytes) -> bytes:
         info.size = len(contenido)
         tar.addfile(info, io.BytesIO(contenido))
     return buf.getvalue()
+
+
+@pytest.fixture(autouse=True)
+def _abre_solo_mmdb_de_mentira(monkeypatch):
+    """Los tests usan bytes de juguete: «MMDB» abre, cualquier otra cosa es
+    una base inválida, como con el lector real."""
+
+    class _R:
+        def close(self):
+            pass
+
+    def abrir(ruta):
+        with open(ruta, "rb") as f:
+            if f.read() != b"MMDB":
+                raise maxminddb.InvalidDatabaseError("no es una base")
+        return _R()
+
+    monkeypatch.setattr(actualizar_geoip.maxminddb, "open_database", abrir)
 
 
 @pytest.fixture
@@ -70,3 +89,30 @@ def test_un_fallo_de_red_deja_la_base_anterior(destino, monkeypatch):
         call_command("actualizar_geoip")
 
     assert destino.read_bytes() == b"VIEJA"
+
+
+def _responde(monkeypatch, contenido: bytes):
+    def get(url, auth=None, timeout=None, follow_redirects=False):
+        return httpx.Response(200, content=contenido, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(actualizar_geoip.httpx, "get", get)
+
+
+def test_un_mmdb_invalido_deja_la_base_anterior(destino, monkeypatch):
+    destino.write_bytes(b"MMDB")
+    _responde(monkeypatch, _targz(b"basura"))
+
+    with pytest.raises(CommandError, match="inválido"):
+        call_command("actualizar_geoip")
+
+    assert destino.read_bytes() == b"MMDB"
+    assert not list(destino.parent.glob("*.part"))
+
+
+def test_una_respuesta_que_no_es_tar_es_un_error_limpio(destino, monkeypatch):
+    _responde(monkeypatch, b"<html>")
+
+    with pytest.raises(CommandError, match="tar.gz"):
+        call_command("actualizar_geoip")
+
+    assert not destino.exists()

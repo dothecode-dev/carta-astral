@@ -15,6 +15,7 @@ import tarfile
 import tempfile
 
 import httpx
+import maxminddb
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
@@ -46,18 +47,31 @@ class Command(BaseCommand):
         carpeta = os.path.dirname(destino) or "."
         os.makedirs(carpeta, exist_ok=True)
         fd, temporal = tempfile.mkstemp(dir=carpeta, suffix=".mmdb.part")
-        with os.fdopen(fd, "wb") as f:
-            f.write(mmdb)
-        os.replace(temporal, destino)  # atómico: nadie lee una base a medias
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(mmdb)
+            try:
+                maxminddb.open_database(temporal).close()
+            except (maxminddb.InvalidDatabaseError, OSError, ValueError):
+                raise CommandError(
+                    "MaxMind devolvió un .mmdb inválido: se conserva la base anterior"
+                ) from None
+            os.replace(temporal, destino)  # atómico: nadie lee una base a medias
+        finally:
+            if os.path.exists(temporal):
+                os.unlink(temporal)
         geo.recargar()
         self.stdout.write(f"base GeoLite2 actualizada en {destino} ({len(mmdb)} bytes)")
 
 
 def _extraer_mmdb(targz: bytes) -> bytes:
-    with tarfile.open(fileobj=io.BytesIO(targz), mode="r:gz") as tar:
-        for miembro in tar.getmembers():
-            if miembro.name.endswith(".mmdb"):
-                archivo = tar.extractfile(miembro)
-                if archivo is not None:
-                    return archivo.read()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(targz), mode="r:gz") as tar:
+            for miembro in tar.getmembers():
+                if miembro.name.endswith(".mmdb"):
+                    archivo = tar.extractfile(miembro)
+                    if archivo is not None:
+                        return archivo.read()
+    except (tarfile.TarError, EOFError, OSError):
+        raise CommandError("la respuesta de MaxMind no es un tar.gz") from None
     raise CommandError("el tar.gz de MaxMind no trae ningún .mmdb")
