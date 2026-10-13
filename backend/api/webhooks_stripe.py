@@ -432,7 +432,26 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon,
         # `notificar` no lanza, así que no tapa la excepción del arranque.
         if aplicado:
             evento = "informe_en_curso" if informe_en_curso else "compra_acreditada"
-            notificaciones.notificar(cuenta, evento, {"producto": codigo}, lang=lang)
+            notificaciones.notificar(
+                cuenta, evento, {"producto": codigo, "medio": _medio_de_pago(sesion)}, lang=lang,
+            )
+
+
+def _payment_intent_id(sesion: dict) -> str:
+    """El PI expandido es un dict; en sesiones viejas (y en los tests) es el id."""
+    pi = sesion.get("payment_intent")
+    if isinstance(pi, dict):
+        return pi.get("id") or ""
+    return pi or ""
+
+
+def _medio_de_pago(sesion: dict) -> str:
+    """`pix`, `card`, ... según el PaymentIntent; vacío si no vino expandido."""
+    pi = sesion.get("payment_intent")
+    if isinstance(pi, dict):
+        tipos = pi.get("payment_method_types") or []
+        return tipos[0] if tipos else ""
+    return ""
 
 
 def _otorgar_y_marcar(sesion, cuenta, fila, codigo, pagado, descuento, external_id, a_mano) -> bool:
@@ -471,7 +490,7 @@ def _otorgar_y_marcar(sesion, cuenta, fila, codigo, pagado, descuento, external_
             # está aplicado y la compra YA fue entregada. Si la marca dependiera
             # de ese True, la página de retorno diría "pendiente" para siempre
             # sobre un informe que la persona ya tiene.
-            fila.payment_intent = sesion.get("payment_intent") or ""
+            fila.payment_intent = _payment_intent_id(sesion)
             fila.acreditado_at = fila.acreditado_at or timezone.now()
             fila.save(update_fields=["payment_intent", "acreditado_at"])
     return aplicado

@@ -82,7 +82,8 @@ def verificar_firma(cuerpo: bytes, cabecera: str, secreto: str) -> dict:
 
 
 def obtener_sesion(session_id: str) -> dict:
-    """La sesión tal como la ve Stripe, con los line items expandidos.
+    """La sesión tal como la ve Stripe, con los line items expandidos y el
+    PaymentIntent, que dice con qué medio se pagó.
 
     El payload del evento sirve para saber QUÉ pasó; para saber cuánto y de qué
     producto se vuelve a preguntar, que es lo que Stripe recomienda: el evento
@@ -90,7 +91,7 @@ def obtener_sesion(session_id: str) -> dict:
     esta llamada falla, quien llama responde 5xx y Stripe reintenta.
     """
     stripe.api_key = settings.STRIPE_SECRET_KEY
-    sesion = stripe.checkout.Session.retrieve(session_id, expand=["line_items"])
+    sesion = stripe.checkout.Session.retrieve(session_id, expand=["line_items", "payment_intent"])
     return sesion.to_dict()
 
 

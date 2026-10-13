@@ -179,3 +179,17 @@ def test_el_uso_del_cupon_y_la_analitica_llevan_la_moneda(client, monkeypatch, m
     uso = CuponUso.objects.get()
     assert (uso.moneda, uso.monto_pagado_centavos, uso.descuento_centavos) == ("brl", 10430, 4470)
     assert medidos[0]["moneda"] == "brl" and medidos[0]["monto_centavos"] == 10430
+
+
+def test_el_medio_de_pago_llega_al_aviso(client, monkeypatch, compra_brl, sin_hilo):
+    from api import notificaciones
+
+    avisados = []
+    monkeypatch.setattr(notificaciones, "notificar", lambda cuenta, evento, ctx, lang: avisados.append(ctx))
+    sesion = _sesion(payment_intent={"id": "pi_brl", "payment_method_types": ["pix"]})
+
+    _entregar(client, monkeypatch, sesion)
+
+    assert avisados[0]["medio"] == "pix"
+    compra_brl.refresh_from_db()
+    assert compra_brl.payment_intent == "pi_brl"

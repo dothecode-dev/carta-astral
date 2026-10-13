@@ -319,7 +319,7 @@ def test_al_acreditar_se_le_avisa_a_quien_compro(client, monkeypatch, compra, si
 
     _entregar(client, monkeypatch)
 
-    assert avisos == [("informe_en_curso", {"producto": "informe_natal"})]
+    assert avisos == [("informe_en_curso", {"producto": "informe_natal", "medio": ""})]
     assert len(sin_hilo) == 1
 
 
