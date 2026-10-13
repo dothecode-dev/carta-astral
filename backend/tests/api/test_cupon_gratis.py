@@ -153,7 +153,7 @@ def test_un_regalo_sigue_valiendo_cero_aunque_el_precio_cambie(
     account_client.post(URL, {"producto": "informe_natal", "cupon": "REGALO"})
     monkeypatch.setitem(
         catalogo.CATALOGO, "informe_natal",
-        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=500),
+        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precios={"usd": 500}),
     )
 
     compra = account_client.get("/api/compras/").json()["compras"][0]

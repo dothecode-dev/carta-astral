@@ -68,7 +68,7 @@ def test_el_descuento_queda_congelado_en_la_fila(account_client, stripe_responde
     account_client.post(URL, {"producto": "informe_natal", "cupon": "PROMO30"})
 
     fila = PasarelaCheckout.objects.get(checkout_id="cs_test_cupon")
-    precio = producto("informe_natal").precio_centavos
+    precio = producto("informe_natal").precio_en("usd")
     assert fila.cupon == promo
     assert fila.precio_centavos == precio
     assert fila.descuento_centavos == precio * 30 // 100

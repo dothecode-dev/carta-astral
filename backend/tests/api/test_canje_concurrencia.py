@@ -192,7 +192,7 @@ def test_dos_aplicar_compra_del_mismo_evento_otorgan_una_sola_vez(make_account):
 
     resultados, errores = en_hilos(
         lambda _i: aplicar_compra(
-            cuenta, "pack_5_natal", producto("pack_5_natal").precio_centavos,
+            cuenta, "pack_5_natal", producto("pack_5_natal").precio_en("usd"),
             external_id="stripe:session:cs_par",
         ),
         3,

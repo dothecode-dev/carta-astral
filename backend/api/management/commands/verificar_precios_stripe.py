@@ -68,7 +68,7 @@ class Command(BaseCommand):
                 continue
 
             try:
-                esperado = producto(codigo).precio_centavos
+                esperado = producto(codigo).precio_en("usd")
             except KeyError:
                 self.stderr.write(f"{codigo}: no está en el catálogo (mapeado a {price_id})")
                 problemas += 1

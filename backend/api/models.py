@@ -576,7 +576,7 @@ class PasarelaCheckout(models.Model):
             return self.precio_centavos
         from api.catalogo import producto
 
-        return producto(self.codigo_producto).precio_centavos
+        return producto(self.codigo_producto).precio_en("usd")
 
     def __str__(self):
         return f"{self.checkout_id} ({self.codigo_producto})"
@@ -651,7 +651,7 @@ class Cupon(models.Model):
             prod = CATALOGO.get(codigo)
             if prod is None:
                 raise ValidationError({"productos": f"{codigo} no está en el catálogo."})
-            if prod.precio_centavos <= 0:
+            if prod.es_gratis:
                 raise ValidationError({"productos": f"{codigo} es gratis: no admite descuento."})
 
     def save(self, *args, **kwargs):

@@ -373,7 +373,7 @@ def _bajar_el_precio(monkeypatch, centavos):
     from api import catalogo
     monkeypatch.setitem(
         catalogo.CATALOGO, "informe_natal",
-        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=centavos),
+        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precios={"usd": centavos}),
     )
 
 

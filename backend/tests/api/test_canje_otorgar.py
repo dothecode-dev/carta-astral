@@ -60,7 +60,7 @@ def test_si_la_deuda_es_mayor_que_lo_otorgado_queda_deuda_y_cero_saldo(make_acco
 def test_otorgar_un_producto_de_acceso_pone_vigencia_y_no_cantidad(make_account, monkeypatch):
     from api import catalogo
     plan = catalogo.Producto(
-        codigo="plan_demo", precio_centavos=999, naturaleza=catalogo.ACCESO,
+        codigo="plan_demo", precios={"usd": 999}, naturaleza=catalogo.ACCESO,
         capacidades=("leer_informe",), otorga=(("plan_demo", 1),), duracion_dias=30,
     )
     monkeypatch.setitem(catalogo.CATALOGO, "plan_demo", plan)

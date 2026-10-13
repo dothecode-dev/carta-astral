@@ -47,7 +47,7 @@ def test_dos_productos_dan_la_misma_capacidad_y_basta_uno(make_account):
 def test_un_acceso_vigente_puede_y_uno_vencido_no(make_account, monkeypatch):
     from api import catalogo
     monkeypatch.setitem(catalogo.CATALOGO, "plan_demo", catalogo.Producto(
-        codigo="plan_demo", precio_centavos=999, naturaleza=catalogo.ACCESO,
+        codigo="plan_demo", precios={"usd": 999}, naturaleza=catalogo.ACCESO,
         capacidades=("horoscopo_semanal",), otorga=(("plan_demo", 1),), duracion_dias=30,
     ))
     cuenta = make_account()

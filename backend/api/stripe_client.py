@@ -195,7 +195,7 @@ def crear_checkout(
     pone la casilla obligatoria de aceptar los términos en el checkout.
     """
     prod = producto(codigo_producto)  # KeyError si no existe: lo dice el catálogo
-    if prod.precio_centavos == 0:
+    if prod.es_gratis:
         raise ValueError(f"{codigo_producto} es gratis: no se cobra")
     if not prod.vendible:
         raise ValueError(f"{codigo_producto} está retirado: no se vende")

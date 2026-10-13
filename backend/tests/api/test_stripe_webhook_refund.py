@@ -162,7 +162,7 @@ def test_los_reembolsos_de_la_pasarela_cuentan_para_el_contador(client, comprado
 # —eso va a deuda—. En un producto suelto cualquier reembolso parcial revoca su
 # única unidad: no existe medio informe.
 
-PRECIO_PACK = producto("pack_5_natal").precio_centavos
+PRECIO_PACK = producto("pack_5_natal").precio_en("usd")
 
 
 @pytest.fixture
@@ -242,7 +242,7 @@ def test_el_reembolso_se_mide_contra_lo_que_se_pago_no_contra_el_precio_de_hoy(
     aplicar_compra(cuenta, "pack_5_natal", 12500, external_id="stripe:session:cs_pack")
     monkeypatch.setitem(
         catalogo.CATALOGO, "pack_5_natal",
-        dataclasses.replace(catalogo.CATALOGO["pack_5_natal"], precio_centavos=2500),
+        dataclasses.replace(catalogo.CATALOGO["pack_5_natal"], precios={"usd": 2500}),
     )
 
     r = _entregar(client, _refund(amount=6250))

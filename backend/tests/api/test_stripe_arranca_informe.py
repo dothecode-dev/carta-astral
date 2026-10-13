@@ -92,7 +92,7 @@ def test_un_pack_no_arranca_ningun_informe(
     from api.catalogo import producto
 
     r = _entregar(client, monkeypatch, precio="price_pack",
-                  monto=producto("pack_5_natal").precio_centavos)
+                  monto=producto("pack_5_natal").precio_en("usd"))
 
     assert r.status_code == 200
     assert not Interpretation.objects.exists()

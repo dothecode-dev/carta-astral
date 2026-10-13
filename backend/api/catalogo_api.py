@@ -26,7 +26,7 @@ class CatalogoView(APIView):
             "productos": [
                 {
                     "codigo": p.codigo,
-                    "precio_centavos": p.precio_centavos,
+                    "precio_centavos": p.precio_en("usd"),
                     # Fijo hoy, explícito igual: el día que haya otra moneda,
                     # la web no tiene que adivinar cuál está mostrando.
                     "moneda": "usd",
@@ -37,6 +37,6 @@ class CatalogoView(APIView):
                         for codigo, cantidad in p.otorga
                     ],
                 }
-                for p in sorted(vendibles, key=lambda p: p.precio_centavos)
+                for p in sorted(vendibles, key=lambda p: p.precio_en("usd"))
             ],
         })

@@ -51,7 +51,7 @@ def test_el_precio_es_el_del_catalogo(client):
     productos = {p["codigo"]: p for p in client.get(URL).json()["productos"]}
 
     for codigo, datos in productos.items():
-        assert datos["precio_centavos"] == producto(codigo).precio_centavos
+        assert datos["precio_centavos"] == producto(codigo).precio_en("usd")
 
 
 def test_dice_cuantos_informes_deja_cada_producto(client):

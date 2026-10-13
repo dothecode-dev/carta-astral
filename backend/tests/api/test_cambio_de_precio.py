@@ -43,7 +43,7 @@ def stripe_abre(monkeypatch):
 def _cambiar_precio(monkeypatch, centavos):
     monkeypatch.setitem(
         catalogo.CATALOGO, "informe_natal",
-        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=centavos),
+        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precios={"usd": centavos}),
     )
 
 

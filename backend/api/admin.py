@@ -262,7 +262,7 @@ class CuponForm(forms.ModelForm):
             self.fields.pop("productos", None)
         if "productos" in self.fields:
             self.fields["productos"].choices = [
-                (p.codigo, f"{p.codigo} — {_dolares(p.precio_centavos)}") for p in _productos_con_precio()
+                (p.codigo, f"{p.codigo} — {_dolares(p.precio_en("usd"))}") for p in _productos_con_precio()
             ]
         if not self.instance.pk:
             self.fields["codigo"].initial = codigo_propuesto()
@@ -377,9 +377,9 @@ class CuponAdmin(admin.ModelAdmin):
             filas = format_html_join(
                 "", "<tr><td>{}</td><td>{}</td><td>−{}</td><td><b>{}</b></td></tr>",
                 (
-                    (codigo, _dolares(prod.precio_centavos), _dolares(descuento), _dolares(final))
+                    (codigo, _dolares(prod.precio_en("usd")), _dolares(descuento), _dolares(final))
                     for codigo, prod, (final, descuento) in (
-                        (c, producto(c), cupones.precio_final(producto(c).precio_centavos, obj.porcentaje))
+                        (c, producto(c), cupones.precio_final(producto(c).precio_en("usd"), obj.porcentaje))
                         for c in obj.productos if c in CATALOGO
                     )
                 ),
@@ -409,10 +409,10 @@ class CuponAdmin(admin.ModelAdmin):
         precios = []
         for codigo in request.GET.getlist("productos"):
             prod = CATALOGO.get(codigo)
-            if prod is None or prod.precio_centavos <= 0:
+            if prod is None or prod.es_gratis:
                 continue
-            final, descuento = cupones.precio_final(prod.precio_centavos, porcentaje)
-            precios.append({"codigo": codigo, "lista": prod.precio_centavos, "final": final, "descuento": descuento})
+            final, descuento = cupones.precio_final(prod.precio_en("usd"), porcentaje)
+            precios.append({"codigo": codigo, "lista": prod.precio_en("usd"), "final": final, "descuento": descuento})
         return JsonResponse({"precios": precios})
 
     def save_model(self, request, obj, form, change):

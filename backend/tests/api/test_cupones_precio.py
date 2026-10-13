@@ -37,9 +37,9 @@ def test_para_todo_porcentaje_y_producto_el_descuento_cabe_en_aplicar_compra():
     siempre, o el webhook rechaza un pago real."""
     for prod in CATALOGO.values():
         for porcentaje in range(1, 101):
-            final, descuento = precio_final(prod.precio_centavos, porcentaje)
-            assert 0 <= descuento <= prod.precio_centavos
-            assert final + descuento == prod.precio_centavos
+            final, descuento = precio_final(prod.precio_en("usd"), porcentaje)
+            assert 0 <= descuento <= prod.precio_en("usd")
+            assert final + descuento == prod.precio_en("usd")
 
 
 @pytest.mark.parametrize("porcentaje", [0, 101, -1])

@@ -10,7 +10,7 @@ pytestmark = pytest.mark.django_db
 
 def test_el_vinculo_esta_en_el_catalogo_a_9_dolares():
     p = catalogo.producto("informe_vinculo")
-    assert p.precio_centavos == 900 and p.capacidades == ("leer_vinculo",) and p.sujeto == "vinculo"
+    assert p.precio_en("usd") == 900 and p.capacidades == ("leer_vinculo",) and p.sujeto == "vinculo"
 
 
 @pytest.fixture

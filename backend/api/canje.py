@@ -146,7 +146,7 @@ def aplicar_compra(
     duplicado sin llegar acá— lo encuentra ya puesto.
     """
     prod = producto(codigo_producto)
-    precio = prod.precio_centavos if precio_centavos is None else precio_centavos
+    precio = prod.precio_en("usd") if precio_centavos is None else precio_centavos
     if not (0 <= descuento_centavos <= precio):
         # Sin esta cota, un descuento inventado en el payload hace pasar
         # cualquier monto (incluido 0 o negativo) como si el catálogo lo

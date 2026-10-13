@@ -215,7 +215,7 @@ def test_una_compra_vieja_muestra_lo_que_se_pago_aunque_el_precio_cambie(
     )
     monkeypatch.setitem(
         catalogo.CATALOGO, "informe_natal",
-        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=500),
+        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precios={"usd": 500}),
     )
 
     compra = account_client.get("/api/compras/").json()["compras"][0]

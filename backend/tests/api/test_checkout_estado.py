@@ -109,7 +109,7 @@ def test_un_pack_manda_a_la_cuenta(account_client, make_chart, acreditar):
     )
 
     acreditar(checkout_id="cs_5", price="price_pack",
-              monto=producto("pack_5_natal").precio_centavos)
+              monto=producto("pack_5_natal").precio_en("usd"))
 
     datos = account_client.get("/api/checkout/cs_5/").json()
     assert datos["estado"] == "acreditado"

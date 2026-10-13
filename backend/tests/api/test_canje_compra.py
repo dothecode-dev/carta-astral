@@ -8,7 +8,7 @@ from api.sujetos import sujeto_natal
 # Del catálogo y no un literal: el precio cambia (el pack de 5 pasó de
 # US$ 149,90 a US$ 125,00 el 02-09-2026) y estos tests son sobre qué otorga
 # la compra, no sobre cuánto sale. El valor exacto lo fija test_catalogo.py.
-PRECIO_PACK = producto("pack_5_natal").precio_centavos
+PRECIO_PACK = producto("pack_5_natal").precio_en("usd")
 
 pytestmark = pytest.mark.django_db
 

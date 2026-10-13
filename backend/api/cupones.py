@@ -99,17 +99,17 @@ def canjear_gratis(
         external_id = f"cupon:{checkout_id}"
         aplicar_compra(
             account, codigo_producto, 0, external_id, sujeto=sujeto,
-            descuento_centavos=prod.precio_centavos, origen="cupon",
+            descuento_centavos=prod.precio_en("usd"), origen="cupon",
         )
         fila = PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=account, codigo_producto=codigo_producto,
             sujeto=sujeto, locale=locale, acreditado_at=timezone.now(),
-            cupon=cupon, descuento_centavos=prod.precio_centavos,
-            precio_centavos=prod.precio_centavos,
+            cupon=cupon, descuento_centavos=prod.precio_en("usd"),
+            precio_centavos=prod.precio_en("usd"),
         )
         CuponUso.objects.create(
             cupon=cupon, account=account, codigo_producto=codigo_producto,
-            descuento_centavos=prod.precio_centavos, monto_pagado_centavos=0,
+            descuento_centavos=prod.precio_en("usd"), monto_pagado_centavos=0,
             checkout=fila, external_id=external_id,
         )
     logger.info("cupón %s canjeado gratis por acc=%s: %s", cupon.codigo, account.pk, codigo_producto)
@@ -151,7 +151,7 @@ def cambiar_activo(cupon, activo: bool) -> None:
 def precio_y_descuento(codigo_producto: str, cupon) -> tuple[int, int]:
     """`(precio de lista, descuento)` que se congelan en la fila del checkout:
     es contra esto que el webhook valida lo que Stripe cobró."""
-    precio = producto(codigo_producto).precio_centavos
+    precio = producto(codigo_producto).precio_en("usd")
     descuento = precio_final(precio, cupon.porcentaje)[1] if cupon is not None else 0
     return precio, descuento
 
