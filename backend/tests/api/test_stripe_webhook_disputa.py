@@ -100,6 +100,28 @@ def test_funds_reinstated_devuelve_lo_revocado_y_desbloquea(client, compra_acred
     assert len(avisos_enviados) == 2
 
 
+def test_el_withdrawn_reentregado_tras_el_reinstate_no_vuelve_a_marcar_ni_bloquear(
+    client, compra_acreditada, avisos_enviados,
+):
+    """Stripe reentrega el `funds_withdrawn` DESPUÉS del `reinstated`: la
+    disputa ya se cerró a favor, así que no se vuelve a marcar la fila, no se
+    bloquea el mail otra vez ni se avisa. El ledger ya era idempotente por
+    `external_id`; lo que faltaba era no tocar la marca ni el bloqueo."""
+    _disputa(client)
+    _disputa(client, tipo="charge.dispute.funds_reinstated")
+    antes = len(avisos_enviados)
+
+    r = _disputa(client)
+
+    assert r.status_code == 200
+    compra_acreditada.refresh_from_db()
+    assert compra_acreditada.disputa_id is None
+    assert not MailBloqueado.bloqueado("ana@mail.com")
+    assert _restante(compra_acreditada.account) == 1
+    assert compra_acreditada.reembolsado_centavos == 14900
+    assert len(avisos_enviados) == antes
+
+
 def test_reinstated_sin_retiro_previo_solo_avisa(client, compra_acreditada, avisos_enviados):
     _disputa(client, tipo="charge.dispute.funds_reinstated")
 

@@ -740,6 +740,13 @@ def _retirar_por_disputa(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> 
         if fila.disputa_id == dispute_id:
             logger.info("disputa %s ya aplicada", dispute_id)
             return None
+        if Movimiento.objects.filter(external_id=f"stripe:dispute:{dispute_id}:reinstated").exists():
+            # Reentrega de un `withdrawn` DESPUÉS de su `reinstated`: la
+            # disputa ya se cerró a favor y la marca se borró al reponer. El
+            # ledger no movería plata (mismo `external_id`), pero volver a
+            # marcar la fila bloquearía el mail de una compra ya repuesta.
+            logger.info("disputa %s ya repuesta: el retiro reentregado no se aplica", dispute_id)
+            return None
         if moneda != fila.moneda:
             logger.error("disputa %s en %s sobre compra en %s: no se revoca", dispute_id, moneda, fila.moneda)
             return (
