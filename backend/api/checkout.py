@@ -28,7 +28,7 @@ from api import (
     stripe_client,
 )
 from api.auth import AccountTokenAuthentication
-from api.models import Chart, PasarelaCheckout, Sujeto
+from api.models import Chart, MailBloqueado, PasarelaCheckout, Sujeto
 from api.permissions import HasAccount
 from api.sujetos import sujeto_natal
 
@@ -110,6 +110,10 @@ class CheckoutView(APIView):
                 {"error": "estamos actualizando el sitio, probá en unos minutos"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        if MailBloqueado.bloqueado(request.user.email or ""):
+            # RF16: quien disputó un pago no vuelve a comprar con cuenta.
+            logger.warning("checkout de una cuenta con mail bloqueado: %s", request.user.pk)
+            return Response({"error": "cuenta bloqueada", "motivo": "bloqueado"}, status=status.HTTP_403_FORBIDDEN)
 
         codigo = request.data.get("producto")
         if not codigo:

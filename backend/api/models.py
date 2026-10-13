@@ -569,6 +569,11 @@ class PasarelaCheckout(models.Model):
     # canje anónimo lo devuelven para que la web no espere un informe que no
     # va a arrancar.
     saldo_deuda = models.BooleanField(default=False)
+    # La disputa que retiró los fondos de esta compra (`charge.dispute.*`,
+    # spec cobro-brl-pix RF15). Único: es la idempotencia del evento. Una fila
+    # con disputa no se entrega aunque después llegue su `completed` (EC16:
+    # medido el 13-10-2026 que la disputa puede llegar antes).
+    disputa_id = models.CharField(max_length=100, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -714,6 +719,40 @@ class CuponUso(models.Model):
 
     def __str__(self):
         return f"{self.cupon_id} → acc={self.account_id} ({self.codigo_producto})"
+
+
+class MailBloqueado(models.Model):
+    """Un mail que no entra ni compra con cuenta (RF16): el de quien disputó
+    un pago. Se guarda normalizado. Una compra sin cuenta con este mail se
+    acredita igual —la plata ya entró— y avisa al admin (R8). Alta y baja a
+    mano desde el admin; `funds_reinstated` lo da de baja solo."""
+
+    email = models.EmailField(unique=True)
+    motivo = models.CharField(max_length=40)
+    dispute_id = models.CharField(max_length=100, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "mail bloqueado"
+        verbose_name_plural = "mails bloqueados"
+
+    @staticmethod
+    def normalizar(email: str) -> str:
+        return (email or "").strip().lower()
+
+    @classmethod
+    def bloqueado(cls, email: str) -> bool:
+        limpio = cls.normalizar(email)
+        return bool(limpio) and cls.objects.filter(email=limpio).exists()
+
+    @classmethod
+    def bloquear(cls, email: str, motivo: str, dispute_id: str = "") -> None:
+        limpio = cls.normalizar(email)
+        if limpio:
+            cls.objects.get_or_create(email=limpio, defaults={"motivo": motivo, "dispute_id": dispute_id})
+
+    def __str__(self):
+        return f"{self.email} ({self.motivo})"
 
 
 class CupoDiario(models.Model):

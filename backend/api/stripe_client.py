@@ -94,6 +94,15 @@ def obtener_sesion(session_id: str) -> dict:
     return sesion.to_dict()
 
 
+def sesion_por_payment_intent(payment_intent: str) -> dict | None:
+    """La Checkout Session de ese PaymentIntent, o None. Para una disputa que
+    llega antes de que la fila tenga el PI (EC16). Si la API falla, la
+    excepción sube y el webhook pide el reintento."""
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    lista = stripe.checkout.Session.list(payment_intent=payment_intent, limit=1)
+    return lista.data[0].to_dict() if lista.data else None
+
+
 def product_de(codigo_producto: str) -> str:
     """El id del Product de Stripe para ese producto nuestro, de
     `STRIPE_PRODUCTOS`. Falla ANTES de abrir un pago que después nadie

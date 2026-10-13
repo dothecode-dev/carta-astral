@@ -1,10 +1,12 @@
 """El webhook de Stripe: por acá entra la plata.
 
-Despacha cinco eventos, que el endpoint del dashboard de Stripe (live y
+Despacha siete eventos, que el endpoint del dashboard de Stripe (live y
 sandbox) tiene que tener dados de alta a mano —ver el CLAUDE.md del repo—:
 `checkout.session.completed` y `checkout.session.async_payment_succeeded`
-(acreditar), `refund.created` (revocar), y `checkout.session.expired` y
-`checkout.session.async_payment_failed` (vencer y descartar).
+(acreditar), `refund.created` (revocar), `checkout.session.expired` y
+`checkout.session.async_payment_failed` (vencer y descartar), y
+`charge.dispute.funds_withdrawn` y `charge.dispute.funds_reinstated`
+(revertir por disputa, y reponer si Stripe devuelve los fondos).
 
 La URL es pública, así que la firma es la única autenticación. Sin
 `STRIPE_WEBHOOK_SECRET` configurado se rechaza todo (fail-closed): aceptar
@@ -39,8 +41,10 @@ from api import analitica, catalogo, compra_anonima, notificaciones
 from api.avisos import avisar_admin
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
-from api.models import Account, CuponUso, PasarelaCheckout
-from api.stripe_client import FirmaInvalida, codigo_de_product, obtener_sesion, verificar_firma
+from api.models import Account, CuponUso, MailBloqueado, PasarelaCheckout
+from api.stripe_client import (
+    FirmaInvalida, codigo_de_product, obtener_sesion, sesion_por_payment_intent, verificar_firma,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,12 @@ EVENTOS_REEMBOLSO = ("refund.created",)
 # `expired` no llega nunca, así que sin él la carta anónima quedaba guardada
 # para siempre.
 EVENTOS_VENCIMIENTO = ("checkout.session.expired", "checkout.session.async_payment_failed")
+
+# Stripe retiró los fondos por una disputa (o los devolvió). Con Pix no se
+# puede contestar; con tarjeta Managed Payments la gestiona y no nos avisaba
+# del resultado. MEDIDO el 13-10-2026: llegan con `payment_intent`, `amount`,
+# `currency`, y pueden llegar ANTES que `completed`.
+EVENTOS_DISPUTA = ("charge.dispute.funds_withdrawn", "charge.dispute.funds_reinstated")
 
 
 class StripeWebhookView(APIView):
@@ -87,7 +97,7 @@ class StripeWebhookView(APIView):
 
         tipo = evento.get("type", "")
         objeto = (evento.get("data") or {}).get("object") or {}
-        if tipo not in EVENTOS_PAGO + EVENTOS_REEMBOLSO + EVENTOS_VENCIMIENTO:
+        if tipo not in EVENTOS_PAGO + EVENTOS_REEMBOLSO + EVENTOS_VENCIMIENTO + EVENTOS_DISPUTA:
             logger.info("evento de stripe ignorado: %s", tipo)
             return Response(status=status.HTTP_200_OK)
 
@@ -96,6 +106,8 @@ class StripeWebhookView(APIView):
                 _acreditar(objeto.get("id", ""))
             elif tipo in EVENTOS_VENCIMIENTO:
                 _vencer(objeto.get("id", ""))
+            elif tipo in EVENTOS_DISPUTA:
+                _disputar(objeto, tipo)
             else:
                 _reembolsar(objeto)
         except Exception:
@@ -166,6 +178,10 @@ def _adjudicar_si_es_anonima(session_id: str, sesion: dict) -> None:
         # vista lo loguea con nivel error y responde 5xx.
         raise SesionAnonimaSinEmail(f"sesión anónima {session_id} pagada sin email")
     compra_anonima.adjudicar(session_id, email)
+    if MailBloqueado.bloqueado(email):
+        # R8: la plata entró, se entrega igual; pero se mira.
+        logger.warning("sesión %s: compra sin cuenta de un mail bloqueado; se acredita igual", session_id)
+        avisar_admin(f"Stripe {session_id}: compra sin cuenta de un mail BLOQUEADO ({email}). Se acredita igual.")
 
 
 def _product_de(sesion: dict) -> str:
@@ -207,6 +223,15 @@ def _acreditar(session_id: str) -> None:
     if cuenta is None:
         logger.error("sesión %s sin cuenta que la reclame: no se acredita", session_id)
         avisar_admin(f"Stripe {session_id}: pagada y sin cuenta que la reclame. No se acreditó.")
+        return
+
+    if fila is not None and fila.disputa_id:
+        # EC16: la disputa llegó antes que el pago. Esos fondos ya se los
+        # llevó Stripe: entregar ahora sería regalar lo disputado.
+        logger.error("sesión %s con disputa %s: no se entrega", session_id, fila.disputa_id)
+        avisar_admin(
+            f"Stripe {session_id}: llegó el pago de una compra ya disputada ({fila.disputa_id}). No se entregó.",
+        )
         return
 
     # El Product de la sesión dice qué cobró Stripe; la fila dice qué abrimos.
@@ -593,3 +618,91 @@ def _reembolsar(refund: dict) -> None:
         "reembolso %s parcial (%s de %s): revocadas %s de %s unidades de %s",
         refund_id, monto, precio_pagado, unidades, multiplicador, codigo_otorgado,
     )
+
+
+def _fila_de_disputa(dispute: dict):
+    """La compra de esta disputa. Primero por el `payment_intent` de la fila;
+    si la disputa llegó antes que `completed` (EC16) la fila todavía no lo
+    tiene, y se pregunta a Stripe de qué sesión es."""
+    pi = dispute.get("payment_intent") or ""
+    if not pi:
+        # Buscar por vacío engancharía cualquier fila abierta (ver `_reembolsar`).
+        return None
+    fila = PasarelaCheckout.objects.filter(payment_intent=pi).first()
+    if fila is not None:
+        return fila
+    sesion = sesion_por_payment_intent(pi)
+    if sesion is None:
+        return None
+    return PasarelaCheckout.objects.filter(checkout_id=sesion.get("id", "")).first()
+
+
+def _disputar(dispute: dict, tipo: str) -> None:
+    """RF15: una disputa que retira fondos se trata como reembolso total, se
+    avisa y se bloquea el mail; si Stripe devuelve los fondos, se repone.
+
+    Todo `return` es definitivo (200). Una disputa sin compra nuestra también:
+    a diferencia del reembolso, acá ya se le preguntó a Stripe por la sesión,
+    así que reintentar no la va a hacer aparecer. La idempotencia es
+    `disputa_id` (único) más los `external_id` del ledger.
+    """
+    dispute_id = dispute.get("id", "")
+    pi = dispute.get("payment_intent") or ""
+    monto = dispute.get("amount") or 0
+    moneda = (dispute.get("currency") or "").lower()
+    fila = _fila_de_disputa(dispute)
+    if fila is None:
+        logger.error("disputa %s sin compra conocida (pi=%s): no se toca nada", dispute_id, pi)
+        avisar_admin(f"Stripe disputa {dispute_id} ({tipo}) sobre {pi}: no encuentro la compra. {monto} {moneda}.")
+        return
+
+    mail = (fila.account.email if fila.account is not None else "") or ""
+    if tipo == "charge.dispute.funds_withdrawn":
+        if fila.disputa_id == dispute_id:
+            logger.info("disputa %s ya aplicada", dispute_id)
+            return
+        if moneda != fila.moneda:
+            logger.error("disputa %s en %s sobre compra en %s: no se revoca", dispute_id, moneda, fila.moneda)
+            avisar_admin(
+                f"Stripe disputa {dispute_id}: vino en {moneda} y la compra {fila.checkout_id} está en "
+                f"{fila.moneda}. No se revocó.",
+            )
+            return
+        PasarelaCheckout.objects.filter(pk=fila.pk).update(disputa_id=dispute_id)
+        # Sin acreditar no hay nada que revocar: la marca alcanza para que el
+        # `completed` que llegue después no entregue (EC16).
+        if fila.acreditado_at is not None and revocar(
+            fila.account, fila.codigo_producto, 1, external_id=f"stripe:dispute:{dispute_id}",
+        ):
+            _anotar_reembolso(fila, monto)
+        MailBloqueado.bloquear(mail, motivo="disputa", dispute_id=dispute_id)
+        logger.warning("disputa %s aplicada sobre %s", dispute_id, fila.checkout_id)
+        avisar_admin(
+            f"⚠️ Disputa {dispute_id} ({dispute.get('reason')}): {fila.codigo_producto} {fila.checkout_id}, "
+            f"{monto} {moneda}. Revocado y mail bloqueado: {mail or 'sin mail'}.",
+        )
+        return
+
+    # funds_reinstated
+    if fila.disputa_id != dispute_id:
+        logger.error("disputa %s: fondos devueltos sin retiro previo registrado", dispute_id)
+        avisar_admin(
+            f"Stripe disputa {dispute_id}: fondos devueltos sobre {fila.checkout_id} sin retiro previo registrado.",
+        )
+        return
+    if fila.acreditado_at is not None:
+        # Otro `external_id` que el de la compra: con el mismo, `aplicar_compra`
+        # lo descartaría como duplicado. Idempotente por ese id.
+        aplicar_compra(
+            fila.account, fila.codigo_producto, fila.precio_de_lista() - fila.descuento_centavos,
+            external_id=f"stripe:dispute:{dispute_id}:reinstated", sujeto=fila.sujeto,
+            descuento_centavos=fila.descuento_centavos, precio_centavos=fila.precio_de_lista(),
+        )
+        estado = "repuesto"
+    else:
+        # La disputa llegó antes que el pago (EC16) y la fila sigue marcada:
+        # su `completed` ya no entrega solo. Queda para `acreditar_sesion`.
+        estado = "nunca se entregó, resolver a mano con acreditar_sesion"
+    MailBloqueado.objects.filter(email=MailBloqueado.normalizar(mail), dispute_id=dispute_id).delete()
+    logger.info("disputa %s resuelta a favor sobre %s", dispute_id, fila.checkout_id)
+    avisar_admin(f"Disputa {dispute_id} resuelta a favor: {fila.checkout_id} {estado}; mail desbloqueado.")

@@ -35,8 +35,8 @@ from django.utils.html import format_html, format_html_join
 from api import canje, cupones, stripe_client
 from api.catalogo import CATALOGO, a_la_venta, producto
 from api.models import (
-    Account, Chart, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, Movimiento,
-    PasarelaCheckout,
+    Account, Chart, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, MailBloqueado,
+    Movimiento, PasarelaCheckout,
 )
 
 
@@ -484,3 +484,11 @@ class CuponUsoAdmin(SoloLectura):
             uso.save(update_fields=["revocado_at"])
             revocados += 1
         self.message_user(request, f"{revocados} regalo(s) revocado(s).")
+
+
+@admin.register(MailBloqueado)
+class MailBloqueadoAdmin(admin.ModelAdmin):
+    """Alta y baja a mano (RF16): no es de sólo lectura a propósito."""
+
+    list_display = ("email", "motivo", "dispute_id", "created_at")
+    search_fields = ("email", "dispute_id")
