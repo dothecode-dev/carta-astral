@@ -34,8 +34,12 @@ def avisar_admin(texto: str) -> None:
             json={"chat_id": chat, "text": texto[:_TOPE]},
             timeout=_TIMEOUT,
         )
-    except httpx.HTTPError as exc:
-        # `from None` y sin `exc`: el mensaje de httpx trae la URL con el token.
+    except Exception as exc:  # el contrato es «nunca levanta»
+        # Amplio a propósito: `InvalidURL` y `StreamError` no heredan de
+        # `HTTPError`, y una que escape convierte el 200 deliberado de un
+        # webhook en un 5xx que Stripe reintenta en loop. Se loguea, no se
+        # traga: sólo el tipo, porque el mensaje de httpx trae la URL con el
+        # token.
         logger.warning("telegram no contestó: %s", type(exc).__name__)
         return
     if respuesta.status_code >= 400:

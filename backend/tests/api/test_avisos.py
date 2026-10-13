@@ -52,6 +52,24 @@ def test_un_fallo_de_red_no_levanta_y_no_loguea_el_token(monkeypatch, settings, 
     assert "telegram" in caplog.text.lower()
 
 
+def test_una_excepcion_que_no_es_httperror_tampoco_levanta(monkeypatch, settings, caplog):
+    """`InvalidURL` (un token con caracteres raros) no hereda de `HTTPError`:
+    si escapara, el webhook respondería 5xx y Stripe reintentaría en loop."""
+    settings.TELEGRAM_BOT_TOKEN = "123:secreto"
+    settings.TELEGRAM_CHAT_ID = "1"
+
+    def post(url, json=None, timeout=None):
+        raise httpx.InvalidURL(f"x {url}")
+
+    monkeypatch.setattr(avisos.httpx, "post", post)
+
+    with caplog.at_level("WARNING", logger="api.avisos"):
+        avisos.avisar_admin("algo")  # no levanta
+
+    assert "InvalidURL" in caplog.text
+    assert "secreto" not in caplog.text
+
+
 def test_un_4xx_tampoco_levanta(monkeypatch, settings, caplog):
     settings.TELEGRAM_BOT_TOKEN = "123:abc"
     settings.TELEGRAM_CHAT_ID = "1"
