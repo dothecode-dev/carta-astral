@@ -13,6 +13,11 @@ fi
 # NOTA: el dataset GeoNames NO se carga acá (trunca+recarga ~234k filas y tarda).
 # Correr una sola vez, manualmente, post-deploy:  python manage.py import_geonames
 
+# La base de países para la moneda inicial (RF3). Si falla —sin clave, sin
+# red— el sitio arranca igual y cobra en USD; el Scheduled Task semanal
+# reintenta. El `||` porque arriba hay `set -e`.
+python manage.py actualizar_geoip || echo "geoip: sin base, se sigue en usd"
+
 exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \
     --workers "${GUNICORN_WORKERS:-3}" \

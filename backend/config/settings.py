@@ -522,6 +522,15 @@ STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 
+# --- Moneda por país (GeoLite2) ----------------------------------------------
+# La base de MaxMind la baja `manage.py actualizar_geoip` (en el arranque y en
+# un Scheduled Task semanal de Coolify: la EULA exige destruir versiones
+# viejas a los 30 días). Sin base, todo es `usd`. Vive en /tmp: es del
+# contenedor y se vuelve a bajar en cada arranque.
+GEOIP_PATH = os.environ.get("GEOIP_PATH", "/tmp/GeoLite2-Country.mmdb")
+MAXMIND_ACCOUNT_ID = os.environ.get("MAXMIND_ACCOUNT_ID", "").strip()
+MAXMIND_LICENSE_KEY = os.environ.get("MAXMIND_LICENSE_KEY", "").strip()
+
 # Cantidad de reembolsos que marca una cuenta como abuso.
 REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 

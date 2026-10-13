@@ -1,6 +1,7 @@
 from django.urls import path
 
 from api.catalogo_api import CatalogoView
+from api.geo_api import MonedaView
 from api.checkout import CheckoutEstadoView, CheckoutView
 from api.compra_anonima_api import CheckoutAnonimoView, CheckoutCanjeView
 from api.compras_api import ComprasView
@@ -49,6 +50,7 @@ urlpatterns = [
     path("compras/", ComprasView.as_view()),
     # Público: los precios se ven sin cuenta.
     path("catalogo/", CatalogoView.as_view()),
+    path("moneda/", MonedaView.as_view()),
     path("cupones/<str:codigo>/", CuponPublicoView.as_view()),
     path("webhooks/stripe/", StripeWebhookView.as_view()),
     path("webhooks/resend/", ResendWebhookView.as_view()),

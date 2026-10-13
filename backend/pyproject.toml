@@ -25,6 +25,7 @@ dependencies = [
     "wagtail>=7.4.2",
     "weasyprint>=69.0",
     "whitenoise>=6.12.0",
+    "geoip2>=4.8",
 ]
 
 [dependency-groups]
