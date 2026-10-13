@@ -730,7 +730,9 @@ def _mail_de_disputa(fila, sesion) -> str:
 
 def _retirar_por_disputa(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> str | None:
     with transaction.atomic():
-        fila = PasarelaCheckout.objects.select_for_update().select_related("account").get(pk=fila_pk)
+        # `of=("self",)`: `account` es nullable y el JOIN es OUTER; Postgres no
+        # acepta FOR UPDATE sobre ese lado (medido 13-10-2026, SQLite lo ignora).
+        fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila_pk)
         if fila.disputa_id == dispute_id:
             logger.info("disputa %s ya aplicada", dispute_id)
             return None
@@ -761,7 +763,9 @@ def _retirar_por_disputa(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> 
 
 def _reponer_por_disputa(fila_pk, dispute_id) -> str | None:
     with transaction.atomic():
-        fila = PasarelaCheckout.objects.select_for_update().select_related("account").get(pk=fila_pk)
+        # `of=("self",)`: `account` es nullable y el JOIN es OUTER; Postgres no
+        # acepta FOR UPDATE sobre ese lado (medido 13-10-2026, SQLite lo ignora).
+        fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila_pk)
         if fila.disputa_id != dispute_id:
             logger.error("disputa %s: fondos devueltos sin retiro previo registrado", dispute_id)
             return (
