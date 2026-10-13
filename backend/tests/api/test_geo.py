@@ -2,28 +2,19 @@
 `usd`, nunca un error."""
 
 import pytest
-from geoip2.errors import AddressNotFoundError
 
 from api import geo
 
 
 class _Lector:
-    """Lo mínimo de `geoip2.database.Reader` que usa `geo`."""
+    """Lo mínimo de `maxminddb.Reader` que usa `geo`."""
 
     def __init__(self, paises: dict[str, str]):
         self.paises = paises
 
-    def country(self, ip):
-        try:
-            iso = self.paises[ip]
-        except KeyError:
-            raise AddressNotFoundError(ip) from None
-
-        class _R:
-            class country:  # noqa: N801 — imita el objeto de geoip2
-                iso_code = iso
-
-        return _R()
+    def get(self, ip):
+        iso = self.paises.get(ip)
+        return {"country": {"iso_code": iso}} if iso else None
 
 
 @pytest.fixture

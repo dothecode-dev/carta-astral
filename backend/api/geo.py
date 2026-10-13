@@ -1,7 +1,7 @@
 """País del visitante por IP, y la moneda que le corresponde (RF2).
 
-Base GeoLite2-Country de MaxMind en `GEOIP_PATH`, leída con `geoip2`. La
-consulta es en memoria (< 1 ms). Sin base, sin IP o con IP privada la
+Base GeoLite2-Country de MaxMind en `GEOIP_PATH`, leída con `maxminddb` (el lector puro; el cliente
+de alto nivel de MaxMind arrastra aiohttp y no hace falta). La consulta es en memoria (< 1 ms). Sin base, sin IP o con IP privada la
 respuesta es «no sé» y la moneda cae a `usd`: la geo nunca puede ser la razón
 de que una página no cargue. Nada de esto se guarda (política de privacidad:
 la IP se usa para deducir el país y no se almacena).
@@ -28,7 +28,7 @@ _avisado = False
 
 
 def _lector():
-    """El `Reader` de geoip2 sobre la base actual, o None si no hay base.
+    """El `Reader` de maxminddb sobre la base actual, o None si no hay base.
     Se recarga sola si el archivo cambió (lo reemplaza `actualizar_geoip`)."""
     global _cargado, _reader, _avisado
     ruta = settings.GEOIP_PATH
@@ -41,11 +41,11 @@ def _lector():
         return None
     with _lock:
         if _cargado != (ruta, mtime):
-            import geoip2.database
+            import maxminddb
 
             if _reader is not None:
                 _reader.close()
-            _reader = geoip2.database.Reader(ruta)
+            _reader = maxminddb.open_database(ruta)
             _cargado = (ruta, mtime)
             _avisado = False
             logger.info("base GeoLite2 cargada: %s", ruta)
@@ -72,12 +72,13 @@ def pais_de(ip: str | None) -> str | None:
     lector = _lector()
     if lector is None:
         return None
-    from geoip2.errors import AddressNotFoundError
-
     try:
-        return lector.country(ip).country.iso_code
-    except AddressNotFoundError:
+        registro = lector.get(ip)
+    except ValueError:  # maxminddb levanta ValueError con una IP que no parsea
         return None
+    if not registro:
+        return None
+    return ((registro.get("country") or {}).get("iso_code")) or None
 
 
 def moneda_para(pais: str | None) -> str:
