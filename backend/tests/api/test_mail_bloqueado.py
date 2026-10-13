@@ -63,3 +63,23 @@ def test_el_checkout_con_cuenta_bloqueada_es_403(account_client, settings):
 
     assert r.status_code == 403
     assert r.json()["motivo"] == "bloqueado"
+
+
+def test_un_codigo_pedido_antes_del_bloqueo_no_entra(client):
+    """El código se pidió antes de la disputa: no abre la puerta después, y no
+    se quema (el canje no llega a tocar la fila)."""
+    from api import codigos_acceso
+    from api.models import Account, CodigoAcceso, Session
+
+    fila, claro, _ = codigos_acceso.pedir("ana@mail.com")
+    MailBloqueado.bloquear("ana@mail.com", motivo="disputa")
+
+    r = client.post(
+        "/api/auth/email", {"email": "Ana@Mail.com", "codigo": claro}, content_type="application/json",
+    )
+
+    assert r.status_code == 403
+    assert r.json()["motivo"] == "bloqueado"
+    assert not Session.objects.exists()
+    assert not Account.objects.exists()
+    assert CodigoAcceso.objects.get(pk=fila.pk).usado_en is None

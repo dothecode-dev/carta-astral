@@ -113,6 +113,13 @@ class CanjearCodigoView(APIView):
             return Response(
                 {"error": "email y codigo requeridos"}, status=status.HTTP_400_BAD_REQUEST
             )
+        if MailBloqueado.bloqueado(email):
+            # RF16: un código pedido antes del bloqueo no abre la puerta
+            # después. Antes de `canjear()`, así no se quema el código ni se
+            # crea nada. Por el mail del request, que `canjear()` normaliza
+            # igual que `MailBloqueado` (minúsculas y trim).
+            logger.warning("canje de código de un mail bloqueado")
+            return Response({"error": "cuenta bloqueada", "motivo": "bloqueado"}, status=status.HTTP_403_FORBIDDEN)
 
         if not tombstone_hmac_configurada():
             # Chequeo ANTES de tocar la fila del código (C2, revisión de
