@@ -50,10 +50,12 @@ def moneda_pedida(request, codigo_producto: str) -> str:
     """En qué moneda se cobra. La pide el cliente (RF4: puede cambiarla, es
     la decisión del 13-10); ausente, `usd`. Se normaliza —`BRL ` llega de un
     cliente que no es la web— y se valida contra las monedas del producto: no
-    se inventa un precio en una moneda que el catálogo no tiene (EC2)."""
+    se inventa un precio en una moneda que el catálogo no tiene (EC2). Un
+    producto desconocido no es un problema de moneda: lo rechaza quien ya lo
+    rechazaba."""
     pedida = str(request.data.get("moneda") or "usd").strip().lower()
     prod = catalogo.CATALOGO.get(codigo_producto)
-    if prod is None or pedida not in prod.monedas():
+    if prod is not None and pedida not in prod.monedas():
         raise MonedaInvalida(pedida)
     return pedida
 

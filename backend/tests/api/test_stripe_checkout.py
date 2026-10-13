@@ -273,3 +273,12 @@ def test_una_moneda_que_el_producto_no_tiene_es_400(account_client, stripe_respo
     assert r.status_code == 400
     assert r.json()["motivo"] == "moneda_invalida"
     assert not stripe_responde
+
+
+def test_un_producto_desconocido_sigue_siendo_producto_invalido_aunque_venga_moneda(account_client, stripe_responde):
+    r = account_client.post(URL, {"producto": "pack_100", "moneda": "brl"})
+
+    assert r.status_code == 400
+    assert r.json()["error"] == "producto inválido"
+    assert r.json().get("motivo") != "moneda_invalida"
+    assert not stripe_responde
