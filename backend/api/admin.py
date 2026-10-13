@@ -207,7 +207,7 @@ class PasarelaCheckoutAdmin(SoloLectura):
     encuentra. Sin el nonce: aunque está hasheado, no le sirve a soporte."""
 
     list_display = (
-        "checkout_id", "account", "codigo_producto", "anonimo", "cuenta_nueva",
+        "checkout_id", "account", "codigo_producto", "moneda", "anonimo", "cuenta_nueva",
         "acreditado_at", "canjeado_at", "vencido_at", "saldo_deuda", "created_at",
     )
     list_filter = ("anonimo", "codigo_producto")
@@ -229,9 +229,12 @@ admin.site.index_title = "Sólo lectura. Las mutaciones van por management comma
 # --- Cupones: la excepción a la regla 1 -------------------------------------
 
 
-def _dolares(centavos: int) -> str:
+_SIMBOLO = {"usd": "US$", "brl": "R$"}
+
+
+def _monto(centavos: int, moneda: str = "usd") -> str:
     # Espacio duro: que el precio no se parta de su símbolo al final de línea.
-    return f"US$\u00a0{centavos // 100},{centavos % 100:02d}"
+    return f"{_SIMBOLO.get(moneda, moneda.upper())}\u00a0{centavos // 100},{centavos % 100:02d}"
 
 
 def _productos_con_precio():
@@ -262,7 +265,7 @@ class CuponForm(forms.ModelForm):
             self.fields.pop("productos", None)
         if "productos" in self.fields:
             self.fields["productos"].choices = [
-                (p.codigo, f"{p.codigo} — {_dolares(p.precio_en("usd"))}") for p in _productos_con_precio()
+                (p.codigo, f"{p.codigo} — {_monto(p.precio_en("usd"))}") for p in _productos_con_precio()
             ]
         if not self.instance.pk:
             self.fields["codigo"].initial = codigo_propuesto()
@@ -288,11 +291,11 @@ class CuponUsoInline(SoloLecturaInline):
 
     @admin.display(description="descuento")
     def descuento(self, obj):
-        return _dolares(obj.descuento_centavos)
+        return _monto(obj.descuento_centavos, obj.moneda)
 
     @admin.display(description="pagado")
     def pagado(self, obj):
-        return _dolares(obj.monto_pagado_centavos)
+        return _monto(obj.monto_pagado_centavos, obj.moneda)
 
 
 @admin.register(Cupon)
@@ -377,14 +380,13 @@ class CuponAdmin(admin.ModelAdmin):
             filas = format_html_join(
                 "", "<tr><td>{}</td><td>{}</td><td>−{}</td><td><b>{}</b></td></tr>",
                 (
-                    (codigo, _dolares(prod.precio_en("usd")), _dolares(descuento), _dolares(final))
-                    for codigo, prod, (final, descuento) in (
-                        (c, producto(c), cupones.precio_final(producto(c).precio_en("usd"), obj.porcentaje))
-                        for c in obj.productos if c in CATALOGO
-                    )
+                    (f"{codigo} · {moneda}", _monto(lista, moneda), _monto(descuento, moneda), _monto(final, moneda))
+                    for codigo in obj.productos if codigo in CATALOGO
+                    for moneda, lista in producto(codigo).precios.items()
+                    for final, descuento in [cupones.precio_final(lista, obj.porcentaje)]
                 ),
             )
-            filas = format_html("<table><tr><th>producto</th><th>lista</th><th>descuento</th><th>final</th></tr>{}</table>", filas)
+            filas = format_html("<table><tr><th>producto · moneda</th><th>lista</th><th>descuento</th><th>final</th></tr>{}</table>", filas)
         # Absoluta y por `reverse`: en el alta Django pasa un `Cupon()` sin
         # guardar (no `None`), y una URL relativa resuelta desde `/add/` y
         # desde `/<pk>/change/` no cae en el mismo lugar. Falló en staging.
@@ -411,8 +413,9 @@ class CuponAdmin(admin.ModelAdmin):
             prod = CATALOGO.get(codigo)
             if prod is None or prod.es_gratis:
                 continue
-            final, descuento = cupones.precio_final(prod.precio_en("usd"), porcentaje)
-            precios.append({"codigo": codigo, "lista": prod.precio_en("usd"), "final": final, "descuento": descuento})
+            for moneda, lista in prod.precios.items():
+                final, descuento = cupones.precio_final(lista, porcentaje)
+                precios.append({"codigo": codigo, "moneda": moneda, "lista": lista, "final": final, "descuento": descuento})
         return JsonResponse({"precios": precios})
 
     def save_model(self, request, obj, form, change):

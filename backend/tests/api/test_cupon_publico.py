@@ -94,3 +94,17 @@ def test_el_checkout_tambien_tiene_techo(account_client, monkeypatch):
 
     account_client.post("/api/checkout/", {"producto": "informe_natal"})
     assert account_client.post("/api/checkout/", {"producto": "informe_natal"}).status_code == 429
+
+
+@pytest.fixture
+def cupon_30(db):
+    return Cupon.objects.create(codigo="TREINTA", porcentaje=30, productos=["informe_natal"], usos_maximos=10)
+
+
+def test_el_precio_final_viene_por_moneda(client, cupon_30):
+    natal = next(p for p in client.get("/api/cupones/TREINTA/").json()["productos"] if p["codigo"] == "informe_natal")
+    assert natal["precios"] == {"usd": 2900, "brl": 14900}
+    assert natal["finales"] == {
+        "usd": {"precio_final_centavos": 2030, "descuento_centavos": 870},
+        "brl": {"precio_final_centavos": 10430, "descuento_centavos": 4470},
+    }

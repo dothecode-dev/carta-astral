@@ -27,9 +27,9 @@ class CatalogoView(APIView):
                 {
                     "codigo": p.codigo,
                     "precio_centavos": p.precio_en("usd"),
-                    # Fijo hoy, explícito igual: el día que haya otra moneda,
-                    # la web no tiene que adivinar cuál está mostrando.
+                    # Hasta que la web lea `precios`; los borra el plan de la web.
                     "moneda": "usd",
+                    "precios": dict(p.precios),
                     # Lo que hace la diferencia entre "US$ 125" y "US$ 125 por
                     # cinco informes".
                     "otorga": [

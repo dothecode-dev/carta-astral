@@ -68,10 +68,16 @@ def test_no_expone_nada_mas_que_lo_necesario(client):
     """Un endpoint público no filtra el modelo entero: sólo lo que la página
     de precios necesita para mostrar y para comprar."""
     for p in client.get(URL).json()["productos"]:
-        assert set(p) == {"codigo", "precio_centavos", "moneda", "otorga"}
+        assert set(p) == {"codigo", "precio_centavos", "moneda", "precios", "otorga"}
 
 
 def test_viene_ordenado_de_menor_a_mayor(client):
     precios = [p["precio_centavos"] for p in client.get(URL).json()["productos"]]
 
     assert precios == sorted(precios)
+
+
+def test_cada_producto_trae_sus_precios_por_moneda(client):
+    natal = next(p for p in client.get("/api/catalogo/").json()["productos"] if p["codigo"] == "informe_natal")
+    assert natal["precios"] == {"usd": 2900, "brl": 14900}
+    assert (natal["precio_centavos"], natal["moneda"]) == (2900, "usd")
