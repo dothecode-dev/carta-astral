@@ -70,3 +70,38 @@ def test_correrlo_dos_veces_no_otorga_dos(compra):
 def test_una_sesion_que_no_registramos_no_se_acredita():
     with pytest.raises(CommandError):
         call_command("acreditar_sesion", "cs_desconocida", "--si-estoy-seguro")
+
+
+def test_muestra_la_moneda_de_los_dos_lados(compra, capsys):
+    """Un 2900 contra un 2900 no dicen nada si uno es `brl` y el otro `usd`."""
+    compra.moneda = "brl"
+    compra.precio_centavos = 14900
+    compra.save(update_fields=["moneda", "precio_centavos"])
+
+    call_command("acreditar_sesion", SESSION)
+
+    salida = capsys.readouterr().out
+    assert "14900 brl" in salida
+    assert "2900 usd" in salida
+
+
+def test_una_fila_disputada_no_se_acredita_sin_el_segundo_flag(compra, capsys):
+    compra.disputa_id = "du_manual"
+    compra.save(update_fields=["disputa_id"])
+
+    with pytest.raises(CommandError):
+        call_command("acreditar_sesion", SESSION, "--si-estoy-seguro")
+
+    assert "DISPUTADA" in capsys.readouterr().out
+    assert _restante(compra.account) == 0
+    compra.refresh_from_db()
+    assert compra.acreditado_at is None
+
+
+def test_una_fila_disputada_se_acredita_con_los_dos_flags(compra):
+    compra.disputa_id = "du_manual"
+    compra.save(update_fields=["disputa_id"])
+
+    call_command("acreditar_sesion", SESSION, "--si-estoy-seguro", "--aunque-disputada")
+
+    assert _restante(compra.account) == 1
