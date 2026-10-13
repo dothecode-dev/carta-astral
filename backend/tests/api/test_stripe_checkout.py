@@ -88,7 +88,6 @@ def test_el_cliente_no_elige_el_precio(account_client, stripe_responde):
     assert "payment_method_options" not in enviado
 
 
-@pytest.mark.xfail(strict=True, reason="Task 5")
 def test_en_reales_lleva_pix_con_iof_absorbido_y_vence_con_la_sesion(account_client, stripe_responde):
     account_client.post(URL, {"producto": "informe_natal", "moneda": "brl"})
 
@@ -239,3 +238,38 @@ def test_un_pack_retirado_no_se_puede_comprar(account_client, stripe_responde):
 
     assert r.status_code == 400
     assert stripe_responde == []
+
+
+def test_la_moneda_se_normaliza_y_queda_congelada_en_la_fila(account_client, stripe_responde):
+    """Un cliente que no es la web puede mandar `BRL ` (Review Focus 1)."""
+    account_client.post(URL, {"producto": "informe_natal", "moneda": "BRL "})
+
+    fila = PasarelaCheckout.objects.get(checkout_id="cs_test_nueva")
+    assert (fila.moneda, fila.precio_centavos) == ("brl", 14900)
+    assert stripe_responde[0]["line_items"][0]["price_data"]["currency"] == "brl"
+
+
+def test_sin_moneda_se_cobra_en_usd(account_client, stripe_responde):
+    account_client.post(URL, {"producto": "informe_natal"})
+
+    assert PasarelaCheckout.objects.get(checkout_id="cs_test_nueva").moneda == "usd"
+
+
+@pytest.mark.parametrize("moneda", ["ars", "eur", "x", "pesos"])
+def test_una_moneda_desconocida_es_400_y_no_abre_nada(account_client, stripe_responde, moneda):
+    r = account_client.post(URL, {"producto": "informe_natal", "moneda": moneda})
+
+    assert r.status_code == 400
+    assert r.json()["motivo"] == "moneda_invalida"
+    assert not stripe_responde
+    assert PasarelaCheckout.objects.count() == 0
+
+
+def test_una_moneda_que_el_producto_no_tiene_es_400(account_client, stripe_responde, settings):
+    """El vínculo sólo tiene precio en USD (EC2): `brl` no inventa uno."""
+    settings.VINCULO_ENABLED = True
+    r = account_client.post(URL, {"producto": "informe_vinculo", "moneda": "brl"})
+
+    assert r.status_code == 400
+    assert r.json()["motivo"] == "moneda_invalida"
+    assert not stripe_responde

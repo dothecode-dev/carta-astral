@@ -41,6 +41,26 @@ def idioma_pedido(request) -> str:
     return pedido if pedido in stripe_client.LOCALES else stripe_client.LOCALE_POR_DEFECTO
 
 
+class MonedaInvalida(Exception):
+    """El cliente pidió una moneda que no conocemos o en la que ese producto
+    no se vende."""
+
+
+def moneda_pedida(request, codigo_producto: str) -> str:
+    """En qué moneda se cobra. La pide el cliente (RF4: puede cambiarla, es
+    la decisión del 13-10); ausente, `usd`. Se normaliza —`BRL ` llega de un
+    cliente que no es la web— y se valida contra las monedas del producto: no
+    se inventa un precio en una moneda que el catálogo no tiene (EC2)."""
+    pedida = str(request.data.get("moneda") or "usd").strip().lower()
+    prod = catalogo.CATALOGO.get(codigo_producto)
+    if prod is None or pedida not in prod.monedas():
+        raise MonedaInvalida(pedida)
+    return pedida
+
+
+_MONEDA_INVALIDA = {"error": "moneda inválida", "motivo": "moneda_invalida"}
+
+
 def respuesta_de_stripe(exc, codigo) -> Response:
     """Qué le decimos a quien compra cuando `crear_checkout` falla."""
     if isinstance(exc, stripe_client.StripeNoConfigurado):
@@ -123,6 +143,13 @@ class CheckoutView(APIView):
         # blanca acá —no se concatena ni se guarda tal cual— porque viene del
         # navegador y termina en una URL y en la base.
         idioma = idioma_pedido(request)
+        # Antes del cupón: el regalo del 100 % no cobra, pero un 400 por
+        # moneda tiene que ganar igual para que la web no dependa del orden.
+        try:
+            moneda = moneda_pedida(request, codigo)
+        except MonedaInvalida as exc:
+            logger.info("checkout de %r en moneda rechazada: %s", codigo, exc)
+            return Response(_MONEDA_INVALIDA, status=status.HTTP_400_BAD_REQUEST)
 
         cupon = None
         codigo_cupon = request.data.get("cupon")
@@ -140,7 +167,7 @@ class CheckoutView(APIView):
 
         try:
             checkout_id, url = stripe_client.crear_checkout(
-                request.user, codigo, sujeto=sujeto, locale=idioma, cupon=cupon,
+                request.user, codigo, sujeto=sujeto, locale=idioma, cupon=cupon, moneda=moneda,
             )
         except (KeyError, ValueError) as exc:
             # Producto que no está en el catálogo, o gratis. Es un pedido mal
@@ -154,11 +181,11 @@ class CheckoutView(APIView):
         # de otra orden resolviera contra ella. El descuento queda congelado
         # acá, y el precio también: es contra ESTO que el webhook valida lo que
         # Stripe cobró, aunque el catálogo cambie mientras la sesión sigue viva.
-        precio, descuento = cupones.precio_y_descuento(codigo, cupon)
+        precio, descuento = cupones.precio_y_descuento(codigo, cupon, moneda)
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
             sujeto=sujeto, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
-            precio_centavos=precio,
+            precio_centavos=precio, moneda=moneda,
         )
         return Response({"url": url})
 

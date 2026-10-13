@@ -16,7 +16,13 @@ from core.exceptions import CoreError
 
 from api import compra_anonima, mantenimiento, stripe_client
 from api.chart_service import calcular, mensaje_de_datos_invalidos, validar_trato
-from api.checkout import idioma_pedido, respuesta_de_stripe
+from api.checkout import (
+    _MONEDA_INVALIDA,
+    MonedaInvalida,
+    idioma_pedido,
+    moneda_pedida,
+    respuesta_de_stripe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +68,10 @@ class CheckoutAnonimoView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         idioma = idioma_pedido(request)
+        try:
+            moneda = moneda_pedida(request, compra_anonima.PRODUCTO)
+        except MonedaInvalida:
+            return Response(_MONEDA_INVALIDA, status=status.HTTP_400_BAD_REQUEST)
         # Misma validación que la vista previa (`calcular`), ANTES de crear
         # nada. Sin `exc_info` ni payload en el log: es la fecha de nacimiento
         # de alguien que todavía no aceptó nada.
@@ -75,7 +85,7 @@ class CheckoutAnonimoView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            fila, nonce = compra_anonima.abrir(request.data, idioma)
+            fila, nonce = compra_anonima.abrir(request.data, idioma, moneda)
         except compra_anonima.NoDisponible:
             return Response(_NO_DISPONIBLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except (KeyError, ValueError):

@@ -36,7 +36,7 @@ def comprobar_disponible() -> None:
         raise NoDisponible("TOMBSTONE_HMAC_KEY")
 
 
-def abrir(datos: dict, locale: str):
+def abrir(datos: dict, locale: str, moneda: str = "usd"):
     """Crea la carta sin dueño, abre la sesión de Stripe y guarda la fila.
 
     Devuelve `(fila, nonce_en_claro)`; en la base sólo queda el hash del nonce.
@@ -47,7 +47,7 @@ def abrir(datos: dict, locale: str):
     Sin cupón, siempre al precio de lista (review 07-10): sin cuenta no se
     puede aplicar «uno por cuenta», y la adjudicación podía llevar la compra
     a una cuenta que ya lo había usado. La vista rechaza cualquier cupón
-    antes de llegar acá.
+    antes de llegar acá. `moneda` ya viene validada contra el producto.
     """
     comprobar_disponible()
     nonce = secrets.token_urlsafe(32)
@@ -55,13 +55,13 @@ def abrir(datos: dict, locale: str):
         carta = create_chart(datos, account=None)
         sujeto = sujeto_natal(carta)
         checkout_id, url = stripe_client.crear_checkout(
-            None, PRODUCTO, sujeto=sujeto, locale=locale, terminos=True,
+            None, PRODUCTO, sujeto=sujeto, locale=locale, terminos=True, moneda=moneda,
         )
-        precio, descuento = cupones.precio_y_descuento(PRODUCTO, None)
+        precio, descuento = cupones.precio_y_descuento(PRODUCTO, None, moneda)
         fila = PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=None, codigo_producto=PRODUCTO,
             sujeto=sujeto, locale=locale, descuento_centavos=descuento, url=url,
-            precio_centavos=precio, anonimo=True, nonce_hash=hash_token(nonce),
+            precio_centavos=precio, moneda=moneda, anonimo=True, nonce_hash=hash_token(nonce),
         )
     return fila, nonce
 

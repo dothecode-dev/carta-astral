@@ -186,3 +186,20 @@ def test_campo_faltante_dice_cual_falta_sin_repr_de_la_excepcion(client, stripe_
     r = _post(client, {k: v for k, v in DATOS.items() if k != "date"})
     assert r.status_code == 400
     assert r.json() == {"error": "falta el campo date", "motivo": "datos_invalidos"}
+
+
+def test_sin_cuenta_tambien_se_puede_pagar_en_reales(client, stripe_responde):
+    r = _post(client, {**DATOS, "moneda": "brl"})
+
+    assert r.status_code == 200
+    fila = PasarelaCheckout.objects.get(checkout_id=r.json()["checkout_id"])
+    assert (fila.moneda, fila.precio_centavos) == ("brl", 14900)
+    assert stripe_responde[0]["payment_method_options"]["pix"]["amount_includes_iof"] == "always"
+
+
+def test_sin_cuenta_una_moneda_inventada_es_400_y_no_deja_carta(client, stripe_responde):
+    r = _post(client, {**DATOS, "moneda": "ars"})
+
+    assert r.status_code == 400
+    assert r.json()["motivo"] == "moneda_invalida"
+    assert Chart.objects.count() == 0
