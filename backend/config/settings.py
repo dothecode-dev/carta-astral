@@ -517,6 +517,15 @@ STRIPE_PRECIOS_RETIRADOS = _mapa_json("STRIPE_PRECIOS_RETIRADOS")
 # Plantilla con `{locale}` (lo pone el checkout, de la lista blanca) y con
 # `{CHECKOUT_SESSION_ID}`, que reemplaza Stripe al redirigir.
 STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL", "")
+
+# --- Avisos al admin por Telegram ------------------------------------------
+# Un bot de BotFather y el chat al que escribe. Sin token, `avisar_admin` no
+# hace nada (desarrollo y tests). `strip()` porque pegado en el panel de deploy
+# suele venir con un salto de línea al final, y Telegram responde 404 a un
+# token con `\n` sin decir por qué.
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+
 # Cantidad de reembolsos que marca una cuenta como abuso.
 REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 
