@@ -46,7 +46,7 @@ def cupon_100():
 #: para no confundirse con el `SESSION` local de cada archivo de webhooks.
 SESSION_ANONIMA = "cs_test_anonima"
 PI_ANONIMA = "pi_anonima"
-PRECIO_ANONIMA = "price_natal"
+PRECIO_ANONIMA = "prod_natal"
 
 
 def sesion_anonima(**cambios) -> dict:
@@ -59,7 +59,7 @@ def sesion_anonima(**cambios) -> dict:
         "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": PI_ANONIMA,
         "metadata": {},
-        "line_items": {"data": [{"price": {"id": PRECIO_ANONIMA}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": PRECIO_ANONIMA}, "quantity": 1}]},
     }
     sesion.update(cambios)
     return sesion
@@ -109,7 +109,7 @@ def entregar_anonima(client, monkeypatch, settings):
     from tests.api.stripe_firma import SECRETO, firmar
 
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {PRECIO_ANONIMA: "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": PRECIO_ANONIMA}
 
     def _entregar(sesion, tipo="checkout.session.completed", evt="evt_anonima"):
         monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _sid: sesion)

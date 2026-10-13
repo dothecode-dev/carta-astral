@@ -39,7 +39,7 @@ from api import analitica, catalogo, compra_anonima, notificaciones
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
 from api.models import Account, CuponUso, PasarelaCheckout
-from api.stripe_client import FirmaInvalida, codigo_de_producto, obtener_sesion, verificar_firma
+from api.stripe_client import FirmaInvalida, codigo_de_product, obtener_sesion, verificar_firma
 
 logger = logging.getLogger(__name__)
 
@@ -167,11 +167,13 @@ def _adjudicar_si_es_anonima(session_id: str, sesion: dict) -> None:
     compra_anonima.adjudicar(session_id, email)
 
 
-def _precio_de(sesion: dict) -> str:
+def _product_de(sesion: dict) -> str:
+    """El Product de Stripe del único line item. Con `price_data` Stripe crea
+    un Price efímero por sesión: su id no dice nada, el Product sí."""
     items = ((sesion.get("line_items") or {}).get("data")) or []
     if not items:
         return ""
-    return ((items[0].get("price") or {}).get("id")) or ""
+    return ((items[0].get("price") or {}).get("product")) or ""
 
 
 def _acreditar(session_id: str) -> None:
@@ -206,9 +208,9 @@ def _acreditar(session_id: str) -> None:
         return
 
     try:
-        codigo = codigo_de_producto(_precio_de(sesion))
+        codigo = codigo_de_product(_product_de(sesion))
     except KeyError:
-        logger.error("sesión %s con un precio que no mapeamos: no se acredita", session_id)
+        logger.error("sesión %s con un Product que no mapeamos: no se acredita", session_id)
         return
 
     if fila is not None and fila.codigo_producto != codigo:

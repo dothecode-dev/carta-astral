@@ -11,7 +11,7 @@ from tests.api.stripe_firma import SECRETO, firmar
 pytestmark = pytest.mark.django_db
 
 URL = "/api/webhooks/stripe/"
-PRECIO = "price_vinculo"
+PRECIO = "prod_vinculo"
 SESSION = "cs_test_vinculo"
 PI = "pi_vinculo"
 A = {"date": "1985-03-14", "time": "08:30", "time_known": True, "lat": -32.95, "lng": -60.65}
@@ -22,7 +22,7 @@ B = {"date": "1988-09-09", "time_known": False, "lat": -31.42, "lng": -64.18}
 def _configurado(settings, monkeypatch):
     settings.VINCULO_ENABLED = True
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {PRECIO: "informe_vinculo"}
+    settings.STRIPE_PRODUCTOS = {"informe_vinculo": PRECIO}
     monkeypatch.setattr(stripe_client, "crear_checkout",
                         lambda *a, **k: (SESSION, "https://checkout.stripe.test/x"))
 
@@ -50,7 +50,7 @@ def _pagar(client, monkeypatch):
     sesion = {
         "id": SESSION, "payment_status": "paid", "amount_subtotal": 900, "amount_total": 900,
         "total_details": {"amount_tax": 0, "amount_discount": 0}, "payment_intent": PI,
-        "metadata": {}, "line_items": {"data": [{"price": {"id": PRECIO}, "quantity": 1}]},
+        "metadata": {}, "line_items": {"data": [{"price": {"product": PRECIO}, "quantity": 1}]},
     }
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda session_id: sesion)
     return _post_firmado(client, {"id": "evt_v", "type": "checkout.session.completed",

@@ -18,14 +18,14 @@ from tests.api.stripe_firma import SECRETO, firmar
 pytestmark = pytest.mark.django_db
 
 URL = "/api/webhooks/stripe/"
-PRECIO = "price_natal"
+PRECIO = "prod_natal"
 SESSION = "cs_test_vence"
 
 
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {PRECIO: "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": PRECIO}
 
 
 def _postear(client, tipo, session_id=SESSION):
@@ -105,7 +105,7 @@ def test_un_pago_que_llega_despues_del_vencimiento_acredita_igual(client, monkey
             "id": SESSION, "payment_status": "paid", "amount_subtotal": 2900,
             "amount_total": 2900, "total_details": {"amount_tax": 0, "amount_discount": 0},
             "payment_intent": "pi_1", "metadata": {},
-            "line_items": {"data": [{"price": {"id": PRECIO}, "quantity": 1}]},
+            "line_items": {"data": [{"price": {"product": PRECIO}, "quantity": 1}]},
         }
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", falsa)
 

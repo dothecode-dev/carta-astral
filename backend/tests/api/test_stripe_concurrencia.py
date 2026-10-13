@@ -23,13 +23,13 @@ PI = "pi_carrera"
 @pytest.fixture(autouse=True)
 def _configurado(settings, monkeypatch):
     settings.STRIPE_WEBHOOK_SECRET = "whsec_" + "z" * 32
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal"}
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _sid: {
         "id": SESSION, "payment_status": "paid",
         "amount_subtotal": 2900, "amount_total": 2900,
         "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": PI, "metadata": {},
-        "line_items": {"data": [{"price": {"id": "price_natal"}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
     })
 
 

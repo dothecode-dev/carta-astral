@@ -21,7 +21,7 @@ URL = "/api/checkout/"
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
     settings.STRIPE_SUCCESS_URL = "https://astraguia.com/{locale}/compra?checkout_id={CHECKOUT_SESSION_ID}"
 
 
@@ -60,7 +60,13 @@ def test_el_descuento_viaja_como_promotion_code_y_el_precio_sigue_siendo_el_del_
     assert r.status_code == 200, r.content
     (enviado,) = stripe_responde
     assert enviado["discounts"] == [{"promotion_code": "promo_1"}]
-    assert enviado["line_items"] == [{"price": "price_natal", "quantity": 1}]
+    assert enviado["line_items"] == [{
+        "price_data": {
+            "product": "prod_natal", "currency": "usd", "unit_amount": 2900,
+            "tax_behavior": "inclusive",
+        },
+        "quantity": 1,
+    }]
     assert enviado["managed_payments"] == {"enabled": True}
 
 

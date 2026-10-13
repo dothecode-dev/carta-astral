@@ -38,7 +38,7 @@ def panel_montado(monkeypatch):
 @pytest.fixture(autouse=True)
 def config(settings):
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
     # Mismo motivo que `sin_manifiesto` en test_admin.py: renderizar el admin
     # sin haber corrido collectstatic.
     settings.STORAGES = {

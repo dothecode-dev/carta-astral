@@ -37,7 +37,7 @@ class FirmaInvalida(Exception):
 
 
 class StripeNoConfigurado(Exception):
-    """Falta la clave, o el producto no tiene precio mapeado en Stripe."""
+    """Falta la clave, o el producto no tiene Product mapeado en Stripe."""
 
 
 class StripeError(Exception):
@@ -94,41 +94,33 @@ def obtener_sesion(session_id: str) -> dict:
     return sesion.to_dict()
 
 
-def codigo_de_producto(price_id: str) -> str:
-    """El código del catálogo para ese precio de Stripe.
-
-    Levanta `KeyError` si no lo mapeamos: acreditar un producto que no sabemos
-    cuál es sería entregar cualquier cosa. El mapeo vive en `STRIPE_PRECIOS`
-    porque los ids son distintos en test y en live —Stripe no los comparte
-    entre modos— y el código tiene que ser el mismo en los dos.
-
-    Busca también en `STRIPE_PRECIOS_RETIRADOS`: un precio que ya no se vende
-    puede llegar igual, en una sesión abierta antes de cambiarlo.
-    """
-    if price_id in settings.STRIPE_PRECIOS:
-        return settings.STRIPE_PRECIOS[price_id]
-    return settings.STRIPE_PRECIOS_RETIRADOS[price_id]
+def product_de(codigo_producto: str) -> str:
+    """El id del Product de Stripe para ese producto nuestro, de
+    `STRIPE_PRODUCTOS`. Falla ANTES de abrir un pago que después nadie
+    podría acreditar."""
+    try:
+        return settings.STRIPE_PRODUCTOS[codigo_producto]
+    except KeyError:
+        raise StripeNoConfigurado(f"{codigo_producto} no tiene Product en STRIPE_PRODUCTOS") from None
 
 
-def _price_de(codigo_producto: str) -> str:
-    """El id del precio de Stripe para ese producto nuestro.
+def codigo_de_product(product_id: str) -> str:
+    """El código del catálogo para ese Product. `KeyError` si no lo mapeamos:
+    acreditar un producto que no sabemos cuál es sería entregar cualquier
+    cosa."""
+    for codigo, prod in settings.STRIPE_PRODUCTOS.items():
+        if prod == product_id:
+            return codigo
+    raise KeyError(product_id)
 
-    `STRIPE_PRECIOS` mapea al revés (price de Stripe → código nuestro) porque
-    así lo consume el webhook, que es quien recibe el id.
-    """
-    ids = [p for p, codigo in settings.STRIPE_PRECIOS.items() if codigo == codigo_producto]
-    # El catálogo y Stripe son dos listas que hay que mantener alineadas: mejor
-    # fallar acá que abrir un pago que después nadie puede acreditar.
-    if not ids:
-        raise StripeNoConfigurado(f"{codigo_producto} no tiene precio en Stripe")
-    if len(ids) > 1:
-        # Elegir uno sería elegir al azar entre el precio nuevo y el viejo, y
-        # el viejo cobra un monto que el catálogo ya no acepta. El id que se
-        # deja de vender va a `STRIPE_PRECIOS_RETIRADOS`.
-        raise StripeNoConfigurado(
-            f"{codigo_producto} tiene {len(ids)} precios a la venta en STRIPE_PRECIOS: {ids}",
-        )
-    return ids[0]
+
+#: Cómo pide Stripe cada idioma nuestro. `pt` a secas es Portugal; la web y
+#: Brasil hablan `pt-BR`.
+_LOCALE_STRIPE = {"es": "es", "en": "en", "pt": "pt-BR"}
+
+#: Cuánto vive un QR de Pix después de confirmado: lo mismo que la sesión. Sin
+#: esto Stripe lo deja 4 horas (medido el 13-10-2026).
+VENCIMIENTO_PIX = int(VENCIMIENTO_SESION.total_seconds())
 
 
 #: Cómo se llama, en la URL de retorno, el parámetro con la sesión de Stripe.
@@ -174,13 +166,18 @@ def _validar_success_url(url: str) -> None:
 
 def crear_checkout(
     account, codigo_producto: str, sujeto=None, locale: str = LOCALE_POR_DEFECTO, cupon=None,
-    terminos: bool = False,
+    terminos: bool = False, moneda: str = "usd",
 ) -> tuple[str, str]:
     """Abre una sesión de pago y devuelve `(session_id, url)`.
 
-    `KeyError` si el producto no está en el catálogo, `ValueError` si es gratis
-    y `StripeNoConfigurado` si falta la clave o el precio: los tres son errores
-    de configuración nuestra, no de quien compra.
+    `KeyError` si el producto no está en el catálogo o no se vende en `moneda`,
+    `ValueError` si es gratis o está retirado, y `StripeNoConfigurado` si falta
+    la clave o el Product: todos errores de configuración nuestra (o de un
+    pedido mal armado), no de quien compra.
+
+    El precio va en `price_data` —Product + moneda + monto del catálogo— y no
+    como un Price id: MEDIDO el 13-10-2026 que Managed Payments lo acepta, que
+    en `brl` ofrece Pix, y que `amount_subtotal` llega en centavos de real.
 
     Con `cupon`, la sesión lleva su Promotion Code en `discounts` y Stripe
     aplica el descuento y cuenta el uso al pagar. NUNCA `allow_promotion_codes`:
@@ -199,12 +196,13 @@ def crear_checkout(
         raise ValueError(f"{codigo_producto} es gratis: no se cobra")
     if not prod.vendible:
         raise ValueError(f"{codigo_producto} está retirado: no se vende")
+    monto = prod.precio_en(moneda)  # KeyError si no se vende en esa moneda
     if not settings.STRIPE_SECRET_KEY:
         raise StripeNoConfigurado("STRIPE_SECRET_KEY no configurado")
 
     _validar_success_url(settings.STRIPE_SUCCESS_URL)
 
-    price_id = _price_de(codigo_producto)
+    product_id = product_de(codigo_producto)
     idioma = locale if locale in LOCALES else LOCALE_POR_DEFECTO
     metadata = {"account_id": str(account.pk)} if account is not None else {}
     if sujeto is not None:
@@ -216,12 +214,27 @@ def crear_checkout(
 
     if terminos:
         extra["consent_collection"] = {"terms_of_service": "required"}
+    if moneda == "brl":
+        # Pix sólo existe en reales. El IOF (3,5 %) lo absorbemos (decisión del
+        # 13-10-2026, R4): quien paga ve en el banco exactamente lo que vio en
+        # la página. El QR vence con la sesión.
+        extra["payment_method_options"] = {
+            "pix": {"amount_includes_iof": "always", "expires_after_seconds": VENCIMIENTO_PIX},
+        }
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
     try:
         sesion = stripe.checkout.Session.create(
             mode="payment",
-            line_items=[{"price": price_id, "quantity": 1}],
+            line_items=[{
+                "price_data": {
+                    "product": product_id, "currency": moneda, "unit_amount": monto,
+                    # Impuesto INCLUIDO en el precio publicado, como el default
+                    # de la cuenta; explícito para no depender de ese default.
+                    "tax_behavior": "inclusive",
+                },
+                "quantity": 1,
+            }],
             **extra,
             # `managed_payments` EXPLÍCITO en cada sesión. No es obligatorio
             # —viene activado por defecto en la cuenta—, pero ese default es un
@@ -233,7 +246,7 @@ def crear_checkout(
             # vuelve a una página en portugués. `{CHECKOUT_SESSION_ID}` lo
             # reemplaza Stripe: es lo que la página de retorno usa para
             # preguntar en qué quedó la compra.
-            locale=idioma,
+            locale=_LOCALE_STRIPE[idioma],
             success_url=settings.STRIPE_SUCCESS_URL.replace("{locale}", idioma),
             expires_at=int((timezone.now() + VENCIMIENTO_SESION).timestamp()),
             metadata=metadata,
@@ -259,16 +272,6 @@ def crear_checkout(
     return sesion.id, sesion.url
 
 
-def _product_de(codigo_producto: str) -> str:
-    """El id del Product de Stripe para ese producto nuestro.
-
-    `STRIPE_PRECIOS` sólo mapea precios; el producto se le pregunta a Stripe,
-    que es la única fuente que no puede desalinearse con el precio.
-    """
-    stripe.api_key = settings.STRIPE_SECRET_KEY
-    return stripe.Price.retrieve(_price_de(codigo_producto)).product
-
-
 def crear_cupon(cupon) -> tuple[str, str]:
     """Crea en Stripe el Coupon y el Promotion Code de un cupón nuestro y
     devuelve `(coupon_id, promotion_code_id)`.
@@ -280,7 +283,7 @@ def crear_cupon(cupon) -> tuple[str, str]:
     """
     if not settings.STRIPE_SECRET_KEY:
         raise StripeNoConfigurado("STRIPE_SECRET_KEY no configurado")
-    productos = [_product_de(codigo) for codigo in cupon.productos]
+    productos = [product_de(codigo) for codigo in cupon.productos]
     vence = cupon.vence_at
     stripe.api_key = settings.STRIPE_SECRET_KEY
     try:

@@ -31,7 +31,7 @@ REFUND = "re_1"
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal"}
 
 
 def _entregar(client, refund=None):

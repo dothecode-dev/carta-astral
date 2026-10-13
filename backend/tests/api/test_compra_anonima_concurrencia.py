@@ -25,7 +25,7 @@ pytestmark = pytest.mark.django_db(transaction=True)
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {PRECIO_ANONIMA: "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": PRECIO_ANONIMA}
 
 
 @requiere_postgres

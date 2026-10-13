@@ -505,15 +505,11 @@ REVENUECAT_PRODUCT_CREDITS = _mapa_json("REVENUECAT_PRODUCT_CREDITS")
 # ocupa del IVA en más de 80 países y avisa por webhook.
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-# `price_id → código del catálogo`, en la dirección en que lo consulta el
-# webhook. Los ids de Stripe no se comparten entre modo test y live, así que
-# este mapeo es distinto en cada entorno y el código, el mismo.
-STRIPE_PRECIOS = _mapa_json("STRIPE_PRECIOS")
-# Precios que ya no se venden pero se siguen ACEPTANDO al acreditar: una sesión
-# de Stripe vive una hora y cobra el precio con el que se abrió, así que al
-# cambiar un precio el id viejo pasa de `STRIPE_PRECIOS` a éste. Dejarlo en
-# `STRIPE_PRECIOS` no sirve: el checkout abriría pagos con él.
-STRIPE_PRECIOS_RETIRADOS = _mapa_json("STRIPE_PRECIOS_RETIRADOS")
+# `código del catálogo → id del Product de Stripe`. El PRECIO no vive en
+# Stripe: cada sesión se abre con `price_data` (producto + moneda + monto del
+# catálogo), así que cambiar un precio es una línea en `api/catalogo.py` y
+# nada acá. Los ids de Product son distintos en modo test y en live.
+STRIPE_PRODUCTOS = _mapa_json("STRIPE_PRODUCTOS")
 # Plantilla con `{locale}` (lo pone el checkout, de la lista blanca) y con
 # `{CHECKOUT_SESSION_ID}`, que reemplaza Stripe al redirigir.
 STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL", "")

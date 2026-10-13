@@ -20,7 +20,7 @@ URL = "/api/webhooks/stripe/"
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {"price_pack": "pack_5_natal", "price_natal": "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"pack_5_natal": "prod_pack", "informe_natal": "prod_natal"}
 
 
 def _entregar(client, amount, pi):

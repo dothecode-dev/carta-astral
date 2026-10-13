@@ -24,14 +24,14 @@ from tests.api.stripe_firma import SECRETO, firmar
 pytestmark = pytest.mark.django_db
 
 URL = "/api/webhooks/stripe/"
-PRECIO = "price_natal"
+PRECIO = "prod_natal"
 SESSION = "cs_test_compra"
 
 
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {PRECIO: "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": PRECIO}
 
 
 def _sesion(**cambios) -> dict:
@@ -44,7 +44,7 @@ def _sesion(**cambios) -> dict:
         "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": "pi_1",
         "metadata": {},
-        "line_items": {"data": [{"price": {"id": PRECIO}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": PRECIO}, "quantity": 1}]},
     }
     sesion.update(cambios)
     return sesion
@@ -210,7 +210,7 @@ def test_un_subtotal_nulo_no_se_disfraza_de_monto_invalido(client, monkeypatch, 
 
 def test_un_precio_que_no_mapeamos_no_otorga(client, monkeypatch, compra):
     r = _entregar(client, monkeypatch, _sesion(
-        line_items={"data": [{"price": {"id": "price_desconocido"}, "quantity": 1}]},
+        line_items={"data": [{"price": {"product": "prod_desconocido"}, "quantity": 1}]},
     ))
 
     assert r.status_code == 200
@@ -218,7 +218,7 @@ def test_un_precio_que_no_mapeamos_no_otorga(client, monkeypatch, compra):
 
 
 def test_si_el_producto_del_checkout_no_coincide_no_otorga(client, monkeypatch, compra, settings):
-    settings.STRIPE_PRECIOS = {PRECIO: "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"pack_5_natal": PRECIO}
 
     r = _entregar(client, monkeypatch)
 
@@ -334,7 +334,7 @@ def test_el_reintento_no_avisa_dos_veces(client, monkeypatch, compra, sin_hilo):
 def test_un_pack_avisa_compra_acreditada(client, monkeypatch, make_account, settings, sin_hilo):
     """Un pack no arranca ningún informe: decirle «lo estamos escribiendo»
     sería mentirle."""
-    settings.STRIPE_PRECIOS = {PRECIO: "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"pack_5_natal": PRECIO}
     cuenta = make_account()
     PasarelaCheckout.objects.create(checkout_id=SESSION, account=cuenta, codigo_producto="pack_5_natal")
     avisos = _espiar_avisos(monkeypatch)

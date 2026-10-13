@@ -25,7 +25,7 @@ SESSION = "cs_test_cupon"
 @pytest.fixture(autouse=True)
 def _configurado(settings, monkeypatch):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
     monkeypatch.setattr(webhooks_stripe, "arrancar_informe", lambda cuenta, fila: None)
 
 
@@ -45,7 +45,7 @@ def _sesion(**cambios) -> dict:
         "total_details": {"amount_tax": 0, "amount_discount": 870, "amount_shipping": 0},
         "discounts": [{"coupon": None, "promotion_code": "promo_1"}],
         "payment_intent": "pi_cupon", "metadata": {},
-        "line_items": {"data": [{"price": {"id": "price_natal"}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
     }
     sesion.update(cambios)
     return sesion

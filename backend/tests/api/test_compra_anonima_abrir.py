@@ -15,7 +15,7 @@ DATOS = {"date": "1990-05-10", "time": "14:30", "time_known": True, "lat": -34.6
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
     settings.STRIPE_SUCCESS_URL = (
         "https://astraguia.com/{locale}/compra?checkout_id={CHECKOUT_SESSION_ID}"
     )

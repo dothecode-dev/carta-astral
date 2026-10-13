@@ -28,7 +28,7 @@ SESSION = "cs_test_informe"
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
 
 
 @pytest.fixture
@@ -42,13 +42,13 @@ def sin_hilo(monkeypatch):
     return arrancados
 
 
-def _entregar(client, monkeypatch, precio="price_natal", monto=2900):
+def _entregar(client, monkeypatch, precio="prod_natal", monto=2900):
     sesion = {
         "id": SESSION, "payment_status": "paid",
         "amount_subtotal": monto, "amount_total": monto,
         "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": "pi_1", "metadata": {},
-        "line_items": {"data": [{"price": {"id": precio}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": precio}, "quantity": 1}]},
     }
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _sid: sesion)
     cuerpo = json.dumps({
@@ -91,7 +91,7 @@ def test_un_pack_no_arranca_ningun_informe(
     _compra(cuenta, carta, codigo="pack_5_natal")
     from api.catalogo import producto
 
-    r = _entregar(client, monkeypatch, precio="price_pack",
+    r = _entregar(client, monkeypatch, precio="prod_pack",
                   monto=producto("pack_5_natal").precio_en("usd"))
 
     assert r.status_code == 200
