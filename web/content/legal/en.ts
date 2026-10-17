@@ -21,7 +21,7 @@ export const legalEn: LegalContent = {
           "**Birth data:** what you enter to compute a chart — name (optional), date, time and place of birth.",
           "**Purchases:** payments are processed by **Stripe**, acting as merchant of record. We never see or store your card details: from Stripe we receive the payment confirmation and the purchase identifier, so we can give you access to what you bought.",
           "**Buying without an account:** if you open the payment for the report without signing in, we store that chart's data so we can deliver the report once the payment is confirmed. If the payment isn't completed, the chart is deleted when the checkout expires (one hour after opening it). You enter your email in **Stripe**, which passes it to us when the payment is confirmed: we use it to create your account, or to credit the purchase to the account you already had with that email, and to send you the access code.",
-          "**Reading without an account:** to write your short reading without an account we use your birth details at that moment and don't store them on our servers. The reading stays on our server only until your browser receives it (15 minutes at most). After that, the reading and your chart details stay only in your browser for 24 hours, so you can see it again or buy the full report. To keep the free reading to one per browser, we store for 24 hours a marker that contains no personal data.",
+          "**Chart without an account:** to show you your chart without an account we use your birth details at that moment and don't store them on our servers. If you then buy the report, see «Buying without an account» above.",
         ],
       },
       { kind: "h2", text: "How we use it" },
@@ -75,7 +75,7 @@ export const legalEn: LegalContent = {
       {
         kind: "ul",
         items: [
-          "Each new account gets **free short readings**, in the amount shown on the pricing page. The full report for a chart is a separate purchase.",
+          "Your birth chart is calculated at no cost and without an account. The full report for a chart is a separate purchase.",
           "What you buy is the right to read a report: it **never expires**, is not transferable and has no monetary value outside ASTRA. Reading that same report in another language doesn't consume another one.",
           "Payment is processed by **Stripe**, acting as *merchant of record*: it issues the receipt, collects any tax due in your country and handles transaction enquiries.",
           "**Refunds:** Stripe may refund a purchase within 60 days and applies the cooling-off periods your country requires. If a purchase is refunded, it is deducted from the reports you have available; if you already used them, it stays as an outstanding balance settled against your next purchase. **We never take back a report that has already been written.**",

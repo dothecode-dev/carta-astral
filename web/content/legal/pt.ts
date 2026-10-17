@@ -21,7 +21,7 @@ export const legalPt: LegalContent = {
           "**Dados de nascimento:** os que você informa para calcular um mapa — nome (opcional), data, hora e lugar de nascimento.",
           "**Compras:** o pagamento é processado pela **Stripe**, que atua como vendedora registrada. Não vemos nem guardamos os dados do seu cartão: da Stripe recebemos a confirmação do pagamento e o identificador da compra, para liberar o que você comprou.",
           "**Comprar sem conta:** se você abrir o pagamento do relatório sem ter entrado, guardamos os dados desse mapa para poder entregar o relatório quando o pagamento for confirmado. Se o pagamento não for concluído, o mapa é apagado quando o checkout expira (uma hora depois de aberto). Você informa seu e-mail no **Stripe**, que nos repassa quando o pagamento é confirmado: usamos esse e-mail para criar sua conta, ou para creditar a compra na conta que você já tinha com ele, e para enviar o código de acesso.",
-          "**Leitura sem conta:** para escrever sua leitura breve sem conta usamos seus dados de nascimento no momento e não os guardamos nos nossos servidores. A leitura fica no nosso servidor só até seu navegador recebê-la (no máximo 15 minutos). Depois, a leitura e os dados da sua carta ficam apenas no seu navegador por 24 horas, para que você possa vê-la de novo ou comprar o relatório completo. Para que a leitura grátis seja uma por navegador, guardamos por 24 horas uma marca que não contém dados pessoais.",
+          "**Mapa sem conta:** para mostrar seu mapa sem conta usamos seus dados de nascimento no momento e não os guardamos nos nossos servidores. Se depois você comprar o relatório, veja «Comprar sem conta» acima.",
         ],
       },
       { kind: "h2", text: "Para que usamos" },
@@ -75,7 +75,7 @@ export const legalPt: LegalContent = {
       {
         kind: "ul",
         items: [
-          "Cada conta nova recebe **leituras breves de presente**, na quantidade indicada na página de preços. O relatório completo de um mapa é comprado à parte.",
+          "O mapa natal é calculado sem custo e sem conta. O relatório completo de um mapa é comprado à parte.",
           "O que você compra é o direito de ler um relatório: **não expira**, não é transferível e não tem valor monetário fora do ASTRA. Ler esse mesmo relatório em outro idioma não consome outro.",
           "O pagamento é processado pela **Stripe**, que atua como vendedora registrada (*merchant of record*): emite o comprovante, cobra o imposto devido no seu país e atende as reclamações da transação.",
           "**Reembolsos:** a Stripe pode reembolsar uma compra em até 60 dias e aplica os prazos de arrependimento exigidos no seu país. Se uma compra for reembolsada, ela é descontada dos relatórios que você tem disponíveis; se você já os usou, fica como saldo pendente que é abatido na próxima compra. **Nunca retiramos um relatório já escrito.**",

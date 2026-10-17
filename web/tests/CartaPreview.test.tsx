@@ -104,22 +104,20 @@ describe("botón de compra de la vista previa", () => {
     expect(screen.queryByText(/No guardamos nada de esto\. /)).toBeNull();
   });
 
-  it("sin precio no hay compra que mencionar: la nota dice que la lectura queda en el navegador", () => {
+  it("sin precio no hay compra que mencionar: la nota sólo dice que no se guarda nada mientras mira", () => {
     pintar("es", { precio: null });
     expect(
-      screen.getByText(
-        "Tu carta y tu lectura quedan sólo en este navegador por 24 horas. No guardamos tus datos de nacimiento.",
-      ),
+      screen.getByText("Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta."),
     ).toBeTruthy();
   });
 
-  // Final review I2: con precio (el caso normal) la nota tiene que decir las
-  // tres cosas ciertas: nada en el servidor mientras mira, la lectura gratis
-  // en el navegador 24 h, y la carta guardada sólo si compra.
+  // Con precio (el caso normal) la nota dice las dos cosas ciertas: nada en el
+  // servidor mientras mira, y la carta guardada sólo si compra. Ni una palabra
+  // de lectura gratis ni de guardado en el navegador: ya no existen.
   it.each([
-    ["es", "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta. Si leés tu lectura gratis, tu carta y tu lectura quedan sólo en este navegador por 24 horas. Si comprás el informe, la carta queda guardada para entregártelo."],
-    ["en", "Your birth details aren't stored on our servers while you look at your chart. If you read your free reading, your chart and your reading stay only in this browser for 24 hours. If you buy the report, the chart is saved so we can deliver it."],
-    ["pt", "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta. Se você ler sua leitura grátis, sua carta e sua leitura ficam só neste navegador por 24 horas. Se você comprar o relatório, a carta fica guardada para entregá-lo."],
+    ["es", "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta. Si comprás el informe, la carta queda guardada para entregártelo."],
+    ["en", "Your birth details aren't stored on our servers while you look at your chart. If you buy the report, the chart is saved so we can deliver it."],
+    ["pt", "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta. Se você comprar o relatório, a carta fica guardada para entregá-lo."],
   ] as const)("%s: con precio la nota de privacidad dice lo que de verdad pasa", (locale, texto) => {
     pintar(locale, { precio: "US$ 29" });
     expect(screen.getByText(texto)).toBeTruthy();

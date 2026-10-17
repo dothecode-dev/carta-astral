@@ -7,12 +7,21 @@ RAIZ = Path(__file__).resolve().parent.parent.parent
 
 
 def test_la_web_promete_las_mismas_lecturas_que_regala_el_backend():
-    """El copy de /entrar promete un número de lecturas de regalo. Si alguien
-    cambia INSTALL_FREE_CREDITS y no toca la web, la pantalla miente."""
+    """La web espeja en `regalo.ts` cuántas lecturas regala una cuenta nueva. Si
+    alguien cambia el regalo efectivo y no toca la web, la pantalla miente.
+
+    El regalo efectivo es `INSTALL_FREE_CREDITS` sólo con
+    `LECTURA_BREVE_GRATIS_ENABLED` prendido; con el flag en su default (apagado)
+    es 0. Prender el flag exige cambiar `regalo.ts` y los textos de la web que
+    hoy no prometen ninguna lectura: es un deploy de la web, no sólo de una
+    variable de entorno."""
     fuente = (RAIZ / "web" / "lib" / "regalo.ts").read_text(encoding="utf-8")
     match = re.search(r"LECTURAS_DE_REGALO\s*=\s*(\d+)", fuente)
     assert match, "web/lib/regalo.ts debe exportar LECTURAS_DE_REGALO"
-    assert int(match.group(1)) == settings.INSTALL_FREE_CREDITS
+    regalo_efectivo = (
+        settings.INSTALL_FREE_CREDITS if settings.LECTURA_BREVE_GRATIS_ENABLED else 0
+    )
+    assert int(match.group(1)) == regalo_efectivo
 
 
 def test_el_regalo_no_se_lee_del_entorno():

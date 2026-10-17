@@ -12,9 +12,9 @@ import type { Dict, Locale } from "@/lib/i18n";
 // misma rueda y las mismas tablas que ve un usuario registrado—, y antes de la
 // rueda, lo que ya se puede leer de ella: el teaser y el índice del informe
 // (spec 2026-10-17). Hasta el 17-10-2026 acá se ofrecía una lectura breve por
-// IA gratis; se apagó porque costaba por visita y no
-// llevaba a ninguna compra. El código de esa lectura sigue en el repo (`useLecturaAnonima`), sin
-// usarse desde esta pantalla.
+// IA gratis; se apagó porque costaba por visita y no llevaba a ninguna compra.
+// El código de esa lectura sigue en el repo (`useLecturaAnonima`), sin usarse
+// desde esta pantalla.
 
 export function CartaPreview({
   carta,

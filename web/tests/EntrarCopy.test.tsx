@@ -3,47 +3,45 @@ import { describe, expect, it } from "vitest";
 import { LECTURAS_DE_REGALO } from "@/lib/regalo";
 import { LOCALES, getDict } from "@/lib/i18n";
 
-/** Cómo tiene que nombrar un texto la cantidad de regalo: en singular si es
- *  una («una lectura breve»), con el número si son más. Lo que no puede es
- *  decir «tres» cuando el backend regala una. */
-function promesaDelRegalo(locale: string): RegExp {
-  if (LECTURAS_DE_REGALO === 1) {
-    return { es: /(una|primera) lectura breve/i, en: /(a|first) short reading\b/i, pt: /(uma|primeira) leitura breve/i }[
-      locale
-    ]!;
-  }
-  return new RegExp(`\\b${LECTURAS_DE_REGALO}\\b`);
-}
+// Desde el 17-10-2026 el backend no regala lecturas (LECTURA_BREVE_GRATIS_ENABLED
+// apagado): lo gratis es la carta y el adelanto del informe. Ningún texto que
+// se muestra puede prometer una lectura de regalo.
+const PROMETE_LECTURA = /lecturas? breves?|short readings?|leituras? breves?/i;
+const PROMETE_REGALO = /regalo|presente|on the house|gratis|free|gr[aá]tis/i;
 
-const PLURAL_DEL_REGALO = { es: /lecturas breves/i, en: /short readings/i, pt: /leituras breves/i };
+describe("nada promete una lectura de regalo", () => {
+  it("el espejo del regalo dice cero", () => {
+    expect(LECTURAS_DE_REGALO).toBe(0);
+  });
 
-describe("todo texto que nombra el regalo dice la cantidad que da el backend", () => {
   it.each(LOCALES)("%s", (locale) => {
     const dict = getDict(locale);
     const textos = [
       dict.pricing.title,
-      dict.pricing.terms[0].label,
+      ...dict.pricing.terms.map((t) => t.label),
+      dict.precios.gratisNombre,
       dict.precios.gratisDetalle,
       dict.auth.lede,
+      dict.newChart.seoGratisBody,
+      dict.newChart.previewNote,
+      dict.newChart.previewPrivacidad,
+      dict.newChart.previewPrivacidadSinCompra,
     ];
-    for (const texto of textos.slice(0, 2).concat(textos[3])) {
-      expect(texto).toMatch(promesaDelRegalo(locale));
+    for (const texto of textos) {
+      expect(texto).not.toMatch(PROMETE_LECTURA);
     }
-    if (LECTURAS_DE_REGALO === 1) {
-      // Con una sola, ni el detalle de /precios ni los avisos de agotado
-      // pueden hablar en plural del regalo.
-      expect(dict.precios.gratisDetalle).not.toMatch(/\b(tres|three|três|3)\b/i);
-      for (const texto of [...textos, dict.chart.sinLeerBreve, dict.newChart.sinLeerBreve]) {
-        expect(texto).not.toMatch(PLURAL_DEL_REGALO[locale as keyof typeof PLURAL_DEL_REGALO]);
-      }
+    // Lo que se muestra cuando no hay lecturas no puede llamarlas gratis ni de regalo.
+    for (const texto of [dict.chart.sinLeerBreve, dict.newChart.sinLeerBreve]) {
+      expect(texto).not.toMatch(PROMETE_REGALO);
     }
   });
 });
 
 describe("el copy de /entrar", () => {
-  it("promete las lecturas de regalo que da el backend, en los tres idiomas", () => {
+  it("no promete una lectura de regalo, en los tres idiomas", () => {
     for (const locale of LOCALES) {
-      expect(getDict(locale).auth.lede).toMatch(promesaDelRegalo(locale));
+      expect(getDict(locale).auth.lede).not.toMatch(PROMETE_LECTURA);
+      expect(getDict(locale).auth.lede).not.toMatch(PROMETE_REGALO);
     }
   });
 
