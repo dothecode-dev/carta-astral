@@ -123,21 +123,22 @@ def _bloques(data: dict) -> list[dict]:
     return bloques
 
 
-def _elegidos(data: dict, slug: str) -> list[Tema]:
+def _elegidos(data: dict, todos: list[Tema], slug: str) -> list[Tema]:
     """Los temas propios de la sección `slug` que se muestran, en orden."""
-    propios = [t for t in temas(data) if t.duena == slug and _mostrable(t, data)]
+    propios = [t for t in todos if t.duena == slug and _mostrable(t, data)]
     # `sorted` es estable: el desempate es el orden de `reparto.temas()`.
     return sorted(propios, key=_prioridad)[:MAX_TEMAS_POR_SECCION]
 
 
 def _indice(data: dict, aplicables) -> list[dict]:
+    todos = temas(data)
     return [
         {
             "slug": s.slug,
             "titulos": {lang: s.titulo[lang] for lang in IDIOMAS},
             "temas": [
                 {lang: _nombre_tema(t, lang, data) for lang in IDIOMAS}
-                for t in _elegidos(data, s.slug)
+                for t in _elegidos(data, todos, s.slug)
             ],
         }
         for s in aplicables
@@ -146,7 +147,9 @@ def _indice(data: dict, aplicables) -> list[dict]:
 
 def teaser(data: dict) -> dict:
     """El teaser para el `data` serializado de una carta (forma de RF5)."""
-    aplicables = secciones_natal(bool(data.get("time_known")))
+    # Default True, como `informe_service.secciones_aplicables`: si leyeran
+    # distinto, el teaser prometería otras secciones que las que se escriben.
+    aplicables = secciones_natal(data.get("time_known", True))
     palabras = sum(s.palabras for s in aplicables)
     return {
         "bloques": _bloques(data),

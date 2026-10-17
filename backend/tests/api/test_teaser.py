@@ -81,7 +81,7 @@ def test_todo_tema_mostrado_es_propio_de_su_seccion(payload):
     mostrados = 0
     for s in aplicables:
         propios = {t.clave for t in todos if t.duena == s.slug}
-        elegidos = mod._elegidos(data, s.slug)
+        elegidos = mod._elegidos(data, reparto.temas(data), s.slug)
         assert {t.clave for t in elegidos} <= propios
         mostrados += len(elegidos)
     # Que no pase vacío: todas las cartas fijas tienen planetas propios en alguna sección.
@@ -89,7 +89,7 @@ def test_todo_tema_mostrado_es_propio_de_su_seccion(payload):
     # Y lo que sale en el índice es exactamente lo elegido, nombrado.
     for s in mod.teaser(data)["indice"]:
         esperado = [{lang: mod._nombre_tema(t, lang, data) for lang in ("es", "en", "pt")}
-                    for t in mod._elegidos(data, s["slug"])]
+                    for t in mod._elegidos(data, reparto.temas(data), s["slug"])]
         assert s["temas"] == esperado
 
 
@@ -234,3 +234,20 @@ def test_nomenclatura_exacta_por_idioma():
     assert asp("Venus", "Sun", "opposition") == {
         "es": "Venus en oposición al Sol", "en": "Venus opposite Sun", "pt": "Vênus em oposição ao Sol"}
     assert asp("Venus", "Moon", "trine")["pt"] == "Vênus em trígono com a Lua"
+
+
+def test_sin_la_clave_time_known_el_indice_cuenta_lo_mismo_que_el_informe():
+    # `informe_service.secciones_aplicables` lee `time_known` con default True;
+    # el teaser tiene que leerlo igual o promete otra cantidad de secciones.
+    from interpret.prompts import secciones_natal
+
+    data = {"placements": [{"name": "Sun", "sign": "Ari", "house": None}], "flags": {}}
+    assert mod.teaser(data)["informe"]["secciones"] == len(secciones_natal(True))
+
+
+def test_los_temas_se_calculan_una_sola_vez(monkeypatch):
+    llamadas = []
+    original = mod.temas
+    monkeypatch.setattr(mod, "temas", lambda d: (llamadas.append(1), original(d))[1])
+    mod.teaser({"time_known": False, "placements": [{"name": "Sun", "sign": "Ari", "house": None}], "flags": {}})
+    assert len(llamadas) == 1
