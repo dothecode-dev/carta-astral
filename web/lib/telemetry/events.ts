@@ -24,6 +24,12 @@ export type EventoProps = {
    *  por la home o por una nota y llegó a ver algo suyo sin registrarse: es el
    *  primer escalón del embudo que antes empezaba directamente en el login. */
   carta_calculada: { con_sesion: boolean };
+  /** El teaser y el índice del informe llegaron a la pantalla de la carta sin
+   *  cuenta (spec 2026-10-17, RF10). Una vez por carta calculada. Es el
+   *  denominador del criterio de decisión: `checkout_iniciado` / carta. Sin
+   *  datos de nacimiento: `con_hora` dice si el índice trae Ascendente y las
+   *  secciones que piden hora, `secciones` cuántas se mostraron. */
+  teaser_visto: { con_hora: boolean; secciones: number };
   /** Pidió la lectura breve sin cuenta desde la vista previa (spec 2026-10-08). */
   lectura_anonima_pedida: Record<string, never>;
   /** La lectura breve sin cuenta llegó a la pantalla. */

@@ -712,6 +712,10 @@ export type Dict = {
     previewLede: string;
     previewCta: string;
     previewNote: string;
+    /** Debajo del botón de compra: qué trae el informe. `{n}` y `{palabras}` salen de `teaser.informe`. */
+    informeTrae: string;
+    /** Etiqueta accesible del candado de cada tema del índice. */
+    temaBloqueado: string;
     /** El botón de pago de la vista previa, sin cuenta. `{precio}` sale del catálogo. */
     comprarCta: string;
     /** Frase legal armada con dos enlaces: antes + términos + y + privacidad + después. */
@@ -999,6 +1003,8 @@ const es: Dict = {
     previewLede: "Es tuya y está completa: las posiciones, las casas y los aspectos del cielo del día en que naciste.",
     previewCta: "Leer qué dice",
     previewNote: "Gratis y sin crear cuenta.",
+    informeTrae: "{n} secciones escritas para tu carta, unas {palabras} palabras, en tu idioma.",
+    temaBloqueado: "En el informe completo",
     comprarCta: "Leer el informe completo · {precio}",
     legalAntes: "Al continuar aceptás los ",
     legalTerminos: "términos",
@@ -1408,6 +1414,8 @@ const en: Dict = {
     previewLede: "It's yours and it's complete: the positions, the houses and the aspects of the sky on the day you were born.",
     previewCta: "Read what it says",
     previewNote: "Free, no account needed.",
+    informeTrae: "{n} sections written for your chart, about {palabras} words, in your language.",
+    temaBloqueado: "In the full report",
     comprarCta: "Read the full report · {precio}",
     legalAntes: "By continuing you accept the ",
     legalTerminos: "terms",
@@ -1817,6 +1825,8 @@ const pt: Dict = {
     previewLede: "É seu e está completo: as posições, as casas e os aspectos do céu do dia em que você nasceu.",
     previewCta: "Ler o que diz",
     previewNote: "Grátis e sem criar conta.",
+    informeTrae: "{n} seções escritas para o seu mapa, cerca de {palabras} palavras, no seu idioma.",
+    temaBloqueado: "No relatório completo",
     comprarCta: "Ler o relatório completo · {precio}",
     legalAntes: "Ao continuar, você aceita os ",
     legalTerminos: "termos",

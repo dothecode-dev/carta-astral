@@ -72,6 +72,15 @@ const DATOS_GUARDADOS = {
   lat: -32.94682, lng: -60.63932, place_label: "Rosario, Santa Fe, AR",
 };
 
+const CARTA_CON_TEASER = {
+  ...CARTA,
+  teaser: {
+    bloques: [{ cuerpo: "Sun", signo: "Gem", textos: { es: "Párrafo del Sol.", en: "Sun.", pt: "Sol." } }],
+    indice: [{ slug: "identidad", titulos: { es: "Identidad", en: "Identity", pt: "Identidade" }, temas: [] }],
+    informe: { secciones: 8, palabras: 6200 },
+  },
+};
+
 const CALCULADA = { ok: true, status: 200, json: async () => CARTA };
 
 describe("sin cuenta", () => {
@@ -109,139 +118,57 @@ describe("sin cuenta", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("al pedir la lectura la escribe acá, sin ir a entrar", async () => {
+  it("tras el preview mide teaser_visto una sola vez, con la hora y las secciones", async () => {
+    track.mockClear();
     render(<NewChartForm locale="es" dict={dict} />);
-    await completarYEnviar(fetchMock, CALCULADA);
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando" }), { status: 202 }));
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
-    expect(push).not.toHaveBeenCalled();
-    const [url, init] = fetchMock.mock.calls.at(-1)!;
-    expect(url).toBe("/api/lectura-anonima");
-    expect(JSON.parse(init.body)).toMatchObject({ date: "1976-05-31", lang: "es" });
-    expect(screen.getByRole("status")).toHaveTextContent(t.lecturaEscribiendo);
+    fireEvent.change(screen.getByLabelText(t.time), { target: { value: "19:30" } });
+    await completarYEnviar(fetchMock, { ok: true, status: 200, json: async () => CARTA_CON_TEASER });
+
+    const vistos = track.mock.calls.filter((c) => c[0] === "teaser_visto");
+    expect(vistos).toEqual([["teaser_visto", { con_hora: true, secciones: 8 }]]);
+    expect(screen.getByText("Sol en Géminis")).toBeTruthy();
   });
 
-  it("«Probar de nuevo» tras una fallida reusa el pedido de esa carta", async () => {
+  it("sin hora de nacimiento teaser_visto lo dice", async () => {
+    track.mockClear();
     render(<NewChartForm locale="es" dict={dict} />);
-    await completarYEnviar(fetchMock, CALCULADA);
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando" }), { status: 202 }));
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
-    const pedido = JSON.parse(fetchMock.mock.calls.at(-1)![1].body).pedido;
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "fallida", pedido }), { status: 200 }));
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando" }), { status: 202 }));
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.lecturaReintentar })); });
-    const [url, init] = fetchMock.mock.calls.at(-1)!;
-    expect(url).toBe("/api/lectura-anonima");
-    expect(JSON.parse(init.body).pedido).toBe(pedido);
+    await completarYEnviar(fetchMock, { ok: true, status: 200, json: async () => CARTA_CON_TEASER });
+
+    expect(track).toHaveBeenCalledWith("teaser_visto", { con_hora: false, secciones: 8 });
   });
 
-  it("con una lectura guardada ofrece verla", async () => {
+  it("si el backend no manda teaser no mide teaser_visto y la pantalla sigue andando", async () => {
+    track.mockClear();
+    render(<NewChartForm locale="es" dict={dict} />);
+    await completarYEnviar(fetchMock, CALCULADA);
+
+    expect(track.mock.calls.some((c) => c[0] === "teaser_visto")).toBe(false);
+    expect(screen.getByText(t.previewTitle)).toBeTruthy();
+  });
+
+  // RF9: una lectura anónima de antes, o un pedido en curso, ni se muestra ni se retoma.
+  it("con una lectura anónima guardada no ofrece verla ni pide nada", async () => {
     localStorage.setItem("astra-lectura-anonima", JSON.stringify({
       carta: CARTA, datos: DATOS_GUARDADOS, texto: "guardada", lang: "es", disclaimer: "", vence: Date.now() + 3600_000,
     }));
-    render(<NewChartForm locale="es" dict={dict} />);
-    await act(async () => {});
-    fireEvent.click(screen.getByRole("button", { name: /Ver tu lectura de/ }));
-    expect(screen.getByText("guardada")).toBeInTheDocument();
-  });
-
-  /** Un backend de lectura anónima con memoria: el primer pedido se escribe;
-   *  cualquier otro mientras tanto es «usado» (C1). `lista()` la termina. */
-  function backendDeLectura(fetchMock: ReturnType<typeof vi.fn>) {
-    let primero: string | null = null;
-    let lista = false;
-    fetchMock.mockImplementation((url: string, init?: { method?: string; body?: string }) => {
-      const r = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status }));
-      if (url !== "/api/lectura-anonima") return Promise.reject(new Error(`inesperado: ${url}`));
-      if (init?.method === "POST") {
-        const { pedido } = JSON.parse(init.body!) as { pedido: string };
-        primero ??= pedido;
-        return pedido === primero ? r(202, { estado: "generando" }) : r(409, { motivo: "usado" });
-      }
-      return lista
-        ? r(200, { estado: "lista", texto: "la lectura de Ana", lang: "es", disclaimer: "", pedido: primero })
-        : r(200, { estado: "generando", pedido: primero });
-    });
-    return { lista: () => { lista = true; } };
-  }
-
-  // C1 + I1 (final review): pide la de A, vuelve, corrige y pide la de B.
-  it("la lectura pedida para A nunca aparece ni se guarda como la de B, y queda guardada con A", async () => {
-    render(<NewChartForm locale="es" dict={dict} />);
-    fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Ana" } });
-    await completarYEnviar(fetchMock, CALCULADA);
-    const backend = backendDeLectura(fetchMock);
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.navNew })); });
-
-    // Corrige la hora y recalcula: otra carta, en el mismo navegador.
-    fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Bea" } });
-    fireEvent.change(screen.getByLabelText(t.time), { target: { value: "19:30" } });
-    fetchMock.mockResolvedValueOnce(CALCULADA);
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.submit })); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
-    expect(screen.getByRole("status")).toHaveTextContent(t.lecturaUsada);
-
-    backend.lista();
-    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
-    expect(screen.queryByText("la lectura de Ana")).toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent(t.lecturaUsada);
-    const guardada = JSON.parse(localStorage.getItem("astra-lectura-anonima")!);
-    expect(guardada.texto).toBe("la lectura de Ana");
-    expect(guardada.datos).toMatchObject({ name: "Ana", time: null });
-
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.navNew })); });
-    expect(screen.getByRole("button", { name: "Ver tu lectura de Ana" })).toBeInTheDocument();
-  });
-
-  it("volver mientras se escribe: la guarda de fondo y ofrece verla sin recargar", async () => {
-    render(<NewChartForm locale="es" dict={dict} />);
-    fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Ana" } });
-    await completarYEnviar(fetchMock, CALCULADA);
-    const backend = backendDeLectura(fetchMock);
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.navNew })); });
-    expect(screen.queryByRole("button", { name: /Ver tu lectura de/ })).toBeNull();
-
-    backend.lista();
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
-    fireEvent.click(screen.getByRole("button", { name: "Ver tu lectura de Ana" }));
-    expect(screen.getByText("la lectura de Ana")).toBeInTheDocument();
-  });
-
-  // §11 v3: una recarga a mitad de la espera no pierde la lectura gratis.
-  it("con un pedido en curso guardado, al montar retoma de fondo y ofrece verla al llegar", async () => {
-    const P = "00000000-0000-4000-8000-0000000000aa";
     localStorage.setItem("astra-lectura-pedido", JSON.stringify({
-      pedido: P, carta: CARTA, datos: DATOS_GUARDADOS, vence: Date.now() + 60_000,
+      pedido: "00000000-0000-4000-8000-0000000000aa", carta: CARTA, datos: DATOS_GUARDADOS, vence: Date.now() + 60_000,
     }));
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando", pedido: P }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ estado: "lista", texto: "de Ana", lang: "es", disclaimer: "", pedido: P }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     render(<NewChartForm locale="es" dict={dict} />);
-    expect(screen.queryByRole("button", { name: t.lecturaVerAnterior.replace("{quien}", "Ana") })).toBeNull();
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
-    // Nunca pinta: sigue el formulario, ahora con el botón para verla.
-    expect(screen.getByLabelText(t.date)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: t.lecturaVerAnterior.replace("{quien}", "Ana") }));
-    expect(screen.getByText("de Ana")).toBeTruthy();
-    expect(fetchMock.mock.calls.at(-1)).toEqual([`/api/lectura-anonima?pedido=${P}`, { method: "DELETE" }]);
-    expect(localStorage.getItem("astra-lectura-pedido")).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    expect(screen.queryByRole("button", { name: /Ver tu lectura de/ })).toBeNull();
+    expect(screen.queryByText("guardada")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("después de leerla, al volver ofrece verla otra vez", async () => {
+  it("el preview nunca llama a /api/lectura-anonima y no ofrece pedirla", async () => {
     render(<NewChartForm locale="es" dict={dict} />);
-    fireEvent.change(screen.getByLabelText(t.name), { target: { value: "Ana" } });
-    await completarYEnviar(fetchMock, CALCULADA);
-    const backend = backendDeLectura(fetchMock);
-    backend.lista();
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.previewCta })); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    expect(screen.getByText("la lectura de Ana")).toBeInTheDocument();
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: t.navNew })); });
-    expect(screen.getByRole("button", { name: "Ver tu lectura de Ana" })).toBeInTheDocument();
+    await completarYEnviar(fetchMock, { ok: true, status: 200, json: async () => CARTA_CON_TEASER });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).not.toContain("/api/lectura-anonima");
+    expect(screen.queryByRole("button", { name: t.previewCta })).toBeNull();
   });
 
   it("si el techo por IP corta, avisa en vez de quedarse mudo", async () => {
@@ -249,31 +176,6 @@ describe("sin cuenta", () => {
     await completarYEnviar(fetchMock, { ok: false, status: 429, json: async () => ({}) });
 
     expect(screen.getByRole("alert").textContent).toBe(t.failed);
-  });
-});
-
-describe("lectura guardada reabierta", () => {
-  it("el botón de comprar funciona: manda lo guardado al checkout anónimo", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const assign = vi.fn();
-    vi.stubGlobal("location", { ...window.location, assign });
-    localStorage.clear();
-    localStorage.setItem("astra-lectura-anonima", JSON.stringify({
-      carta: CARTA, datos: DATOS_GUARDADOS, texto: "guardada", lang: "es", disclaimer: "", vence: Date.now() + 3600_000,
-    }));
-    render(<NewChartForm locale="es" dict={dict} precio="US$ 29" />);
-    await act(async () => {});
-    fireEvent.click(screen.getByRole("button", { name: /Ver tu lectura de Ana/ }));
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ url: "https://stripe.test/c" }) });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Leer el informe completo · US\$ 29/ }));
-    });
-    const [url, init] = fetchMock.mock.calls.at(-1)!;
-    expect(url).toBe("/api/checkout/anonimo");
-    expect(JSON.parse(init.body)).toMatchObject({ ...DATOS_GUARDADOS, locale: "es" });
-    expect(assign).toHaveBeenCalledWith("https://stripe.test/c");
-    vi.unstubAllGlobals();
   });
 });
 

@@ -1060,6 +1060,68 @@ body:has(.consentBar) .accionFija {
   background: var(--surface);
 }
 
+/* El teaser: un párrafo por posición y, debajo, el índice del informe con los
+   temas bloqueados. Es lectura, no tabla: columnas que se acomodan al ancho. */
+.teaserBloques {
+  display: grid;
+  gap: 1.5rem 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.teaserTitulo,
+.teaserSeccionTitulo {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+}
+
+.teaserTitulo {
+  font-size: 1.25rem;
+}
+
+.teaserTexto {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.teaserIndice {
+  display: grid;
+  gap: 1.25rem 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teaserSeccionTitulo {
+  font-size: 1.05rem;
+}
+
+.teaserTemas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.teaserTema {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.teaserCandado {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  color: var(--ink-soft);
+}
+
 .previewPie {
   display: flex;
   flex-direction: column;

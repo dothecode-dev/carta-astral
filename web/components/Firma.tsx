@@ -6,6 +6,13 @@ const SIGNO_INDICE: Record<string, number> = {
   Ari: 0, Tau: 1, Gem: 2, Can: 3, Leo: 4, Vir: 5, Lib: 6, Sco: 7, Sag: 8, Cap: 9, Aqu: 10, Pis: 11,
 };
 
+/** «Sol en Géminis»: el título de una línea de firma, y también de cada bloque
+ *  del teaser. `cuerpo` y `signo` son los del motor (`Sun`, `Ascendant`, `Gem`). */
+export function tituloCuerpoEnSigno(cuerpo: string, signo: string, dict: Dict, locale: Locale): string {
+  const nombre = cuerpo === "Ascendant" ? dict.chart.axisNames.AC : PLANET_NAME_BY_KEY[locale][cuerpo];
+  return dict.chart.firmaEn.replace("{cuerpo}", nombre).replace("{signo}", SIGN_NAMES[locale][SIGNO_INDICE[signo]]);
+}
+
 /**
  * Sol, Luna y Ascendente en palabras, debajo del nombre. Es lo único de la
  * carta que entiende quien no sabe leer glifos, y lo que lo hace querer leer
@@ -15,16 +22,13 @@ const SIGNO_INDICE: Record<string, number> = {
  */
 export function Firma({ firma, dict, locale }: { firma?: FirmaLinea[]; dict: Dict; locale: Locale }) {
   if (!firma || firma.length === 0) return null;
-  const nombres = PLANET_NAME_BY_KEY[locale];
   return (
     <dl className="firma">
       {firma.map((linea) => {
-        const cuerpo = linea.cuerpo === "Ascendant" ? dict.chart.axisNames.AC : nombres[linea.cuerpo];
-        const signo = SIGN_NAMES[locale][SIGNO_INDICE[linea.signo]];
         return (
           <div key={linea.cuerpo} className="firmaLinea">
             <dt className="firmaTitulo">
-              {dict.chart.firmaEn.replace("{cuerpo}", cuerpo).replace("{signo}", signo)}
+              {tituloCuerpoEnSigno(linea.cuerpo, linea.signo, dict, locale)}
             </dt>
             <dd className="firmaFrase">{linea.frases[locale]}</dd>
           </div>

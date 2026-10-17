@@ -3,11 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CartaPreview } from "@/components/CartaPreview";
 import { getDict, LOCALES } from "@/lib/i18n";
-import type { EstadoLectura } from "@/components/useLecturaAnonima";
+import type { Teaser } from "@/lib/chart";
 
-// El botón de pago de la vista previa es secundario: el principal sigue siendo
-// la lectura gratis, que se escribe ahí mismo, sin cuenta. Y sin precio no hay botón: el precio
-// sale del catálogo y no se inventa.
+// La vista previa muestra el teaser y el índice bloqueado del informe, y la
+// compra es la acción principal (spec 2026-10-17). Sin precio no hay botón: el
+// precio sale del catálogo y no se inventa.
 
 const CARTA = {
   data: {
@@ -26,16 +26,38 @@ const CARTA = {
   },
 };
 
+const TEASER: Teaser = {
+  bloques: [
+    { cuerpo: "Sun", signo: "Gem", textos: { es: "Párrafo del Sol.", en: "Sun paragraph.", pt: "Parágrafo do Sol." } },
+    { cuerpo: "Ascendant", signo: "Leo", textos: { es: "Párrafo del Asc.", en: "Asc paragraph.", pt: "Parágrafo do Asc." } },
+  ],
+  indice: [
+    {
+      slug: "identidad",
+      titulos: { es: "Identidad y propósito", en: "Identity and purpose", pt: "Identidade e propósito" },
+      temas: [
+        { es: "Tu Sol y tu Luna", en: "Your Sun and Moon", pt: "Seu Sol e sua Lua" },
+        { es: "Tu Marte en Casa 10", en: "Your Mars in House 10", pt: "Seu Marte na Casa 10" },
+      ],
+    },
+    {
+      slug: "vinculos",
+      titulos: { es: "Vínculos", en: "Bonds", pt: "Vínculos" },
+      temas: [],
+    },
+  ],
+  informe: { secciones: 8, palabras: 6200 },
+};
+
+const CON_TEASER = { ...CARTA, teaser: TEASER };
+
 afterEach(cleanup);
 
-function pintar(locale: "es" | "en" | "pt", extra: Partial<Parameters<typeof CartaPreview>[0]> = {}) {
-  const props = {
-    carta: CARTA,
+function propsBase(locale: "es" | "en" | "pt", extra: Partial<Parameters<typeof CartaPreview>[0]> = {}) {
+  return {
+    carta: CON_TEASER,
     dict: getDict(locale),
     locale,
-    lectura: { tipo: "nada" } as EstadoLectura,
-    onPedirLectura: vi.fn(),
-    onReintentar: vi.fn(),
     onVolver: vi.fn(),
     precio: "US$ 29",
     onComprar: vi.fn().mockResolvedValue(undefined),
@@ -43,6 +65,10 @@ function pintar(locale: "es" | "en" | "pt", extra: Partial<Parameters<typeof Car
     errorCompra: null,
     ...extra,
   };
+}
+
+function pintar(locale: "es" | "en" | "pt", extra: Partial<Parameters<typeof CartaPreview>[0]> = {}) {
+  const props = propsBase(locale, extra);
   render(<CartaPreview {...props} />);
   return props;
 }
@@ -59,23 +85,17 @@ describe("botón de compra de la vista previa", () => {
     expect(privacidad.getAttribute("href")).toBe(`/${locale}/legal/privacy`);
   });
 
-  it("el principal gratis va primero y el de pago es secundario, debajo", () => {
+  it("el botón de compra es el principal", () => {
     pintar("es");
-    const t = getDict("es").newChart;
-    const gratis = screen.getByRole("button", { name: t.previewCta });
     const pago = screen.getByRole("button", { name: /Leer el informe completo/ });
-
-    expect(gratis.className).toContain("btnPrimary");
-    expect(pago.className).not.toContain("btnPrimary");
-    expect(gratis.compareDocumentPosition(pago) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(pago.className).toContain("btnPrimary");
   });
 
   it("apretarlo llama a onComprar y no manda a entrar", () => {
-    const { onComprar, onPedirLectura } = pintar("es");
+    const { onComprar } = pintar("es");
     fireEvent.click(screen.getByRole("button", { name: /Leer el informe completo/ }));
 
     expect(onComprar).toHaveBeenCalledTimes(1);
-    expect(onPedirLectura).not.toHaveBeenCalled();
   });
 
   it("la nota de privacidad no promete que no se guarda nada: abrir el pago guarda la carta", () => {
@@ -117,7 +137,6 @@ describe("botón de compra de la vista previa", () => {
 
     expect(screen.queryByRole("button", { name: /Leer el informe completo/ })).toBeNull();
     expect(screen.queryByRole("link", { name: getDict("es").newChart.legalTerminos })).toBeNull();
-    expect(screen.getByRole("button", { name: getDict("es").newChart.previewCta })).toBeTruthy();
   });
 
   it("mientras la compra está en curso el botón queda deshabilitado", () => {
@@ -134,29 +153,66 @@ describe("botón de compra de la vista previa", () => {
   });
 });
 
-describe("la lectura breve en la vista previa", () => {
-  it("con la lectura lista la muestra con el disclaimer y saca el botón de pedir", () => {
-    pintar("es", { lectura: { tipo: "lista", texto: "Tu Sol en Escorpio", lang: "es", disclaimer: "Entretenimiento." } });
-    expect(screen.getByText(/Tu Sol en Escorpio/)).toBeInTheDocument();
-    expect(screen.getByText("Entretenimiento.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: getDict("es").newChart.previewCta })).toBeNull();
+describe("el teaser y el índice del informe", () => {
+  it.each(LOCALES)("%s: el orden es bloques, índice, compra, rueda y datos", (locale) => {
+    const { container } = render(<CartaPreview {...propsBase(locale)} />);
+    const t = getDict(locale).newChart;
+    const orden = [
+      container.querySelector(".teaserBloques"),
+      container.querySelector(".teaserIndice"),
+      screen.getByRole("button", { name: t.comprarCta.replace("{precio}", "US$ 29") }),
+      container.querySelector(".chartBody"),
+      container.querySelector(".datosCarta"),
+    ];
+    orden.forEach((el) => expect(el).not.toBeNull());
+    for (let i = 0; i < orden.length - 1; i++) {
+      expect(orden[i]!.compareDocumentPosition(orden[i + 1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
   });
 
-  it("«usada» muestra la carta nueva y ofrece el informe", () => {
-    pintar("es", { lectura: { tipo: "usada" } });
-    expect(screen.getByText(getDict("es").newChart.lecturaUsada)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Leer el informe completo/ })).toBeInTheDocument();
+  it("cada bloque lleva «{cuerpo} en {signo}» y su párrafo en el idioma de la página", () => {
+    pintar("es");
+    expect(screen.getByText("Sol en Géminis")).toBeTruthy();
+    expect(screen.getByText("Párrafo del Sol.")).toBeTruthy();
+    expect(screen.getByText("Ascendente en Leo")).toBeTruthy();
+    cleanup();
+    pintar("en");
+    expect(screen.getByText("Sun in Gemini")).toBeTruthy();
+    expect(screen.getByText("Sun paragraph.")).toBeTruthy();
   });
 
-  it("en otro idioma lo avisa", () => {
-    pintar("en", { lectura: { tipo: "lista", texto: "t", lang: "es", disclaimer: "" } });
-    expect(screen.getByText("Your reading is in Spanish.")).toBeInTheDocument();
+  it("el índice muestra cada sección y sus temas como bloqueados", () => {
+    pintar("es");
+    const t = getDict("es").newChart;
+    expect(screen.getByText("Identidad y propósito")).toBeTruthy();
+    expect(screen.getByText("Tu Marte en Casa 10")).toBeTruthy();
+    // Sólo los dos temas llevan candado; una sección sin temas muestra el título.
+    expect(screen.getAllByLabelText(t.temaBloqueado)).toHaveLength(2);
+    expect(screen.getByText("Vínculos")).toBeTruthy();
   });
 
-  it("fallida ofrece reintentar", () => {
-    const onReintentar = vi.fn();
-    pintar("es", { lectura: { tipo: "fallida" }, onReintentar });
-    fireEvent.click(screen.getByRole("button", { name: getDict("es").newChart.lecturaReintentar }));
-    expect(onReintentar).toHaveBeenCalled();
+  it.each([
+    ["es", "8 secciones escritas para tu carta, unas 6.200 palabras, en tu idioma."],
+    ["en", "8 sections written for your chart, about 6,200 words, in your language."],
+    ["pt", "8 seções escritas para o seu mapa, cerca de 6.200 palavras, no seu idioma."],
+  ] as const)("%s: la línea de qué trae el informe usa los números del teaser", (locale, texto) => {
+    pintar(locale);
+    expect(screen.getByText(texto)).toBeTruthy();
+  });
+
+  it("no queda nada de la lectura anónima", () => {
+    pintar("es");
+    const t = getDict("es").newChart;
+    expect(screen.queryByText(t.previewCta)).toBeNull();
+    expect(screen.queryByText(t.previewNote)).toBeNull();
+    expect(screen.queryByText(t.lecturaEscribiendo)).toBeNull();
+    expect(screen.queryByRole("button", { name: t.lecturaReintentar })).toBeNull();
+  });
+
+  it("sin teaser (backend viejo) muestra la compra, la rueda y los datos sin romper", () => {
+    pintar("es", { carta: CARTA });
+    expect(screen.getByRole("button", { name: /Leer el informe completo/ })).toBeTruthy();
+    expect(screen.queryByText(/secciones escritas/)).toBeNull();
+    expect(screen.getByText(getDict("es").newChart.previewTitle)).toBeTruthy();
   });
 });
