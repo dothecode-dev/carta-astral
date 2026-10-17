@@ -78,3 +78,69 @@ def test_el_prompt_va_en_el_idioma_destino(cliente, tmp_path, lang, pedido, ause
     assert ausente not in system
     if lang != "es":
         assert "vos misma" not in system and "Escribís" not in system
+
+
+def _textos(frase: str, cuantos: int) -> dict[str, str]:
+    return {f"k{i}": f"{frase} resto {i}" for i in range(cuantos)}
+
+
+def test_frases_repetidas_detecta_una_frase_en_siete_textos_y_no_en_seis():
+    assert ("tu identidad se", 7) in cmd.frases_repetidas(_textos("tu identidad se construye", 7))
+    assert not any(f == "tu identidad se" for f, _ in cmd.frases_repetidas(_textos("tu identidad se construye", 6)))
+
+
+def test_frases_repetidas_cuenta_textos_distintos_no_apariciones():
+    textos = {"a": "tu identidad se " * 10, "b": "otra cosa distinta"}
+    assert cmd.frases_repetidas(textos) == []
+
+
+def test_frases_repetidas_ignora_ngramas_de_solo_palabras_vacias():
+    textos = {f"k{i}": f"de la en {'xyz' * (i + 1)} pelo{i}" for i in range(10)}
+    assert cmd.frases_repetidas(textos) == []
+
+
+def test_frases_repetidas_ordena_por_frecuencia_descendente():
+    textos = {f"k{i}": "luna brilla fuerte" + (" sol arde mucho" if i < 8 else "") for i in range(10)}
+    res = cmd.frases_repetidas(textos)
+    assert res[0] == ("luna brilla fuerte", 10)
+    assert ("sol arde mucho", 8) in res
+
+
+def test_muletillas_presentes_cuenta_por_texto_no_por_aparicion():
+    textos = {"a": "Te cuesta mucho. Te cuesta otra vez.", "b": "a veces dudás", "c": "nada"}
+    res = cmd.muletillas_presentes(textos, "es")
+    assert res["te cuesta"] == 1
+    assert res["a veces"] == 1
+    assert "sin pedir permiso" not in res
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_prompt_de_generacion_es_y_pt_tiene_regla_de_genero_y_muletillas(lang):
+    system = cmd._SISTEMA_GENERAR[lang]
+    assert "neutr" in system.lower()
+    assert any(m in system for m in cmd.MULETILLAS[lang])
+
+
+def test_prompt_de_generacion_en_no_tiene_regla_de_genero():
+    for system in (cmd._SISTEMA_GENERAR["en"], cmd._SISTEMA_TRADUCIR["en"]):
+        assert "gender" not in system.lower()
+    assert any(m in cmd._SISTEMA_GENERAR["en"] for m in cmd.MULETILLAS["en"])
+
+
+@pytest.mark.parametrize("lang", ["en", "pt"])
+def test_prompt_de_traduccion_lleva_las_prohibiciones(lang):
+    system = cmd._SISTEMA_TRADUCIR[lang]
+    assert any(m in system for m in cmd.MULETILLAS[lang])
+
+
+def test_los_prompts_de_generacion_se_formatean_sin_llaves_sueltas():
+    for lang, system in cmd._SISTEMA_GENERAR.items():
+        assert "{" not in system.format(cuerpo="X", signo="Y")
+
+
+def test_el_comando_avisa_por_stderr_de_repeticion_y_muletillas(cliente, tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(cmd, "_stream_text", lambda *a, **k: "Siempre te cuesta mirar el cielo con calma.")
+    call_command("generar_textos_teaser", "--lang", "es", "--salida", str(tmp_path / "t.json"))
+    err = capsys.readouterr().err
+    assert "REPETIDA en 72 textos: «te cuesta mirar»" in err
+    assert "MULETILLA prohibida en 72 textos: «te cuesta»" in err
