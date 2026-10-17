@@ -34,10 +34,12 @@ class ClienteFalso:
     (`messages.stream(...)` como context manager + `get_final_message()`),
     calcado del de `tests/api/test_informe_service.py`. `falla_en` hace que
     la llamada N-ésima levante RuntimeError, para simular un corte a mitad
-    de la traducción."""
+    de la traducción. `textos`, si se pasa, es una función que recibe el número
+    de llamada (desde 1) y devuelve el texto de esa respuesta."""
 
-    def __init__(self, falla_en=None):
+    def __init__(self, falla_en=None, textos=None):
         self.falla_en = falla_en
+        self.textos = textos
         self.llamadas = []
 
     class _Messages:
@@ -48,6 +50,8 @@ class ClienteFalso:
             self.outer.llamadas.append(kwargs)
             if self.outer.falla_en is not None and len(self.outer.llamadas) == self.outer.falla_en:
                 raise RuntimeError("cayó la API")
+            if self.outer.textos is not None:
+                return _StreamCtx(_Respuesta(self.outer.textos(len(self.outer.llamadas))))
             return _StreamCtx(_Respuesta())
 
     @property

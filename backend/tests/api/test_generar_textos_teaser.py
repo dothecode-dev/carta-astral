@@ -9,9 +9,13 @@ from api.management.commands import generar_textos_teaser as cmd
 from tests.api.llm_falso import ClienteFalso
 
 
+# 60 palabras sin muletillas ni formas con género: pasa la validación del comando.
+LIMPIO = " ".join(f"palabra{i}" for i in range(60))
+
+
 @pytest.fixture
 def cliente(monkeypatch):
-    falso = ClienteFalso()
+    falso = ClienteFalso(textos=lambda n: LIMPIO)
     monkeypatch.setattr(cmd, "_build_client", lambda: falso)
     return falso
 
@@ -173,3 +177,81 @@ def test_el_prompt_de_traduccion_no_pide_variar_la_apertura():
     for lang in ("es", "en", "pt"):
         assert cmd._APERTURA_VARIADA[lang] not in cmd._SISTEMA_TRADUCIR[lang]
         assert cmd._APERTURA_VARIADA[lang] in cmd._SISTEMA_GENERAR[lang]
+
+
+def _con_textos(monkeypatch, textos):
+    falso = ClienteFalso(textos=textos)
+    monkeypatch.setattr(cmd, "_build_client", lambda: falso)
+    return falso
+
+
+def _una_clave(monkeypatch):
+    monkeypatch.setattr(cmd.Command, "_claves", staticmethod(lambda: ["Sun|Ari"]))
+
+
+def test_reintenta_si_el_texto_trae_una_muletilla_y_guarda_el_limpio(monkeypatch, tmp_path):
+    _una_clave(monkeypatch)
+    sucio = "Siempre te cuesta mirar el cielo. " + LIMPIO
+    falso = _con_textos(monkeypatch, lambda n: sucio if n == 1 else LIMPIO)
+    salida = tmp_path / "t.json"
+    call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
+    assert len(falso.llamadas) == 2
+    assert json.loads(salida.read_text(encoding="utf-8"))["es"]["Sun|Ari"] == LIMPIO
+    pedido = falso.llamadas[1]["messages"][0]["content"]
+    assert pedido.startswith("el Sol en Aries") and "Evitá" in pedido and "te cuesta" in pedido
+
+
+def test_siempre_sucio_hace_cuatro_llamadas_guarda_el_mejor_y_avisa(monkeypatch, tmp_path, capsys):
+    _una_clave(monkeypatch)
+    # Mejora en el 3er intento (1 problema contra 2); el resto es peor.
+    dos = "te cuesta a veces " + LIMPIO
+    uno = "te cuesta " + LIMPIO
+    falso = _con_textos(monkeypatch, lambda n: uno if n == 3 else dos)
+    salida = tmp_path / "t.json"
+    call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
+    assert len(falso.llamadas) == 4
+    assert json.loads(salida.read_text(encoding="utf-8"))["es"]["Sun|Ari"] == uno
+    err = capsys.readouterr().err
+    assert "Sun|Ari" in err and "te cuesta" in err and "1 textos con reintento" in err
+
+
+def test_la_traduccion_tambien_reintenta(monkeypatch, tmp_path):
+    _una_clave(monkeypatch)
+    falso = _con_textos(monkeypatch, lambda n: "it's hard for you " + LIMPIO if n == 1 else LIMPIO)
+    salida = tmp_path / "t.json"
+    salida.write_text(json.dumps({"es": {"Sun|Ari": "original"}}), encoding="utf-8")
+    call_command("generar_textos_teaser", "--lang", "en", "--desde", "es", "--salida", str(salida))
+    assert len(falso.llamadas) == 2
+    assert "Avoid" in falso.llamadas[1]["messages"][0]["content"]
+
+
+def test_problemas_detecta_genero_en_es_y_pt_y_no_en_en():
+    assert any("entero" in p for p in cmd.problemas_de_texto("Querés mostrarte entero. " + LIMPIO, "es"))
+    assert any("atrapada" in p for p in cmd.problemas_de_texto("Sentís quedarte atrapada. " + LIMPIO, "es"))
+    assert any("seguro de" in p for p in cmd.problemas_de_texto("Estás seguro de vos. " + LIMPIO, "es"))
+    assert any("despercebido" in p for p in cmd.problemas_de_texto("Prefere passar despercebido. " + LIMPIO, "pt"))
+    assert cmd.problemas_de_texto("Estás entero. " + LIMPIO, "en") == []
+
+
+def test_problemas_genero_es_palabra_completa_y_sin_mayusculas():
+    assert cmd.problemas_de_texto("Enteros ejemplos, enterovirus. " + LIMPIO, "es") == []
+    assert cmd.problemas_de_texto("ENTERA " + LIMPIO, "es") != []
+
+
+def test_solo_adverbio_no_es_marca_de_genero():
+    # Decisión: «solo» queda fuera de FORMAS_CON_GENERO porque «no solo» / «solo cuando»
+    # son adverbio y darían falsos positivos constantes; «sola» sí está.
+    assert cmd.problemas_de_texto("No solo avanzás, solo cuando querés. " + LIMPIO, "es") == []
+    assert cmd.problemas_de_texto("Te quedás sola. " + LIMPIO, "es") != []
+
+
+def test_problemas_de_largo_y_texto_limpio():
+    assert cmd.problemas_de_texto(LIMPIO, "es") == []
+    assert any("largo" in p for p in cmd.problemas_de_texto("muy corto", "es"))
+    assert any("largo" in p for p in cmd.problemas_de_texto(" ".join(["x"] * 111), "es"))
+
+
+def test_problemas_incluye_muletillas_con_el_mismo_criterio():
+    assert cmd.problemas_de_texto("Tenés elegancia y te cuestan cosas. " + LIMPIO, "es") == []
+    assert cmd.problemas_de_texto("Con Venus en casa. " + LIMPIO, "es") != []
+    assert cmd.problemas_de_texto(LIMPIO + " con Venus en casa", "es") == []
