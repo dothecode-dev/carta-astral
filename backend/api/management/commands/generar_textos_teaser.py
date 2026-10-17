@@ -420,11 +420,18 @@ class Command(BaseCommand):
                 raise CommandError(f"Faltan {len(faltan)} textos en «{desde}» (p. ej. {faltan[0]}).")
 
         cliente = _build_client()
-        nuevos: dict[str, str] = {}
+        # Cada texto se paga: se guardan a medida que salen, aparte de la salida
+        # revisada, y un corte de la API se retoma desde ahí corriendo lo mismo.
+        parcial = ruta.with_name(f"{ruta.stem}.{lang}{'-desde-' + desde if desde else ''}.parcial.json")
+        nuevos: dict[str, str] = _cargar(parcial)
+        if nuevos:
+            self.stderr.write(f"AVISO {lang}: se retoman {len(nuevos)} textos ya generados de {parcial}.")
         reintentados: list[str] = []
         corregidos: list[str] = []
         con_problemas: dict[str, list[str]] = {}
         for clave in self._claves():
+            if clave in nuevos:
+                continue
             cuerpo, signo = clave.split("|")
             if desde:
                 system = _SISTEMA_TRADUCIR[lang]
@@ -446,6 +453,8 @@ class Command(BaseCommand):
                     f"AVISO {lang} {clave}: quedó con problemas tras {intentos} intentos: " + "; ".join(problemas)
                 )
             nuevos[clave] = texto
+            parcial.parent.mkdir(parents=True, exist_ok=True)
+            parcial.write_text(json.dumps(nuevos, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
         self.stderr.write(
             f"AVISO {lang}: {len(reintentados)} textos con reintento, "
@@ -457,6 +466,7 @@ class Command(BaseCommand):
         datos[lang] = nuevos
         ruta.parent.mkdir(parents=True, exist_ok=True)
         ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        parcial.unlink(missing_ok=True)
         self.stdout.write(f"{len(nuevos)} textos de «{lang}» escritos en {ruta}. Revisalos a mano.")
 
     def _texto_valido(

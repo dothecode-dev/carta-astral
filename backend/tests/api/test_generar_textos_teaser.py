@@ -391,3 +391,30 @@ def test_pt_br_correcto_con_sustantivos_plurales_y_contigo_no_es_problema_de_reg
 @pytest.mark.parametrize("tabla", ["_SISTEMA_GENERAR", "_SISTEMA_TRADUCIR"])
 def test_los_prompts_pt_exigen_voce(tabla):
     assert "«você», nunca de «tu»" in getattr(cmd, tabla)["pt"]
+
+
+def test_un_corte_a_mitad_no_pierde_lo_ya_generado(cliente, tmp_path, monkeypatch):
+    from interpret.exceptions import InterpretationError
+
+    salida = tmp_path / "t.json"
+    llamadas = []
+
+    def corta_en_la_31(*a, **k):
+        llamadas.append(1)
+        if len(llamadas) == 31:
+            raise InterpretationError("cayó la API")
+        return LIMPIO
+
+    monkeypatch.setattr(cmd, "_stream_text", corta_en_la_31)
+    with pytest.raises(CommandError):
+        call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
+    # Lo pagado queda guardado aparte; la salida revisada no se toca.
+    assert not salida.exists()
+
+    llamadas.clear()
+    monkeypatch.setattr(cmd, "_stream_text", lambda *a, **k: (llamadas.append(1), LIMPIO)[1])
+    call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
+
+    assert len(llamadas) == 72 - 30
+    assert len(json.loads(salida.read_text(encoding="utf-8"))["es"]) == 72
+    assert list(tmp_path.iterdir()) == [salida]
