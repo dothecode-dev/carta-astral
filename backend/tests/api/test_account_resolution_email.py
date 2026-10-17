@@ -9,10 +9,11 @@ from api.sso import VerifiedIdentity
 pytestmark = pytest.mark.django_db
 
 
-@pytest.fixture(autouse=True)
-def _breve_gratis_prendida(settings):
-    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
-    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+@pytest.fixture
+def breve_gratis_prendida(settings):
+    """Prende el regalo de bienvenida sólo para los tests que lo afirman:
+    `LECTURA_BREVE_GRATIS_ENABLED` viene apagado, como en producción, y el
+    resto del módulo corre así."""
     settings.LECTURA_BREVE_GRATIS_ENABLED = True
 
 
@@ -22,12 +23,14 @@ def identidad_mail(email):
     )
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_una_direccion_nueva_nace_con_el_regalo():
     cuenta = resolve_account(identidad_mail("juan@gmail.com"))
     derecho = Derecho.objects.get(account=cuenta, codigo_producto="lectura_breve")
     assert derecho.cantidad_restante == settings.INSTALL_FREE_CREDITS
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_dos_canjes_seguidos_no_regalan_el_doble():
     """Lo garantiza el match temprano por `ProviderIdentity(provider, sub)`
     en `resolve_account()` (accounts.py:44-46): la segunda llamada devuelve
@@ -43,6 +46,7 @@ def test_dos_canjes_seguidos_no_regalan_el_doble():
     assert Movimiento.objects.filter(account=cuenta, origen="regalo").count() == 1
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_quien_entro_por_google_cae_en_la_misma_cuenta_al_entrar_por_mail():
     """El caso que más va a pasar: se registró con Google y vuelve por mail."""
     por_google = resolve_account(VerifiedIdentity(

@@ -10,10 +10,11 @@ from api.sso import VerifiedIdentity
 from api.sujetos import sujeto_natal
 
 
-@pytest.fixture(autouse=True)
-def _breve_gratis_prendida(settings):
-    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
-    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+@pytest.fixture
+def breve_gratis_prendida(settings):
+    """Prende el regalo de bienvenida sólo para los tests que lo afirman:
+    `LECTURA_BREVE_GRATIS_ENABLED` viene apagado, como en producción, y el
+    resto del módulo corre así."""
     settings.LECTURA_BREVE_GRATIS_ENABLED = True
 
 
@@ -29,6 +30,7 @@ def _gastar_lecturas_breves(cuenta, make_chart, n):
         canjear(cuenta, "leer_breve", sujeto_natal(make_chart(account=cuenta)))
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 def test_delete_account_endpoint_revokes_and_tombstones(make_chart):
     from api.accounts import resolve_account
@@ -48,6 +50,7 @@ def test_delete_account_endpoint_revokes_and_tombstones(make_chart):
     assert not Account.objects.filter(pk=acc.pk).exists()
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 def test_recreate_after_delete_has_no_free(make_chart):
     from api.accounts import resolve_account
@@ -61,6 +64,7 @@ def test_recreate_after_delete_has_no_free(make_chart):
     assert puede(again, "leer_breve") is False
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_el_tombstone_cuenta_lo_gastado_segun_los_movimientos(make_chart):
@@ -108,6 +112,7 @@ def test_borrar_una_cuenta_sin_derechos_no_baja_el_tombstone():
     assert tomb.free_credits_consumed == 3
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_el_tombstone_no_cuenta_una_lectura_devuelta(make_chart):
@@ -128,6 +133,7 @@ def test_el_tombstone_no_cuenta_una_lectura_devuelta(make_chart):
     assert tomb.free_credits_consumed == 0
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_el_tombstone_de_una_segunda_vida_suma_lo_de_la_primera(make_chart):

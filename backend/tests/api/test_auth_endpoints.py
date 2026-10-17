@@ -3,13 +3,15 @@ from rest_framework.test import APIClient
 from api.sso import VerifiedIdentity
 
 
-@pytest.fixture(autouse=True)
-def _breve_gratis_prendida(settings):
-    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
-    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+@pytest.fixture
+def breve_gratis_prendida(settings):
+    """Prende el regalo de bienvenida sólo para los tests que lo afirman:
+    `LECTURA_BREVE_GRATIS_ENABLED` viene apagado, como en producción, y el
+    resto del módulo corre así."""
     settings.LECTURA_BREVE_GRATIS_ENABLED = True
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 def test_apple_auth_creates_session(monkeypatch, settings):
     # Apagado por defecto sin app (ver `test_modo_web.py`).

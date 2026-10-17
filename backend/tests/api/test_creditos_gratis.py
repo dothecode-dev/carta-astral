@@ -13,10 +13,11 @@ pytestmark = pytest.mark.django_db
 _contador = itertools.count()
 
 
-@pytest.fixture(autouse=True)
-def _breve_gratis_prendida(settings):
-    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
-    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+@pytest.fixture
+def breve_gratis_prendida(settings):
+    """Prende el regalo de bienvenida sólo para los tests que lo afirman:
+    `LECTURA_BREVE_GRATIS_ENABLED` viene apagado, como en producción, y el
+    resto del módulo corre así."""
     settings.LECTURA_BREVE_GRATIS_ENABLED = True
 
 
@@ -48,6 +49,7 @@ def test_el_cap_diario_acota_el_gasto_al_costo_nuevo():
     assert settings.INTERPRETATION_DAILY_CAP * 0.45 <= 20
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_una_cuenta_nueva_arranca_con_tres_lecturas_breves(crear_cuenta):
     cuenta = crear_cuenta()
@@ -75,6 +77,7 @@ def test_repetir_el_regalo_no_da_seis(crear_cuenta):
     assert Derecho.objects.get(account=cuenta, codigo_producto="lectura_breve").cantidad_restante == 3
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_el_tombstone_descuenta_del_regalo(crear_cuenta):
     # Ya se gastaron 2 de las 3 lecturas gratis en un ciclo anterior (cuenta
