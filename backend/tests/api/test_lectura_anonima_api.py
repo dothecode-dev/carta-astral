@@ -167,6 +167,7 @@ def test_cupo_503(settings):
     assert r.status_code == 503 and r.json()["motivo"] == "cupo"
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_get_sin_token_404():
     assert APIClient().get(URL).status_code == 404
 

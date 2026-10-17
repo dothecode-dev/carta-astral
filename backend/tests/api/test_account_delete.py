@@ -86,6 +86,7 @@ def test_el_tombstone_cuenta_lo_gastado_segun_los_movimientos(make_chart):
     assert tomb.free_credits_consumed == 2
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_borrar_una_cuenta_sin_derechos_no_baja_el_tombstone():

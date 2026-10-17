@@ -104,6 +104,7 @@ def test_con_la_breve_gratis_apagada_la_cuenta_nace_sin_regalo_y_recibe_lo_compr
     assert len(sin_hilo) == 1
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_el_tombstone_descuenta_el_regalo_de_una_cuenta_borrada(entregar_anonima, anonima, sin_hilo):
     SubTombstone.objects.create(
         sub_hash=sub_hash("email", "volvio@mail.com"),
@@ -117,6 +118,7 @@ def test_el_tombstone_descuenta_el_regalo_de_una_cuenta_borrada(entregar_anonima
     assert not Movimiento.objects.filter(external_id=f"bienvenida:{anonima.account.pk}").exists()
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_cuenta_verificada_sin_identidad_recibe_la_compra_y_la_identidad(
     client, entregar_anonima, anonima, make_account, sin_hilo,
 ):

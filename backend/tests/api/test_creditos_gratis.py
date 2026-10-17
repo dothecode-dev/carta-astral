@@ -60,11 +60,13 @@ def test_una_cuenta_nueva_arranca_con_tres_lecturas_breves(crear_cuenta):
     assert puede(cuenta, "leer_breve") is True
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_una_cuenta_nueva_no_puede_leer_un_informe(crear_cuenta):
     assert puede(crear_cuenta(), "leer_informe") is False
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_repetir_el_regalo_no_da_seis(crear_cuenta):
     # Antes el 3 era el `default` del campo y duplicarlo era imposible. Al
@@ -92,6 +94,7 @@ def test_el_tombstone_descuenta_del_regalo(crear_cuenta):
     assert Derecho.objects.get(account=cuenta, codigo_producto="lectura_breve").cantidad_restante == 1
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @override_settings(INSTALL_FREE_CREDITS=3)
 def test_el_tombstone_agotado_no_regala_nada(crear_cuenta):
     # Las 3 lecturas gratis ya se consumieron antes: sin esto, borrar la

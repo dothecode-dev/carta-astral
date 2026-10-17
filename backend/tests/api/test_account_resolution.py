@@ -36,6 +36,7 @@ def test_links_by_verified_email_across_providers():
     assert apple.identities.count() == 2
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 def test_new_sub_with_tombstone_starts_without_free():
     from api.accounts import resolve_account
