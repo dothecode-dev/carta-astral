@@ -28,6 +28,7 @@ from api.models import Chart, ProviderIdentity, Sujeto
 from api.permissions import HasAccount
 from api.serializers import serialize_chart_data
 from api.sujetos import sujeto_natal
+from api.teaser import teaser
 from api.versioning import engine_version
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
 
@@ -220,6 +221,8 @@ def _preview_repr(carta: CartaCalculada) -> dict:
         # Sol, Luna y Ascendente en palabras: lo único de la carta que entiende
         # quien no sabe leer glifos. Texto fijo, sin costo de modelo.
         "firma": firma(data),
+        # Párrafos fijos por cuerpo e índice bloqueado del informe pago.
+        "teaser": teaser(data),
         "engine_version": engine_version(),
         "interpretation_langs": [],
         "interpretations": {},

@@ -180,3 +180,47 @@ def test_la_carta_guardada_recorta_los_textos_y_el_nulo_es_vacio():
     assert nulo.birth_data.name == "" and nulo.birth_data.place_label == ""
     sin = create_chart({k: v for k, v in PAYLOAD.items() if k not in ("name", "place_label")}, acc)
     assert sin.birth_data.name == "" and sin.birth_data.place_label == ""
+
+
+# --- teaser -----------------------------------------------------------------
+
+SIGNOS_TEASER = ("Ari", "Tau", "Gem", "Can", "Leo", "Vir", "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis")
+
+
+@pytest.fixture
+def textos_de_prueba(monkeypatch):
+    """`teaser_textos.json` está vacío hasta que se escriban los párrafos reales:
+    para afirmar sobre los bloques se inyectan textos de prueba."""
+    from api import teaser as mod
+
+    falsos = {
+        lang: {f"{c}|{s}": f"{lang} {c} {s}" for c in mod.CUERPOS_TEASER for s in SIGNOS_TEASER}
+        for lang in ("es", "en", "pt")
+    }
+    monkeypatch.setattr(mod, "_TEXTOS", falsos)
+
+
+def test_devuelve_el_teaser_con_hora(textos_de_prueba):
+    r = APIClient().post(URL, PAYLOAD, format="json")
+    assert r.status_code == 200, r.data
+    teaser = r.data["teaser"]
+    assert "Ascendant" in [b["cuerpo"] for b in teaser["bloques"]]
+    assert teaser["indice"]
+    assert teaser["informe"]["secciones"] > 0
+
+
+def test_devuelve_el_teaser_sin_hora(textos_de_prueba):
+    r = APIClient().post(URL, {**PAYLOAD, "time": None, "time_known": False}, format="json")
+    assert r.status_code == 200, r.data
+    teaser = r.data["teaser"]
+    assert "Ascendant" not in [b["cuerpo"] for b in teaser["bloques"]]
+    assert teaser["indice"]
+    assert teaser["informe"]["secciones"] > 0
+
+
+def test_las_demas_claves_no_cambian():
+    r = APIClient().post(URL, PAYLOAD, format="json")
+    assert set(r.data) == {
+        "house_system", "zodiac", "data", "firma", "teaser", "engine_version",
+        "interpretation_langs", "interpretations", "en_curso", "birth",
+    }
