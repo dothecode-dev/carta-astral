@@ -725,6 +725,8 @@ export type Dict = {
     temaBloqueado: string;
     /** El botón de pago de la vista previa, sin cuenta. `{precio}` sale del catálogo. */
     comprarCta: string;
+    /** El mismo botón cuando el catálogo no respondió y no hay precio. */
+    comprarCtaSinPrecio: string;
     /** Frase legal armada con dos enlaces: antes + términos + y + privacidad + después. */
     legalAntes: string;
     legalTerminos: string;
@@ -735,7 +737,6 @@ export type Dict = {
     comprarRequiereCuenta: string;
     /** Qué se guarda y qué no al mirar la carta sin cuenta; con y sin botón de compra. */
     previewPrivacidad: string;
-    previewPrivacidadSinCompra: string;
     /** Sin uso desde el 17-10-2026 (la breve gratis está apagada por
      *  `LECTURA_BREVE_GRATIS_ENABLED`; el hook sigue en el repo). La breve sin cuenta (spec 2026-10-08). `{idioma}` y `{quien}` se reemplazan. */
     lecturaEscribiendo: string;
@@ -1017,6 +1018,7 @@ const es: Dict = {
     informeTrae: "{n} secciones escritas para tu carta, unas {palabras} palabras, en tu idioma.",
     temaBloqueado: "En el informe completo",
     comprarCta: "Leer el informe completo · {precio}",
+    comprarCtaSinPrecio: "Leer el informe completo",
     legalAntes: "Al continuar aceptás los ",
     legalTerminos: "términos",
     legalY: " y la ",
@@ -1025,8 +1027,6 @@ const es: Dict = {
     comprarRequiereCuenta: "Para usar este cupón, entrá con tu mail.",
     previewPrivacidad:
       "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta. Si comprás el informe, la carta queda guardada para entregártelo.",
-    previewPrivacidadSinCompra:
-      "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta.",
     lecturaEscribiendo: "Estamos escribiendo tu lectura…",
     lecturaOcupado: "Estamos escribiendo muchas lecturas, un momento…",
     lecturaFallida: "No pudimos escribir tu lectura.",
@@ -1430,6 +1430,7 @@ const en: Dict = {
     informeTrae: "{n} sections written for your chart, about {palabras} words, in your language.",
     temaBloqueado: "In the full report",
     comprarCta: "Read the full report · {precio}",
+    comprarCtaSinPrecio: "Read the full report",
     legalAntes: "By continuing you accept the ",
     legalTerminos: "terms",
     legalY: " and the ",
@@ -1438,8 +1439,6 @@ const en: Dict = {
     comprarRequiereCuenta: "To use this coupon, sign in with your email.",
     previewPrivacidad:
       "Your birth details aren't stored on our servers while you look at your chart. If you buy the report, the chart is saved so we can deliver it.",
-    previewPrivacidadSinCompra:
-      "Your birth details aren't stored on our servers while you look at your chart.",
     lecturaEscribiendo: "We're writing your reading…",
     lecturaOcupado: "We're writing a lot of readings, one moment…",
     lecturaFallida: "We couldn't write your reading.",
@@ -1843,6 +1842,7 @@ const pt: Dict = {
     informeTrae: "{n} seções escritas para o seu mapa, cerca de {palabras} palavras, no seu idioma.",
     temaBloqueado: "No relatório completo",
     comprarCta: "Ler o relatório completo · {precio}",
+    comprarCtaSinPrecio: "Ler o relatório completo",
     legalAntes: "Ao continuar, você aceita os ",
     legalTerminos: "termos",
     legalY: " e a ",
@@ -1851,8 +1851,6 @@ const pt: Dict = {
     comprarRequiereCuenta: "Para usar este cupom, entre com o seu e-mail.",
     previewPrivacidad:
       "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta. Se você comprar o relatório, a carta fica guardada para entregá-lo.",
-    previewPrivacidadSinCompra:
-      "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta.",
     lecturaEscribiendo: "Estamos escrevendo sua leitura…",
     lecturaOcupado: "Estamos escrevendo muitas leituras, um momento…",
     lecturaFallida: "Não conseguimos escrever sua leitura.",

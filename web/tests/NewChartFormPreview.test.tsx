@@ -279,11 +279,11 @@ describe("comprar sin cuenta desde la vista previa", () => {
     expect(screen.getByRole("alert").textContent).toBe(dict.precios.fallo);
   });
 
-  it("sin precio del catálogo no hay botón de pago", async () => {
+  it("sin precio del catálogo el botón de pago sigue, sin precio", async () => {
     render(<NewChartForm locale="es" dict={dict} precio={null} />);
     await completarYEnviar(fetchMock, CALCULADA);
 
-    expect(screen.queryByRole("button", { name: /Leer el informe completo/ })).toBeNull();
+    expect(screen.getByRole("button", { name: dict.newChart.comprarCtaSinPrecio })).toBeTruthy();
   });
 });
 

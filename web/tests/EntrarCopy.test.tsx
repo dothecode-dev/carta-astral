@@ -26,7 +26,6 @@ describe("nada promete una lectura de regalo", () => {
       dict.newChart.seoGratisBody,
       dict.newChart.previewNote,
       dict.newChart.previewPrivacidad,
-      dict.newChart.previewPrivacidadSinCompra,
     ];
     for (const texto of textos) {
       expect(texto).not.toMatch(PROMETE_LECTURA);

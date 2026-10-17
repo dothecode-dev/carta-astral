@@ -31,7 +31,8 @@ export function CartaPreview({
   locale: Locale;
   onVolver: () => void;
   /** El precio del informe, ya formateado por `lib/catalogo`. `null` si el
-   *  catálogo no respondió: sin precio no se ofrece comprar. */
+   *  catálogo no respondió: el botón sigue, sin precio en el texto (comprar
+   *  no depende de él; Stripe lo muestra antes de cobrar). */
   precio: string | null;
   onComprar: () => void | Promise<void>;
   comprando: boolean;
@@ -53,48 +54,52 @@ export function CartaPreview({
           rueda: es la acción principal de la pantalla. Hasta el 17-10-2026 era
           secundaria (`btnGhost`) porque el principal era la lectura gratis; con
           esa apagada, el único camino que sigue es este. Pagar es entrar: se
-          compra sin pasar por /entrar. */}
-      {precio && (
-        <div className="previewCta">
-          {errorCompra && (
-            <p className="compraError" role="alert">
-              {errorCompra}
-            </p>
-          )}
-          <button
-            type="button"
-            className="btn btnPrimary"
-            disabled={comprando}
-            onClick={() => void onComprar()}
-          >
-            {comprando ? dict.precios.abriendo : t.comprarCta.replace("{precio}", precio)}
-          </button>
-          {carta.teaser && (
-            <p className="fieldNote">
-              {t.informeTrae
-                .replace("{n}", String(carta.teaser.informe.secciones))
-                // "always": en es, ICU no agrupa los números de cuatro cifras
-                // (6000; el backend redondea a miles) y al lado de pt (6.000)
-                // se vería inconsistente.
-                .replace("{palabras}", carta.teaser.informe.palabras.toLocaleString(locale, { useGrouping: "always" }))}
-            </p>
-          )}
-          <p className="fieldNote">
-            {t.legalAntes}
-            <Link href={`/${locale}/legal/terms`}>{t.legalTerminos}</Link>
-            {t.legalY}
-            <Link href={`/${locale}/legal/privacy`}>{t.legalPrivacidad}</Link>
-            {t.legalDespues}
+          compra sin pasar por /entrar. Sin precio (el catálogo no respondió) el
+          botón sigue: con la breve apagada, sacarlo dejaba la pantalla sin
+          salida. */}
+      <div className="previewCta">
+        {errorCompra && (
+          <p className="compraError" role="alert">
+            {errorCompra}
           </p>
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          className="btn btnPrimary"
+          disabled={comprando}
+          onClick={() => void onComprar()}
+        >
+          {comprando
+            ? dict.precios.abriendo
+            : precio
+              ? t.comprarCta.replace("{precio}", precio)
+              : t.comprarCtaSinPrecio}
+        </button>
+        {carta.teaser && (
+          <p className="fieldNote">
+            {t.informeTrae
+              .replace("{n}", String(carta.teaser.informe.secciones))
+              // "always": en es, ICU no agrupa los números de cuatro cifras
+              // (6000; el backend redondea a miles) y al lado de pt (6.000)
+              // se vería inconsistente.
+              .replace("{palabras}", carta.teaser.informe.palabras.toLocaleString(locale, { useGrouping: "always" }))}
+          </p>
+        )}
+        <p className="fieldNote">
+          {t.legalAntes}
+          <Link href={`/${locale}/legal/terms`}>{t.legalTerminos}</Link>
+          {t.legalY}
+          <Link href={`/${locale}/legal/privacy`}>{t.legalPrivacidad}</Link>
+          {t.legalDespues}
+        </p>
+      </div>
 
       <ChartBody chart={carta} dict={dict} locale={locale} soloRueda />
 
       <DatosCarta chart={carta} dict={dict} locale={locale} />
 
       <footer className="previewPie">
-        <p className="fieldNote">{precio ? t.previewPrivacidad : t.previewPrivacidadSinCompra}</p>
+        <p className="fieldNote">{t.previewPrivacidad}</p>
         <button type="button" className="btn btnGhost" onClick={onVolver}>
           {t.navNew}
         </button>

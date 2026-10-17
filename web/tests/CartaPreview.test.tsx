@@ -104,11 +104,9 @@ describe("botón de compra de la vista previa", () => {
     expect(screen.queryByText(/No guardamos nada de esto\. /)).toBeNull();
   });
 
-  it("sin precio no hay compra que mencionar: la nota sólo dice que no se guarda nada mientras mira", () => {
+  it("sin precio también se puede comprar, así que la nota es la misma", () => {
     pintar("es", { precio: null });
-    expect(
-      screen.getByText("Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta."),
-    ).toBeTruthy();
+    expect(screen.getByText(/Si comprás el informe, la carta queda guardada para entregártelo\./)).toBeTruthy();
   });
 
   // Con precio (el caso normal) la nota dice las dos cosas ciertas: nada en el
@@ -123,18 +121,17 @@ describe("botón de compra de la vista previa", () => {
     expect(screen.getByText(texto)).toBeTruthy();
   });
 
-  it.each(LOCALES)("%s: la nota de privacidad existe y cambia con y sin precio", (locale) => {
+  // Si el catálogo no respondió, el botón sigue: comprar no depende del precio
+  // (lo arma el backend y Stripe lo muestra antes de cobrar). Antes del
+  // 17-10-2026 sin precio no había botón, y con la breve gratis apagada la
+  // pantalla quedaba con candados y sin ninguna salida.
+  it.each(LOCALES)("%s: sin precio el botón de pago sigue, sin precio en el texto", (locale) => {
+    pintar(locale, { precio: null });
     const t = getDict(locale).newChart;
-    expect(t.previewPrivacidad).toBeTruthy();
-    expect(t.previewPrivacidadSinCompra).toBeTruthy();
-    expect(t.previewPrivacidad).not.toBe(t.previewPrivacidadSinCompra);
-  });
 
-  it("sin precio no se muestra el botón de pago ni la nota", () => {
-    pintar("es", { precio: null });
-
-    expect(screen.queryByRole("button", { name: /Leer el informe completo/ })).toBeNull();
-    expect(screen.queryByRole("link", { name: getDict("es").newChart.legalTerminos })).toBeNull();
+    expect(screen.getByRole("button", { name: t.comprarCtaSinPrecio })).toBeTruthy();
+    expect(screen.getByRole("link", { name: t.legalTerminos })).toBeTruthy();
+    expect(t.comprarCtaSinPrecio).not.toContain("{precio}");
   });
 
   it("mientras la compra está en curso el botón queda deshabilitado", () => {
