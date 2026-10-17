@@ -105,10 +105,22 @@ def _luna_dudosa(birth: BirthInput) -> bool:
     inicio = inicio.astimezone(timezone.utc).astimezone(zona)
     fin = datetime.combine(birth.date, time(23, 59), tzinfo=zona)
 
-    def signo(momento: datetime) -> str:
-        return next(p.sign for p in sky_now(momento) if p.name == "Moon")
+    def signo(momento: datetime) -> str | None:
+        # Mismo zodíaco que la carta: `sky_now` es siempre tropical y en una
+        # carta sidérea el signo que se muestra es el sidéreo.
+        utc = momento.astimezone(timezone.utc)
+        subj = AstrologicalSubject(
+            name="Luna", year=utc.year, month=utc.month, day=utc.day,
+            hour=utc.hour, minute=utc.minute, lng=birth.lng, lat=birth.lat,
+            tz_str="UTC", online=False,
+            zodiac_type=("Sidereal" if birth.zodiac == "Sidereal" else "Tropical"),
+        )
+        luna = subj.model().moon
+        return None if luna is None else str(luna.sign)
 
-    return signo(inicio) != signo(fin)
+    al_inicio, al_fin = signo(inicio), signo(fin)
+    # Sin efeméride de la Luna no hay signo que afirmar.
+    return al_inicio is None or al_fin is None or al_inicio != al_fin
 
 
 def build_chart(birth: BirthInput) -> ChartData:

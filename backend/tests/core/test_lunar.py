@@ -196,3 +196,23 @@ def test_dia_sin_medianoche_no_levanta():
     chart = build_chart(_nacimiento(datetime.date(2018, 11, 4), SAO_PAULO))
 
     assert isinstance(chart.flags.moon_sign_uncertain, bool)
+
+
+@pytest.mark.parametrize(("dia", "tropical", "sidereo"), [
+    # Buenos Aires, 2026-03-06: la Luna cruza de signo sólo en el zodíaco
+    # sidéreo (el tropical la deja en Libra todo el día).
+    (datetime.date(2026, 3, 6), False, True),
+    # 2026-03-07: al revés, cruza a Escorpio en el tropical y no en el sidéreo.
+    (datetime.date(2026, 3, 7), True, False),
+])
+def test_sin_hora_luna_dudosa_respeta_el_zodiaco_de_la_carta(dia, tropical, sidereo):
+    import dataclasses
+
+    from core.ephemeris import build_chart
+
+    base = _nacimiento(dia, BUENOS_AIRES)
+    t = build_chart(dataclasses.replace(base, zodiac="Tropical"))
+    s = build_chart(dataclasses.replace(base, zodiac="Sidereal"))
+
+    assert t.flags.moon_sign_uncertain is tropical
+    assert s.flags.moon_sign_uncertain is sidereo
