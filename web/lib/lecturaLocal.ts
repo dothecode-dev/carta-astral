@@ -11,7 +11,7 @@ import { isLocale, type Locale } from "@/lib/i18n";
 // (`datos`, los de nacimiento): así, al reabrirla, el botón de comprar el
 // informe sigue funcionando. Es decisión de producto del 08-10: queda sólo en
 // este navegador, 24 h, y nunca viaja al servidor para guardarse.
-const CLAVE = "astra-lectura-anonima";
+export const CLAVE_LECTURA = "astra-lectura-anonima";
 const VIDA_MS = 24 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f-]{36}$/;
 
@@ -29,7 +29,7 @@ export type LecturaGuardada = {
 
 export function guardarLectura(l: Omit<LecturaGuardada, "vence">, ahora = Date.now()): void {
   try {
-    localStorage.setItem(CLAVE, JSON.stringify({ ...l, vence: ahora + VIDA_MS }));
+    localStorage.setItem(CLAVE_LECTURA, JSON.stringify({ ...l, vence: ahora + VIDA_MS }));
   } catch {
     // Sin storage se ve igual; sólo no sobrevive a recargar.
   }
@@ -56,11 +56,11 @@ function esValida(l: unknown): l is LecturaGuardada {
 
 export function leerLectura(ahora = Date.now()): LecturaGuardada | null {
   try {
-    const crudo = localStorage.getItem(CLAVE);
+    const crudo = localStorage.getItem(CLAVE_LECTURA);
     if (!crudo) return null;
     const l = JSON.parse(crudo) as LecturaGuardada;
     if (!esValida(l) || l.vence < ahora) {
-      localStorage.removeItem(CLAVE);
+      localStorage.removeItem(CLAVE_LECTURA);
       return null;
     }
     return l;
@@ -74,7 +74,7 @@ export function leerLectura(ahora = Date.now()): LecturaGuardada | null {
 // fondo y guarda la lectura con la carta con que se pidió. Vive lo mismo que la
 // lectura sin acusar en el servidor (15 min) y se borra apenas termina: lista
 // (guardada y acusada), fallida o corte.
-const CLAVE_PEDIDO = "astra-lectura-pedido";
+export const CLAVE_PEDIDO = "astra-lectura-pedido";
 const VIDA_PEDIDO_MS = 15 * 60 * 1000;
 
 export type PedidoEnCurso = {
@@ -143,4 +143,18 @@ export function borrarPedido(pedido: string): void {
     return;
   }
   quitarPedido();
+}
+
+/** Borra los restos de la lectura anónima. Desde el 17-10-2026 nadie la lee ni
+ *  la escribe (el adelanto del informe la reemplazó), pero los navegadores de
+ *  antes del deploy conservan, sin vencer, los datos de nacimiento con que se
+ *  pidió. Se llama al montar el formulario de carta nueva. */
+export function limpiarRestosDeLectura(): void {
+  for (const clave of [CLAVE_LECTURA, CLAVE_PEDIDO]) {
+    try {
+      localStorage.removeItem(clave);
+    } catch {
+      // Storage bloqueado: no hay nada que borrar.
+    }
+  }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Place } from "@/app/api/geocode/route";
 import { CartaPreview } from "@/components/CartaPreview";
@@ -10,6 +10,7 @@ import { PlaceField } from "@/components/PlaceField";
 import type { CartaDibujable } from "@/lib/chart";
 import { armarDatosCarta, errorDeFecha, TRATOS, type DatosCarta, type Trato } from "@/lib/datosCarta";
 import type { Dict, Locale } from "@/lib/i18n";
+import { limpiarRestosDeLectura } from "@/lib/lecturaLocal";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
 // es el único que sabe de efemérides. Lo único que resuelve acá es que no se
@@ -73,6 +74,9 @@ export function NewChartForm({
   const [comprando, setComprando] = useState(false);
   const [errorCompra, setErrorCompra] = useState<string | null>(null);
   const datos = useRef<DatosCarta | null>(null);
+
+  // La lectura anónima ya no existe: se van los datos de nacimiento que dejó.
+  useEffect(limpiarRestosDeLectura, []);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();

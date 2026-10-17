@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NewChartForm } from "@/components/NewChartForm";
 import { getDict } from "@/lib/i18n";
+import { CLAVE_LECTURA, CLAVE_PEDIDO } from "@/lib/lecturaLocal";
 
 // El formulario es la puerta de entrada a todo lo demás: si deja pasar datos
 // que el backend rechaza, se gasta un viaje y la persona ve un error genérico;
@@ -233,5 +234,18 @@ describe("NewChartForm manda a la carta", () => {
     await enviar();
 
     expect(replace).toHaveBeenCalledWith("/es/carta/abc-123");
+  });
+});
+
+describe("restos de la lectura anónima", () => {
+  it("al montar borra la lectura y el pedido que quedaron en el navegador", () => {
+    // Datos de nacimiento de antes del deploy: nadie los lee y no vencen solos.
+    localStorage.setItem(CLAVE_LECTURA, JSON.stringify({ vence: 1 }));
+    localStorage.setItem(CLAVE_PEDIDO, JSON.stringify({ vence: 1 }));
+    localStorage.setItem("otra-clave", "queda");
+    render(<NewChartForm locale="es" dict={dict} />);
+    expect(localStorage.getItem(CLAVE_LECTURA)).toBeNull();
+    expect(localStorage.getItem(CLAVE_PEDIDO)).toBeNull();
+    expect(localStorage.getItem("otra-clave")).toBe("queda");
   });
 });
