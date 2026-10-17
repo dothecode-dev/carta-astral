@@ -381,3 +381,13 @@ def test_en_you_would_rather_es_muletilla_con_apostrofo_recto_y_tipografico():
 def test_la_linea_de_reintento_en_pt_pide_voce_y_nombra_las_formas():
     linea = cmd._linea_de_reintento([("registro", "fazes")], "pt")
     assert "você" in linea and "fazes" in linea
+
+
+def test_pt_br_correcto_con_sustantivos_plurales_y_contigo_no_es_problema_de_registro():
+    texto = "As buscas por sentido e as crias, as procuras e as amas. Fique contigo. " + LIMPIO
+    assert cmd.problemas_de_texto(texto, "pt") == []
+
+
+@pytest.mark.parametrize("tabla", ["_SISTEMA_GENERAR", "_SISTEMA_TRADUCIR"])
+def test_los_prompts_pt_exigen_voce(tabla):
+    assert "«você», nunca de «tu»" in getattr(cmd, tabla)["pt"]

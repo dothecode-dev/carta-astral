@@ -199,6 +199,7 @@ _SISTEMA_GENERAR = {
         "Fale com a pessoa em segunda pessoa (você), com tom caloroso e direto, como as frases curtas "
         "de um mapa natal («Você começa antes de todo mundo: seu jeito é se mover primeiro e ajustar depois…»). "
         "Sem promessas nem previsões: descreva tendências, não o que vai acontecer. "
+        + "Trate a pessoa sempre de «você», nunca de «tu» nem com voseo. "
         + _PROHIBIDAS["pt"]
         + _APERTURA_VARIADA["pt"]
         + _REGLA_GENERO["pt"]
@@ -227,6 +228,7 @@ _SISTEMA_TRADUCIR = {
     "pt": (
         "Você é um tradutor profissional. Traduza para o português brasileiro o parágrafo do usuário, "
         "que já foi revisado: conserve o sentido, o tom e o tamanho (60 a 90 palavras). "
+        + "Trate a pessoa sempre de «você», nunca de «tu» nem com voseo. "
         + _PROHIBIDAS["pt"]
         + "Se o original usa uma fórmula proibida, a tradução a evita com outra construção. "
         + _REGLA_GENERO["pt"]
@@ -289,15 +291,15 @@ def _formas_con_genero_en(texto: str, lang: str) -> list[str]:
 
 # Formas de segunda persona que no son «você»: el «tu» europeo y el voseo español que se
 # cuela al traducir desde el es. Sólo pt (en es el voseo es lo correcto; en en no aplica).
-# «te» como objeto es normal en Brasil y no está; «és»/«vês» llevan tilde y no chocan con
+# «te» como objeto, «contigo» y los verbos que son también sustantivos plurales («as buscas
+# por sentido», «as crias», «amas») son pt-BR correcto y no están; «és»/«vês» llevan tilde y no chocan con
 # «es»/«ves», que además no se buscan.
 FORMAS_DE_REGISTRO: dict[str, tuple[str, ...]] = {
     "es": (),
     "en": (),
     "pt": (
-        "tu", "contigo", "és", "estás", "tens", "fazes", "sabes", "queres", "podes", "vives", "sentes",
-        "pensas", "gostas", "preferes", "procuras", "buscas", "ficas", "vais", "dizes", "crias",
-        "precisas", "brilhas", "amas", "vês",
+        "tu", "és", "estás", "tens", "fazes", "sabes", "queres", "podes", "vives", "sentes",
+        "pensas", "gostas", "preferes", "vais", "dizes", "precisas", "brilhas", "vês",
         "sentís", "tenés", "sos", "podés", "querés", "criás", "sabés", "hacés", "necesitás",
     ),
 }
