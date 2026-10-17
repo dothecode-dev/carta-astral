@@ -354,3 +354,30 @@ def test_si_el_juez_empeora_se_queda_el_original_y_avisa(monkeypatch, tmp_path, 
     assert json.loads(salida.read_text(encoding="utf-8"))["es"]["Sun|Ari"] == LIMPIO
     err = capsys.readouterr().err
     assert "Sun|Ari" in err and "juez" in err and "0 corregidos por el juez" in err
+
+
+def test_pt_con_forma_de_tu_es_problema_de_registro():
+    assert "registro: «fazes»" in cmd.problemas_de_texto("O que fazes importa. " + LIMPIO, "pt")
+    assert any(p.startswith("registro") for p in cmd.problemas_de_texto("Tu brilhas. " + LIMPIO, "pt"))
+    assert any(p.startswith("registro") for p in cmd.problemas_de_texto("Quando sentís isso. " + LIMPIO, "pt"))
+
+
+def test_pt_con_voce_y_te_objeto_no_es_problema_de_registro():
+    assert cmd.problemas_de_texto("Você faz o que importa e quero te ver brilhar. " + LIMPIO, "pt") == []
+    # «ves»/«es» sin tilde son español/otras palabras y no chocan con «vês»/«és».
+    assert cmd.problemas_de_texto("Isso é bom, três vezes. " + LIMPIO, "pt") == []
+
+
+def test_es_con_voseo_no_es_problema_de_registro():
+    assert cmd.problemas_de_texto("Cuando sentís eso, tenés calma. " + LIMPIO, "es") == []
+
+
+def test_en_you_would_rather_es_muletilla_con_apostrofo_recto_y_tipografico():
+    for frase in ("you’d rather wait", "You'd rather wait", "You would rather wait"):
+        assert cmd.muletillas_presentes({"a": frase}, "en"), frase
+    assert "you'd rather" in cmd._SISTEMA_GENERAR["en"].replace("\u2019", "'")
+
+
+def test_la_linea_de_reintento_en_pt_pide_voce_y_nombra_las_formas():
+    linea = cmd._linea_de_reintento([("registro", "fazes")], "pt")
+    assert "você" in linea and "fazes" in linea

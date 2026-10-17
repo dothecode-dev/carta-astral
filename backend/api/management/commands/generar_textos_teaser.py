@@ -65,6 +65,7 @@ _MULETILLAS_EN_CUERPO: dict[str, tuple[str, ...]] = {
     "en": (
         "it's hard for you", "you struggle to", "your identity is built", "without asking permission",
         "the challenge is", "your emotional world", "works like", "sometimes",
+        "you'd rather", "you would rather",
     ),
     "pt": (
         "te custa", "sua identidade se constrói", "sem pedir permissão", "o desafio está em",
@@ -113,7 +114,7 @@ _PROHIBIDAS = {
         "Do NOT use these stock phrases, which already repeat across other texts: \u201cit's hard for "
         "you\u201d, \u201cyou struggle to\u201d, \u201cyour identity is built\u201d, \u201cwithout "
         "asking permission\u201d, \u201cthe challenge is\u201d, \u201cyour emotional world\u201d, "
-        "\u201cworks like\u201d, \u201csometimes\u201d. Also avoid formula openings such as "
+        "\u201cworks like\u201d, \u201csometimes\u201d, \u201cyou'd rather\u201d, \u201cyou would rather\u201d. Also avoid formula openings such as "
         "\u201cWith Venus in\u2026\u201d, \u201cYou have the Sun in\u2026\u201d or "
         "\u201cMars in Aries:\u201d. "
     ),
@@ -286,6 +287,22 @@ def _formas_con_genero_en(texto: str, lang: str) -> list[str]:
     ]
 
 
+# Formas de segunda persona que no son «você»: el «tu» europeo y el voseo español que se
+# cuela al traducir desde el es. Sólo pt (en es el voseo es lo correcto; en en no aplica).
+# «te» como objeto es normal en Brasil y no está; «és»/«vês» llevan tilde y no chocan con
+# «es»/«ves», que además no se buscan.
+FORMAS_DE_REGISTRO: dict[str, tuple[str, ...]] = {
+    "es": (),
+    "en": (),
+    "pt": (
+        "tu", "contigo", "és", "estás", "tens", "fazes", "sabes", "queres", "podes", "vives", "sentes",
+        "pensas", "gostas", "preferes", "procuras", "buscas", "ficas", "vais", "dizes", "crias",
+        "precisas", "brilhas", "amas", "vês",
+        "sentís", "tenés", "sos", "podés", "querés", "criás", "sabés", "hacés", "necesitás",
+    ),
+}
+
+
 def _palabras(texto: str) -> list[str]:
     return re.findall(r"\w+", texto.lower())
 
@@ -307,7 +324,8 @@ def frases_repetidas(textos: dict[str, str], n: int = 3, tope: int = 6) -> list[
 
 def _muletillas_en(texto: str, lang: str) -> list[str]:
     """Muletillas de `lang` en un texto: por palabra completa; las aperturas, sólo al inicio."""
-    t = texto.lower()
+    # El apóstrofo tipográfico se iguala al recto: «you’d rather» es la misma muletilla.
+    t = texto.lower().replace("\u2019", "'")
     halladas = [m for m in _MULETILLAS_EN_CUERPO[lang] if re.search(rf"\b{re.escape(m)}\b", t)]
     # Sólo al inicio: se saltea la puntuación o comilla de apertura.
     halladas += [m for m in _APERTURAS[lang] if re.match(rf"\W*{re.escape(m)}\b", t)]
@@ -326,6 +344,10 @@ def _problemas(texto: str, lang: str) -> list[tuple[str, str]]:
     """Pares (tipo, valor): tipo es «muletilla», «género» o «largo»."""
     problemas = [("muletilla", m) for m in _muletillas_en(texto, lang)]
     problemas += [("género", f) for f in _formas_con_genero_en(texto, lang)]
+    minusculas = texto.lower()
+    problemas += [
+        ("registro", f) for f in FORMAS_DE_REGISTRO[lang] if re.search(rf"\b{re.escape(f)}\b", minusculas)
+    ]
     palabras = len(texto.split())
     if not PALABRAS_MIN <= palabras <= PALABRAS_MAX:
         problemas.append(("largo", f"{palabras} palabras (se esperan {PALABRAS_MIN}-{PALABRAS_MAX})"))
@@ -350,10 +372,15 @@ def _peso(problemas: list[tuple[str, str]]) -> tuple[bool, int]:
     return any(t == "largo" for t, _ in problemas), len(problemas)
 
 
+_USA_VOCE = {"pt": "Trate a pessoa de «você», sem «tu» nem voseo."}
+
+
 def _linea_de_reintento(problemas: list[tuple[str, str]], lang: str) -> str:
     """Línea en el idioma destino que nombra lo concreto a evitar en el nuevo intento."""
     citas = ", ".join(f"\"{v}\"" for t, v in problemas if t != "largo")
     partes = [f"{_EVITA[lang]}: {citas}." if citas else ""]
+    if any(t == "registro" for t, _ in problemas):
+        partes.append(_USA_VOCE[lang])
     if any(t == "largo" for t, _ in problemas):
         partes.append(_LARGO_PEDIDO[lang])
     return " ".join(p for p in partes if p)
