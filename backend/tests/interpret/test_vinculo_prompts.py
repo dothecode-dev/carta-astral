@@ -124,3 +124,15 @@ def test_sin_genero_el_rol_no_trae_las_formas_que_la_guia_prohibe(lang):
         doble = " o " if lang == "es" else " ou "  # en pt « o » es artículo
         assert doble not in etiqueta, (rol, etiqueta)
         assert "progenitor" not in etiqueta
+
+
+def test_avisa_la_luna_dudosa_de_quien_no_tiene_hora():
+    sec = secciones_vinculo("familia", hay_hora=True)[0]
+    datos = {**DATOS, "persona_b": {**DATOS["persona_b"], "carta": {
+        "time_known": False,
+        "flags": {"moon_sign_uncertain": True, "moon_sign_options": ["Leo", "Vir"]},
+    }}}
+    texto = contenido_vinculo(datos, sec, "es", "")
+    cola = texto.rsplit("}", 1)[-1]
+    assert "Luna de Persona B" in cola and "Leo" in cola and "Vir" in cola
+    assert "Luna de Persona B" not in contenido_vinculo(DATOS, sec, "es", "")

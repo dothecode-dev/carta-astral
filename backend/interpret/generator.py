@@ -43,29 +43,46 @@ _DEGRADED_NOTES = {
 }
 
 # Sin hora, la Luna puede cambiar de signo en el día de nacimiento
-# (core.ephemeris marca `moon_sign_uncertain` con los dos signos posibles). La
-# vista previa ya no la nombra; el informe no puede afirmarla después.
+# (core.ephemeris marca `moon_sign_uncertain`, con los dos signos posibles si
+# pudo acotar el día). La vista previa ya no la nombra; el informe no puede
+# afirmarla después. `{luna}` es «la Luna» o «la Luna de Persona B».
 _LUNA_DUDOSA = {
-    "es": "\n\nIMPORTANTE: ese día la Luna cambió de signo, de {a} a {b} (abreviaturas como "
-    "en el JSON), y sin hora no se sabe en cuál nació esta persona. No afirmes un signo de "
-    "Luna: presentá las dos posibilidades e invitá a reconocerse en una, sin elegir por ella.",
-    "en": "\n\nIMPORTANT: on that day the Moon changed sign, from {a} to {b} (abbreviations as "
-    "in the JSON), and without a birth time it is unknown which one applies. Do not state a "
-    "Moon sign: present both possibilities and invite the reader to recognize one, without "
-    "choosing for them.",
-    "pt": "\n\nIMPORTANTE: nesse dia a Lua mudou de signo, de {a} para {b} (abreviaturas como "
-    "no JSON), e sem hora não se sabe em qual a pessoa nasceu. Não afirme um signo de Lua: "
-    "apresente as duas possibilidades e convide a pessoa a se reconhecer em uma, sem escolher "
-    "por ela.",
+    "es": "\n\nIMPORTANTE: ese día {luna} cambió de signo, de {a} a {b} (abreviaturas como "
+    "en el JSON), y sin hora no se sabe cuál corresponde. No afirmes ese signo de Luna: "
+    "presentá las dos posibilidades e invitá a reconocerse en una, sin elegir.",
+    "en": "\n\nIMPORTANT: on that day {luna} changed sign, from {a} to {b} (abbreviations as "
+    "in the JSON), and without a birth time it is unknown which one applies. Do not state "
+    "that Moon sign: present both possibilities and invite recognition in one, without choosing.",
+    "pt": "\n\nIMPORTANTE: nesse dia {luna} mudou de signo, de {a} para {b} (abreviaturas como "
+    "no JSON), e sem hora não se sabe qual vale. Não afirme esse signo de Lua: apresente as "
+    "duas possibilidades e convide a se reconhecer em uma, sem escolher.",
 }
+_LUNA_INCIERTA = {
+    "es": "\n\nIMPORTANTE: sin hora ni zona horaria del lugar no se puede saber el signo de "
+    "{luna}, que pudo cambiar ese día. No afirmes ese signo de Luna: hablá de ella sin darlo "
+    "por cierto.",
+    "en": "\n\nIMPORTANT: without a birth time or a time zone for the place, the sign of {luna} "
+    "cannot be known; it may have changed that day. Do not state that Moon sign: discuss it "
+    "without taking it as certain.",
+    "pt": "\n\nIMPORTANTE: sem hora nem fuso horário do lugar não dá para saber o signo de "
+    "{luna}, que pode ter mudado nesse dia. Não afirme esse signo de Lua: fale dela sem "
+    "tomá-lo como certo.",
+}
+_LA_LUNA = {"es": ("la Luna", "la Luna de {p}"), "en": ("the Moon", "{p}'s Moon"), "pt": ("a Lua", "a Lua de {p}")}
 
 
-def _nota_luna(chart_data: dict, lang: str) -> str:
+def nota_luna(chart_data: dict, lang: str, persona: str = "") -> str:
+    """La nota de Luna dudosa para el prompt, o "" si la Luna no lo es.
+    `persona` («Persona B») la atribuye en el vínculo, donde hay dos cartas."""
     flags = chart_data.get("flags") or {}
-    opciones = flags.get("moon_sign_options") or ()
-    if not flags.get("moon_sign_uncertain") or len(opciones) != 2:
+    if not flags.get("moon_sign_uncertain"):
         return ""
-    return _LUNA_DUDOSA[lang].format(a=opciones[0], b=opciones[1])
+    sola, de = _LA_LUNA[lang]
+    luna = de.format(p=persona) if persona else sola
+    opciones = flags.get("moon_sign_options") or ()
+    if len(opciones) == 2:
+        return _LUNA_DUDOSA[lang].format(luna=luna, a=opciones[0], b=opciones[1])
+    return _LUNA_INCIERTA[lang].format(luna=luna)
 
 
 def _user_content(chart_data: dict, lang: str, trato: str = "") -> str:
@@ -73,7 +90,7 @@ def _user_content(chart_data: dict, lang: str, trato: str = "") -> str:
     content = f"{_INSTRUCTIONS[lang]}\n{body}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
-        content += _nota_luna(chart_data, lang)
+        content += nota_luna(chart_data, lang)
     if nota := instruccion(trato, lang):
         content += f"\n\n{nota}"
     return content
@@ -238,7 +255,7 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     content = f"{pedido}\n\n{cuerpo}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
-        content += _nota_luna(chart_data, lang)
+        content += nota_luna(chart_data, lang)
     if reparto:
         # Quién explica qué: lo que impide que la misma oposición se explique
         # en cuatro secciones (interpret/reparto.py, spec 2026-10-07).

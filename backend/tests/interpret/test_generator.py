@@ -223,3 +223,13 @@ def test_luna_estable_no_agrega_la_nota():
     client = FakeClient()
     build_interpretation(CHART_NO_TIME, "es", "v1", client)
     assert "Vir" not in client.calls[0]["messages"][0]["content"]
+
+
+@pytest.mark.parametrize("lang,palabra", [("es", "Luna"), ("en", "Moon"), ("pt", "Lua")])
+def test_luna_dudosa_sin_opciones_igual_pide_no_afirmar_el_signo(lang, palabra):
+    # Un lugar sin zona horaria (mar abierto): dudosa, sin los dos signos.
+    carta = {"time_known": False, "placements": [], "flags": {"moon_sign_uncertain": True, "moon_sign_options": []}}
+    client = FakeClient()
+    build_interpretation(carta, lang, "v1", client)
+    cola = client.calls[0]["messages"][0]["content"].rsplit("}", 1)[-1]
+    assert palabra in cola

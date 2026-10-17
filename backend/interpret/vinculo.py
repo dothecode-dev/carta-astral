@@ -6,7 +6,7 @@ nombre: los alias no entran al prompt (RF22) y se sustituyen al mostrar."""
 
 import json
 
-from interpret.generator import _MARGEN_TOPE_SECCION, _stream_text
+from interpret.generator import _MARGEN_TOPE_SECCION, _stream_text, nota_luna
 from interpret.prompts import MODEL, SECCION_TOKENS_POR_PALABRA, Seccion
 from interpret.trato import instruccion_personas, nombre_persona
 
@@ -233,6 +233,7 @@ def contenido_vinculo(
     for letra, p in personas:
         if not p["carta"].get("time_known", True):
             texto += _SIN_HORA[lang].format(p=nombre_persona(letra, lang))
+            texto += nota_luna(p["carta"], lang, nombre_persona(letra, lang))
     if otras:
         lista = "\n".join(f"- {o.titulo[lang]}: {o.foco[lang]}" for o in otras)
         texto += _MAPA[lang].format(lista=lista)
