@@ -240,7 +240,8 @@ def _con_genero(*raices: str) -> tuple[str, ...]:
 
 # Formas que marcan el género de quien lee. El prompt ya lo prohíbe, pero la segunda
 # tanda real igual dejó «Mostrarte entero»: la salida se valida con esta lista, y el
-# test de la Task 3 sobre los textos revisados usa esta misma. «solo» queda afuera:
+# test de la Task 3 sobre los textos revisados usa esta misma (con DISPARADORES_DE_GENERO,
+# que dice en qué contexto cuenta cada forma). «solo» queda afuera:
 # como adverbio («no solo», «solo cuando») daría un falso positivo en casi todo
 # párrafo; «sola» sí está. En inglés no hay marca de género.
 FORMAS_CON_GENERO: dict[str, tuple[str, ...]] = {
@@ -254,6 +255,34 @@ FORMAS_CON_GENERO: dict[str, tuple[str, ...]] = {
         "preso", "conquistado", "inteiro", "despercebido",
     ),
 }
+
+
+# Una forma de FORMAS_CON_GENERO sólo cuenta si aparece a 0-2 palabras de un verbo o
+# pronombre que refiere a quien lee: «mostrarte entero» marca género, «una energía
+# intensa», «el mundo entero» o «una sola vez» no hablan de la persona.
+DISPARADORES_DE_GENERO: dict[str, tuple[str, ...]] = {
+    "es": (
+        "te", "sos", "estás", "ser", "estar", "sentirte", "te sentís", "quedarte", "quedás",
+        "mostrarte", "te mostrás", "pasar", "volverte", "te volvés", "parecer", "parecés", "hacerte",
+    ),
+    "en": (),
+    "pt": (
+        "você é", "você está", "ser", "estar", "se sentir", "sentir-se", "ficar", "fica",
+        "se mostrar", "passar", "parecer", "se tornar",
+    ),
+}
+
+
+def _formas_con_genero_en(texto: str, lang: str) -> list[str]:
+    """Formas con género de `lang` que aparecen en contexto de quien lee."""
+    if not DISPARADORES_DE_GENERO[lang]:
+        return []
+    t = texto.lower()
+    disparadores = "|".join(re.escape(d) for d in DISPARADORES_DE_GENERO[lang])
+    return [
+        f for f in FORMAS_CON_GENERO[lang]
+        if re.search(rf"\b(?:{disparadores})\b(?:\W+\w+){{0,2}}\W+{re.escape(f)}\b", t)
+    ]
 
 
 def _palabras(texto: str) -> list[str]:
@@ -295,10 +324,7 @@ def muletillas_presentes(textos: dict[str, str], lang: str) -> dict[str, int]:
 def _problemas(texto: str, lang: str) -> list[tuple[str, str]]:
     """Pares (tipo, valor): tipo es «muletilla», «género» o «largo»."""
     problemas = [("muletilla", m) for m in _muletillas_en(texto, lang)]
-    minusculas = texto.lower()
-    problemas += [
-        ("género", f) for f in FORMAS_CON_GENERO[lang] if re.search(rf"\b{re.escape(f)}\b", minusculas)
-    ]
+    problemas += [("género", f) for f in _formas_con_genero_en(texto, lang)]
     palabras = len(texto.split())
     if not PALABRAS_MIN <= palabras <= PALABRAS_MAX:
         problemas.append(("largo", f"{palabras} palabras (se esperan {PALABRAS_MIN}-{PALABRAS_MAX})"))
@@ -316,6 +342,11 @@ _LARGO_PEDIDO = {
     "en": "The text must be between 60 and 90 words long.",
     "pt": "O texto tem que ter entre 60 e 90 palavras.",
 }
+
+
+def _peso(problemas: list[tuple[str, str]]) -> tuple[bool, int]:
+    """Orden del «mejor intento»: el largo fuera de rango pesa más que cualquier cantidad de otros."""
+    return any(t == "largo" for t, _ in problemas), len(problemas)
 
 
 def _linea_de_reintento(problemas: list[tuple[str, str]], lang: str) -> str:
@@ -371,7 +402,7 @@ class Command(BaseCommand):
                 nombre = nombre_signo(signo, lang)
                 system = _SISTEMA_GENERAR[lang].format(cuerpo=_CUERPO[lang][cuerpo], signo=nombre)
                 pedido = f"{_CUERPO[lang][cuerpo]} {_PREPOSICION[lang]} {nombre}"
-            texto, intentos, problemas = self._texto_valido(cliente, system, pedido, lang, clave)
+            texto, intentos, problemas = self._texto_valido(cliente, system, pedido, lang, clave, traduccion=bool(desde))
             if intentos > 1:
                 reintentados.append(clave)
             if problemas:
@@ -391,36 +422,42 @@ class Command(BaseCommand):
         ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         self.stdout.write(f"{len(nuevos)} textos de «{lang}» escritos en {ruta}. Revisalos a mano.")
 
-    def _texto_valido(self, cliente, system: str, pedido: str, lang: str, clave: str) -> tuple[str, int, list[str]]:
+    def _texto_valido(
+        self, cliente, system: str, pedido: str, lang: str, clave: str, traduccion: bool = False,
+    ) -> tuple[str, int, list[str]]:
         """Pide el texto y, si `problemas_de_texto` no da vacío, lo vuelve a pedir.
 
-        Hasta `REINTENTOS` veces más, sumando al pedido una línea que nombra lo
-        concreto a evitar. Si no hay caso, devuelve el mejor intento (el de menos
-        problemas): nunca aborta, el aviso lo da quien llama. Devuelve
-        (texto, intentos hechos, problemas que le quedan).
+        Hasta `REINTENTOS` veces más, nombrando lo concreto a evitar. Al generar va
+        en el mensaje de usuario; al traducir el mensaje es sólo el texto de origen
+        (si no, el modelo podría traducir la línea o colarla en la salida) y la lista
+        va en un bloque extra del system. Si no hay caso, devuelve el mejor intento
+        (largo en rango primero, después menos problemas): nunca aborta, el aviso lo
+        da quien llama. Devuelve (texto, intentos hechos, problemas que le quedan).
         """
-        mejor: tuple[str, list[tuple[str, str]]] | None = None
-        mensaje = pedido
-        intentos = 0
-        for intentos in range(1, REINTENTOS + 2):
+        def pedir(bloques: list[dict], mensaje: str) -> tuple[str, list[tuple[str, str]]]:
             try:
                 texto = _stream_text(
-                    cliente, MODEL, [{"type": "text", "text": system}], mensaje, MAX_TOKENS,
-                    thinking={"type": "disabled"},
+                    cliente, MODEL, bloques, mensaje, MAX_TOKENS, thinking={"type": "disabled"},
                 ).strip()
             except InterpretationError as exc:
                 logger.error("teaser: falló %s/%s: %s", lang, clave, exc)
                 raise CommandError(f"Falló {clave}: {exc}") from exc
-            problemas = _problemas(texto, lang)
-            if mejor is None or len(problemas) < len(mejor[1]):
-                mejor = (texto, problemas)
-            if not problemas:
-                break
-            mensaje = f"{pedido}\n\n{_linea_de_reintento(problemas, lang)}"
-        assert mejor is not None
+            return texto, _problemas(texto, lang)
+
+        base = [{"type": "text", "text": system}]
+        actual = mejor = pedir(base, pedido)
+        intentos = 1
+        while actual[1] and intentos <= REINTENTOS:
+            linea = _linea_de_reintento(actual[1], lang)
+            if traduccion:
+                actual = pedir([*base, {"type": "text", "text": linea}], pedido)
+            else:
+                actual = pedir(base, f"{pedido}\n\n{linea}")
+            intentos += 1
+            if _peso(actual[1]) < _peso(mejor[1]):
+                mejor = actual
         texto, problemas = mejor
-        legibles = [f"{t}: {v}" for t, v in problemas]
-        return texto, intentos, legibles
+        return texto, intentos, [f"{t}: {v}" for t, v in problemas]
 
     def _avisar_repeticion(self, textos: dict[str, str], lang: str) -> None:
         """Aviso, no error: la repetición se corrige editando o regenerando a mano."""

@@ -222,7 +222,12 @@ def test_la_traduccion_tambien_reintenta(monkeypatch, tmp_path):
     salida.write_text(json.dumps({"es": {"Sun|Ari": "original"}}), encoding="utf-8")
     call_command("generar_textos_teaser", "--lang", "en", "--desde", "es", "--salida", str(salida))
     assert len(falso.llamadas) == 2
-    assert "Avoid" in falso.llamadas[1]["messages"][0]["content"]
+    # El mensaje de usuario es exactamente el texto de origen; la lista va en el system.
+    assert falso.llamadas[1]["messages"][0]["content"] == "original"
+    assert falso.llamadas[0]["messages"][0]["content"] == "original"
+    system = " ".join(b["text"] for b in falso.llamadas[1]["system"])
+    assert "Avoid" in system and "it's hard for you" in system
+    assert len(falso.llamadas[0]["system"]) == 1
 
 
 def test_problemas_detecta_genero_en_es_y_pt_y_no_en_en():
@@ -235,7 +240,7 @@ def test_problemas_detecta_genero_en_es_y_pt_y_no_en_en():
 
 def test_problemas_genero_es_palabra_completa_y_sin_mayusculas():
     assert cmd.problemas_de_texto("Enteros ejemplos, enterovirus. " + LIMPIO, "es") == []
-    assert cmd.problemas_de_texto("ENTERA " + LIMPIO, "es") != []
+    assert cmd.problemas_de_texto("Te mostrás ENTERA " + LIMPIO, "es") != []
 
 
 def test_solo_adverbio_no_es_marca_de_genero():
@@ -255,3 +260,42 @@ def test_problemas_incluye_muletillas_con_el_mismo_criterio():
     assert cmd.problemas_de_texto("Tenés elegancia y te cuestan cosas. " + LIMPIO, "es") == []
     assert cmd.problemas_de_texto("Con Venus en casa. " + LIMPIO, "es") != []
     assert cmd.problemas_de_texto(LIMPIO + " con Venus en casa", "es") == []
+
+
+@pytest.mark.parametrize(
+    ("lang", "frase"),
+    [
+        ("es", "Una energía intensa te acompaña."),
+        ("es", "Recorrés el mundo entero."),
+        ("es", "Pasa una sola vez."),
+        ("pt", "Você aproveita a semana inteira."),
+        ("pt", "O prazo ficou preso na agenda."),
+    ],
+)
+def test_forma_con_genero_fuera_de_contexto_no_es_problema(lang, frase):
+    assert cmd.problemas_de_texto(frase + " " + LIMPIO, lang) == []
+
+
+@pytest.mark.parametrize(
+    ("lang", "frase"),
+    [
+        ("es", "Preferís mostrarte entero."),
+        ("es", "Evitás quedarte quieta."),
+        ("es", "No querés pasar inadvertido."),
+        ("es", "Odiás ser conquistado."),
+        ("pt", "Você fica presa."),
+    ],
+)
+def test_forma_con_genero_en_contexto_es_problema(lang, frase):
+    assert any(p.startswith("género") for p in cmd.problemas_de_texto(frase + " " + LIMPIO, lang))
+
+
+def test_el_mejor_intento_prefiere_largo_en_rango_aunque_tenga_muletilla(monkeypatch, tmp_path):
+    _una_clave(monkeypatch)
+    cortito = "palabra " * 5  # 1 solo problema (largo), pero fuera de rango
+    con_muletilla = "te cuesta " + LIMPIO + " a veces"  # 2 problemas, largo en rango
+    falso = _con_textos(monkeypatch, lambda n: cortito if n == 1 else con_muletilla)
+    salida = tmp_path / "t.json"
+    call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
+    assert len(falso.llamadas) == 4
+    assert json.loads(salida.read_text(encoding="utf-8"))["es"]["Sun|Ari"] == con_muletilla.strip()
