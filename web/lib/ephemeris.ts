@@ -153,6 +153,10 @@ export function signAbbr(lon: number, locale: Locale): string {
  * por su cuenta —como venía pasando—, el sitio y el documento que se descarga
  * terminan mostrando cosas distintas.
  */
+export function positionLabel(lon: number, locale: Locale): string {
+  return `${formatDegree(lon)} ${signOf(lon)} ${signName(lon, locale)}`;
+}
+
 /**
  * La posición de un cuerpo para una tabla (la de la pantalla y la del PDF).
  *
@@ -171,8 +175,4 @@ export function posicionCuerpo(
   if (opciones.length !== 2 || opciones.some((i) => i < 0)) return dict.chart.lunaIncierta;
   const [a, b] = opciones.map((i) => `${SIGNS[i]} ${SIGN_NAMES[locale][i]}`);
   return dict.chart.lunaDudosa.replace("{a}", a).replace("{b}", b);
-}
-
-export function positionLabel(lon: number, locale: Locale): string {
-  return `${formatDegree(lon)} ${signOf(lon)} ${signName(lon, locale)}`;
 }
