@@ -4,7 +4,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Any, Literal, cast
 
-from kerykeion import AstrologicalSubject, NatalAspects
+from kerykeion import AstrologicalSubject, AstrologicalSubjectFactory, NatalAspects
 
 from core.models import Angle, Aspect, ChartData, DegradationFlags, House, Placement, BirthInput
 from core.exceptions import GeocodeTimezoneError
@@ -99,14 +99,17 @@ def _zona_local(birth: BirthInput) -> ZoneInfo | None:
 def _signo_luna(momento: datetime, birth: BirthInput) -> str | None:
     # Mismo zodíaco que la carta: `sky_now` es siempre tropical y en una
     # carta sidérea el signo que se muestra es el sidéreo.
+    # Sólo la Luna (`active_points`): el mismo motor y la misma configuración
+    # que la carta, sin calcular los otros cuerpos.
     utc = momento.astimezone(timezone.utc)
-    subj = AstrologicalSubject(
+    modelo = AstrologicalSubjectFactory.from_birth_data(
         name="Luna", year=utc.year, month=utc.month, day=utc.day,
-        hour=utc.hour, minute=utc.minute, lng=birth.lng, lat=birth.lat,
+        hour=utc.hour, minute=utc.minute, seconds=0, lng=birth.lng, lat=birth.lat,
         tz_str="UTC", online=False,
         zodiac_type=("Sidereal" if birth.zodiac == "Sidereal" else "Tropical"),
+        active_points=["Moon"], calculate_lunar_phase=False,
     )
-    luna = subj.model().moon
+    luna = modelo.moon
     return None if luna is None else str(luna.sign)
 
 

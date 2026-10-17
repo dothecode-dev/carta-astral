@@ -253,16 +253,36 @@ def test_la_ventana_de_la_luna_dudosa_cubre_el_dia_entero(monkeypatch):
     import core.ephemeris as eph
 
     vistos = []
-    original = eph.AstrologicalSubject
+    original = eph.AstrologicalSubjectFactory.from_birth_data
 
     def espia(*args, **kwargs):
         if kwargs.get("name") == "Luna":
             vistos.append((kwargs["day"], kwargs["hour"], kwargs["minute"]))
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(eph, "AstrologicalSubject", espia)
+    monkeypatch.setattr(eph.AstrologicalSubjectFactory, "from_birth_data", espia)
     eph.build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
 
     # Buenos Aires es UTC-3: 00:00 del 5 local = 03:00 UTC del 5, y 00:00
     # del 6 local = 03:00 UTC del 6.
     assert vistos == [(5, 3, 0), (6, 3, 0)]
+
+
+@pytest.mark.parametrize("zodiaco", ["Tropical", "Sidereal"])
+def test_el_signo_de_la_luna_liviana_es_el_de_la_carta_completa(zodiaco):
+    # El muestreo de la Luna dudosa calcula sólo la Luna; tiene que dar el
+    # mismo signo que la carta entera en el mismo instante, también cerca de
+    # un cambio de signo (2026-03-02 cruza de Leo a Virgo en Buenos Aires).
+    import dataclasses
+
+    from core.ephemeris import _signo_luna, build_chart
+
+    zona = datetime.timezone(datetime.timedelta(hours=-3))
+    for hora in range(0, 24, 2):
+        base = dataclasses.replace(
+            _nacimiento(datetime.date(2026, 3, 2), BUENOS_AIRES, con_hora=True),
+            time=datetime.time(hora, 0), zodiac=zodiaco,
+        )
+        completa = next(p.sign for p in build_chart(base).placements if p.name == "Moon")
+        momento = datetime.datetime.combine(base.date, base.time, tzinfo=zona)
+        assert _signo_luna(momento, base) == completa, hora
