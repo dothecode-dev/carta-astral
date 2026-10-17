@@ -28,6 +28,7 @@ from api.teaser import CUERPOS_TEASER
 from interpret.exceptions import InterpretationError
 from interpret.generator import _stream_text
 from interpret.prompts import MODEL
+from interpret.revision_trato import revisar_trato
 
 logger = logging.getLogger(__name__)
 
@@ -392,6 +393,7 @@ class Command(BaseCommand):
         cliente = _build_client()
         nuevos: dict[str, str] = {}
         reintentados: list[str] = []
+        corregidos: list[str] = []
         con_problemas: dict[str, list[str]] = {}
         for clave in self._claves():
             cuerpo, signo = clave.split("|")
@@ -405,6 +407,10 @@ class Command(BaseCommand):
             texto, intentos, problemas = self._texto_valido(cliente, system, pedido, lang, clave, traduccion=bool(desde))
             if intentos > 1:
                 reintentados.append(clave)
+            # La lista de FORMAS_CON_GENERO no cierra nunca («quedarte callado» se coló);
+            # el juez del informe pago sí entiende la frase. Sólo en idiomas con género.
+            if lang in ("es", "pt"):
+                texto, problemas = self._pasar_por_el_juez(cliente, texto, problemas, lang, clave, corregidos)
             if problemas:
                 con_problemas[clave] = problemas
                 self.stderr.write(
@@ -413,7 +419,9 @@ class Command(BaseCommand):
             nuevos[clave] = texto
 
         self.stderr.write(
-            f"AVISO {lang}: {len(reintentados)} textos con reintento, {len(con_problemas)} con problemas"
+            f"AVISO {lang}: {len(reintentados)} textos con reintento, "
+            f"{len(corregidos)} corregidos por el juez" + (f" ({', '.join(corregidos)})" if corregidos else "")
+            + f", {len(con_problemas)} con problemas"
             + (f" ({', '.join(con_problemas)})" if con_problemas else "") + "."
         )
         self._avisar_repeticion(nuevos, lang)
@@ -458,6 +466,22 @@ class Command(BaseCommand):
                 mejor = actual
         texto, problemas = mejor
         return texto, intentos, [f"{t}: {v}" for t, v in problemas]
+
+    def _pasar_por_el_juez(
+        self, cliente, texto: str, problemas: list[str], lang: str, clave: str, corregidos: list[str],
+    ) -> tuple[str, list[str]]:
+        """Corrige el trato con `revisar_trato`; si el resultado tiene más problemas, se queda el original."""
+        corregido = revisar_trato(texto, "neutro", lang, cliente)
+        if corregido == texto:
+            return texto, problemas
+        nuevos = problemas_de_texto(corregido, lang)
+        if len(nuevos) > len(problemas):
+            self.stderr.write(
+                f"AVISO {lang} {clave}: el juez empeoró el texto ({'; '.join(nuevos)}); se queda el original."
+            )
+            return texto, problemas
+        corregidos.append(clave)
+        return corregido, nuevos
 
     def _avisar_repeticion(self, textos: dict[str, str], lang: str) -> None:
         """Aviso, no error: la repetición se corrige editando o regenerando a mano."""

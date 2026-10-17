@@ -13,6 +13,21 @@ from tests.api.llm_falso import ClienteFalso
 LIMPIO = " ".join(f"palabra{i}" for i in range(60))
 
 
+@pytest.fixture(autouse=True)
+def juez(monkeypatch):
+    """El juez del trato, por defecto, deja el texto como estaba; `juez.llamadas` registra los pedidos."""
+    llamadas = []
+
+    def falso(texto, trato, lang, client):
+        llamadas.append((texto, trato, lang, client))
+        return falso.respuesta(texto) if falso.respuesta else texto
+
+    falso.respuesta = None
+    falso.llamadas = llamadas
+    monkeypatch.setattr(cmd, "revisar_trato", falso)
+    return falso
+
+
 @pytest.fixture
 def cliente(monkeypatch):
     falso = ClienteFalso(textos=lambda n: LIMPIO)
@@ -299,3 +314,43 @@ def test_el_mejor_intento_prefiere_largo_en_rango_aunque_tenga_muletilla(monkeyp
     call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
     assert len(falso.llamadas) == 4
     assert json.loads(salida.read_text(encoding="utf-8"))["es"]["Sun|Ari"] == con_muletilla.strip()
+
+
+def test_es_pasa_cada_texto_por_el_juez_y_guarda_su_correccion(monkeypatch, tmp_path, juez, capsys):
+    _una_clave(monkeypatch)
+    falso = _con_textos(monkeypatch, lambda n: LIMPIO + " quedarte callado")
+    juez.respuesta = lambda t: t.replace("quedarte callado", "guardar silencio")
+    salida = tmp_path / "t.json"
+    call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
+    assert len(juez.llamadas) == 1
+    _, trato, lang, client = juez.llamadas[0]
+    assert (trato, lang) == ("neutro", "es") and client is falso
+    assert json.loads(salida.read_text(encoding="utf-8"))["es"]["Sun|Ari"].endswith("guardar silencio")
+    assert "1 corregidos por el juez (Sun|Ari)" in capsys.readouterr().err
+
+
+def test_pt_tambien_pasa_por_el_juez_y_la_traduccion_igual(monkeypatch, tmp_path, juez):
+    _una_clave(monkeypatch)
+    _con_textos(monkeypatch, lambda n: LIMPIO)
+    salida = tmp_path / "t.json"
+    salida.write_text(json.dumps({"es": {"Sun|Ari": "original"}}), encoding="utf-8")
+    call_command("generar_textos_teaser", "--lang", "pt", "--desde", "es", "--salida", str(salida))
+    assert [(c[1], c[2]) for c in juez.llamadas] == [("neutro", "pt")]
+
+
+def test_en_no_llama_al_juez(monkeypatch, tmp_path, juez):
+    _una_clave(monkeypatch)
+    _con_textos(monkeypatch, lambda n: LIMPIO)
+    call_command("generar_textos_teaser", "--lang", "en", "--salida", str(tmp_path / "t.json"))
+    assert juez.llamadas == []
+
+
+def test_si_el_juez_empeora_se_queda_el_original_y_avisa(monkeypatch, tmp_path, juez, capsys):
+    _una_clave(monkeypatch)
+    _con_textos(monkeypatch, lambda n: LIMPIO)
+    juez.respuesta = lambda t: "te cuesta " + t
+    salida = tmp_path / "t.json"
+    call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
+    assert json.loads(salida.read_text(encoding="utf-8"))["es"]["Sun|Ari"] == LIMPIO
+    err = capsys.readouterr().err
+    assert "Sun|Ari" in err and "juez" in err and "0 corregidos por el juez" in err
