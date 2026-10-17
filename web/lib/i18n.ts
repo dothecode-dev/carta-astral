@@ -804,7 +804,7 @@ const es: Dict = {
     empty: "Todavía no hay notas publicadas en español. Están en camino.",
     back: "Todas las notas",
     ctaTitle: "Y la tuya, ¿cómo está?",
-    ctaLede: "Poné tu fecha, hora y lugar de nacimiento y mirá tu carta natal, calculada con las mismas efemérides. La primera lectura breve no cuesta nada.",
+    ctaLede: "Poné tu fecha, hora y lugar de nacimiento y mirá tu carta natal, calculada con las mismas efemérides. La carta y un adelanto de lo que dice son gratis, sin crear cuenta.",
     ctaBoton: "Ver mi carta natal",
     publishedOn: "Publicada el",
   },
@@ -858,7 +858,7 @@ const es: Dict = {
       },
       {
         q: "¿Necesito crear una cuenta?",
-        a: "Entrás con tu cuenta de Google. No hay contraseñas que recordar ni formulario que completar.",
+        a: "No hace falta: la carta se calcula sin cuenta. Para guardar tus cartas e informes, entrás con Google o con tu mail, sin contraseñas que recordar.",
       },
       {
         q: "¿Puedo hacer cartas de otras personas?",
@@ -873,7 +873,7 @@ const es: Dict = {
   cierre: {
     eyebrow: "Empezar",
     title: "Empezá por la tuya.",
-    note: "En el navegador, sin instalar nada. Tu primera lectura breve no cuesta nada.",
+    note: "En el navegador, sin instalar nada. La carta y un adelanto de lo que dice son gratis, sin crear cuenta.",
     cta: "Ver mi carta natal",
   },
   chart: {
@@ -1215,7 +1215,7 @@ const en: Dict = {
     empty: "No notes published in English yet. They're on the way.",
     back: "All notes",
     ctaTitle: "And yours, how does it look?",
-    ctaLede: "Enter your birth date, time and place and see your own chart, calculated with the same ephemerides. The first short reading costs nothing.",
+    ctaLede: "Enter your birth date, time and place and see your own chart, calculated with the same ephemerides. The chart and a preview of what it says are free, no account needed.",
     ctaBoton: "See my birth chart",
     publishedOn: "Published on",
   },
@@ -1269,7 +1269,7 @@ const en: Dict = {
       },
       {
         q: "Do I need an account?",
-        a: "You sign in with your Google account. No passwords to remember, no form to fill in.",
+        a: "Not to see your chart: it's calculated without an account. To save your charts and reports, sign in with Google or your email, no passwords to remember.",
       },
       {
         q: "Can I make charts for other people?",
@@ -1284,7 +1284,7 @@ const en: Dict = {
   cierre: {
     eyebrow: "Get started",
     title: "Start with yours.",
-    note: "In your browser, nothing to install. Your first short reading costs nothing.",
+    note: "In your browser, nothing to install. The chart and a preview of what it says are free, no account needed.",
     cta: "See my birth chart",
   },
   chart: {
@@ -1626,7 +1626,7 @@ const pt: Dict = {
     empty: "Ainda não há notas publicadas em português. Estão a caminho.",
     back: "Todas as notas",
     ctaTitle: "E o seu, como está?",
-    ctaLede: "Coloque sua data, hora e local de nascimento e veja seu mapa natal, calculado com as mesmas efemérides. A primeira leitura breve não custa nada.",
+    ctaLede: "Coloque sua data, hora e local de nascimento e veja seu mapa natal, calculado com as mesmas efemérides. O mapa e uma prévia do que ele diz são grátis, sem criar conta.",
     ctaBoton: "Ver meu mapa natal",
     publishedOn: "Publicada em",
   },
@@ -1680,7 +1680,7 @@ const pt: Dict = {
       },
       {
         q: "Preciso criar uma conta?",
-        a: "Você entra com sua conta do Google. Sem senha para lembrar e sem formulário para preencher.",
+        a: "Não para ver seu mapa: ele é calculado sem conta. Para guardar seus mapas e relatórios, você entra com o Google ou com seu e-mail, sem senha para lembrar.",
       },
       {
         q: "Posso fazer mapas de outras pessoas?",
@@ -1695,7 +1695,7 @@ const pt: Dict = {
   cierre: {
     eyebrow: "Começar",
     title: "Comece pelo seu.",
-    note: "No navegador, sem instalar nada. Sua primeira leitura breve não custa nada.",
+    note: "No navegador, sem instalar nada. O mapa e uma prévia do que ele diz são grátis, sem criar conta.",
     cta: "Ver meu mapa natal",
   },
   chart: {
