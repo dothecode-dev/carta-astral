@@ -22,14 +22,12 @@ from django.core.management.base import BaseCommand, CommandError
 
 from api.firma_frases import IDIOMAS, SIGNOS, nombre_signo
 from api.interpretation_service import _build_client
+from api.teaser import CUERPOS_TEASER
 from interpret.exceptions import InterpretationError
 from interpret.generator import _stream_text
 from interpret.prompts import MODEL
 
 logger = logging.getLogger(__name__)
-
-# Los cuerpos del teaser. La Task 4 los mueve a `api/teaser.py`.
-CUERPOS_TEASER: tuple[str, ...] = ("Sun", "Moon", "Ascendant", "Mercury", "Venus", "Mars")
 
 RUTA_DEFAULT = pathlib.Path(__file__).resolve().parents[2] / "data" / "teaser_textos.json"
 
