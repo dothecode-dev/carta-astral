@@ -11,3 +11,6 @@ wheels/
 
 # Secrets locales (API keys de desarrollo)
 .env
+
+# Borradores a medias de generar_textos_teaser: se retoman, no se versionan.
+*.parcial.json

@@ -418,3 +418,23 @@ def test_un_corte_a_mitad_no_pierde_lo_ya_generado(cliente, tmp_path, monkeypatc
     assert len(llamadas) == 72 - 30
     assert len(json.loads(salida.read_text(encoding="utf-8"))["es"]) == 72
     assert list(tmp_path.iterdir()) == [salida]
+
+
+def test_si_el_juez_arregla_el_genero_pero_se_pasa_de_largo_se_queda_el_original(monkeypatch, tmp_path, juez):
+    # Mismo criterio que el mejor intento: el largo fuera de rango pesa más
+    # que cualquier cantidad de otros problemas.
+    _una_clave(monkeypatch)
+    con_genero = "Sos generoso. " + LIMPIO
+    _con_textos(monkeypatch, lambda n: con_genero)
+    juez.respuesta = lambda t: " ".join(f"palabra{i}" for i in range(130))
+    salida = tmp_path / "t.json"
+    call_command("generar_textos_teaser", "--lang", "es", "--salida", str(salida))
+    assert json.loads(salida.read_text(encoding="utf-8"))["es"]["Sun|Ari"] == con_genero
+
+
+def test_el_borrador_parcial_no_se_puede_commitear():
+    import subprocess
+
+    ruta = "api/data/teaser_textos.es.parcial.json"
+    salida = subprocess.run(["git", "check-ignore", "-q", ruta], capture_output=True)
+    assert salida.returncode == 0, f"{ruta} no está en .gitignore"

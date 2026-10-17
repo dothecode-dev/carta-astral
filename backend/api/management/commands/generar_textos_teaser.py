@@ -509,12 +509,13 @@ class Command(BaseCommand):
     def _pasar_por_el_juez(
         self, cliente, texto: str, problemas: list[str], lang: str, clave: str, corregidos: list[str],
     ) -> tuple[str, list[str]]:
-        """Corrige el trato con `revisar_trato`; si el resultado tiene más problemas, se queda el original."""
+        """Corrige el trato con `revisar_trato`; si el resultado pesa más (mismo
+        `_peso` que el mejor intento: el largo fuera de rango primero), se queda el original."""
         corregido = revisar_trato(texto, "neutro", lang, cliente)
         if corregido == texto:
             return texto, problemas
         nuevos = problemas_de_texto(corregido, lang)
-        if len(nuevos) > len(problemas):
+        if _peso(_problemas(corregido, lang)) > _peso(_problemas(texto, lang)):
             self.stderr.write(
                 f"AVISO {lang} {clave}: el juez empeoró el texto ({'; '.join(nuevos)}); se queda el original."
             )
