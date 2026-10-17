@@ -438,3 +438,31 @@ def test_el_borrador_parcial_no_se_puede_commitear():
     ruta = "api/data/teaser_textos.es.parcial.json"
     salida = subprocess.run(["git", "check-ignore", "-q", ruta], capture_output=True)
     assert salida.returncode == 0, f"{ruta} no está en .gitignore"
+
+
+def test_al_retomar_no_reusa_la_traduccion_de_un_original_que_cambio(cliente, tmp_path, monkeypatch):
+    from interpret.exceptions import InterpretationError
+
+    salida = tmp_path / "t.json"
+    es = {k: LIMPIO for k in cmd.Command._claves()}
+    salida.write_text(json.dumps({"es": es}), encoding="utf-8")
+    llamadas = []
+
+    def corta_en_la_31(*a, **k):
+        llamadas.append(1)
+        if len(llamadas) == 31:
+            raise InterpretationError("cayó la API")
+        return LIMPIO
+
+    monkeypatch.setattr(cmd, "_stream_text", corta_en_la_31)
+    with pytest.raises(CommandError):
+        call_command("generar_textos_teaser", "--lang", "en", "--desde", "es", "--salida", str(salida))
+
+    # Entre el corte y la vuelta se edita a mano uno de los ya traducidos.
+    es["Sun|Ari"] = "otro " + LIMPIO
+    salida.write_text(json.dumps({"es": es}), encoding="utf-8")
+    llamadas.clear()
+    monkeypatch.setattr(cmd, "_stream_text", lambda *a, **k: (llamadas.append(1), LIMPIO)[1])
+    call_command("generar_textos_teaser", "--lang", "en", "--desde", "es", "--salida", str(salida))
+
+    assert len(llamadas) == 72 - 30 + 1

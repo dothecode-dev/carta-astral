@@ -14,6 +14,7 @@ mismo en los tres. Escribe `{lang: {"Sun|Ari": "...", ...}}` y no toca los
 otros idiomas del archivo.
 """
 
+import hashlib
 import json
 import logging
 import pathlib
@@ -422,16 +423,17 @@ class Command(BaseCommand):
         cliente = _build_client()
         # Cada texto se paga: se guardan a medida que salen, aparte de la salida
         # revisada, y un corte de la API se retoma desde ahí corriendo lo mismo.
+        # Cada texto guarda la huella de lo que se pidió (system + pedido): si el
+        # original se editó o cambió el prompt, ese texto no se reusa.
         parcial = ruta.with_name(f"{ruta.stem}.{lang}{'-desde-' + desde if desde else ''}.parcial.json")
-        nuevos: dict[str, str] = _cargar(parcial)
-        if nuevos:
-            self.stderr.write(f"AVISO {lang}: se retoman {len(nuevos)} textos ya generados de {parcial}.")
+        guardados: dict[str, dict[str, str]] = _cargar(parcial)
+        nuevos: dict[str, str] = {}
+        huellas: dict[str, str] = {}
+        reusados = 0
         reintentados: list[str] = []
         corregidos: list[str] = []
         con_problemas: dict[str, list[str]] = {}
         for clave in self._claves():
-            if clave in nuevos:
-                continue
             cuerpo, signo = clave.split("|")
             if desde:
                 system = _SISTEMA_TRADUCIR[lang]
@@ -440,6 +442,12 @@ class Command(BaseCommand):
                 nombre = nombre_signo(signo, lang)
                 system = _SISTEMA_GENERAR[lang].format(cuerpo=_CUERPO[lang][cuerpo], signo=nombre)
                 pedido = f"{_CUERPO[lang][cuerpo]} {_PREPOSICION[lang]} {nombre}"
+            huella = hashlib.sha256(f"{system}\0{pedido}".encode()).hexdigest()
+            previo = guardados.get(clave) or {}
+            if previo.get("huella") == huella and previo.get("texto"):
+                nuevos[clave], huellas[clave] = previo["texto"], huella
+                reusados += 1
+                continue
             texto, intentos, problemas = self._texto_valido(cliente, system, pedido, lang, clave, traduccion=bool(desde))
             if intentos > 1:
                 reintentados.append(clave)
@@ -452,10 +460,13 @@ class Command(BaseCommand):
                 self.stderr.write(
                     f"AVISO {lang} {clave}: quedó con problemas tras {intentos} intentos: " + "; ".join(problemas)
                 )
-            nuevos[clave] = texto
+            nuevos[clave], huellas[clave] = texto, huella
             parcial.parent.mkdir(parents=True, exist_ok=True)
-            parcial.write_text(json.dumps(nuevos, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            borrador = {k: {"texto": v, "huella": huellas[k]} for k, v in nuevos.items()}
+            parcial.write_text(json.dumps(borrador, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+        if reusados:
+            self.stderr.write(f"AVISO {lang}: se retomaron {reusados} textos ya generados de {parcial}.")
         self.stderr.write(
             f"AVISO {lang}: {len(reintentados)} textos con reintento, "
             f"{len(corregidos)} corregidos por el juez" + (f" ({', '.join(corregidos)})" if corregidos else "")
