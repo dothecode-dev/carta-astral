@@ -24,10 +24,9 @@ def svg_lineas(serie: dict, claves: tuple[str, ...] | None = None) -> str:
     """Un gráfico con las series de `claves` (todas si no se pasa), con el eje
     Y escalado a ellas: los pagos, de a uno, no pueden compartir escala con
     las cartas, de a decenas, o quedan aplastados contra el piso."""
-    return svg_series(serie["fechas"], [
-        (nombre, color, serie[clave]) for clave, nombre, color in SERIES
-        if claves is None or clave in claves
-    ])
+    elegidas = [(nombre, color, serie[clave]) for clave, nombre, color in SERIES
+                if claves is None or clave in claves]
+    return svg_series(serie["fechas"], elegidas, " y ".join(nombre for nombre, _, _ in elegidas))
 
 
 def svg_series(fechas: list[str], series: list[tuple[str, str, list[int]]], titulo: str = "") -> str:
@@ -45,7 +44,7 @@ def svg_series(fechas: list[str], series: list[tuple[str, str, list[int]]], titu
 
     partes = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {ANCHO} {ALTO}" '
-        f'width="100%" role="img" aria-label="Conteo diario" '
+        f'width="100%" role="img" aria-label="{escape(titulo or "Conteo diario")}" '
         f'style="max-width:{ANCHO}px;font:12px system-ui,sans-serif;color:inherit">',
     ]
     if titulo:

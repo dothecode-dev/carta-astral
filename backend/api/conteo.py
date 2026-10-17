@@ -28,18 +28,24 @@ def contar(evento: str) -> None:
     if evento not in EVENTOS:
         logger.error("conteo: evento desconocido %r", evento)
         return
-    hoy = timezone.now().date()
     try:
         with transaction.atomic():
-            # Lo común es que la fila del día ya exista: un solo UPDATE
-            # (cantidad = cantidad + 1, atómico entre procesos). Sólo el primer
-            # conteo del día la crea; si dos la crean a la vez, `get_or_create`
-            # resuelve el choque y el UPDATE de abajo suma igual.
-            if not ConteoDiario.objects.filter(fecha=hoy, evento=evento).update(cantidad=F("cantidad") + 1):
-                fila, _ = ConteoDiario.objects.get_or_create(fecha=hoy, evento=evento)
-                ConteoDiario.objects.filter(pk=fila.pk).update(cantidad=F("cantidad") + 1)
+            _incrementar(ConteoDiario, fecha=timezone.now().date(), evento=evento)
     except DatabaseError:
         logger.exception("conteo: no se pudo contar %s", evento)
+
+
+def _incrementar(modelo, **clave) -> None:
+    """Suma uno a la fila de `clave`, creándola si es la primera del día.
+
+    Lo común es que ya exista: un solo UPDATE (cantidad = cantidad + 1,
+    atómico entre procesos). Si dos la crean a la vez, `get_or_create`
+    resuelve el choque y el UPDATE de abajo suma igual. Lo llama quien abre
+    el savepoint y atrapa el error.
+    """
+    if not modelo.objects.filter(**clave).update(cantidad=F("cantidad") + 1):
+        fila, _ = modelo.objects.get_or_create(**clave)
+        modelo.objects.filter(pk=fila.pk).update(cantidad=F("cantidad") + 1)
 
 
 def resumen(dias: int = 7) -> dict:
@@ -95,31 +101,55 @@ def serie(dias: int = 90) -> dict:
 # --- Procedencia --------------------------------------------------------------
 
 CANALES = (
-    "google_ads", "google", "otros_buscadores", "redes", "otro_sitio", "otra_campana", "directo",
+    "google_ads", "google", "otros_buscadores", "redes", "email", "otro_sitio", "otra_campana", "directo",
 )
-_BUSCADORES = ("bing.", "duckduckgo.", "yahoo.", "yandex.", "ecosia.", "brave.")
-_REDES = ("facebook.", "instagram.", "t.co", "twitter.", "x.com", "tiktok.", "linkedin.",
-          "reddit.", "whatsapp.", "pinterest.", "youtube.", "threads.")
+_BUSCADORES = ("bing.com", "duckduckgo.com", "search.yahoo.com", "yandex.com", "yandex.ru",
+               "ecosia.org", "search.brave.com")
+_REDES = ("facebook.com", "instagram.com", "t.co", "twitter.com", "x.com", "tiktok.com",
+          "linkedin.com", "reddit.com", "whatsapp.com", "pinterest.com", "youtube.com", "threads.net")
+_CORREO = ("mail.google.com", "com.google.android.gm", "outlook.live.com", "outlook.office.com",
+           "mail.yahoo.com", "mail.proton.me")
+# Volver de pagar o de entrar con Google o Apple no dice cómo llegó la persona.
+_VUELTAS = ("checkout.stripe.com", "accounts.google.com", "appleid.apple.com")
+_APP_GOOGLE = "com.google.android.googlequicksearchbox"
 # Nombres con tilde que la base de zonas escribe sin ella.
 _CON_TILDE = {"Bogota": "Bogotá", "Sao_Paulo": "São Paulo", "Asuncion": "Asunción", "Merida": "Mérida"}
 
 
-def canal_de(utm_source: object, referrer: object) -> str:
-    """El canal, de `CANALES`, a partir de la dirección del anuncio y la página previa."""
+def _es(host: str, dominios: tuple[str, ...]) -> bool:
+    """Dominio completo o subdominio: «blogspot.com» no es «t.co»."""
+    return any(host == d or host.endswith("." + d) for d in dominios)
+
+
+def _es_buscador_google(host: str) -> bool:
+    # google.com, www.google.com.ar, google.es…; no mail. ni accounts.
+    return host == _APP_GOOGLE or host.startswith(("google.", "www.google."))
+
+
+def canal_de(utm_source: object, referrer: object, gclid: object = False) -> str:
+    """El canal, de `CANALES`, a partir de la dirección del anuncio y la página previa.
+
+    Google Ads marca sus clics con `gclid` (auto-etiquetado) aunque no haya
+    `utm_source`; la web sólo manda si estaba, nunca el valor.
+    """
     utm = utm_source.strip().lower() if isinstance(utm_source, str) else ""
+    if gclid is True or utm in ("google", "google_ads", "adwords"):
+        return "google_ads"
     if utm:
-        return "google_ads" if utm in ("google", "google_ads", "adwords") else "otra_campana"
+        return "otra_campana"
     try:
         host = (urlsplit(referrer).hostname or "") if isinstance(referrer, str) else ""
     except ValueError:  # una URL mal formada («http://[») no es un canal
         return "otro_sitio"
-    if not host:
+    if not host or _es(host, _VUELTAS):
         return "directo"
-    if host.startswith("google.") or ".google." in host:
+    if _es(host, _CORREO):
+        return "email"
+    if _es_buscador_google(host):
         return "google"
-    if any(b in host for b in _BUSCADORES):
+    if _es(host, _BUSCADORES):
         return "otros_buscadores"
-    if any(r in host for r in _REDES):
+    if _es(host, _REDES):
         return "redes"
     return "otro_sitio"
 
@@ -139,34 +169,31 @@ def lugar_de_zona(zona: object) -> str:
     return _CON_TILDE.get(ciudad, ciudad.replace("_", " "))
 
 
-def _sumar(tipo: str, valor: str) -> None:
-    hoy = timezone.now().date()
-    filas = ConteoProcedencia.objects.filter(fecha=hoy, tipo=tipo, valor=valor)
-    if not filas.update(cantidad=F("cantidad") + 1):
-        fila, _ = ConteoProcedencia.objects.get_or_create(fecha=hoy, tipo=tipo, valor=valor)
-        ConteoProcedencia.objects.filter(pk=fila.pk).update(cantidad=F("cantidad") + 1)
-
-
 def contar_procedencia(procedencia: object) -> None:
     """Suma uno al canal y al lugar de quien calculó una carta. Nunca rompe."""
     datos = procedencia if isinstance(procedencia, dict) else {}
-    canal = canal_de(datos.get("utm_source"), datos.get("referrer"))
+    canal = canal_de(datos.get("utm_source"), datos.get("referrer"), datos.get("gclid"))
     lugar = lugar_de_zona(datos.get("zona"))
+    hoy = timezone.now().date()
     try:
         with transaction.atomic():
-            _sumar("canal", canal)
-            _sumar("lugar", lugar)
+            _incrementar(ConteoProcedencia, fecha=hoy, tipo="canal", valor=canal)
+            _incrementar(ConteoProcedencia, fecha=hoy, tipo="lugar", valor=lugar)
     except DatabaseError:
         logger.exception("conteo: no se pudo contar la procedencia")
 
 
 def serie_procedencia(tipo: str, dias: int = 90, top: int = 5) -> dict:
-    """La historia diaria de los `top` valores más frecuentes del período."""
+    """La historia diaria de los `top` valores más frecuentes del período, y el
+    resto sumado en «otros»: así las series suman lo mismo que las cartas."""
     hoy = timezone.now().date()
     fechas = [hoy - datetime.timedelta(days=i) for i in range(dias - 1, -1, -1)]
     indice = {f: i for i, f in enumerate(fechas)}
     valores: dict[str, list[int]] = {}
     for fila in ConteoProcedencia.objects.filter(tipo=tipo, fecha__gte=fechas[0]):
         valores.setdefault(fila.valor, [0] * dias)[indice[fila.fecha]] = fila.cantidad
-    primeros = sorted(valores.items(), key=lambda kv: -sum(kv[1]))[:top]
-    return {"fechas": [str(f) for f in fechas], "series": primeros}
+    ordenados = sorted(valores.items(), key=lambda kv: -sum(kv[1]))
+    series = ordenados[:top]
+    if resto := ordenados[top:]:
+        series.append(("otros", [sum(col) for col in zip(*(v for _, v in resto))]))
+    return {"fechas": [str(f) for f in fechas], "series": series}

@@ -12,7 +12,17 @@ describe("procedencia", () => {
 
   it("toma el utm_source y sólo el origen de la página anterior", () => {
     capturarProcedencia(lugar("https://astraguia.com/es/nueva?utm_source=google&gclid=abc"), "https://www.google.com/search?q=carta+natal");
-    expect(leerProcedencia()).toMatchObject({ utm_source: "google", referrer: "https://www.google.com" });
+    expect(leerProcedencia()).toMatchObject({ utm_source: "google", gclid: true, referrer: "https://www.google.com" });
+  });
+
+  it("sin gclid ni utm, gclid va en false", () => {
+    capturarProcedencia(lugar("https://astraguia.com/es"), "https://www.google.com/");
+    expect(leerProcedencia()).toMatchObject({ utm_source: "", gclid: false });
+  });
+
+  it("la app de Google en Android no se pierde como directo", () => {
+    capturarProcedencia(lugar("https://astraguia.com/es"), "android-app://com.google.android.googlequicksearchbox/");
+    expect(leerProcedencia().referrer).toBe("android-app://com.google.android.googlequicksearchbox");
   });
 
   it("una navegación interna no pisa de dónde llegó", () => {
