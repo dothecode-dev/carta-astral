@@ -48,6 +48,9 @@ def firma(data: dict) -> list[dict]:
     signos = {p["name"]: p["sign"] for p in data.get("placements") or []}
     if data.get("time_known") and data.get("angles"):
         signos.update({a["name"]: a["sign"] for a in data["angles"]})
+    # Sin hora la Luna puede cambiar de signo en el día: no se afirma.
+    if (data.get("flags") or {}).get("moon_sign_uncertain"):
+        signos.pop("Moon", None)
     return [
         {
             "cuerpo": cuerpo,

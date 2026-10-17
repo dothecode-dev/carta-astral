@@ -69,3 +69,21 @@ def test_firma_sin_datos_es_vacia():
     y eso no puede ser un 500 en el detalle ni en el listado de cartas."""
     assert firma({}) == []
     assert firma({"placements": [], "angles": None, "time_known": True}) == []
+
+
+def test_sin_hora_y_luna_dudosa_la_firma_no_nombra_la_luna():
+    data = {
+        "time_known": False, "angles": None,
+        "placements": [{"name": "Sun", "sign": "Pis"}, {"name": "Moon", "sign": "Leo"}],
+        "flags": {"moon_sign_uncertain": True, "moon_sign_options": ["Leo", "Vir"]},
+    }
+    assert [f["cuerpo"] for f in firma(data)] == ["Sun"]
+
+
+def test_sin_hora_y_luna_estable_la_firma_nombra_la_luna():
+    data = {
+        "time_known": False, "angles": None,
+        "placements": [{"name": "Sun", "sign": "Pis"}, {"name": "Moon", "sign": "Lib"}],
+        "flags": {"moon_sign_uncertain": False},
+    }
+    assert [f["cuerpo"] for f in firma(data)] == ["Sun", "Moon"]

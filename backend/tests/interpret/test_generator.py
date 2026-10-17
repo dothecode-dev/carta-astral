@@ -201,3 +201,25 @@ def test_la_generacion_no_manda_thinking():
     build_interpretation(CHART, "es", "v1", client)
     build_seccion({"time_known": True}, SECCIONES[0], "es", "", client)
     assert all("thinking" not in c for c in client.calls)
+
+
+CHART_LUNA_DUDOSA = {
+    "time_known": False, "placements": [],
+    "flags": {"moon_sign_uncertain": True, "moon_sign_options": ["Leo", "Vir"]},
+}
+
+
+@pytest.mark.parametrize("lang", ["es", "en", "pt"])
+def test_luna_dudosa_pide_no_afirmar_el_signo(lang):
+    client = FakeClient()
+    build_interpretation(CHART_LUNA_DUDOSA, lang, "v1", client)
+    user_content = client.calls[0]["messages"][0]["content"]
+    # La nota va después del JSON de la carta, no adentro.
+    cola = user_content.rsplit("}", 1)[-1]
+    assert "Leo" in cola and "Vir" in cola
+
+
+def test_luna_estable_no_agrega_la_nota():
+    client = FakeClient()
+    build_interpretation(CHART_NO_TIME, "es", "v1", client)
+    assert "Vir" not in client.calls[0]["messages"][0]["content"]

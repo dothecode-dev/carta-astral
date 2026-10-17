@@ -42,12 +42,38 @@ _DEGRADED_NOTES = {
     "Não interprete o ascendente nem as casas; limite-se a planetas, signos e aspectos.",
 }
 
+# Sin hora, la Luna puede cambiar de signo en el día de nacimiento
+# (core.ephemeris marca `moon_sign_uncertain` con los dos signos posibles). La
+# vista previa ya no la nombra; el informe no puede afirmarla después.
+_LUNA_DUDOSA = {
+    "es": "\n\nIMPORTANTE: ese día la Luna cambió de signo, de {a} a {b} (abreviaturas como "
+    "en el JSON), y sin hora no se sabe en cuál nació esta persona. No afirmes un signo de "
+    "Luna: presentá las dos posibilidades e invitá a reconocerse en una, sin elegir por ella.",
+    "en": "\n\nIMPORTANT: on that day the Moon changed sign, from {a} to {b} (abbreviations as "
+    "in the JSON), and without a birth time it is unknown which one applies. Do not state a "
+    "Moon sign: present both possibilities and invite the reader to recognize one, without "
+    "choosing for them.",
+    "pt": "\n\nIMPORTANTE: nesse dia a Lua mudou de signo, de {a} para {b} (abreviaturas como "
+    "no JSON), e sem hora não se sabe em qual a pessoa nasceu. Não afirme um signo de Lua: "
+    "apresente as duas possibilidades e convide a pessoa a se reconhecer em uma, sem escolher "
+    "por ela.",
+}
+
+
+def _nota_luna(chart_data: dict, lang: str) -> str:
+    flags = chart_data.get("flags") or {}
+    opciones = flags.get("moon_sign_options") or ()
+    if not flags.get("moon_sign_uncertain") or len(opciones) != 2:
+        return ""
+    return _LUNA_DUDOSA[lang].format(a=opciones[0], b=opciones[1])
+
 
 def _user_content(chart_data: dict, lang: str, trato: str = "") -> str:
     body = json.dumps(chart_data, ensure_ascii=False)
     content = f"{_INSTRUCTIONS[lang]}\n{body}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
+        content += _nota_luna(chart_data, lang)
     if nota := instruccion(trato, lang):
         content += f"\n\n{nota}"
     return content
@@ -212,6 +238,7 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
     content = f"{pedido}\n\n{cuerpo}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
+        content += _nota_luna(chart_data, lang)
     if reparto:
         # Quién explica qué: lo que impide que la misma oposición se explique
         # en cuatro secciones (interpret/reparto.py, spec 2026-10-07).
