@@ -6,7 +6,7 @@
 // (backend/core/ephemeris.py), y cuando exista el endpoint público esta rueda
 // va a leer de ahí.
 
-import { SIGN_NAMES, SIGNS, type Locale } from "@/lib/i18n";
+import { type Dict, KERYKEION_SIGNS, SIGN_NAMES, SIGNS, type Locale } from "@/lib/i18n";
 
 const RAD = Math.PI / 180;
 
@@ -153,6 +153,26 @@ export function signAbbr(lon: number, locale: Locale): string {
  * por su cuenta —como venía pasando—, el sitio y el documento que se descarga
  * terminan mostrando cosas distintas.
  */
+/**
+ * La posición de un cuerpo para una tabla (la de la pantalla y la del PDF).
+ *
+ * La Luna de una carta sin hora que cambia de signo ese día no tiene un grado
+ * ni un signo que afirmar: se muestran los dos signos posibles, como hacen el
+ * teaser y la firma. Sin los dos (lugar sin zona horaria), se dice incierto.
+ */
+export function posicionCuerpo(
+  cuerpo: { name: string; abs_pos: number },
+  flags: { moon_sign_uncertain?: boolean; moon_sign_options?: string[] },
+  dict: Dict,
+  locale: Locale,
+): string {
+  if (cuerpo.name !== "Moon" || !flags.moon_sign_uncertain) return positionLabel(cuerpo.abs_pos, locale);
+  const opciones = (flags.moon_sign_options ?? []).map((s) => KERYKEION_SIGNS.indexOf(s));
+  if (opciones.length !== 2 || opciones.some((i) => i < 0)) return dict.chart.lunaIncierta;
+  const [a, b] = opciones.map((i) => `${SIGNS[i]} ${SIGN_NAMES[locale][i]}`);
+  return dict.chart.lunaDudosa.replace("{a}", a).replace("{b}", b);
+}
+
 export function positionLabel(lon: number, locale: Locale): string {
   return `${formatDegree(lon)} ${signOf(lon)} ${signName(lon, locale)}`;
 }
