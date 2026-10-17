@@ -216,3 +216,53 @@ def test_sin_hora_luna_dudosa_respeta_el_zodiaco_de_la_carta(dia, tropical, side
 
     assert t.flags.moon_sign_uncertain is tropical
     assert s.flags.moon_sign_uncertain is sidereo
+
+
+AUCKLAND = (-36.85, 174.76)
+
+
+def test_sin_hora_la_luna_es_la_del_mediodia_local():
+    from core.ephemeris import build_chart
+
+    # 2026-01-16 en Auckland: la Luna está en Sagitario todo el día local,
+    # pero a las 12:00 UTC (las 01:00 del 17 allá) ya está en Capricornio.
+    # Calcular al mediodía UTC mostraba un signo que no tuvo ningún minuto
+    # del día de nacimiento (buscado con sky_now).
+    chart = build_chart(_nacimiento(datetime.date(2026, 1, 16), AUCKLAND))
+
+    luna = next(p for p in chart.placements if p.name == "Moon")
+    assert luna.sign == "Sag"
+    assert chart.flags.moon_sign_uncertain is False
+
+
+def test_sin_hora_dudosa_trae_los_dos_signos_posibles():
+    from core.ephemeris import build_chart
+
+    dudosa = build_chart(_nacimiento(datetime.date(2026, 3, 2), BUENOS_AIRES))
+    estable = build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
+
+    assert dudosa.flags.moon_sign_options == ("Leo", "Vir")
+    luna = next(p for p in dudosa.placements if p.name == "Moon")
+    assert luna.sign in dudosa.flags.moon_sign_options
+    assert estable.flags.moon_sign_options == ()
+
+
+def test_la_ventana_de_la_luna_dudosa_cubre_el_dia_entero(monkeypatch):
+    # El último minuto del día también cuenta: el segundo muestreo es la
+    # medianoche siguiente, no las 23:59.
+    import core.ephemeris as eph
+
+    vistos = []
+    original = eph.AstrologicalSubject
+
+    def espia(*args, **kwargs):
+        if kwargs.get("name") == "Luna":
+            vistos.append((kwargs["day"], kwargs["hour"], kwargs["minute"]))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(eph, "AstrologicalSubject", espia)
+    eph.build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
+
+    # Buenos Aires es UTC-3: 00:00 del 5 local = 03:00 UTC del 5, y 00:00
+    # del 6 local = 03:00 UTC del 6.
+    assert vistos == [(5, 3, 0), (6, 3, 0)]

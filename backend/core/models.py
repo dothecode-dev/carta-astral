@@ -62,6 +62,10 @@ class DegradationFlags:
     #: nacimiento, así que su signo no se puede afirmar. A diferencia de
     #: `moon_approximate` (que marca toda carta sin hora), éste es exacto.
     moon_sign_uncertain: bool = False
+    #: Si la Luna es dudosa, los dos signos posibles en orden (el de la
+    #: medianoche del día y el de la siguiente). Vacío si no lo es, o si es
+    #: dudosa sin poder acotar el día (lugar sin zona horaria).
+    moon_sign_options: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
