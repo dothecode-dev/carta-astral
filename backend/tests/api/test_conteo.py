@@ -120,3 +120,47 @@ def test_abrir_cualquier_checkout_de_stripe_lo_cuenta(settings, monkeypatch):
     monkeypatch.setattr(stripe_client.stripe.checkout.Session, "create", staticmethod(lambda **k: _Sesion()))
     stripe_client.crear_checkout(None, "informe_natal", locale="es", terminos=True)
     assert ConteoDiario.objects.get(evento="checkout_abierto").cantidad == 1
+
+
+def test_la_serie_va_del_dia_mas_viejo_a_hoy_con_ceros_donde_no_hubo_nada():
+    ayer = _hoy() - datetime.timedelta(days=1)
+    ConteoDiario.objects.create(fecha=_hoy(), evento="carta_calculada", cantidad=4)
+    ConteoDiario.objects.create(fecha=ayer, evento="checkout_abierto", cantidad=2)
+    PasarelaCheckout.objects.create(checkout_id="cs_1", codigo_producto="informe_natal", acreditado_at=timezone.now())
+
+    s = conteo.serie(dias=3)
+
+    assert s["fechas"] == [str(_hoy() - datetime.timedelta(days=2)), str(ayer), str(_hoy())]
+    assert s["carta_calculada"] == [0, 0, 4]
+    assert s["checkout_abierto"] == [0, 2, 0]
+    assert s["compra_pagada"] == [0, 0, 1]
+
+
+def test_el_grafico_es_un_svg_con_una_linea_por_serie():
+    from api.grafico_conteo import svg_lineas
+
+    svg = svg_lineas({
+        "fechas": ["2026-10-16", "2026-10-17"],
+        "carta_calculada": [3, 9], "checkout_abierto": [0, 1], "compra_pagada": [0, 0],
+    })
+    assert svg.startswith("<svg") and svg.rstrip().endswith("</svg>")
+    assert svg.count("<polyline") == 3
+    assert "Cartas calculadas" in svg and "Pagos abiertos" in svg and "Compras pagas" in svg
+    # El máximo del eje sale del dato: 9.
+    assert ">9<" in svg
+
+
+def test_sin_datos_el_grafico_no_divide_por_cero():
+    from api.grafico_conteo import svg_lineas
+
+    svg = svg_lineas({"fechas": ["2026-10-17"], "carta_calculada": [0], "checkout_abierto": [0], "compra_pagada": [0]})
+    assert svg.startswith("<svg")
+
+
+def test_cada_grafico_escala_a_sus_propias_series():
+    from api.grafico_conteo import svg_lineas
+
+    datos = {"fechas": ["2026-10-16", "2026-10-17"],
+             "carta_calculada": [30, 90], "checkout_abierto": [1, 3], "compra_pagada": [0, 1]}
+    pagos = svg_lineas(datos, ("checkout_abierto", "compra_pagada"))
+    assert pagos.count("<polyline") == 2 and ">3<" in pagos and ">90<" not in pagos

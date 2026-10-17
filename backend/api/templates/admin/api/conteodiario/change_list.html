@@ -1,0 +1,8 @@
+{% extends "admin/change_list.html" %}
+{% block result_list %}
+  <div style="margin:0 0 24px">
+    <p style="margin:0 0 8px">Últimos {{ dias_grafico }} días, contados en el servidor (sin cookies). Veces, no personas. Hoy está incompleto.</p>
+    {{ grafico }}
+  </div>
+  {{ block.super }}
+{% endblock %}

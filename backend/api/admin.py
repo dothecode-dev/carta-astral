@@ -209,6 +209,28 @@ class ConteoDiarioAdmin(SoloLectura):
     ordering = ("-fecha", "evento")
     readonly_fields = list_display
 
+    DIAS_GRAFICO = 90
+
+    def changelist_view(self, request, extra_context=None):
+        # Acá y no arriba: el admin se importa al arrancar y `conteo` toca modelos.
+        from django.utils.safestring import mark_safe
+
+        from api import conteo
+        from api.grafico_conteo import svg_lineas
+
+        datos = conteo.serie(self.DIAS_GRAFICO)
+        extra_context = {
+            **(extra_context or {}),
+            # El SVG sólo interpola números y fechas (api/grafico_conteo.py).
+            # Dos gráficos con su propia escala: cartas (decenas) y pagos (unidades).
+            "grafico": mark_safe(  # noqa: S308
+                svg_lineas(datos, ("carta_calculada",))
+                + svg_lineas(datos, ("checkout_abierto", "compra_pagada"))
+            ),
+            "dias_grafico": self.DIAS_GRAFICO,
+        }
+        return super().changelist_view(request, extra_context=extra_context)
+
 
 @admin.register(PasarelaCheckout)
 class PasarelaCheckoutAdmin(SoloLectura):

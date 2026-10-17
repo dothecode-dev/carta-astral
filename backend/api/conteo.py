@@ -65,3 +65,25 @@ def resumen(dias: int = 7) -> dict:
     hoy_parcial = por_dia.pop(str(hoy))
     total = {c: sum(d[c] for d in por_dia.values()) for c in claves}
     return {"dias": dias, "total": total, "hoy": hoy_parcial, "por_dia": por_dia}
+
+
+def serie(dias: int = 90) -> dict:
+    """La historia diaria para el gráfico, del día más viejo a hoy (incluido).
+
+    Una lista por evento, alineada con `fechas`, con 0 donde no hubo nada.
+    `compra_pagada` con el mismo criterio que `resumen`.
+    """
+    hoy = timezone.now().date()
+    fechas = [hoy - datetime.timedelta(days=i) for i in range(dias - 1, -1, -1)]
+    indice = {f: i for i, f in enumerate(fechas)}
+    claves = (*EVENTOS, "compra_pagada")
+    valores = {c: [0] * dias for c in claves}
+    for fila in ConteoDiario.objects.filter(fecha__gte=fechas[0]):
+        valores[fila.evento][indice[fila.fecha]] = fila.cantidad
+    pagas = PasarelaCheckout.objects.filter(
+        acreditado_at__date__gte=fechas[0], reembolsado_centavos=0,
+    ).exclude(checkout_id__startswith="cupon_")
+    for acreditado in pagas.values_list("acreditado_at", flat=True):
+        if (i := indice.get(acreditado.date())) is not None:
+            valores["compra_pagada"][i] += 1
+    return {"fechas": [str(f) for f in fechas], **valores}
