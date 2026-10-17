@@ -84,7 +84,16 @@ def test_derecho_existente_se_sigue_canjeando(settings, make_chart):
     account, _ = resolver_cuenta(VerifiedIdentity("apple", "ANTES", "a@x.com", True))
     settings.LECTURA_BREVE_GRATIS_ENABLED = False
     assert puede(account, "leer_breve") is True
+    regalo = Derecho.objects.get(account=account, codigo_producto="lectura_breve").cantidad_restante
     canjear(account, "leer_breve", sujeto_natal(make_chart(account=account)))
+    # El canje se ve en el ledger y en el derecho, no sólo en que no levante.
+    consumos = Movimiento.objects.filter(
+        account=account, codigo_producto="lectura_breve", tipo="consumo",
+    )
+    assert [m.cantidad for m in consumos] == [-1]
+    assert Derecho.objects.get(account=account, codigo_producto="lectura_breve").cantidad_restante == regalo - 1
+    if regalo == 1:
+        assert puede(account, "leer_breve") is False
 
 
 def test_flag_prendido_regala_como_hoy(settings):
