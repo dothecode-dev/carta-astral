@@ -35,7 +35,7 @@ from django.utils.html import format_html, format_html_join
 from api import canje, cupones, stripe_client
 from api.catalogo import CATALOGO, a_la_venta, producto
 from api.models import (
-    Account, Chart, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, Movimiento,
+    Account, Chart, ConteoDiario, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, Movimiento,
     PasarelaCheckout,
 )
 
@@ -196,6 +196,18 @@ class MovimientoAdmin(SoloLectura):
     list_filter = ("tipo", "origen", "codigo_producto")
     search_fields = ("external_id", "account__id", "account__email")
     readonly_fields = list_display + ("sujeto", "note")
+
+
+@admin.register(ConteoDiario)
+class ConteoDiarioAdmin(SoloLectura):
+    """La cuenta real de cada día (UTC), contada en el servidor sin cookies:
+    cartas calculadas y pagos abiertos. Veces, no personas. Las compras pagas
+    están en «Pasarela checkouts» (acreditado_at)."""
+
+    list_display = ("fecha", "evento", "cantidad")
+    list_filter = ("evento",)
+    ordering = ("-fecha", "evento")
+    readonly_fields = list_display
 
 
 @admin.register(PasarelaCheckout)

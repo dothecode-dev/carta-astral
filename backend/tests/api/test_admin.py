@@ -17,6 +17,7 @@ from api.models import (
     Account,
     BirthData,
     Chart,
+    ConteoDiario,
     CreditTransaction,
     Cupon,
     CuponUso,
@@ -60,7 +61,7 @@ def admin_montado(monkeypatch):
 @pytest.mark.parametrize(
     "modelo", [
         Account, Chart, Interpretation, CreditTransaction, Derecho, Movimiento, CuponUso,
-        PasarelaCheckout,
+        PasarelaCheckout, ConteoDiario,
     ],
 )
 def test_ningun_modelo_se_puede_crear_editar_ni_borrar(modelo):
