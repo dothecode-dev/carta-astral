@@ -144,3 +144,32 @@ def test_el_comando_avisa_por_stderr_de_repeticion_y_muletillas(cliente, tmp_pat
     err = capsys.readouterr().err
     assert "REPETIDA en 72 textos: «te cuesta mirar»" in err
     assert "MULETILLA prohibida en 72 textos: «te cuesta»" in err
+
+
+def test_muletillas_presentes_respeta_limite_de_palabra():
+    textos = {"a": "Tenés elegancia natural y te cuestan los cambios."}
+    assert cmd.muletillas_presentes(textos, "es") == {}
+
+
+def test_aperturas_cuentan_solo_al_inicio_del_parrafo():
+    textos = {
+        "a": "«Con Venus en casa, buscás calma.»",
+        "b": "Buscás calma. Con Venus en casa todo cambia.",
+        "c": "Tenés el don de escuchar.",
+    }
+    assert cmd.muletillas_presentes(textos, "es") == {"con venus en": 1, "tenés el": 1}
+
+
+@pytest.mark.parametrize("lang", ["es", "en", "pt"])
+@pytest.mark.parametrize("tabla", ["_SISTEMA_GENERAR", "_SISTEMA_TRADUCIR"])
+def test_ningun_ejemplo_del_prompt_usa_una_muletilla(lang, tabla):
+    # Fuera de la lista de prohibidas (que las nombra a propósito), el resto del
+    # prompt —ejemplos de tono y de reescritura— no puede modelar una muletilla.
+    resto = getattr(cmd, tabla)[lang].replace(cmd._PROHIBIDAS[lang], "").lower()
+    assert not [m for m in cmd.MULETILLAS[lang] if m in resto]
+
+
+def test_el_prompt_de_traduccion_no_pide_variar_la_apertura():
+    for lang in ("es", "en", "pt"):
+        assert cmd._APERTURA_VARIADA[lang] not in cmd._SISTEMA_TRADUCIR[lang]
+        assert cmd._APERTURA_VARIADA[lang] in cmd._SISTEMA_GENERAR[lang]

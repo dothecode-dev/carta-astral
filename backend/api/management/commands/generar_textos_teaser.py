@@ -54,25 +54,40 @@ _PREPOSICION = {"es": "en", "en": "in", "pt": "em"}
 # Una persona lee 6 párrafos, así que cada una se nota. Los prompts las prohíben y
 # `muletillas_presentes` cuenta cuántas se colaron igual. Van en minúsculas porque se
 # buscan sin distinguir mayúsculas; las fórmulas de apertura se listan por cuerpo.
-MULETILLAS: dict[str, tuple[str, ...]] = {
+_MULETILLAS_EN_CUERPO: dict[str, tuple[str, ...]] = {
     "es": (
         "te cuesta", "tu identidad se construye", "sin pedir permiso", "el desafío está en",
         "tu mundo emocional", "funciona como", "a veces",
-        "con el sol en", "con la luna en", "con el ascendente en", "con mercurio en",
-        "con venus en", "con marte en", "tenés el",
     ),
     "en": (
         "it's hard for you", "you struggle to", "your identity is built", "without asking permission",
         "the challenge is", "your emotional world", "works like", "sometimes",
-        "with the sun in", "with the moon in", "with the ascendant in", "with mercury in",
-        "with venus in", "with mars in", "you have the",
     ),
     "pt": (
         "te custa", "sua identidade se constrói", "sem pedir permissão", "o desafio está em",
         "seu mundo emocional", "funciona como", "às vezes",
+    ),
+}
+
+# Fórmulas de apertura: sólo molestan al inicio del párrafo («Con Venus en…»); en
+# medio de una frase son castellano normal, así que se buscan únicamente ahí.
+_APERTURAS: dict[str, tuple[str, ...]] = {
+    "es": (
+        "con el sol en", "con la luna en", "con el ascendente en", "con mercurio en",
+        "con venus en", "con marte en", "tenés el",
+    ),
+    "en": (
+        "with the sun in", "with the moon in", "with the ascendant in", "with mercury in",
+        "with venus in", "with mars in", "you have the",
+    ),
+    "pt": (
         "com o sol em", "com a lua em", "com o ascendente em", "com mercúrio em",
         "com vênus em", "com marte em", "você tem o",
     ),
+}
+
+MULETILLAS: dict[str, tuple[str, ...]] = {
+    lang: _MULETILLAS_EN_CUERPO[lang] + _APERTURAS[lang] for lang in _MULETILLAS_EN_CUERPO
 }
 
 # Palabras que no cuentan como repetición: un n-grama hecho sólo de estas («de la
@@ -84,13 +99,12 @@ _VACIAS = frozenset(
     "pelo pela pelos pelas e ou mas seu sua seus suas teu tua lhe".split()
 )
 
-_REGLA_FORMULAS = {
+_PROHIBIDAS = {
     "es": (
         "Prohibido usar estas muletillas, que ya se repiten en otros textos: «te cuesta», «tu identidad "
         "se construye», «sin pedir permiso», «el desafío está en», «tu mundo emocional», «funciona como», "
         "«a veces». Prohibidas también las aperturas con fórmula: «Con Venus en…», «Tenés el Sol en…», "
-        "«Marte en Aries:». La primera frase entra directo por una imagen o un rasgo concreto de esa "
-        "posición, sin nombrar la posición, y cada texto abre distinto. "
+        "«Marte en Aries:». "
     ),
     "en": (
         "Do NOT use these stock phrases, which already repeat across other texts: \u201cit's hard for "
@@ -98,15 +112,30 @@ _REGLA_FORMULAS = {
         "asking permission\u201d, \u201cthe challenge is\u201d, \u201cyour emotional world\u201d, "
         "\u201cworks like\u201d, \u201csometimes\u201d. Also avoid formula openings such as "
         "\u201cWith Venus in\u2026\u201d, \u201cYou have the Sun in\u2026\u201d or "
-        "\u201cMars in Aries:\u201d. The first sentence goes straight into a concrete image or trait of "
-        "that placement, without naming the placement, and every text opens differently. "
+        "\u201cMars in Aries:\u201d. "
     ),
     "pt": (
         "Proibido usar estas muletas, que já se repetem em outros textos: «te custa», «sua identidade se "
         "constrói», «sem pedir permissão», «o desafio está em», «seu mundo emocional», «funciona como», "
         "«às vezes». Proibidas também as aberturas de fórmula: «Com Vênus em…», «Você tem o Sol em…», "
-        "«Marte em Áries:». A primeira frase entra direto por uma imagem ou um traço concreto dessa "
-        "posição, sem nomear a posição, e cada texto abre de um jeito diferente. "
+        "«Marte em Áries:». "
+    ),
+}
+
+# Sólo para generar: el traductor ve un solo párrafo ya revisado y tiene que
+# conservarlo, así que no se le pide variar la apertura.
+_APERTURA_VARIADA = {
+    "es": (
+        "La primera frase entra directo por una imagen o un rasgo concreto de esa posición, sin "
+        "nombrar la posición, y cada texto abre distinto. "
+    ),
+    "en": (
+        "The first sentence goes straight into a concrete image or trait of that placement, "
+        "without naming the placement, and every text opens differently. "
+    ),
+    "pt": (
+        "A primeira frase entra direto por uma imagem ou um traço concreto dessa posição, sem "
+        "nomear a posição, e cada texto abre de um jeito diferente. "
     ),
 }
 
@@ -118,7 +147,7 @@ _REGLA_GENERO = {
         "Redacción neutra en género: nunca uses adjetivos, participios ni pronombres con género referidos "
         "a la persona que lee (nada terminado en -o/-a para ella: ni «segura» ni «seguro», ni «vos misma»). "
         "La técnica: pasá la idea a un verbo conjugado o a un sustantivo, o poné a la persona como sujeto de "
-        "una acción. Ejemplos: «te cuesta pasar inadvertido» pasa a «preferís que te noten»; «quedarte "
+        "una acción. Ejemplos: «no querer pasar inadvertido» pasa a «preferís que te noten»; «quedarte "
         "quieto» pasa a «frenar»; «ser conquistado» pasa a «que te conquisten»; «ser dura con» pasa a "
         "«exigirle mucho a». Tampoco atribuyas rasgos a un género («maternal», «femenino», «viril»). "
         "Sin barras, «x», «@» ni «e» neutra. "
@@ -127,7 +156,7 @@ _REGLA_GENERO = {
         "Redação neutra em gênero: nunca use adjetivos, particípios nem pronomes com gênero referidos a quem "
         "lê (nada terminado em -o/-a para essa pessoa: nem «segura» nem «seguro», nem «você mesma»; nem "
         "«o»/«a» como pronome oblíquo: use «te» ou «lhe»). A técnica: passe a ideia para um verbo conjugado "
-        "ou um substantivo, ou ponha a pessoa como sujeito de uma ação. Exemplos: «custa passar "
+        "ou um substantivo, ou ponha a pessoa como sujeito de uma ação. Exemplos: «não querer passar "
         "despercebido» vira «você prefere que reparem em você»; «ficar parado» vira «parar»; «ser "
         "conquistado» vira «que te conquistem»; «ser dura com» vira «exigir muito de». Também não atribua "
         "traços a um gênero («maternal», «feminino», «viril»). Sem barras, «x», «@» nem «e» neutro. "
@@ -143,9 +172,10 @@ _SISTEMA_GENERAR = {
         "Escribís textos para la vista previa gratuita de una carta natal. Un párrafo de 60 a 90 "
         "palabras, en español rioplatense (voseo), sobre qué significa tener {cuerpo} en {signo}. "
         "Hablale a la persona en segunda persona, con tono cálido y directo, como las frases cortas "
-        "de una carta natal («Arrancás antes que nadie: tu identidad se afirma en la acción…»). "
+        "de una carta natal («Arrancás antes que nadie: lo tuyo es moverte primero y ajustar después…»). "
         "Sin promesas ni predicciones: describí tendencias, no lo que va a pasar. "
-        + _REGLA_FORMULAS["es"]
+        + _PROHIBIDAS["es"]
+        + _APERTURA_VARIADA["es"]
         + _REGLA_GENERO["es"]
         + "Devolvé SOLO el párrafo, sin título, sin comillas ni comentarios."
     ),
@@ -153,18 +183,20 @@ _SISTEMA_GENERAR = {
         "You write texts for the free preview of a natal chart. One paragraph of 60 to 90 words, "
         "in English, about what it means to have {cuerpo} in {signo}. Address the reader in the second "
         "person, in a warm, direct tone, like the short lines of a natal chart reading "
-        "(\u201cYou start before anyone else: your identity is built on action\u2026\u201d). "
+        "(\u201cYou start before anyone else: you move first and adjust later\u2026\u201d). "
         "No promises and no predictions: describe tendencies, not what will happen. "
-        + _REGLA_FORMULAS["en"]
+        + _PROHIBIDAS["en"]
+        + _APERTURA_VARIADA["en"]
         + "Return ONLY the paragraph, with no title, quotation marks or comments."
     ),
     "pt": (
         "Você escreve textos para a prévia gratuita de um mapa natal. Um parágrafo de 60 a 90 "
         "palavras, em português brasileiro, sobre o que significa ter {cuerpo} em {signo}. "
         "Fale com a pessoa em segunda pessoa (você), com tom caloroso e direto, como as frases curtas "
-        "de um mapa natal («Você começa antes de todo mundo: sua identidade se afirma na ação…»). "
+        "de um mapa natal («Você começa antes de todo mundo: seu jeito é se mover primeiro e ajustar depois…»). "
         "Sem promessas nem previsões: descreva tendências, não o que vai acontecer. "
-        + _REGLA_FORMULAS["pt"]
+        + _PROHIBIDAS["pt"]
+        + _APERTURA_VARIADA["pt"]
         + _REGLA_GENERO["pt"]
         + "Devolva SÓ o parágrafo, sem título, aspas nem comentários."
     ),
@@ -176,7 +208,7 @@ _SISTEMA_TRADUCIR = {
     "es": (
         "Sos un traductor profesional. Traducí al español rioplatense (voseo) el párrafo del usuario, "
         "que ya fue revisado: conservá el sentido, el tono y el largo (60 a 90 palabras). "
-        + _REGLA_FORMULAS["es"]
+        + _PROHIBIDAS["es"]
         + "Si el original usa una fórmula prohibida, la traducción la evita con otra construcción. "
         + _REGLA_GENERO["es"]
         + "Devolvé SOLO la traducción, sin título, sin comillas ni comentarios."
@@ -184,14 +216,14 @@ _SISTEMA_TRADUCIR = {
     "en": (
         "You are a professional translator. Translate the user's paragraph into English. It has "
         "already been reviewed: keep the meaning, the warm direct tone and the length (60 to 90 words). "
-        + _REGLA_FORMULAS["en"]
+        + _PROHIBIDAS["en"]
         + "If the original uses a forbidden phrase, the translation avoids it with a different construction. "
         "Return ONLY the translation, with no title, quotation marks or comments."
     ),
     "pt": (
         "Você é um tradutor profissional. Traduza para o português brasileiro o parágrafo do usuário, "
         "que já foi revisado: conserve o sentido, o tom e o tamanho (60 a 90 palavras). "
-        + _REGLA_FORMULAS["pt"]
+        + _PROHIBIDAS["pt"]
         + "Se o original usa uma fórmula proibida, a tradução a evita com outra construção. "
         + _REGLA_GENERO["pt"]
         + "Devolva SÓ a tradução, sem título, aspas nem comentários."
@@ -221,7 +253,13 @@ def frases_repetidas(textos: dict[str, str], n: int = 3, tope: int = 6) -> list[
 def muletillas_presentes(textos: dict[str, str], lang: str) -> dict[str, int]:
     """Cuántos textos contienen cada muletilla de `lang` (sólo las que aparecen)."""
     minusculas = [t.lower() for t in textos.values()]
-    cuenta = {m: sum(m in t for t in minusculas) for m in MULETILLAS[lang]}
+    cuenta = {
+        m: sum(bool(re.search(rf"\b{re.escape(m)}\b", t)) for t in minusculas)
+        for m in _MULETILLAS_EN_CUERPO[lang]
+    }
+    for m in _APERTURAS[lang]:
+        # Sólo al inicio: se saltea la puntuación o comilla de apertura.
+        cuenta[m] = sum(bool(re.match(rf"\W*{re.escape(m)}\b", t)) for t in minusculas)
     return {m: c for m, c in cuenta.items() if c}
 
 
