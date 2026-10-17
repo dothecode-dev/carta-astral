@@ -71,6 +71,23 @@ _LUNA_INCIERTA = {
 _LA_LUNA = {"es": ("la Luna", "la Luna de {p}"), "en": ("the Moon", "{p}'s Moon"), "pt": ("a Lua", "a Lua de {p}")}
 
 
+def carta_para_prompt(chart_data: dict) -> dict:
+    """La carta como va al prompt. Con la Luna dudosa, su placement viaja sin
+    signo ni grado y con los dos signos posibles (`sign_options`): si el JSON
+    dijera "Leo", el modelo lo afirmaría aunque la nota le pida no hacerlo.
+    No toca el dict original."""
+    flags = chart_data.get("flags") or {}
+    if not flags.get("moon_sign_uncertain"):
+        return chart_data
+    opciones = list(flags.get("moon_sign_options") or [])
+    placements = [
+        {**{k: v for k, v in p.items() if k not in ("position", "abs_pos")}, "sign": None, "sign_options": opciones}
+        if p.get("name") == "Moon" else p
+        for p in chart_data.get("placements") or []
+    ]
+    return {**chart_data, "placements": placements}
+
+
 def nota_luna(chart_data: dict, lang: str, persona: str = "") -> str:
     """La nota de Luna dudosa para el prompt, o "" si la Luna no lo es.
     `persona` («Persona B») la atribuye en el vínculo, donde hay dos cartas."""
@@ -86,7 +103,7 @@ def nota_luna(chart_data: dict, lang: str, persona: str = "") -> str:
 
 
 def _user_content(chart_data: dict, lang: str, trato: str = "") -> str:
-    body = json.dumps(chart_data, ensure_ascii=False)
+    body = json.dumps(carta_para_prompt(chart_data), ensure_ascii=False)
     content = f"{_INSTRUCTIONS[lang]}\n{body}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
@@ -251,7 +268,7 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
         palabras=seccion.palabras,
         maximo=int(seccion.palabras * _MARGEN_TOPE_SECCION),
     )
-    cuerpo = json.dumps(chart_data, ensure_ascii=False)
+    cuerpo = json.dumps(carta_para_prompt(chart_data), ensure_ascii=False)
     content = f"{pedido}\n\n{cuerpo}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
