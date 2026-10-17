@@ -286,3 +286,15 @@ def test_el_signo_de_la_luna_liviana_es_el_de_la_carta_completa(zodiaco):
         completa = next(p.sign for p in build_chart(base).placements if p.name == "Moon")
         momento = datetime.datetime.combine(base.date, base.time, tzinfo=zona)
         assert _signo_luna(momento, base) == completa, hora
+
+
+def test_una_zona_que_tzdata_no_conoce_no_rompe_la_carta_sin_hora(monkeypatch):
+    # Si timezonefinder devuelve un nombre que el tzdata de la imagen todavía
+    # no tiene, la carta sin hora se calcula igual: como un lugar sin zona.
+    import core.ephemeris as eph
+
+    monkeypatch.setattr(eph, "resolve_tz", lambda lat, lng: "Atlantis/Capital")
+    chart = eph.build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
+
+    assert chart.flags.moon_sign_uncertain is True
+    assert chart.flags.moon_sign_options == ()

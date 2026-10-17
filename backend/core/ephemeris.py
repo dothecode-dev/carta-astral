@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Any, Literal, cast
 
 from kerykeion import AstrologicalSubject, AstrologicalSubjectFactory, NatalAspects
@@ -89,10 +89,11 @@ def sky_now(moment: datetime, lat: float = 0.0, lng: float = 0.0) -> list[Placem
 
 
 def _zona_local(birth: BirthInput) -> ZoneInfo | None:
-    """La zona horaria del lugar de nacimiento; None en mar abierto."""
+    """La zona horaria del lugar de nacimiento; None en mar abierto, o si el
+    tzdata de la imagen todavía no conoce el nombre que da timezonefinder."""
     try:
         return ZoneInfo(resolve_tz(birth.lat, birth.lng))
-    except GeocodeTimezoneError:
+    except (GeocodeTimezoneError, ZoneInfoNotFoundError):
         return None
 
 
