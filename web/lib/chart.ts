@@ -79,6 +79,12 @@ export type ApiChart = {
       precision_degraded: boolean;
       bodies_missing: boolean;
       house_system_fallback: boolean;
+      /** Carta sin hora en la que la Luna cambia de signo ese día. Opcional:
+       *  las cartas guardadas antes del 17-10-2026 no lo traen. */
+      moon_sign_uncertain?: boolean;
+      /** Los dos signos posibles (abreviaturas del motor), o vacío si el
+       *  lugar no tiene zona horaria. */
+      moon_sign_options?: string[];
     };
   };
 };

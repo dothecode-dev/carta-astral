@@ -2,6 +2,7 @@ import type { MajorPhase, Phase } from "@/content/cielo";
 
 import type { BodyKey, Positions } from "./ephemeris";
 import { API_URL } from "./config";
+import { KERYKEION_SIGNS } from "./i18n";
 
 // El cielo lo calcula el backend con Swiss Ephemeris, el mismo motor con el que
 // se arman las cartas. El pedido se hace desde el servidor de Next, no desde el
@@ -88,11 +89,6 @@ export async function fetchSky(): Promise<Sky | null> {
     return null;
   }
 }
-
-/** Las abreviaturas de signo de kerykeion, en el orden del zodíaco: el índice
- *  es el de `SIGN_NAMES`. */
-const KERYKEION_SIGNS = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
-                         "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"];
 
 export type Moon = {
   moment: string;

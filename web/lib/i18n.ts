@@ -193,6 +193,11 @@ export const ASPECT_GLYPHS: Record<string, string> = {
  */
 export const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 
+/** Las abreviaturas de signo del motor (kerykeion), en el orden del zodíaco:
+ *  el índice es el de `SIGN_NAMES` y `SIGNS`. */
+export const KERYKEION_SIGNS = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
+                                "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"];
+
 /**
  * Los cuerpos que la carta lista pero la rueda no dibuja.
  *
@@ -565,6 +570,10 @@ export type Dict = {
     verAspectos: string;
     /** El desplegable que guarda posiciones, casas y aspectos, al final. */
     verDatos: string;
+    /** La Luna de una carta sin hora que cambia de signo ese día: «{a} o {b}». */
+    lunaDudosa: string;
+    /** La misma, cuando el lugar no tiene zona horaria y no hay dos signos. */
+    lunaIncierta: string;
     /** Cambiar cómo le hablamos, desde la carta ya creada. */
     tratoTitulo: string;
     tratoAclaracion: string;
@@ -910,6 +919,8 @@ const es: Dict = {
     verCasas: "Ver las casas",
     verAspectos: "Ver los {n} aspectos",
     verDatos: "Ver los datos de la carta",
+    lunaDudosa: "{a} o {b}",
+    lunaIncierta: "Signo incierto sin la hora",
     tratoTitulo: "Cómo te hablamos",
     tratoAclaracion: "Vale para lo que se escriba o traduzca desde ahora; lo ya escrito queda como está.",
     tratoError: "No pudimos guardarlo. Probá de nuevo.",
@@ -1321,6 +1332,8 @@ const en: Dict = {
     verCasas: "Show the houses",
     verAspectos: "Show all {n} aspects",
     verDatos: "Show the chart data",
+    lunaDudosa: "{a} or {b}",
+    lunaIncierta: "Sign uncertain without the time",
     tratoTitulo: "How we address you",
     tratoAclaracion: "Applies to what we write or translate from now on; what's already written stays as it is.",
     tratoError: "We couldn't save it. Please try again.",
@@ -1732,6 +1745,8 @@ const pt: Dict = {
     verCasas: "Ver as casas",
     verAspectos: "Ver os {n} aspectos",
     verDatos: "Ver os dados do mapa",
+    lunaDudosa: "{a} ou {b}",
+    lunaIncierta: "Signo incerto sem a hora",
     tratoTitulo: "Como falamos com você",
     tratoAclaracion: "Vale para o que for escrito ou traduzido a partir de agora; o que já está escrito fica como está.",
     tratoError: "Não conseguimos salvar. Tente de novo.",

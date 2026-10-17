@@ -1,16 +1,11 @@
 import type { FirmaLinea } from "@/lib/chart";
-import { type Dict, type Locale, PLANET_NAME_BY_KEY, SIGN_NAMES } from "@/lib/i18n";
-
-/** Las abreviaturas del motor, en el orden del zodíaco: índice en SIGN_NAMES. */
-const SIGNO_INDICE: Record<string, number> = {
-  Ari: 0, Tau: 1, Gem: 2, Can: 3, Leo: 4, Vir: 5, Lib: 6, Sco: 7, Sag: 8, Cap: 9, Aqu: 10, Pis: 11,
-};
+import { type Dict, KERYKEION_SIGNS, type Locale, PLANET_NAME_BY_KEY, SIGN_NAMES } from "@/lib/i18n";
 
 /** «Sol en Géminis»: el título de una línea de firma, y también de cada bloque
  *  del teaser. `cuerpo` y `signo` son los del motor (`Sun`, `Ascendant`, `Gem`). */
 export function tituloCuerpoEnSigno(cuerpo: string, signo: string, dict: Dict, locale: Locale): string {
   const nombre = cuerpo === "Ascendant" ? dict.chart.axisNames.AC : PLANET_NAME_BY_KEY[locale][cuerpo];
-  return dict.chart.firmaEn.replace("{cuerpo}", nombre).replace("{signo}", SIGN_NAMES[locale][SIGNO_INDICE[signo]]);
+  return dict.chart.firmaEn.replace("{cuerpo}", nombre).replace("{signo}", SIGN_NAMES[locale][KERYKEION_SIGNS.indexOf(signo)]);
 }
 
 /**

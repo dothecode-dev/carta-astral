@@ -1,6 +1,6 @@
 import type { CartaDibujable } from "@/lib/chart";
 import { positionLabel } from "@/lib/ephemeris";
-import { type Dict, type Locale, PLANET_GLYPHS, PLANET_NAME_BY_KEY } from "@/lib/i18n";
+import { type Dict, KERYKEION_SIGNS, type Locale, PLANET_GLYPHS, PLANET_NAME_BY_KEY, SIGN_NAMES, SIGNS } from "@/lib/i18n";
 
 // La tabla de posiciones: ejes y cuerpos con grado, signo y casa. Vivía dentro
 // de ChartBody junto a la rueda; el 06-10-2026 se separó para poder plegarla
@@ -12,6 +12,18 @@ const HOUSE_INDEX: Record<string, number> = {
   Fifth_House: 5, Sixth_House: 6, Seventh_House: 7, Eighth_House: 8,
   Ninth_House: 9, Tenth_House: 10, Eleventh_House: 11, Twelfth_House: 12,
 };
+
+/** La posición de un cuerpo para la tabla. La Luna de una carta sin hora que
+ *  cambia de signo ese día no tiene un grado ni un signo que afirmar: se
+ *  muestran los dos signos posibles, como en el teaser y la firma. */
+function posicion(p: CartaDibujable["data"]["placements"][number], chart: CartaDibujable, dict: Dict, locale: Locale): string {
+  const flags = chart.data.flags;
+  if (p.name !== "Moon" || !flags.moon_sign_uncertain) return positionLabel(p.abs_pos, locale);
+  const opciones = (flags.moon_sign_options ?? []).map((s) => KERYKEION_SIGNS.indexOf(s));
+  if (opciones.length !== 2 || opciones.some((i) => i < 0)) return dict.chart.lunaIncierta;
+  const [a, b] = opciones.map((i) => `${SIGNS[i]} ${SIGN_NAMES[locale][i]}`);
+  return dict.chart.lunaDudosa.replace("{a}", a).replace("{b}", b);
+}
 
 export function TablaPosiciones({
   chart,
@@ -59,7 +71,7 @@ export function TablaPosiciones({
                 <td className="cellGlyph">{PLANET_GLYPHS[p.name] ?? "·"}</td>
                 <td className="cellBody">{names[p.name] ?? p.name.replace(/_/g, " ")}</td>
                 <td>
-                  {positionLabel(p.abs_pos, locale)}
+                  {posicion(p, chart, dict, locale)}
                 </td>
                 <td className="cellRight">
                   {p.house ? ROMAN[HOUSE_INDEX[p.house] - 1] : "—"}
