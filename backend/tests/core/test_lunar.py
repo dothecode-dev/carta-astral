@@ -142,3 +142,57 @@ def test_justo_antes_de_una_fase_la_proxima_es_esa(phase, fase, antes):
 
     # USNO redondea al minuto.
     assert abs((found - fase).total_seconds()) <= 60
+
+
+# --- Luna de signo dudoso en cartas sin hora -------------------------------
+
+BUENOS_AIRES = (-34.6, -58.4)
+SAO_PAULO = (-23.55, -46.63)
+
+
+def _nacimiento(dia: datetime.date, lugar: tuple[float, float], *, con_hora: bool = False):
+    from core.models import BirthInput
+
+    return BirthInput(
+        name=None, date=dia,
+        time=datetime.time(12, 0) if con_hora else None,
+        time_known=con_hora, lat=lugar[0], lng=lugar[1],
+    )
+
+
+def test_sin_hora_luna_que_cambia_de_signo_ese_dia_es_dudosa():
+    from core.ephemeris import build_chart
+
+    # 2026-03-02 en Buenos Aires: la Luna pasa de Leo (24,6°) a Virgo (8,1°)
+    # entre las 00:00 y las 23:59 locales (buscado con sky_now).
+    chart = build_chart(_nacimiento(datetime.date(2026, 3, 2), BUENOS_AIRES))
+
+    assert chart.flags.moon_sign_uncertain is True
+
+
+def test_sin_hora_luna_estable_no_es_dudosa():
+    from core.ephemeris import build_chart
+
+    # 2026-03-05 en Buenos Aires: la Luna va de Libra 4° a Libra 17° todo el día.
+    chart = build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
+
+    assert chart.flags.moon_sign_uncertain is False
+
+
+def test_con_hora_nunca_es_dudosa():
+    from core.ephemeris import build_chart
+
+    # Mismo día que el primer test, donde la Luna sí cambia de signo.
+    chart = build_chart(_nacimiento(datetime.date(2026, 3, 2), BUENOS_AIRES, con_hora=True))
+
+    assert chart.flags.moon_sign_uncertain is False
+
+
+def test_dia_sin_medianoche_no_levanta():
+    from core.ephemeris import build_chart
+
+    # En São Paulo el horario de verano 2018 arrancó el 04-11 a las 00:00: esa
+    # medianoche local no existe.
+    chart = build_chart(_nacimiento(datetime.date(2018, 11, 4), SAO_PAULO))
+
+    assert isinstance(chart.flags.moon_sign_uncertain, bool)

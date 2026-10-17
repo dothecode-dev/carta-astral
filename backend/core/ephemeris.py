@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Literal, cast
 
 from kerykeion import AstrologicalSubject, NatalAspects
 
 from core.models import Angle, Aspect, ChartData, DegradationFlags, House, Placement, BirthInput
+from core.exceptions import GeocodeTimezoneError
 from core.timeconv import resolve_dst, resolve_tz
 
 # espeja el enum interno de kerykeion; sólo usamos los 5 de _HOUSE_CODE
@@ -86,6 +88,29 @@ def sky_now(moment: datetime, lat: float = 0.0, lng: float = 0.0) -> list[Placem
     ]
 
 
+def _luna_dudosa(birth: BirthInput) -> bool:
+    """¿Cambia la Luna de signo durante el día local del nacimiento?
+
+    Sin hora sólo sabemos el día: si entre el primer y el último minuto de ese
+    día la Luna cambia de signo, no hay forma de afirmar en cuál nació. Sin
+    zona horaria terrestre no podemos acotar el día, así que es dudosa.
+    """
+    try:
+        zona = ZoneInfo(resolve_tz(birth.lat, birth.lng))
+    except GeocodeTimezoneError:
+        return True
+    # Un día cuya medianoche no existe (salto de horario de verano) se
+    # normaliza pasando por UTC: queda en el primer instante válido del día.
+    inicio = datetime.combine(birth.date, time.min, tzinfo=zona)
+    inicio = inicio.astimezone(timezone.utc).astimezone(zona)
+    fin = datetime.combine(birth.date, time(23, 59), tzinfo=zona)
+
+    def signo(momento: datetime) -> str:
+        return next(p.sign for p in sky_now(momento) if p.name == "Moon")
+
+    return signo(inicio) != signo(fin)
+
+
 def build_chart(birth: BirthInput) -> ChartData:
     precision_degraded = birth.date.year < 1880
     if not birth.time_known or birth.time is None:
@@ -101,6 +126,7 @@ def build_chart(birth: BirthInput) -> ChartData:
             placements=placements, houses=None, angles=None, aspects=[],
             zodiac=birth.zodiac, house_system=birth.house_system, time_known=False,
             flags=DegradationFlags(moon_approximate=True,
+                                   moon_sign_uncertain=_luna_dudosa(birth),
                                    precision_degraded=precision_degraded or missing,
                                    bodies_missing=missing),
             julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,

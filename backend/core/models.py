@@ -58,6 +58,10 @@ class DegradationFlags:
     #: Falta algún cuerpo porque su efeméride no cubre esa fecha. La de Quirón,
     #: por ejemplo, arranca alrededor del año 675.
     bodies_missing: bool = False
+    #: Carta sin hora: la Luna cambia de signo durante el día local del
+    #: nacimiento, así que su signo no se puede afirmar. A diferencia de
+    #: `moon_approximate` (que marca toda carta sin hora), éste es exacto.
+    moon_sign_uncertain: bool = False
 
 
 @dataclass(frozen=True)
