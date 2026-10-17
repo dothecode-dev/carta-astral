@@ -26,6 +26,13 @@ from tests.api.conftest import PI_ANONIMA, SESSION_ANONIMA, con_mail, sesion_ano
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def _breve_gratis_prendida(settings):
+    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
+    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def _entrar_por_codigo(client, email):
     """El login por código de hoy (`test_codigo_endpoints`): la cuenta en la
     que cae quien prueba que el mail es suyo."""

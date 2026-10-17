@@ -18,6 +18,7 @@ OTRO = "22222222-2222-4222-8222-222222222222"
 @pytest.fixture(autouse=True)
 def _base(settings, monkeypatch):
     cache.clear()
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True  # viene apagado por default
     settings.INTERPRETATION_ANON_DAILY_CAP = 40
     monkeypatch.setattr(la, "_build_client", lambda: object())
     monkeypatch.setattr(la.informe_service, "escribir_breve", lambda *a: "breve")

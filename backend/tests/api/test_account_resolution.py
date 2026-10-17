@@ -5,6 +5,13 @@ from django.conf import settings
 from api.sso import VerifiedIdentity
 
 
+@pytest.fixture(autouse=True)
+def _breve_gratis_prendida(settings):
+    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
+    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def _vid(provider="apple", sub="S", email="u@x.com", verified=True):
     return VerifiedIdentity(provider=provider, sub=sub, email=email, email_verified=verified)
 

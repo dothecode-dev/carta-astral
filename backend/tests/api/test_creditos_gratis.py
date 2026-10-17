@@ -13,6 +13,13 @@ pytestmark = pytest.mark.django_db
 _contador = itertools.count()
 
 
+@pytest.fixture(autouse=True)
+def _breve_gratis_prendida(settings):
+    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
+    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 @pytest.fixture
 def crear_cuenta():
     """Crea una cuenta por el camino real del alta: `resolve_account` con una

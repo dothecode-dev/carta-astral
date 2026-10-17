@@ -33,6 +33,13 @@ from tests.api.concurrencia import en_hilos, requiere_postgres
 pytestmark = [pytest.mark.django_db(transaction=True), requiere_postgres]
 
 
+@pytest.fixture(autouse=True)
+def _breve_gratis_prendida(settings):
+    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
+    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def test_dos_pedidos_casi_a_la_vez_sin_codigo_previo_no_revientan():
     def pedir(_i):
         try:

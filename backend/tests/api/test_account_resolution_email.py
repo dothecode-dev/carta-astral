@@ -9,6 +9,13 @@ from api.sso import VerifiedIdentity
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def _breve_gratis_prendida(settings):
+    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
+    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def identidad_mail(email):
     return VerifiedIdentity(
         provider="email", sub=email, email=email, email_verified=True,

@@ -10,6 +10,13 @@ from api.sso import VerifiedIdentity
 from api.sujetos import sujeto_natal
 
 
+@pytest.fixture(autouse=True)
+def _breve_gratis_prendida(settings):
+    """Este módulo prueba el regalo de bienvenida: lo prende explícito,
+    porque `LECTURA_BREVE_GRATIS_ENABLED` viene apagado por default."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def _gastar_lecturas_breves(cuenta, make_chart, n):
     """Consume `n` lecturas breves por el camino real (`canje.canjear`).
 
