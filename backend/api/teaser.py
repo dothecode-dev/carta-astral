@@ -12,7 +12,7 @@ import logging
 import pathlib
 
 from api.firma_frases import IDIOMAS, nombre_signo
-from interpret.prompts import SECCIONES
+from interpret.prompts import secciones_natal
 from interpret.reparto import ASPECTOS, NOMBRES, ROMANOS, TENSOS, Tema, temas
 
 logger = logging.getLogger(__name__)
@@ -73,13 +73,6 @@ def _aspecto(t: Tema, lang: str) -> str:
     if frase.endswith(" a") and (lang, art) in _CONTRACCION:
         return f"{n[t.puntos[0]]} {frase[:-2]} {_CONTRACCION[(lang, art)]} {n[segundo]}"
     return f"{n[t.puntos[0]]} {frase} {art} {n[segundo]}"
-
-
-def _secciones_aplicables(hora: bool):
-    # Misma regla que `informe_service.secciones_aplicables` (largo): el
-    # informe completo menos lo que depende de una hora que no está. Allá
-    # recibe un sujeto y acá sólo tenemos el `data`, por eso se replica.
-    return [s for s in SECCIONES if hora or not s.requiere_hora]
 
 
 def _signos(data: dict) -> dict[str, str]:
@@ -164,7 +157,7 @@ def _indice(data: dict, aplicables) -> list[dict]:
 
 def teaser(data: dict) -> dict:
     """El teaser para el `data` serializado de una carta (forma de RF5)."""
-    aplicables = _secciones_aplicables(bool(data.get("time_known")))
+    aplicables = secciones_natal(bool(data.get("time_known")))
     palabras = sum(s.palabras for s in aplicables)
     return {
         "bloques": _bloques(data),

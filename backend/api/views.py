@@ -221,8 +221,6 @@ def _preview_repr(carta: CartaCalculada) -> dict:
         # Sol, Luna y Ascendente en palabras: lo único de la carta que entiende
         # quien no sabe leer glifos. Texto fijo, sin costo de modelo.
         "firma": firma(data),
-        # Párrafos fijos por cuerpo e índice bloqueado del informe pago.
-        "teaser": teaser(data),
         "engine_version": engine_version(),
         "interpretation_langs": [],
         "interpretations": {},
@@ -274,7 +272,11 @@ class ChartPreviewView(APIView):
             return Response(
                 {"error": mensaje_de_datos_invalidos(exc)}, status=status.HTTP_400_BAD_REQUEST
             )
-        return Response(_preview_repr(carta))
+        # Párrafos fijos por cuerpo e índice bloqueado del informe pago. Sólo
+        # acá: `_preview_repr` también arma las dos cartas del vínculo, que no
+        # muestran teaser.
+        repr_ = _preview_repr(carta)
+        return Response({**repr_, "teaser": teaser(repr_["data"])})
 
 
 class ChartDetailView(APIView):
