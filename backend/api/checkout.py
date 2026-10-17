@@ -30,6 +30,7 @@ from api.auth import AccountTokenAuthentication
 from api.models import Chart, PasarelaCheckout, Sujeto
 from api.permissions import HasAccount
 from api.sujetos import sujeto_natal
+from api.conteo import contar
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +161,7 @@ class CheckoutView(APIView):
             sujeto=sujeto, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
             precio_centavos=precio,
         )
+        contar("checkout_abierto")
         return Response({"url": url})
 
     def _canjear_gratis(self, request, cupon, codigo, sujeto, idioma):

@@ -186,3 +186,10 @@ def test_campo_faltante_dice_cual_falta_sin_repr_de_la_excepcion(client, stripe_
     r = _post(client, {k: v for k, v in DATOS.items() if k != "date"})
     assert r.status_code == 400
     assert r.json() == {"error": "falta el campo date", "motivo": "datos_invalidos"}
+
+
+def test_abrir_el_pago_cuenta_un_checkout_abierto(client, stripe_responde):
+    from api.models import ConteoDiario
+
+    _post(client)
+    assert ConteoDiario.objects.get(evento="checkout_abierto").cantidad == 1

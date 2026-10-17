@@ -28,6 +28,7 @@ from api.models import Chart, ProviderIdentity, Sujeto
 from api.permissions import HasAccount
 from api.serializers import serialize_chart_data
 from api.sujetos import sujeto_natal
+from api.conteo import contar
 from api.teaser import teaser
 from api.versioning import engine_version
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
@@ -276,6 +277,7 @@ class ChartPreviewView(APIView):
         # acá: `_preview_repr` también arma las dos cartas del vínculo, que no
         # muestran teaser.
         repr_ = _preview_repr(carta)
+        contar("carta_calculada")
         return Response({**repr_, "teaser": teaser(repr_["data"])})
 
 

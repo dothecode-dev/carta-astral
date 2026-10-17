@@ -211,3 +211,10 @@ def test_un_pack_retirado_no_se_puede_comprar(account_client, stripe_responde):
 
     assert r.status_code == 400
     assert stripe_responde == []
+
+
+def test_abrir_el_pago_con_cuenta_cuenta_un_checkout_abierto(account_client, stripe_responde):
+    from api.models import ConteoDiario
+
+    account_client.post(URL, {"producto": "informe_natal"})
+    assert ConteoDiario.objects.get(evento="checkout_abierto").cantidad == 1
