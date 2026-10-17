@@ -69,7 +69,7 @@ export const legalPt: LegalContent = {
       { kind: "h2", text: "Conta" },
       {
         kind: "p",
-        text: "Para usar o ASTRA você precisa de uma conta do Google e ter pelo menos 13 anos. Você é responsável pelo uso feito com sua conta.",
+        text: "Você pode calcular e ver seu mapa natal sem conta. Para guardar seus mapas e ver seus relatórios é preciso uma conta, com o Google ou com o seu e-mail. Para usar o ASTRA você precisa ter pelo menos 13 anos. Você é responsável pelo uso feito com sua conta.",
       },
       { kind: "h2", text: "Compras" },
       {

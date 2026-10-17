@@ -69,7 +69,7 @@ export const legalEn: LegalContent = {
       { kind: "h2", text: "Account" },
       {
         kind: "p",
-        text: "Using ASTRA requires a Google account and being at least 13 years old. You are responsible for activity on your account.",
+        text: "You can calculate and see your birth chart without an account. To save your charts and see your reports you need an account, with Google or with your email. To use ASTRA you must be at least 13 years old. You are responsible for activity on your account.",
       },
       { kind: "h2", text: "Purchases" },
       {

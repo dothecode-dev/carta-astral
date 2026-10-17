@@ -70,7 +70,7 @@ export const legalEs: LegalContent = {
       { kind: "h2", text: "Cuenta" },
       {
         kind: "p",
-        text: "Para usar ASTRA necesitás una cuenta de Google y ser mayor de 13 años. Sos responsable del uso que se haga desde tu cuenta.",
+        text: "Podés calcular y ver tu carta natal sin cuenta. Para guardar tus cartas y ver tus informes necesitás una cuenta, con Google o con tu mail. Para usar ASTRA tenés que ser mayor de 13 años. Sos responsable del uso que se haga desde tu cuenta.",
       },
       { kind: "h2", text: "Compras" },
       {

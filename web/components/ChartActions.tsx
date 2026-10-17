@@ -584,6 +584,12 @@ export function ChartActions({
    *  —son todos consumibles—, pero el criterio correcto es el mismo que
    *  habilita el botón, no uno parecido. */
   const breveAgotada = !puede(derechos, "leer_breve") && !enOtroIdioma("corto");
+  /** «Agotada» es que la gastó: hace falta que exista la fila de `lectura_breve`
+   *  (los consumidos quedan en 0). Sin fila nunca tuvo una —con la breve gratis
+   *  apagada es toda cuenta nueva y toda compra sin cuenta—, y avisarle que no
+   *  le quedan, o medirlo como agotada, habla de algo que nunca existió. */
+  const breveNuncaTuvo =
+    breveAgotada && !derechos.some((d) => d.codigo_producto === "lectura_breve");
   /**
    * Si el informe se puede pedir sin volver a pagar: porque hay derecho, o
    * porque ya está escrito en otro idioma y traducirlo no cuesta.
@@ -601,7 +607,11 @@ export function ChartActions({
   // Lo que se le ofreció, tal como se va a ver. `no_se_ofrece` es que ese
   // producto ya está leído para esta carta y no hay nada que proponer.
   const ofertaBreve: OfertaBreve =
-    tieneBreve || tieneCompleto ? "no_se_ofrece" : breveAgotada ? "agotada" : "disponible";
+    tieneBreve || tieneCompleto || breveNuncaTuvo
+      ? "no_se_ofrece"
+      : breveAgotada
+        ? "agotada"
+        : "disponible";
   const ofertaCompleto: OfertaCompleto = tieneCompleto
     ? "no_se_ofrece"
     : puedeLeerlo
