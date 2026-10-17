@@ -756,6 +756,31 @@ class ConteoDiario(models.Model):
         return f"{self.fecha} {self.evento}: {self.cantidad}"
 
 
+class ConteoProcedencia(models.Model):
+    """De dónde viene quien calcula su carta, por día (UTC): canal y lugar.
+
+    Igual que `ConteoDiario`, sin dato de quién fue. El valor nunca es lo que
+    mandó el navegador: el canal es de una lista cerrada (`conteo.CANALES`) y el
+    lugar sale de una zona horaria real (`conteo.lugar_de_zona`), así que la
+    tabla no crece con lo que cualquiera quiera inventar.
+    """
+
+    TIPOS = (("canal", "canal"), ("lugar", "lugar"))
+
+    fecha = models.DateField()
+    tipo = models.CharField(max_length=10, choices=TIPOS)
+    valor = models.CharField(max_length=64)
+    cantidad = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["fecha", "tipo", "valor"], name="uniq_procedencia_por_dia"),
+        ]
+
+    def __str__(self):
+        return f"{self.fecha} {self.tipo}={self.valor}: {self.cantidad}"
+
+
 class EntradaCache(models.Model):
     """La tabla de `DatabaseCache`, para que `purgar_codigos_acceso` borre lo
     vencido por el ORM y no con SQL armado a mano. No gestionada: la crea y

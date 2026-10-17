@@ -3,6 +3,10 @@
   <div style="margin:0 0 24px">
     <p style="margin:0 0 8px">Últimos {{ dias_grafico }} días, contados en el servidor (sin cookies). Veces, no personas. Hoy está incompleto.</p>
     {{ grafico }}
+    <h2 style="margin:24px 0 8px">Por canal</h2>
+    {{ grafico_canal }}
+    <h2 style="margin:24px 0 8px">Por lugar (zona horaria del navegador)</h2>
+    {{ grafico_lugar }}
   </div>
   {{ block.super }}
 {% endblock %}

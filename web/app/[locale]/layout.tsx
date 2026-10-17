@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { notFound } from "next/navigation";
 
 import "../globals.css";
+import { CapturaProcedencia } from "@/components/CapturaProcedencia";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import { DEFAULT_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
@@ -119,6 +120,7 @@ export default async function LocaleLayout({
       </head>
       <body>
         {children}
+        <CapturaProcedencia />
         {/* Se decide en el cliente por la misma razón que el tema: leer el
             consentimiento en el servidor obliga a `cookies()` y las tres rutas
             dejarían de ser estáticas. Aparece un instante después del primer

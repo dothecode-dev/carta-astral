@@ -8,12 +8,15 @@ transacción de quien llamó.
 
 import datetime
 import logging
+import zoneinfo
+from functools import cache
+from urllib.parse import urlsplit
 
 from django.db import DatabaseError, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from api.models import ConteoDiario, PasarelaCheckout
+from api.models import ConteoDiario, ConteoProcedencia, PasarelaCheckout
 
 logger = logging.getLogger(__name__)
 
@@ -87,3 +90,83 @@ def serie(dias: int = 90) -> dict:
         if (i := indice.get(acreditado.date())) is not None:
             valores["compra_pagada"][i] += 1
     return {"fechas": [str(f) for f in fechas], **valores}
+
+
+# --- Procedencia --------------------------------------------------------------
+
+CANALES = (
+    "google_ads", "google", "otros_buscadores", "redes", "otro_sitio", "otra_campana", "directo",
+)
+_BUSCADORES = ("bing.", "duckduckgo.", "yahoo.", "yandex.", "ecosia.", "brave.")
+_REDES = ("facebook.", "instagram.", "t.co", "twitter.", "x.com", "tiktok.", "linkedin.",
+          "reddit.", "whatsapp.", "pinterest.", "youtube.", "threads.")
+# Nombres con tilde que la base de zonas escribe sin ella.
+_CON_TILDE = {"Bogota": "Bogotá", "Sao_Paulo": "São Paulo", "Asuncion": "Asunción", "Merida": "Mérida"}
+
+
+def canal_de(utm_source: object, referrer: object) -> str:
+    """El canal, de `CANALES`, a partir de la dirección del anuncio y la página previa."""
+    utm = utm_source.strip().lower() if isinstance(utm_source, str) else ""
+    if utm:
+        return "google_ads" if utm in ("google", "google_ads", "adwords") else "otra_campana"
+    try:
+        host = (urlsplit(referrer).hostname or "") if isinstance(referrer, str) else ""
+    except ValueError:  # una URL mal formada («http://[») no es un canal
+        return "otro_sitio"
+    if not host:
+        return "directo"
+    if host.startswith("google.") or ".google." in host:
+        return "google"
+    if any(b in host for b in _BUSCADORES):
+        return "otros_buscadores"
+    if any(r in host for r in _REDES):
+        return "redes"
+    return "otro_sitio"
+
+
+@cache
+def _zonas() -> frozenset[str]:
+    return frozenset(zoneinfo.available_timezones())
+
+
+def lugar_de_zona(zona: object) -> str:
+    """La ciudad de referencia de una zona horaria real; las de Argentina, juntas."""
+    if not isinstance(zona, str) or zona not in _zonas() or "/" not in zona:
+        return "desconocida"
+    if zona.startswith("America/Argentina/") or zona == "America/Buenos_Aires":
+        return "Argentina"
+    ciudad = zona.rsplit("/", 1)[1]
+    return _CON_TILDE.get(ciudad, ciudad.replace("_", " "))
+
+
+def _sumar(tipo: str, valor: str) -> None:
+    hoy = timezone.now().date()
+    filas = ConteoProcedencia.objects.filter(fecha=hoy, tipo=tipo, valor=valor)
+    if not filas.update(cantidad=F("cantidad") + 1):
+        fila, _ = ConteoProcedencia.objects.get_or_create(fecha=hoy, tipo=tipo, valor=valor)
+        ConteoProcedencia.objects.filter(pk=fila.pk).update(cantidad=F("cantidad") + 1)
+
+
+def contar_procedencia(procedencia: object) -> None:
+    """Suma uno al canal y al lugar de quien calculó una carta. Nunca rompe."""
+    datos = procedencia if isinstance(procedencia, dict) else {}
+    canal = canal_de(datos.get("utm_source"), datos.get("referrer"))
+    lugar = lugar_de_zona(datos.get("zona"))
+    try:
+        with transaction.atomic():
+            _sumar("canal", canal)
+            _sumar("lugar", lugar)
+    except DatabaseError:
+        logger.exception("conteo: no se pudo contar la procedencia")
+
+
+def serie_procedencia(tipo: str, dias: int = 90, top: int = 5) -> dict:
+    """La historia diaria de los `top` valores más frecuentes del período."""
+    hoy = timezone.now().date()
+    fechas = [hoy - datetime.timedelta(days=i) for i in range(dias - 1, -1, -1)]
+    indice = {f: i for i, f in enumerate(fechas)}
+    valores: dict[str, list[int]] = {}
+    for fila in ConteoProcedencia.objects.filter(tipo=tipo, fecha__gte=fechas[0]):
+        valores.setdefault(fila.valor, [0] * dias)[indice[fila.fecha]] = fila.cantidad
+    primeros = sorted(valores.items(), key=lambda kv: -sum(kv[1]))[:top]
+    return {"fechas": [str(f) for f in fechas], "series": primeros}

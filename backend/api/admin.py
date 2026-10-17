@@ -216,7 +216,7 @@ class ConteoDiarioAdmin(SoloLectura):
         from django.utils.safestring import mark_safe
 
         from api import conteo
-        from api.grafico_conteo import svg_lineas
+        from api.grafico_conteo import PALETA, svg_lineas, svg_series
 
         datos = conteo.serie(self.DIAS_GRAFICO)
         extra_context = {
@@ -227,9 +227,25 @@ class ConteoDiarioAdmin(SoloLectura):
                 svg_lineas(datos, ("carta_calculada",))
                 + svg_lineas(datos, ("checkout_abierto", "compra_pagada"))
             ),
+            # De dónde viene quien calcula su carta: canal y lugar (zona horaria).
+            "grafico_canal": mark_safe(self._procedencia(conteo, svg_series, PALETA, "canal")),  # noqa: S308
+            "grafico_lugar": mark_safe(self._procedencia(conteo, svg_series, PALETA, "lugar")),  # noqa: S308
             "dias_grafico": self.DIAS_GRAFICO,
         }
         return super().changelist_view(request, extra_context=extra_context)
+
+    NOMBRES_CANAL = {
+        "google_ads": "Google Ads", "google": "Google (sin pagar)", "otros_buscadores": "Otros buscadores",
+        "redes": "Redes", "otro_sitio": "Otro sitio", "otra_campana": "Otra campaña", "directo": "Directo",
+    }
+
+    def _procedencia(self, conteo, svg_series, paleta, tipo: str) -> str:
+        datos = conteo.serie_procedencia(tipo, self.DIAS_GRAFICO, top=len(paleta))
+        series = [
+            (self.NOMBRES_CANAL.get(valor, valor) if tipo == "canal" else valor, color, valores)
+            for (valor, valores), color in zip(datos["series"], paleta)
+        ]
+        return svg_series(datos["fechas"], series) if series else "<p>Todavía sin datos.</p>"
 
 
 @admin.register(PasarelaCheckout)

@@ -17,14 +17,23 @@ SERIES = (
 )
 
 
+PALETA = ("#4f8cff", "#f5a623", "#3fb950", "#d16ba5", "#8b949e")
+
+
 def svg_lineas(serie: dict, claves: tuple[str, ...] | None = None) -> str:
     """Un gráfico con las series de `claves` (todas si no se pasa), con el eje
     Y escalado a ellas: los pagos, de a uno, no pueden compartir escala con
     las cartas, de a decenas, o quedan aplastados contra el piso."""
-    series = tuple(s for s in SERIES if claves is None or s[0] in claves)
-    fechas = serie["fechas"]
+    return svg_series(serie["fechas"], [
+        (nombre, color, serie[clave]) for clave, nombre, color in SERIES
+        if claves is None or clave in claves
+    ])
+
+
+def svg_series(fechas: list[str], series: list[tuple[str, str, list[int]]], titulo: str = "") -> str:
+    """El gráfico de líneas de `series` (nombre, color, valores por fecha)."""
     n = len(fechas)
-    maximo = max([1, *(v for clave, _, _ in series for v in serie[clave])])
+    maximo = max([1, *(v for _, _, valores in series for v in valores)])
     alto_util = ALTO - ARRIBA - ABAJO
     ancho_util = ANCHO - IZQ - DER
 
@@ -39,6 +48,8 @@ def svg_lineas(serie: dict, claves: tuple[str, ...] | None = None) -> str:
         f'width="100%" role="img" aria-label="Conteo diario" '
         f'style="max-width:{ANCHO}px;font:12px system-ui,sans-serif;color:inherit">',
     ]
+    if titulo:
+        partes.append(f'<title>{escape(titulo)}</title>')
     # Eje Y: 0, la mitad y el máximo, con líneas guía.
     for v in sorted({0, maximo // 2, maximo}):
         partes.append(
@@ -53,19 +64,19 @@ def svg_lineas(serie: dict, claves: tuple[str, ...] | None = None) -> str:
             f'<text x="{x(i):.1f}" y="{ALTO - 8}" text-anchor="middle" fill="currentColor">{dia}</text>'
         )
     # Una línea por serie, con un punto por día (un solo día no dibuja línea).
-    for desplazamiento, (clave, nombre, color) in enumerate(series):
-        puntos = " ".join(f"{x(i):.1f},{y(v):.1f}" for i, v in enumerate(serie[clave]))
+    for desplazamiento, (nombre, color, valores) in enumerate(series):
+        puntos = " ".join(f"{x(i):.1f},{y(v):.1f}" for i, v in enumerate(valores))
         partes.append(
             f'<polyline points="{puntos}" fill="none" stroke="{color}" stroke-width="2"/>'
         )
         partes.extend(
             f'<circle cx="{x(i):.1f}" cy="{y(v):.1f}" r="2.5" fill="{color}"/>'
-            for i, v in enumerate(serie[clave])
+            for i, v in enumerate(valores)
         )
-        lx = IZQ + desplazamiento * 170
+        lx = IZQ + desplazamiento * 165
         partes.append(
             f'<rect x="{lx}" y="10" width="12" height="12" fill="{color}"/>'
-            f'<text x="{lx + 18}" y="20" fill="currentColor">{nombre}</text>'
+            f'<text x="{lx + 18}" y="20" fill="currentColor">{escape(nombre)}</text>'
         )
     partes.append("</svg>")
     return "".join(partes)

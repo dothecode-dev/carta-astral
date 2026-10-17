@@ -28,7 +28,7 @@ from api.models import Chart, ProviderIdentity, Sujeto
 from api.permissions import HasAccount
 from api.serializers import serialize_chart_data
 from api.sujetos import sujeto_natal
-from api.conteo import contar
+from api.conteo import contar, contar_procedencia
 from api.teaser import teaser
 from api.versioning import engine_version
 from api.sso import SSONotConfigured, SSOError, validate_apple, validate_google
@@ -201,6 +201,7 @@ class ChartCollectionView(APIView):
         cuerpo = _chart_repr(chart)
         # Quien ya tiene cuenta calcula por acá y no por la vista previa.
         contar("carta_calculada")
+        contar_procedencia(request.data.get("procedencia"))
         return Response(cuerpo, status=status.HTTP_201_CREATED)
 
     def delete(self, request):
@@ -283,6 +284,7 @@ class ChartPreviewView(APIView):
         cuerpo = {**repr_, "teaser": teaser(repr_["data"])}
         # Después del teaser: si falla, nadie vio esa carta.
         contar("carta_calculada")
+        contar_procedencia(request.data.get("procedencia"))
         return Response(cuerpo)
 
 

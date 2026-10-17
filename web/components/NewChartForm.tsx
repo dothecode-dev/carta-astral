@@ -11,6 +11,7 @@ import type { CartaDibujable } from "@/lib/chart";
 import { armarDatosCarta, errorDeFecha, TRATOS, type DatosCarta, type Trato } from "@/lib/datosCarta";
 import type { Dict, Locale } from "@/lib/i18n";
 import { limpiarRestosDeLectura } from "@/lib/lecturaLocal";
+import { leerProcedencia } from "@/lib/procedencia";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
 // es el único que sabe de efemérides. Lo único que resuelve acá es que no se
@@ -100,7 +101,9 @@ export function NewChartForm({
     const res = await fetch(signedIn ? "/api/charts" : "/api/charts/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cuerpo),
+      // De dónde llegó la visita: el servidor la reduce a canal y lugar y la
+      // cuenta, sin guardar nada de la persona (lib/procedencia).
+      body: JSON.stringify({ ...cuerpo, procedencia: leerProcedencia() }),
     });
 
     if (!res.ok) {

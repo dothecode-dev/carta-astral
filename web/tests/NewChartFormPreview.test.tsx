@@ -101,6 +101,14 @@ describe("sin cuenta", () => {
     vi.unstubAllGlobals();
   });
 
+  it("manda de dónde llegó la visita junto con la carta", async () => {
+    render(<NewChartForm locale="es" dict={dict} />);
+    await completarYEnviar(fetchMock, CALCULADA);
+
+    const [, init] = fetchMock.mock.calls.find((c) => c[0] === "/api/charts/preview")!;
+    expect(JSON.parse(init.body).procedencia).toMatchObject({ zona: expect.any(String) });
+  });
+
   it("calcula contra el preview y no crea ninguna carta", async () => {
     render(<NewChartForm locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA);
