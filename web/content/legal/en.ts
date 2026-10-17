@@ -42,7 +42,7 @@ export const legalEn: LegalContent = {
       { kind: "h2", text: "Deleting your data" },
       {
         kind: "p",
-        text: "You can delete your charts or your entire account from your account page (Account → Delete my data). Deletion is permanent: it removes your personal data, your charts, your readings and whatever you have available to read. We keep only an **irreversible hash** of your login provider identifier — it cannot identify you or recover your data; it only prevents a new account from receiving the free welcome readings again.",
+        text: "You can delete your charts or your entire account from your account page (Account → Delete my data). Deletion is permanent: it removes your personal data, your charts, your readings and whatever you have available to read. We keep only an **irreversible hash** of your login provider identifier — it cannot identify you or recover your data; it only prevents a welcome gift from being repeated, if there is one.",
       },
       { kind: "h2", text: "Security and retention" },
       {

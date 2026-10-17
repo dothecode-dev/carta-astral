@@ -43,7 +43,7 @@ export const legalEs: LegalContent = {
       { kind: "h2", text: "Borrado de tus datos" },
       {
         kind: "p",
-        text: "Podés borrar tus cartas o tu cuenta completa desde tu cuenta (Cuenta → Borrar mis datos). El borrado es definitivo: elimina tus datos personales, tus cartas, tus lecturas y lo que tengas disponible para leer. Conservamos únicamente un **hash irreversible** del identificador de tu proveedor de login — no permite identificarte ni recuperar tus datos; sólo evita que una cuenta nueva vuelva a recibir las lecturas gratuitas de bienvenida.",
+        text: "Podés borrar tus cartas o tu cuenta completa desde tu cuenta (Cuenta → Borrar mis datos). El borrado es definitivo: elimina tus datos personales, tus cartas, tus lecturas y lo que tengas disponible para leer. Conservamos únicamente un **hash irreversible** del identificador de tu proveedor de login — no permite identificarte ni recuperar tus datos; sólo evita que se repita un regalo de bienvenida, si lo hubiera.",
       },
       { kind: "h2", text: "Seguridad y retención" },
       {

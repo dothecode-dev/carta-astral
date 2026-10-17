@@ -42,7 +42,7 @@ export const legalPt: LegalContent = {
       { kind: "h2", text: "Apagar seus dados" },
       {
         kind: "p",
-        text: "Você pode apagar seus mapas ou a conta inteira pela sua conta (Conta → Apagar meus dados). A exclusão é definitiva: remove seus dados pessoais, seus mapas, suas leituras e o que você tiver disponível para ler. Guardamos apenas um **hash irreversível** do identificador do seu provedor de login — ele não permite identificar você nem recuperar seus dados; só evita que uma conta nova receba de novo as leituras gratuitas de boas-vindas.",
+        text: "Você pode apagar seus mapas ou a conta inteira pela sua conta (Conta → Apagar meus dados). A exclusão é definitiva: remove seus dados pessoais, seus mapas, suas leituras e o que você tiver disponível para ler. Guardamos apenas um **hash irreversível** do identificador do seu provedor de login — ele não permite identificar você nem recuperar seus dados; só evita que um presente de boas-vindas se repita, se houver.",
       },
       { kind: "h2", text: "Segurança e retenção" },
       {
