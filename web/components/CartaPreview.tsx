@@ -74,7 +74,8 @@ export function CartaPreview({
               {t.informeTrae
                 .replace("{n}", String(carta.teaser.informe.secciones))
                 // "always": en es, ICU no agrupa los números de cuatro cifras
-                // (6200) y al lado de pt (6.200) se vería inconsistente.
+                // (6000; el backend redondea a miles) y al lado de pt (6.000)
+                // se vería inconsistente.
                 .replace("{palabras}", carta.teaser.informe.palabras.toLocaleString(locale, { useGrouping: "always" }))}
             </p>
           )}

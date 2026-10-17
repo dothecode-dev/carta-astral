@@ -1065,7 +1065,8 @@ body:has(.consentBar) .accionFija {
 .teaserBloques {
   display: grid;
   gap: 1.5rem 2rem;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  /* min(100%, …): a 320 px de ancho la columna mínima no entra y desborda. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
 }
 
 .teaserTitulo,
@@ -1088,7 +1089,7 @@ body:has(.consentBar) .accionFija {
 .teaserIndice {
   display: grid;
   gap: 1.25rem 2rem;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
