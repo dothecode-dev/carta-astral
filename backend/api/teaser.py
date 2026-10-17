@@ -35,13 +35,44 @@ _CANTIDAD = {
     "pt": {3: "três", 4: "quatro", 5: "cinco", 6: "seis", 7: "sete", 8: "oito", 9: "nove", 10: "dez"},
 }
 _FORMAS = {
-    "es": {"en_signo": "{p} en {s}", "en_casa": "{base} en casa {casa}",
+    "es": {"en_signo": "{p} en {s}", "en_casa": "{base} en la casa {casa}",
            "cumulo": "{n} planetas en la casa {casa}"},
-    "en": {"en_signo": "{p} in {s}", "en_casa": "{base} in house {casa}",
-           "cumulo": "{n} planets in house {casa}"},
+    "en": {"en_signo": "{p} in {s}", "en_casa": "{base} in the {casa} house",
+           "cumulo": "{n} planets in the {casa} house"},
     "pt": {"en_signo": "{p} em {s}", "en_casa": "{base} na casa {casa}",
            "cumulo": "{n} planetas na casa {casa}"},
 }
+# El segundo cuerpo de un aspecto lleva artículo donde el idioma lo pide:
+# «con la Luna», «com o Ascendente». Los planetas con nombre propio, no.
+_ARTICULO = {
+    "es": {"Sun": "el", "Moon": "la", "Ascendant": "el", "Medium_Coeli": "el"},
+    "pt": {"Sun": "o", "Moon": "a", "Ascendant": "o", "Medium_Coeli": "o"},
+    "en": {},
+}
+# «a» + artículo se contrae: «al Sol», «ao Sol», «à Lua».
+_CONTRACCION = {("es", "el"): "al", ("pt", "o"): "ao", ("pt", "a"): "à"}
+
+
+def _casa(casa: str, lang: str) -> str:
+    """La casa como se escribe en `lang`: romano en es/pt, ordinal en inglés."""
+    if lang != "en":
+        return ROMANOS[casa]
+    n = list(ROMANOS).index(casa) + 1
+    sufijo = "th" if 10 <= n <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{sufijo}"
+
+
+def _aspecto(t: Tema, lang: str) -> str:
+    assert t.aspecto is not None
+    n = NOMBRES[lang]
+    frase = ASPECTOS[lang][t.aspecto]
+    segundo = t.puntos[1]
+    art = _ARTICULO[lang].get(segundo)
+    if not art:
+        return f"{n[t.puntos[0]]} {frase} {n[segundo]}"
+    if frase.endswith(" a") and (lang, art) in _CONTRACCION:
+        return f"{n[t.puntos[0]]} {frase[:-2]} {_CONTRACCION[(lang, art)]} {n[segundo]}"
+    return f"{n[t.puntos[0]]} {frase} {art} {n[segundo]}"
 
 
 def _secciones_aplicables(hora: bool):
@@ -70,13 +101,12 @@ def _nombre_tema(t: Tema, lang: str, data: dict) -> str:
         texto = f["en_signo"].format(p=n[punto], s=nombre_signo(_signos(data)[punto], lang))
         casa = next((p.get("house") for p in data.get("placements") or [] if p["name"] == punto), None)
         if data.get("time_known") and casa in ROMANOS:
-            texto = f["en_casa"].format(base=texto, casa=ROMANOS[casa])
+            texto = f["en_casa"].format(base=texto, casa=_casa(casa, lang))
         return texto
     if t.tipo == "cumulo":
         assert t.casa is not None
-        return f["cumulo"].format(n=_CANTIDAD[lang][len(t.puntos)], casa=ROMANOS[t.casa])
-    assert t.aspecto is not None
-    return f"{n[t.puntos[0]]} {ASPECTOS[lang][t.aspecto]} {n[t.puntos[1]]}"
+        return f["cumulo"].format(n=_CANTIDAD[lang][len(t.puntos)], casa=_casa(t.casa, lang))
+    return _aspecto(t, lang)
 
 
 def _prioridad(t: Tema) -> int:
@@ -111,19 +141,25 @@ def _bloques(data: dict) -> list[dict]:
     return bloques
 
 
+def _elegidos(data: dict, slug: str) -> list[Tema]:
+    """Los temas propios de la sección `slug` que se muestran, en orden."""
+    propios = [t for t in temas(data) if t.duena == slug and _mostrable(t, data)]
+    # `sorted` es estable: el desempate es el orden de `reparto.temas()`.
+    return sorted(propios, key=_prioridad)[:MAX_TEMAS_POR_SECCION]
+
+
 def _indice(data: dict, aplicables) -> list[dict]:
-    todos = temas(data)
-    indice = []
-    for s in aplicables:
-        propios = [t for t in todos if t.duena == s.slug and _mostrable(t, data)]
-        # `sorted` es estable: el desempate es el orden de `reparto.temas()`.
-        elegidos = sorted(propios, key=_prioridad)[:MAX_TEMAS_POR_SECCION]
-        indice.append({
+    return [
+        {
             "slug": s.slug,
             "titulos": {lang: s.titulo[lang] for lang in IDIOMAS},
-            "temas": [{lang: _nombre_tema(t, lang, data) for lang in IDIOMAS} for t in elegidos],
-        })
-    return indice
+            "temas": [
+                {lang: _nombre_tema(t, lang, data) for lang in IDIOMAS}
+                for t in _elegidos(data, s.slug)
+            ],
+        }
+        for s in aplicables
+    ]
 
 
 def teaser(data: dict) -> dict:

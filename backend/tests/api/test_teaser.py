@@ -73,14 +73,24 @@ def test_luna_dudosa_no_tiene_bloque_ni_tema():
 
 @pytest.mark.parametrize("payload", CARTAS)
 def test_todo_tema_mostrado_es_propio_de_su_seccion(payload):
+    """La propiedad que sostiene el gancho: lo que el teaser promete, el informe lo trata.
+    Se compara por `Tema.clave`, no por el texto que arma el propio teaser."""
     data = _data(payload)
-    propios = {
-        s.slug: {mod._nombre_tema(t, "es", data) for t in reparto.temas(data) if t.duena == s.slug}
-        for s in SECCIONES
-    }
+    todos = reparto.temas(data)
+    aplicables = [s for s in SECCIONES if data["time_known"] or not s.requiere_hora]
+    mostrados = 0
+    for s in aplicables:
+        propios = {t.clave for t in todos if t.duena == s.slug}
+        elegidos = mod._elegidos(data, s.slug)
+        assert {t.clave for t in elegidos} <= propios
+        mostrados += len(elegidos)
+    # Que no pase vacío: todas las cartas fijas tienen planetas propios en alguna sección.
+    assert mostrados >= 4
+    # Y lo que sale en el índice es exactamente lo elegido, nombrado.
     for s in mod.teaser(data)["indice"]:
-        for tema in s["temas"]:
-            assert tema["es"] in propios[s["slug"]]
+        esperado = [{lang: mod._nombre_tema(t, lang, data) for lang in ("es", "en", "pt")}
+                    for t in mod._elegidos(data, s["slug"])]
+        assert s["temas"] == esperado
 
 
 @pytest.mark.parametrize("payload", CARTAS)
@@ -142,20 +152,6 @@ def test_tensos_primero_dentro_de_tensiones():
     assert [x["es"] for x in tensiones["temas"]] == ["Venus en cuadratura con Saturno"]
 
 
-def test_cumulo_y_casa_se_nombran_en_tres_idiomas():
-    data = _data(CECI)
-    nombres = {
-        lang: mod._nombre_tema(t, lang, data)
-        for t in reparto.temas(data) if t.tipo == "planeta" and t.puntos[0] == "Sun"
-        for lang in ("es", "en", "pt")
-    }
-    assert " casa " in nombres["es"] and " house " in nombres["en"] and " na casa " in nombres["pt"]
-    cumulo = reparto.Tema("cumulo", "casas", ("Sun", "Venus", "Mars"), casa="Eighth_House")
-    assert mod._nombre_tema(cumulo, "es", data) == "tres planetas en la casa VIII"
-    assert mod._nombre_tema(cumulo, "en", data) == "three planets in house VIII"
-    assert mod._nombre_tema(cumulo, "pt", data) == "três planetas na casa VIII"
-
-
 def test_sintesis_va_sin_temas():
     s = next(s for s in mod.teaser(_data(CECI))["indice"] if s["slug"] == "sintesis")
     assert s["temas"] == []
@@ -206,3 +202,35 @@ def test_sin_textos_reales_devuelve_bloques_vacios_sin_romper(monkeypatch):
     t = mod.teaser(_data(CECI))
     assert t["bloques"] == []
     assert Counter(s["slug"] for s in t["indice"])
+
+
+def test_nomenclatura_exacta_por_idioma():
+    data = {
+        "time_known": True, "flags": {},
+        "placements": [{"name": "Venus", "sign": "Sco", "house": "Eighth_House"},
+                       {"name": "Sun", "sign": "Leo", "house": "First_House"}],
+        "angles": [{"name": "Ascendant", "sign": "Leo"}],
+    }
+    def nombre(t):
+        return {lang: mod._nombre_tema(t, lang, data) for lang in ("es", "en", "pt")}
+
+    venus = nombre(reparto.Tema("planeta", "afectos", ("Venus",)))
+    assert venus == {"es": "Venus en Escorpio en la casa VIII",
+                     "en": "Venus in Scorpio in the 8th house",
+                     "pt": "Vênus em Escorpião na casa VIII"}
+    cumulo = nombre(reparto.Tema("cumulo", "casas", ("Sun", "Venus", "Mars"), casa="Third_House"))
+    assert cumulo == {"es": "tres planetas en la casa III",
+                      "en": "three planets in the 3rd house",
+                      "pt": "três planetas na casa III"}
+    def asp(a, b, tipo):
+        return nombre(reparto.Tema("aspecto", "x", (a, b), aspecto=tipo))
+
+    assert asp("Sun", "Moon", "opposition") == {
+        "es": "Sol en oposición a la Luna", "en": "Sun opposite Moon", "pt": "Sol em oposição à Lua"}
+    assert asp("Mars", "Ascendant", "conjunction") == {
+        "es": "Marte en conjunción con el Ascendente", "en": "Mars conjunct Ascendant",
+        "pt": "Marte em conjunção com o Ascendente"}
+    assert asp("Venus", "Saturn", "square")["es"] == "Venus en cuadratura con Saturno"
+    assert asp("Venus", "Sun", "opposition") == {
+        "es": "Venus en oposición al Sol", "en": "Venus opposite Sun", "pt": "Vênus em oposição ao Sol"}
+    assert asp("Venus", "Moon", "trine")["pt"] == "Vênus em trígono com a Lua"
