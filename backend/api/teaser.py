@@ -11,7 +11,7 @@ import json
 import logging
 import pathlib
 
-from api.firma_frases import IDIOMAS, nombre_signo
+from api.firma_frases import IDIOMAS, luna_dudosa, nombre_signo, signos_de
 from interpret.prompts import secciones_natal
 from interpret.reparto import ASPECTOS, NOMBRES, ROMANOS, TENSOS, Tema, temas
 
@@ -75,23 +75,12 @@ def _aspecto(t: Tema, lang: str) -> str:
     return f"{n[t.puntos[0]]} {frase} {art} {n[segundo]}"
 
 
-def _signos(data: dict) -> dict[str, str]:
-    signos = {p["name"]: p["sign"] for p in data.get("placements") or []}
-    if data.get("time_known") and data.get("angles"):
-        signos.update({a["name"]: a["sign"] for a in data["angles"]})
-    return signos
-
-
-def _luna_dudosa(data: dict) -> bool:
-    return bool((data.get("flags") or {}).get("moon_sign_uncertain"))
-
-
 def _nombre_tema(t: Tema, lang: str, data: dict) -> str:
     """El tema nombrado para la persona lectora, en `lang`."""
     n, f = NOMBRES[lang], _FORMAS[lang]
     if t.tipo == "planeta":
         punto = t.puntos[0]
-        texto = f["en_signo"].format(p=n[punto], s=nombre_signo(_signos(data)[punto], lang))
+        texto = f["en_signo"].format(p=n[punto], s=nombre_signo(signos_de(data)[punto], lang))
         casa = next((p.get("house") for p in data.get("placements") or [] if p["name"] == punto), None)
         if data.get("time_known") and casa in ROMANOS:
             texto = f["en_casa"].format(base=texto, casa=_casa(casa, lang))
@@ -112,16 +101,16 @@ def _mostrable(t: Tema, data: dict) -> bool:
     if t.tipo == "aspecto" and t.aspecto == "conjunction" and frozenset(t.puntos) in _CONJUNCIONES_COMUNES:
         return False
     # Sin hora la Luna puede cambiar de signo en el día: no se nombra.
-    if t.tipo == "planeta" and t.puntos[0] == "Moon" and _luna_dudosa(data):
+    if t.tipo == "planeta" and t.puntos[0] == "Moon" and luna_dudosa(data):
         return False
     return True
 
 
 def _bloques(data: dict) -> list[dict]:
-    signos = _signos(data)
+    signos = signos_de(data)
     bloques = []
     for cuerpo in CUERPOS_TEASER:
-        if cuerpo not in signos or (cuerpo == "Moon" and _luna_dudosa(data)):
+        if cuerpo not in signos or (cuerpo == "Moon" and luna_dudosa(data)):
             continue
         signo = signos[cuerpo]
         textos = {lang: _TEXTOS.get(lang, {}).get(f"{cuerpo}|{signo}") for lang in IDIOMAS}
