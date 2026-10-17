@@ -13,6 +13,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from api.catalogo import producto
+from api.conteo import contar
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +257,9 @@ def crear_checkout(
         logger.exception("stripe no pudo abrir el checkout de %s", codigo_producto)
         raise StripeError(type(exc).__name__) from exc
 
+    # Acá y no en cada vista: todo pago abierto pasa por esta llamada, así un
+    # camino de pago nuevo no se olvida de contar (api/conteo.py).
+    contar("checkout_abierto")
     return sesion.id, sesion.url
 
 

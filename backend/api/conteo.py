@@ -25,31 +25,43 @@ def contar(evento: str) -> None:
     if evento not in EVENTOS:
         logger.error("conteo: evento desconocido %r", evento)
         return
+    hoy = timezone.now().date()
     try:
         with transaction.atomic():
-            fila, _ = ConteoDiario.objects.get_or_create(fecha=timezone.now().date(), evento=evento)
-            # UPDATE ... SET cantidad = cantidad + 1: atómico entre procesos.
-            ConteoDiario.objects.filter(pk=fila.pk).update(cantidad=F("cantidad") + 1)
+            # Lo común es que la fila del día ya exista: un solo UPDATE
+            # (cantidad = cantidad + 1, atómico entre procesos). Sólo el primer
+            # conteo del día la crea; si dos la crean a la vez, `get_or_create`
+            # resuelve el choque y el UPDATE de abajo suma igual.
+            if not ConteoDiario.objects.filter(fecha=hoy, evento=evento).update(cantidad=F("cantidad") + 1):
+                fila, _ = ConteoDiario.objects.get_or_create(fecha=hoy, evento=evento)
+                ConteoDiario.objects.filter(pk=fila.pk).update(cantidad=F("cantidad") + 1)
     except DatabaseError:
         logger.exception("conteo: no se pudo contar %s", evento)
 
 
 def resumen(dias: int = 7) -> dict:
-    """Los últimos `dias` días (hoy incluido, UTC): por día y en total.
+    """Los últimos `dias` días COMPLETOS (UTC), por día y en total, y hoy aparte.
+
+    Hoy va separado porque el informe sale a la mañana: con unas horas, sumarlo
+    o ponerlo en fila con días enteros se lee como una caída.
 
     `compra_pagada` sale de los pagos acreditados (`PasarelaCheckout`), no de
-    un contador: ya está en la base. Un canje con cupón del 100 % no es pago.
+    un contador: ya está en la base. No cuentan los canjes con cupón del 100 %
+    ni las compras reembolsadas. Los contadores cuentan VECES, no personas.
     """
     hoy = timezone.now().date()
-    fechas = [hoy - datetime.timedelta(days=i) for i in range(dias)]
+    fechas = [hoy - datetime.timedelta(days=i) for i in range(1, dias + 1)]
     claves = (*EVENTOS, "compra_pagada")
-    por_dia = {str(f): dict.fromkeys(claves, 0) for f in fechas}
+    por_dia = {str(f): dict.fromkeys(claves, 0) for f in (hoy, *fechas)}
     for fila in ConteoDiario.objects.filter(fecha__gte=fechas[-1]):
         por_dia[str(fila.fecha)][fila.evento] = fila.cantidad
     pagas = PasarelaCheckout.objects.filter(
-        acreditado_at__date__gte=fechas[-1],
+        acreditado_at__date__gte=fechas[-1], reembolsado_centavos=0,
     ).exclude(checkout_id__startswith="cupon_")
     for acreditado in pagas.values_list("acreditado_at", flat=True):
-        por_dia[str(acreditado.date())]["compra_pagada"] += 1
+        dia = str(acreditado.date())
+        if dia in por_dia:
+            por_dia[dia]["compra_pagada"] += 1
+    hoy_parcial = por_dia.pop(str(hoy))
     total = {c: sum(d[c] for d in por_dia.values()) for c in claves}
-    return {"dias": dias, "total": total, "por_dia": por_dia}
+    return {"dias": dias, "total": total, "hoy": hoy_parcial, "por_dia": por_dia}

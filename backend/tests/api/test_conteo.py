@@ -60,19 +60,63 @@ def test_una_vista_previa_rechazada_no_cuenta(client):
     assert not ConteoDiario.objects.exists()
 
 
-def test_el_resumen_trae_los_dias_y_las_compras_pagas():
+def test_el_resumen_suma_siete_dias_completos_y_hoy_aparte():
+    # El mail sale a las 10 UTC: hoy tiene unas horas y no puede leerse como un
+    # día entero junto a los otros.
     ayer = _hoy() - datetime.timedelta(days=1)
+    hace_7 = _hoy() - datetime.timedelta(days=7)
+    hace_8 = _hoy() - datetime.timedelta(days=8)
     ConteoDiario.objects.create(fecha=_hoy(), evento="carta_calculada", cantidad=7)
     ConteoDiario.objects.create(fecha=ayer, evento="carta_calculada", cantidad=3)
+    ConteoDiario.objects.create(fecha=hace_7, evento="carta_calculada", cantidad=2)
+    ConteoDiario.objects.create(fecha=hace_8, evento="carta_calculada", cantidad=100)
     ConteoDiario.objects.create(fecha=ayer, evento="checkout_abierto", cantidad=1)
-    ahora = timezone.now()
-    PasarelaCheckout.objects.create(checkout_id="cs_1", codigo_producto="informe_natal", acreditado_at=ahora)
-    # Un canje con cupón del 100 % no es una compra paga.
-    PasarelaCheckout.objects.create(checkout_id="cupon_x", codigo_producto="informe_natal", acreditado_at=ahora)
+    ayer_dt = timezone.now() - datetime.timedelta(days=1)
+    PasarelaCheckout.objects.create(checkout_id="cs_1", codigo_producto="informe_natal", acreditado_at=ayer_dt)
+    # Un canje con cupón del 100 % no es una compra paga, ni una reembolsada.
+    PasarelaCheckout.objects.create(checkout_id="cupon_x", codigo_producto="informe_natal", acreditado_at=ayer_dt)
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_3", codigo_producto="informe_natal", acreditado_at=ayer_dt, reembolsado_centavos=500,
+    )
     PasarelaCheckout.objects.create(checkout_id="cs_2", codigo_producto="informe_natal")
 
     r = conteo.resumen(dias=7)
 
-    assert r["total"] == {"carta_calculada": 10, "checkout_abierto": 1, "compra_pagada": 1}
-    assert r["por_dia"][str(_hoy())]["carta_calculada"] == 7
-    assert r["por_dia"][str(ayer)] == {"carta_calculada": 3, "checkout_abierto": 1, "compra_pagada": 0}
+    assert r["total"] == {"carta_calculada": 5, "checkout_abierto": 1, "compra_pagada": 1}
+    assert r["hoy"] == {"carta_calculada": 7, "checkout_abierto": 0, "compra_pagada": 0}
+    assert str(_hoy()) not in r["por_dia"] and str(hace_8) not in r["por_dia"]
+    assert r["por_dia"][str(ayer)] == {"carta_calculada": 3, "checkout_abierto": 1, "compra_pagada": 1}
+
+
+def test_crear_una_carta_con_cuenta_tambien_cuenta(account_client):
+    assert account_client.post("/api/charts/", DATOS, format="json").status_code == 201
+    assert ConteoDiario.objects.get(evento="carta_calculada").cantidad == 1
+
+
+def test_si_el_adelanto_falla_la_carta_no_se_cuenta(client, monkeypatch):
+    from api import views
+
+    def rompe(_):
+        raise RuntimeError("teaser roto")
+
+    monkeypatch.setattr(views, "teaser", rompe)
+    client.raise_request_exception = False
+    assert client.post(PREVIEW, DATOS, content_type="application/json").status_code == 500
+    assert not ConteoDiario.objects.exists()
+
+
+def test_abrir_cualquier_checkout_de_stripe_lo_cuenta(settings, monkeypatch):
+    # Se cuenta donde pasan todos (la llamada a Stripe), no en cada vista: un
+    # camino de pago nuevo no puede olvidarse de contar.
+    from api import stripe_client
+
+    settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
+    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    settings.STRIPE_SUCCESS_URL = "https://astraguia.com/{locale}/compra?checkout_id={CHECKOUT_SESSION_ID}"
+
+    class _Sesion:
+        id, url = "cs_test_1", "https://checkout.stripe.com/c/pay/cs_test_1"
+
+    monkeypatch.setattr(stripe_client.stripe.checkout.Session, "create", staticmethod(lambda **k: _Sesion()))
+    stripe_client.crear_checkout(None, "informe_natal", locale="es", terminos=True)
+    assert ConteoDiario.objects.get(evento="checkout_abierto").cantidad == 1

@@ -20,7 +20,6 @@ from api.identity import hash_token, normalizar, tombstone_hmac_configurada
 from api.models import Account, BirthData, Chart, CodigoAcceso, PasarelaCheckout, ProviderIdentity, Sujeto
 from api.sujetos import sujeto_natal
 from api.sso import VerifiedIdentity
-from api.conteo import contar
 
 logger = logging.getLogger(__name__)
 PRODUCTO = "informe_natal"
@@ -64,7 +63,6 @@ def abrir(datos: dict, locale: str):
             sujeto=sujeto, locale=locale, descuento_centavos=descuento, url=url,
             precio_centavos=precio, anonimo=True, nonce_hash=hash_token(nonce),
         )
-    contar("checkout_abierto")
     return fila, nonce
 
 

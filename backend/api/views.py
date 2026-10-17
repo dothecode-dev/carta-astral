@@ -198,7 +198,10 @@ class ChartCollectionView(APIView):
             return Response(
                 {"error": mensaje_de_datos_invalidos(exc)}, status=status.HTTP_400_BAD_REQUEST
             )
-        return Response(_chart_repr(chart), status=status.HTTP_201_CREATED)
+        cuerpo = _chart_repr(chart)
+        # Quien ya tiene cuenta calcula por acá y no por la vista previa.
+        contar("carta_calculada")
+        return Response(cuerpo, status=status.HTTP_201_CREATED)
 
     def delete(self, request):
         delete_charts(request.user)
@@ -277,8 +280,10 @@ class ChartPreviewView(APIView):
         # acá: `_preview_repr` también arma las dos cartas del vínculo, que no
         # muestran teaser.
         repr_ = _preview_repr(carta)
+        cuerpo = {**repr_, "teaser": teaser(repr_["data"])}
+        # Después del teaser: si falla, nadie vio esa carta.
         contar("carta_calculada")
-        return Response({**repr_, "teaser": teaser(repr_["data"])})
+        return Response(cuerpo)
 
 
 class ChartDetailView(APIView):
