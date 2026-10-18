@@ -282,3 +282,10 @@ def test_un_producto_desconocido_sigue_siendo_producto_invalido_aunque_venga_mon
     assert r.json()["error"] == "producto inválido"
     assert r.json().get("motivo") != "moneda_invalida"
     assert not stripe_responde
+
+
+def test_abrir_el_pago_con_cuenta_cuenta_un_checkout_abierto(account_client, stripe_responde):
+    from api.models import ConteoDiario
+
+    account_client.post(URL, {"producto": "informe_natal"})
+    assert ConteoDiario.objects.get(evento="checkout_abierto").cantidad == 1

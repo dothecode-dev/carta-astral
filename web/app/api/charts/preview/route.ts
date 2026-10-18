@@ -5,7 +5,9 @@ import { ApiError, callApi } from "@/lib/session";
 // Calcula la carta de alguien que todavía no tiene cuenta: `auth: false`, así
 // que no manda cookie ni la necesita. Nada de lo que llega acá se guarda —ni
 // del lado del backend ni del nuestro—: la fecha, la hora y el lugar de
-// nacimiento vuelven dibujados y se olvidan.
+// nacimiento vuelven dibujados y se olvidan. Lo único que el backend anota es
+// un contador agregado del día: canal y zona horaria (`procedencia`), sin nada
+// que identifique a la persona (backend/api/conteo.py).
 
 export const dynamic = "force-dynamic";
 

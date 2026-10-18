@@ -22,7 +22,7 @@ export const legalEs: LegalContent = {
           "**Datos de nacimiento:** los que cargás para calcular una carta — nombre (opcional), fecha, hora y lugar de nacimiento.",
           "**Compras:** el cobro lo procesa **Stripe**, que actúa como vendedor registrado. No vemos ni guardamos los datos de tu tarjeta: de Stripe recibimos la confirmación del pago y el identificador de la compra, para darte acceso a lo que compraste.",
           "**Comprar sin cuenta:** si abrís el pago del informe sin haber entrado, guardamos los datos de esa carta para poder entregarte el informe cuando se confirme el pago. Si el pago no se completa, la carta se borra cuando vence (a la hora de abrirlo). El email lo cargás en **Stripe**, que nos lo pasa al confirmar el pago: lo usamos para crear tu cuenta, o para acreditar la compra en la que ya tenías con ese email, y para mandarte el código de acceso.",
-          "**Lectura sin cuenta:** para escribir tu lectura breve sin cuenta usamos tus datos de nacimiento en el momento y no los guardamos en nuestros servidores. La lectura queda en nuestro servidor sólo hasta que tu navegador la recibe (como máximo 15 minutos). Después, la lectura y los datos de tu carta quedan únicamente en tu navegador durante 24 horas, para que puedas volver a verla o comprar el informe completo. Para que la lectura gratis sea una por navegador, guardamos durante 24 horas una marca que no contiene datos personales.",
+          "**Carta sin cuenta:** para mostrarte tu carta sin cuenta usamos tus datos de nacimiento en el momento y no los guardamos en nuestros servidores. Si después comprás el informe, ver «Comprar sin cuenta» más arriba.",
         ],
       },
       { kind: "h2", text: "Para qué los usamos" },
@@ -34,6 +34,7 @@ export const legalEs: LegalContent = {
           "Llevar la cuenta de los informes que tenés disponibles para leer.",
           "Enviarte esos mails: el envío lo hace **Resend**, un proveedor de envío de mails que los procesa por cuenta nuestra y sólo para entregártelos.",
           "**Detectar fallas y entender el uso del sitio.** Usamos **Sentry** (reportes de errores) y **PostHog** (analítica de producto). Registran acciones como iniciar sesión, crear una carta, generar una lectura, descargarla o completar una compra, junto con el identificador interno de tu cuenta. **Nunca les enviamos tu nombre, tu fecha, hora o lugar de nacimiento, ni el texto de tus lecturas**, y tampoco tu email. Tu dirección IP se usa únicamente para deducir el país desde el que entrás y no se almacena. En el sitio web la analítica sólo se activa si la aceptás, y podés cambiar de opinión cuando quieras desde el enlace del pie de página. **El registro de una compra completada es la excepción: lo hace nuestro servidor cuando el pago se confirma, así que no depende de esa preferencia.** Es un dato de la operación —qué producto y por cuánto—, no de tu navegación, y viaja igual que el resto: con el identificador interno de tu cuenta y sin tu email. Ambos servicios procesan estos datos en Estados Unidos.",
+          "**Contar las visitas, sin cookies.** Cuando calculás una carta, nuestro servidor suma uno a un contador del día y anota por qué canal llegaste (por ejemplo, un anuncio o un buscador) y la zona horaria de tu navegador, reducida a una ciudad de referencia. Son totales por día sin nada que te identifique: no guardamos tu IP ni la página de la que venías, y no se asocian a tu cuenta.",
         ],
       },
       {
@@ -43,7 +44,7 @@ export const legalEs: LegalContent = {
       { kind: "h2", text: "Borrado de tus datos" },
       {
         kind: "p",
-        text: "Podés borrar tus cartas o tu cuenta completa desde tu cuenta (Cuenta → Borrar mis datos). El borrado es definitivo: elimina tus datos personales, tus cartas, tus lecturas y lo que tengas disponible para leer. Conservamos únicamente un **hash irreversible** del identificador de tu proveedor de login — no permite identificarte ni recuperar tus datos; sólo evita que una cuenta nueva vuelva a recibir las lecturas gratuitas de bienvenida.",
+        text: "Podés borrar tus cartas o tu cuenta completa desde tu cuenta (Cuenta → Borrar mis datos). El borrado es definitivo: elimina tus datos personales, tus cartas, tus lecturas y lo que tengas disponible para leer. Conservamos únicamente un **hash irreversible** del identificador de tu proveedor de login — no permite identificarte ni recuperar tus datos; sólo evita que se repita un regalo de bienvenida, si lo hubiera.",
       },
       { kind: "h2", text: "Seguridad y retención" },
       {
@@ -70,13 +71,13 @@ export const legalEs: LegalContent = {
       { kind: "h2", text: "Cuenta" },
       {
         kind: "p",
-        text: "Para usar ASTRA necesitás una cuenta de Google y ser mayor de 13 años. Sos responsable del uso que se haga desde tu cuenta.",
+        text: "Podés calcular y ver tu carta natal sin cuenta. Para guardar tus cartas y ver tus informes necesitás una cuenta, con Google o con tu mail. Para usar ASTRA tenés que ser mayor de 13 años. Sos responsable del uso que se haga desde tu cuenta.",
       },
       { kind: "h2", text: "Compras" },
       {
         kind: "ul",
         items: [
-          "Cada cuenta nueva recibe **lecturas breves de regalo**, en la cantidad que indica la página de precios. El informe completo de una carta se compra aparte.",
+          "La carta natal se calcula sin costo y sin cuenta. El informe completo de una carta se compra aparte.",
           "Lo que compras es el derecho a leer un informe: **no vence**, no es transferible y no tiene valor monetario fuera de ASTRA. Leer ese mismo informe en otro idioma no consume otro.",
           "El cobro lo procesa **Stripe**, que actúa como vendedor registrado (*merchant of record*): emite el comprobante, cobra el impuesto que corresponda a tu país y atiende los reclamos de la transacción.",
           "**Reembolsos:** Stripe puede reembolsar una compra dentro de los 60 días y aplica los plazos de arrepentimiento que exija tu país. Si te reembolsan una compra, se descuenta de los informes que tengas disponibles; si ya los usaste, queda como saldo pendiente que se cancela contra tu próxima compra. **Nunca retiramos un informe ya escrito.**",

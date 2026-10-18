@@ -240,7 +240,12 @@ def resolver_cuenta(vid: VerifiedIdentity, _reintento: bool = True) -> tuple[Acc
 def _create_account(vid: VerifiedIdentity) -> tuple[Account, bool]:
     tomb = SubTombstone.objects.filter(sub_hash=sub_hash(vid.provider, vid.sub)).first()
     consumed = tomb.free_credits_consumed if tomb else 0
-    free = max(0, settings.INSTALL_FREE_CREDITS - consumed)
+    # Con la breve gratis apagada no hay regalo. El tombstone no se toca: si
+    # esta cuenta se borra, `free_consumidas` la anota como regalo consumido.
+    if settings.LECTURA_BREVE_GRATIS_ENABLED:
+        free = max(0, settings.INSTALL_FREE_CREDITS - consumed)
+    else:
+        free = 0
     try:
         # El INSERT de ProviderIdentity puede colisionar con un login paralelo
         # del mismo sub. Atomic = si colisiona, se revierte la Account recien

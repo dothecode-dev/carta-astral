@@ -36,6 +36,21 @@ def frase(cuerpo: str, signo: str, lang: str) -> str:
     return _FRASES[lang][f"{cuerpo}|{signo}"]
 
 
+def signos_de(data: dict) -> dict[str, str]:
+    """Cuerpo → signo del `data` serializado de una carta. Los ángulos sólo con
+    hora: sin ella `angles` no trae un Ascendente que afirmar."""
+    signos = {p["name"]: p["sign"] for p in data.get("placements") or []}
+    if data.get("time_known") and data.get("angles"):
+        signos.update({a["name"]: a["sign"] for a in data["angles"]})
+    return signos
+
+
+def luna_dudosa(data: dict) -> bool:
+    """Sin hora, ¿la Luna cambia de signo en el día? Entonces no se afirma: ni
+    en la firma ni en el teaser (y el informe recibe los dos signos)."""
+    return bool((data.get("flags") or {}).get("moon_sign_uncertain"))
+
+
 def firma(data: dict) -> list[dict]:
     """Las líneas de la firma para el `data` serializado de una carta.
 
@@ -45,9 +60,9 @@ def firma(data: dict) -> list[dict]:
     """
     # `data` puede venir vacío (filas viejas, fixtures): sin cuerpos no hay
     # firma, y eso no puede ser un 500 en el detalle ni en el listado.
-    signos = {p["name"]: p["sign"] for p in data.get("placements") or []}
-    if data.get("time_known") and data.get("angles"):
-        signos.update({a["name"]: a["sign"] for a in data["angles"]})
+    signos = signos_de(data)
+    if luna_dudosa(data):
+        signos.pop("Moon", None)
     return [
         {
             "cuerpo": cuerpo,

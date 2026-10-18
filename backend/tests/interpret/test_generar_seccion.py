@@ -198,3 +198,27 @@ def test_sin_reparto_no_se_agrega_nada():
     c = ClienteFalso()
     build_seccion({"planets": []}, SECCIONES[1], "es", "", c)
     assert "TE TOCA EXPLICAR" not in c.llamadas[0]["messages"][0]["content"]
+
+
+def test_la_seccion_de_una_luna_dudosa_pide_no_afirmar_el_signo():
+    carta = {
+        "time_known": False, "placements": [],
+        "flags": {"moon_sign_uncertain": True, "moon_sign_options": ["Leo", "Vir"]},
+    }
+    cliente = ClienteFalso()
+    build_seccion(carta, SECCIONES[0], "es", "", cliente)
+    contenido = cliente.llamadas[0]["messages"][0]["content"]
+    # La nota va después del JSON de la carta, no adentro.
+    cola = contenido.rsplit("}", 1)[-1]
+    assert "Leo" in cola and "Vir" in cola
+
+
+def test_la_seccion_de_una_luna_dudosa_no_manda_su_signo_en_el_json():
+    carta = {
+        "time_known": False,
+        "placements": [{"name": "Moon", "sign": "Leo", "position": 29.5, "abs_pos": 149.5}],
+        "flags": {"moon_sign_uncertain": True, "moon_sign_options": ["Leo", "Vir"]},
+    }
+    cliente = ClienteFalso()
+    build_seccion(carta, SECCIONES[0], "es", "", cliente)
+    assert '"position": 29.5' not in cliente.llamadas[0]["messages"][0]["content"]

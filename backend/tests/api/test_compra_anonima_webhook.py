@@ -26,6 +26,14 @@ from tests.api.conftest import PI_ANONIMA, SESSION_ANONIMA, con_mail, sesion_ano
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture
+def breve_gratis_prendida(settings):
+    """Prende el regalo de bienvenida sólo para los tests que lo afirman:
+    `LECTURA_BREVE_GRATIS_ENABLED` viene apagado, como en producción, y el
+    resto del módulo corre así."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def _entrar_por_codigo(client, email):
     """El login por código de hoy (`test_codigo_endpoints`): la cuenta en la
     que cae quien prueba que el mail es suyo."""
@@ -57,6 +65,7 @@ def test_mail_nuevo_crea_cuenta_sin_verificar_y_le_pasa_la_carta(entregar_anonim
     assert len(sin_hilo) == 1
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_la_cuenta_creada_recibe_el_regalo_de_bienvenida_como_cualquier_alta(
     entregar_anonima, anonima, sin_hilo,
 ):
@@ -70,6 +79,32 @@ def test_la_cuenta_creada_recibe_el_regalo_de_bienvenida_como_cualquier_alta(
     assert Movimiento.objects.filter(account=cuenta, external_id=f"bienvenida:{cuenta.pk}").count() == 1
 
 
+def test_con_la_breve_gratis_apagada_la_cuenta_nace_sin_regalo_y_recibe_lo_comprado(
+    settings, entregar_anonima, anonima, sin_hilo,
+):
+    """`LECTURA_BREVE_GRATIS_ENABLED` en 0, como en producción: la cuenta que
+    crea la compra no recibe la breve de regalo, pero lo pagado se acredita y
+    se entrega igual —la carta pasa a la cuenta y el informe arranca—."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = False
+
+    assert entregar_anonima(con_mail("sinregalo@mail.com")).status_code == 200
+
+    anonima.refresh_from_db()
+    cuenta = anonima.account
+    assert cuenta is not None and anonima.cuenta_nueva is True
+    assert anonima.acreditado_at is not None
+    # Sin regalo: ni derecho ni movimiento de bienvenida.
+    assert not Derecho.objects.filter(account=cuenta, codigo_producto="lectura_breve").exists()
+    assert not Movimiento.objects.filter(account=cuenta, codigo_producto="lectura_breve").exists()
+    # Lo comprado: acreditado (+1) y canjeado contra la carta (-1).
+    compra = Movimiento.objects.filter(account=cuenta, codigo_producto="informe_natal")
+    assert sorted(compra.values_list("cantidad", flat=True)) == [-1, 1]
+    assert _restante(cuenta, "informe_natal") == 0
+    assert Chart.objects.get(pk=anonima.sujeto.natal_de_id).account == cuenta
+    assert len(sin_hilo) == 1
+
+
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_el_tombstone_descuenta_el_regalo_de_una_cuenta_borrada(entregar_anonima, anonima, sin_hilo):
     SubTombstone.objects.create(
         sub_hash=sub_hash("email", "volvio@mail.com"),
@@ -83,6 +118,7 @@ def test_el_tombstone_descuenta_el_regalo_de_una_cuenta_borrada(entregar_anonima
     assert not Movimiento.objects.filter(external_id=f"bienvenida:{anonima.account.pk}").exists()
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_cuenta_verificada_sin_identidad_recibe_la_compra_y_la_identidad(
     client, entregar_anonima, anonima, make_account, sin_hilo,
 ):

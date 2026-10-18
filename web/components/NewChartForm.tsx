@@ -10,8 +10,8 @@ import { PlaceField } from "@/components/PlaceField";
 import type { CartaDibujable } from "@/lib/chart";
 import { armarDatosCarta, errorDeFecha, TRATOS, type DatosCarta, type Trato } from "@/lib/datosCarta";
 import type { Dict, Locale } from "@/lib/i18n";
-import { leerLectura, type LecturaGuardada } from "@/lib/lecturaLocal";
-import { useLecturaAnonima } from "@/components/useLecturaAnonima";
+import { limpiarRestosDeLectura } from "@/lib/lecturaLocal";
+import { leerProcedencia } from "@/lib/procedencia";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
 // es el único que sabe de efemérides. Lo único que resuelve acá es que no se
@@ -37,12 +37,6 @@ const TRATO_CLAVE = {
 function destinoDe(locale: Locale, id: string | undefined): string {
   if (!id) return `/${locale}/cuenta`;
   return `/${locale}/carta/${id}`;
-}
-
-/** De quién es una lectura guardada, para el botón de «verla»: el nombre que
- *  puso o, si no puso, la fecha de nacimiento. */
-function quienDe(datos: DatosCarta): string {
-  return datos.name || datos.date;
 }
 
 async function motivoDe(res: Response): Promise<string | null> {
@@ -81,19 +75,9 @@ export function NewChartForm({
   const [comprando, setComprando] = useState(false);
   const [errorCompra, setErrorCompra] = useState<string | null>(null);
   const datos = useRef<DatosCarta | null>(null);
-  const lectura = useLecturaAnonima();
-  // La lectura breve guardada en este navegador (RF8). Se lee en un efecto:
-  // `localStorage` no existe en el servidor y leerlo en el render rompería la
-  // hidratación. Se relee cada vez que el hook guarda una —también la que
-  // termina de fondo después de que la persona volvió al formulario—, así
-  // «Ver tu lectura de …» aparece sin recargar.
-  const [guardada, setGuardada] = useState<LecturaGuardada | null>(null);
-  const { guardadas } = lectura;
-  useEffect(() => {
-    if (signedIn) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setGuardada(leerLectura());
-  }, [signedIn, guardadas]);
+
+  // La lectura anónima ya no existe: se van los datos de nacimiento que dejó.
+  useEffect(limpiarRestosDeLectura, []);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -117,7 +101,9 @@ export function NewChartForm({
     const res = await fetch(signedIn ? "/api/charts" : "/api/charts/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cuerpo),
+      // De dónde llegó la visita: el servidor la reduce a canal y lugar y la
+      // cuenta, sin guardar nada de la persona (lib/procedencia).
+      body: JSON.stringify({ ...cuerpo, procedencia: leerProcedencia() }),
     });
 
     if (!res.ok) {
@@ -133,8 +119,15 @@ export function NewChartForm({
 
     if (!signedIn) {
       datos.current = cuerpo;
-      setPreview((await res.json()) as CartaDibujable);
+      const carta = (await res.json()) as CartaDibujable;
+      setPreview(carta);
       setSending(false);
+      // Una vez por carta calculada, cuando el teaser llega a la pantalla
+      // (RF10). Es el denominador de «checkout_iniciado / carta». Sin teaser
+      // (un backend viejo) no hay nada visto que medir.
+      if (carta.teaser) {
+        track("teaser_visto", { con_hora: cuerpo.time_known, secciones: carta.teaser.informe.secciones });
+      }
       return;
     }
 
@@ -144,12 +137,6 @@ export function NewChartForm({
     const chart: { id?: string } = await res.json();
     router.replace(destinoDe(locale, chart.id));
     router.refresh();
-  }
-
-  /** Quiere la lectura: se escribe acá mismo, sin cuenta (spec 2026-10-08). */
-  function pedirLectura() {
-    if (!datos.current || !preview) return;
-    void lectura.pedir(datos.current, preview, locale);
   }
 
   /** Paga el informe sin crear cuenta antes (pagar es entrar): la carta de la
@@ -194,12 +181,7 @@ export function NewChartForm({
         carta={preview}
         dict={dict}
         locale={locale}
-        lectura={lectura.estado}
-        onPedirLectura={pedirLectura}
-        onReintentar={pedirLectura}
         onVolver={() => {
-          lectura.reiniciar();
-          if (!signedIn) setGuardada(leerLectura());
           setPreview(null);
           setErrorCompra(null);
         }}
@@ -213,22 +195,6 @@ export function NewChartForm({
 
   return (
     <form className="form" onSubmit={submit} noValidate>
-      {guardada && !signedIn && (
-        <button
-          type="button"
-          className="btn btnGhost"
-          onClick={() => {
-            // Sin esto el botón de comprar de la vista reabierta no tendría
-            // con qué abrir el checkout.
-            datos.current = guardada.datos;
-            setPreview(guardada.carta);
-            lectura.mostrar(guardada);
-          }}
-        >
-          {t.lecturaVerAnterior.replace("{quien}", quienDe(guardada.datos))}
-        </button>
-      )}
-
       <div className="field">
         <label className="fieldLabel" htmlFor="chart-name">
           {t.name}

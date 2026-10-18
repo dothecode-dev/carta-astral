@@ -21,6 +21,14 @@ from api.sso import VerifiedIdentity
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture
+def breve_gratis_prendida(settings):
+    """Prende el regalo de bienvenida sólo para los tests que lo afirman:
+    `LECTURA_BREVE_GRATIS_ENABLED` viene apagado, como en producción, y el
+    resto del módulo corre así."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def identidad_mail(email):
     return VerifiedIdentity(provider="email", sub=email, email=email, email_verified=True)
 
@@ -29,6 +37,7 @@ def identidad_google(email, sub="sub-de-google"):
     return VerifiedIdentity(provider="google", sub=sub, email=email, email_verified=True)
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_google_con_mayusculas_y_mail_en_minusculas_caen_en_la_misma_cuenta():
     """El caso medido por el revisor: Workspace le manda el claim con casing
     mixto a Google, la persona después entra por mail en minúsculas."""
@@ -40,6 +49,7 @@ def test_google_con_mayusculas_y_mail_en_minusculas_caen_en_la_misma_cuenta():
     assert Movimiento.objects.filter(account=por_google, origen="regalo").count() == 1
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_mail_en_minusculas_primero_y_google_con_mayusculas_despues_caen_en_la_misma_cuenta():
     """El caso inverso: se registra por mail y vuelve por Google con otro casing."""
     por_mail = resolve_account(identidad_mail("juan@gmail.com"))

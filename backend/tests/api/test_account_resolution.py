@@ -5,6 +5,14 @@ from django.conf import settings
 from api.sso import VerifiedIdentity
 
 
+@pytest.fixture
+def breve_gratis_prendida(settings):
+    """Prende el regalo de bienvenida sólo para los tests que lo afirman:
+    `LECTURA_BREVE_GRATIS_ENABLED` viene apagado, como en producción, y el
+    resto del módulo corre así."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def _vid(provider="apple", sub="S", email="u@x.com", verified=True):
     return VerifiedIdentity(provider=provider, sub=sub, email=email, email_verified=verified)
 
@@ -28,6 +36,7 @@ def test_links_by_verified_email_across_providers():
     assert apple.identities.count() == 2
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 def test_new_sub_with_tombstone_starts_without_free():
     from api.accounts import resolve_account
@@ -70,6 +79,7 @@ def test_concurrent_create_of_same_new_sub_does_not_duplicate():
     assert Account.objects.count() == 1  # nuestro intento se rollbackeo, sin huerfana
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 @pytest.mark.django_db
 def test_new_sub_without_tombstone_gets_free_grant():
     """El alta regala lecturas breves y lo anota UNA vez.

@@ -201,3 +201,69 @@ def test_la_generacion_no_manda_thinking():
     build_interpretation(CHART, "es", "v1", client)
     build_seccion({"time_known": True}, SECCIONES[0], "es", "", client)
     assert all("thinking" not in c for c in client.calls)
+
+
+CHART_LUNA_DUDOSA = {
+    "time_known": False, "placements": [],
+    "flags": {"moon_sign_uncertain": True, "moon_sign_options": ["Leo", "Vir"]},
+}
+
+
+@pytest.mark.parametrize("lang", ["es", "en", "pt"])
+def test_luna_dudosa_pide_no_afirmar_el_signo(lang):
+    client = FakeClient()
+    build_interpretation(CHART_LUNA_DUDOSA, lang, "v1", client)
+    user_content = client.calls[0]["messages"][0]["content"]
+    # La nota va después del JSON de la carta, no adentro.
+    cola = user_content.rsplit("}", 1)[-1]
+    assert "Leo" in cola and "Vir" in cola
+
+
+def test_luna_estable_no_agrega_la_nota():
+    client = FakeClient()
+    build_interpretation(CHART_NO_TIME, "es", "v1", client)
+    assert "Vir" not in client.calls[0]["messages"][0]["content"]
+
+
+@pytest.mark.parametrize("lang,palabra", [("es", "Luna"), ("en", "Moon"), ("pt", "Lua")])
+def test_luna_dudosa_sin_opciones_igual_pide_no_afirmar_el_signo(lang, palabra):
+    # Un lugar sin zona horaria (mar abierto): dudosa, sin los dos signos.
+    carta = {"time_known": False, "placements": [], "flags": {"moon_sign_uncertain": True, "moon_sign_options": []}}
+    client = FakeClient()
+    build_interpretation(carta, lang, "v1", client)
+    cola = client.calls[0]["messages"][0]["content"].rsplit("}", 1)[-1]
+    assert palabra in cola
+
+
+def test_con_luna_dudosa_el_json_del_prompt_no_trae_un_signo_de_luna():
+    import json
+
+    from interpret.generator import carta_para_prompt
+
+    carta = {
+        "time_known": False,
+        "placements": [
+            {"name": "Sun", "sign": "Pis", "position": 11.0, "abs_pos": 341.0},
+            {"name": "Moon", "sign": "Leo", "position": 29.5, "abs_pos": 149.5},
+        ],
+        "flags": {"moon_sign_uncertain": True, "moon_sign_options": ["Leo", "Vir"]},
+    }
+    limpia = carta_para_prompt(carta)
+    luna = next(p for p in limpia["placements"] if p["name"] == "Moon")
+    assert luna["sign"] is None and luna["sign_options"] == ["Leo", "Vir"]
+    assert "position" not in luna and "abs_pos" not in luna
+    # El Sol no se toca, y el original tampoco.
+    assert limpia["placements"][0] == carta["placements"][0]
+    assert carta["placements"][1]["sign"] == "Leo"
+
+    client = FakeClient()
+    build_interpretation(carta, "es", "v1", client)
+    cuerpo = client.calls[0]["messages"][0]["content"]
+    assert '"sign": "Leo", "position": 29.5' not in cuerpo
+    assert json.dumps(luna, ensure_ascii=False) in cuerpo
+
+
+def test_sin_luna_dudosa_la_carta_del_prompt_es_la_misma():
+    from interpret.generator import carta_para_prompt
+
+    assert carta_para_prompt(CHART_NO_TIME) == CHART_NO_TIME

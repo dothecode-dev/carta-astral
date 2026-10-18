@@ -7,6 +7,7 @@ cuando el pedido va a escribir (spec 2026-10-08, RF13).
 import logging
 import re
 
+from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -34,6 +35,11 @@ _RESPUESTAS = {
 }
 
 
+# Con `LECTURA_BREVE_GRATIS_ENABLED` apagado el endpoint no existe: 404 antes
+# de tocar el cupo, el throttle, la caché o el LLM.
+_APAGADA = {"error": "no hay lectura gratis", "motivo": "apagada"}
+
+
 class LecturaAnonimaView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -41,6 +47,8 @@ class LecturaAnonimaView(APIView):
     throttle_scope = "lectura_anonima"
 
     def post(self, request):
+        if not settings.LECTURA_BREVE_GRATIS_ENABLED:
+            return Response(_APAGADA, status=status.HTTP_404_NOT_FOUND)
         datos = request.data if isinstance(request.data, dict) else {}
         lang = datos.get("lang")
         try:
@@ -70,6 +78,8 @@ class LecturaAnonimaView(APIView):
         return Response({"token": pedido.token, "estado": pedido.estado}, status=status.HTTP_202_ACCEPTED)
 
     def get(self, request):
+        if not settings.LECTURA_BREVE_GRATIS_ENABLED:
+            return Response(_APAGADA, status=status.HTTP_404_NOT_FOUND)
         token = request.headers.get("X-Lectura-Token")
         resultado = lectura_anonima.estado(token) if token else None
         if resultado is None:
@@ -78,7 +88,12 @@ class LecturaAnonimaView(APIView):
 
     def delete(self, request):
         """El acuse de recibo (spec §11): la web ya guardó la lectura `lista` y
-        pide borrarla. `pedido` va en la query o en el cuerpo."""
+        pide borrarla. `pedido` va en la query o en el cuerpo.
+
+        Con el flag apagado también da 404: no puede haber lectura que acusar
+        (el GET ya no la entrega), y lo que quedara en la caché vence solo."""
+        if not settings.LECTURA_BREVE_GRATIS_ENABLED:
+            return Response(_APAGADA, status=status.HTTP_404_NOT_FOUND)
         datos = request.data if isinstance(request.data, dict) else {}
         pedido_id = request.query_params.get("pedido") or datos.get("pedido")
         if not isinstance(pedido_id, str) or not _PEDIDO.fullmatch(pedido_id):

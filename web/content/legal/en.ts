@@ -21,7 +21,7 @@ export const legalEn: LegalContent = {
           "**Birth data:** what you enter to compute a chart — name (optional), date, time and place of birth.",
           "**Purchases:** payments are processed by **Stripe**, acting as merchant of record. We never see or store your card details: from Stripe we receive the payment confirmation and the purchase identifier, so we can give you access to what you bought.",
           "**Buying without an account:** if you open the payment for the report without signing in, we store that chart's data so we can deliver the report once the payment is confirmed. If the payment isn't completed, the chart is deleted when the checkout expires (one hour after opening it). You enter your email in **Stripe**, which passes it to us when the payment is confirmed: we use it to create your account, or to credit the purchase to the account you already had with that email, and to send you the access code.",
-          "**Reading without an account:** to write your short reading without an account we use your birth details at that moment and don't store them on our servers. The reading stays on our server only until your browser receives it (15 minutes at most). After that, the reading and your chart details stay only in your browser for 24 hours, so you can see it again or buy the full report. To keep the free reading to one per browser, we store for 24 hours a marker that contains no personal data.",
+          "**Chart without an account:** to show you your chart without an account we use your birth details at that moment and don't store them on our servers. If you then buy the report, see «Buying without an account» above.",
         ],
       },
       { kind: "h2", text: "How we use it" },
@@ -33,6 +33,7 @@ export const legalEn: LegalContent = {
           "To keep track of the reports you have available to read.",
           "To send you those emails: they are delivered by **Resend**, an email delivery provider that processes them on our behalf and only to deliver them to you.",
           "**To detect failures and understand how the site is used.** We use **Sentry** (error reporting) and **PostHog** (product analytics). They record actions such as signing in, creating a chart, generating a reading, downloading it or completing a purchase, along with your internal account identifier. **We never send them your name, your birth date, time or place, or the text of your readings**, nor your email. Your IP address is used only to infer the country you are visiting from and is not stored. On the website analytics only run if you accept them, and you can change your mind at any time from the link in the footer. **Recording a completed purchase is the exception: our server does it when the payment is confirmed, so it does not depend on that preference.** It is data about the transaction —which product and for how much—, not about your browsing, and it travels like the rest: with your internal account identifier and without your email. Both services process this data in the United States.",
+          "**Counting visits, without cookies.** When you calculate a chart, our server adds one to a daily counter and records which channel you came from (for example, an ad or a search engine) and your browser's time zone, reduced to a reference city. These are daily totals with nothing that identifies you: we do not store your IP or the page you came from, and they are not linked to your account.",
         ],
       },
       {
@@ -42,7 +43,7 @@ export const legalEn: LegalContent = {
       { kind: "h2", text: "Deleting your data" },
       {
         kind: "p",
-        text: "You can delete your charts or your entire account from your account page (Account → Delete my data). Deletion is permanent: it removes your personal data, your charts, your readings and whatever you have available to read. We keep only an **irreversible hash** of your login provider identifier — it cannot identify you or recover your data; it only prevents a new account from receiving the free welcome readings again.",
+        text: "You can delete your charts or your entire account from your account page (Account → Delete my data). Deletion is permanent: it removes your personal data, your charts, your readings and whatever you have available to read. We keep only an **irreversible hash** of your login provider identifier — it cannot identify you or recover your data; it only prevents a welcome gift from being repeated, if there is one.",
       },
       { kind: "h2", text: "Security and retention" },
       {
@@ -69,13 +70,13 @@ export const legalEn: LegalContent = {
       { kind: "h2", text: "Account" },
       {
         kind: "p",
-        text: "Using ASTRA requires a Google account and being at least 13 years old. You are responsible for activity on your account.",
+        text: "You can calculate and see your birth chart without an account. To save your charts and see your reports you need an account, with Google or with your email. To use ASTRA you must be at least 13 years old. You are responsible for activity on your account.",
       },
       { kind: "h2", text: "Purchases" },
       {
         kind: "ul",
         items: [
-          "Each new account gets **free short readings**, in the amount shown on the pricing page. The full report for a chart is a separate purchase.",
+          "Your birth chart is calculated at no cost and without an account. The full report for a chart is a separate purchase.",
           "What you buy is the right to read a report: it **never expires**, is not transferable and has no monetary value outside ASTRA. Reading that same report in another language doesn't consume another one.",
           "Payment is processed by **Stripe**, acting as *merchant of record*: it issues the receipt, collects any tax due in your country and handles transaction enquiries.",
           "**Refunds:** Stripe may refund a purchase within 60 days and applies the cooling-off periods your country requires. If a purchase is refunded, it is deducted from the reports you have available; if you already used them, it stays as an outstanding balance settled against your next purchase. **We never take back a report that has already been written.**",

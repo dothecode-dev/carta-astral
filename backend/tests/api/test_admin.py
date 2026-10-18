@@ -17,6 +17,7 @@ from api.models import (
     Account,
     BirthData,
     Chart,
+    ConteoDiario,
     CreditTransaction,
     Cupon,
     CuponUso,
@@ -60,7 +61,7 @@ def admin_montado(monkeypatch):
 @pytest.mark.parametrize(
     "modelo", [
         Account, Chart, Interpretation, CreditTransaction, Derecho, Movimiento, CuponUso,
-        PasarelaCheckout,
+        PasarelaCheckout, ConteoDiario,
     ],
 )
 def test_ningun_modelo_se_puede_crear_editar_ni_borrar(modelo):
@@ -323,3 +324,39 @@ def test_el_listado_de_cartas_cuenta_lecturas_sin_crear_sujetos(admin_montado):
     filas = {f.uuid: f for f in r.context["cl"].result_list}
     assert filas[con_lecturas.uuid].n_lecturas == 2
     assert filas[sin_sujeto.uuid].n_lecturas == 0
+
+
+@pytest.mark.django_db
+@sin_manifiesto
+def test_el_conteo_diario_muestra_el_grafico_arriba_de_la_tabla(admin_montado):
+    from django.utils import timezone
+
+    ConteoDiario.objects.create(fecha=timezone.now().date(), evento="carta_calculada", cantidad=5)
+    staff = User.objects.create_superuser("staff9", "s9@x.com", "pw-de-test-12345")
+    c = Client()
+    c.force_login(staff)
+
+    cuerpo = c.get("/panel-test/api/conteodiario/").content.decode()
+
+    assert "<svg" in cuerpo and "Cartas calculadas" in cuerpo
+    assert cuerpo.index("<svg") < cuerpo.index("result_list")
+
+
+@pytest.mark.django_db
+@sin_manifiesto
+def test_el_conteo_diario_muestra_canal_y_lugar(admin_montado):
+    from django.utils import timezone
+
+    from api.models import ConteoProcedencia
+
+    hoy = timezone.now().date()
+    ConteoProcedencia.objects.create(fecha=hoy, tipo="canal", valor="google_ads", cantidad=4)
+    ConteoProcedencia.objects.create(fecha=hoy, tipo="lugar", valor="Bogotá", cantidad=2)
+    staff = User.objects.create_superuser("staff10", "s10@x.com", "pw-de-test-12345")
+    c = Client()
+    c.force_login(staff)
+
+    cuerpo = c.get("/panel-test/api/conteodiario/").content.decode()
+
+    assert "Por canal" in cuerpo and "Google Ads" in cuerpo
+    assert "Por lugar" in cuerpo and "Bogotá" in cuerpo

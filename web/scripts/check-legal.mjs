@@ -28,7 +28,8 @@ const REQUIRED = {
     ["vendedor registrado", "quién factura y cobra el impuesto frente al comprador"],
     ["Reembolsos", "Stripe puede reembolsar por su cuenta: la política tiene que estar escrita"],
     ["sin cuenta", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
-    ["Lectura sin cuenta:", "la política documenta qué se guarda al escribir la lectura breve sin cuenta"],
+    ["Carta sin cuenta:", "la política documenta qué se guarda al mostrar la carta sin cuenta"],
+    ["Contar las visitas, sin cookies", "el conteo propio del servidor: canal y zona horaria agregados"],
   ],
   "en.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
@@ -44,7 +45,8 @@ const REQUIRED = {
     ["merchant of record", "quién factura y cobra el impuesto frente al comprador"],
     ["Refunds", "Stripe puede reembolsar por su cuenta: la política tiene que estar escrita"],
     ["without an account", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
-    ["Reading without an account:", "la política documenta qué se guarda al escribir la lectura breve sin cuenta"],
+    ["Chart without an account:", "la política documenta qué se guarda al mostrar la carta sin cuenta"],
+    ["Counting visits, without cookies", "el conteo propio del servidor: canal y zona horaria agregados"],
   ],
   "pt.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
@@ -60,7 +62,8 @@ const REQUIRED = {
     ["vendedora registrada", "quién factura y cobra el impuesto frente al comprador"],
     ["Reembolsos", "a Stripe pode reembolsar por conta própria: a política tem que estar escrita"],
     ["sem conta", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
-    ["Leitura sem conta:", "la política documenta qué se guarda al escribir la lectura breve sin cuenta"],
+    ["Mapa sem conta:", "la política documenta qué se guarda al mostrar la carta sin cuenta"],
+    ["Contar as visitas, sem cookies", "el conteo propio del servidor: canal y zona horaria agregados"],
   ],
 };
 

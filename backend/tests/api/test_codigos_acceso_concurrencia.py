@@ -33,6 +33,14 @@ from tests.api.concurrencia import en_hilos, requiere_postgres
 pytestmark = [pytest.mark.django_db(transaction=True), requiere_postgres]
 
 
+@pytest.fixture
+def breve_gratis_prendida(settings):
+    """Prende el regalo de bienvenida sólo para los tests que lo afirman:
+    `LECTURA_BREVE_GRATIS_ENABLED` viene apagado, como en producción, y el
+    resto del módulo corre así."""
+    settings.LECTURA_BREVE_GRATIS_ENABLED = True
+
+
 def test_dos_pedidos_casi_a_la_vez_sin_codigo_previo_no_revientan():
     def pedir(_i):
         try:
@@ -56,6 +64,7 @@ def test_dos_pedidos_casi_a_la_vez_sin_codigo_previo_no_revientan():
     # cuál de los dos hilos "ve" al otro primero no está definido.
 
 
+@pytest.mark.usefixtures("breve_gratis_prendida")
 def test_dos_pestanas_canjeando_el_mismo_codigo_por_http_dejan_una_sola_cuenta_y_un_solo_regalo():
     _, claro, _ = codigos_acceso.pedir("juan@gmail.com")
 

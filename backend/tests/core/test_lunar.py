@@ -142,3 +142,159 @@ def test_justo_antes_de_una_fase_la_proxima_es_esa(phase, fase, antes):
 
     # USNO redondea al minuto.
     assert abs((found - fase).total_seconds()) <= 60
+
+
+# --- Luna de signo dudoso en cartas sin hora -------------------------------
+
+BUENOS_AIRES = (-34.6, -58.4)
+SAO_PAULO = (-23.55, -46.63)
+
+
+def _nacimiento(dia: datetime.date, lugar: tuple[float, float], *, con_hora: bool = False):
+    from core.models import BirthInput
+
+    return BirthInput(
+        name=None, date=dia,
+        time=datetime.time(12, 0) if con_hora else None,
+        time_known=con_hora, lat=lugar[0], lng=lugar[1],
+    )
+
+
+def test_sin_hora_luna_que_cambia_de_signo_ese_dia_es_dudosa():
+    from core.ephemeris import build_chart
+
+    # 2026-03-02 en Buenos Aires: la Luna pasa de Leo (24,6°) a Virgo (8,1°)
+    # entre las 00:00 y las 23:59 locales (buscado con sky_now).
+    chart = build_chart(_nacimiento(datetime.date(2026, 3, 2), BUENOS_AIRES))
+
+    assert chart.flags.moon_sign_uncertain is True
+
+
+def test_sin_hora_luna_estable_no_es_dudosa():
+    from core.ephemeris import build_chart
+
+    # 2026-03-05 en Buenos Aires: la Luna va de Libra 4° a Libra 17° todo el día.
+    chart = build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
+
+    assert chart.flags.moon_sign_uncertain is False
+
+
+def test_con_hora_nunca_es_dudosa():
+    from core.ephemeris import build_chart
+
+    # Mismo día que el primer test, donde la Luna sí cambia de signo.
+    chart = build_chart(_nacimiento(datetime.date(2026, 3, 2), BUENOS_AIRES, con_hora=True))
+
+    assert chart.flags.moon_sign_uncertain is False
+
+
+def test_dia_sin_medianoche_no_levanta():
+    from core.ephemeris import build_chart
+
+    # En São Paulo el horario de verano 2018 arrancó el 04-11 a las 00:00: esa
+    # medianoche local no existe.
+    chart = build_chart(_nacimiento(datetime.date(2018, 11, 4), SAO_PAULO))
+
+    assert isinstance(chart.flags.moon_sign_uncertain, bool)
+
+
+@pytest.mark.parametrize(("dia", "tropical", "sidereo"), [
+    # Buenos Aires, 2026-03-06: la Luna cruza de signo sólo en el zodíaco
+    # sidéreo (el tropical la deja en Libra todo el día).
+    (datetime.date(2026, 3, 6), False, True),
+    # 2026-03-07: al revés, cruza a Escorpio en el tropical y no en el sidéreo.
+    (datetime.date(2026, 3, 7), True, False),
+])
+def test_sin_hora_luna_dudosa_respeta_el_zodiaco_de_la_carta(dia, tropical, sidereo):
+    import dataclasses
+
+    from core.ephemeris import build_chart
+
+    base = _nacimiento(dia, BUENOS_AIRES)
+    t = build_chart(dataclasses.replace(base, zodiac="Tropical"))
+    s = build_chart(dataclasses.replace(base, zodiac="Sidereal"))
+
+    assert t.flags.moon_sign_uncertain is tropical
+    assert s.flags.moon_sign_uncertain is sidereo
+
+
+AUCKLAND = (-36.85, 174.76)
+
+
+def test_sin_hora_la_luna_es_la_del_mediodia_local():
+    from core.ephemeris import build_chart
+
+    # 2026-01-16 en Auckland: la Luna está en Sagitario todo el día local,
+    # pero a las 12:00 UTC (las 01:00 del 17 allá) ya está en Capricornio.
+    # Calcular al mediodía UTC mostraba un signo que no tuvo ningún minuto
+    # del día de nacimiento (buscado con sky_now).
+    chart = build_chart(_nacimiento(datetime.date(2026, 1, 16), AUCKLAND))
+
+    luna = next(p for p in chart.placements if p.name == "Moon")
+    assert luna.sign == "Sag"
+    assert chart.flags.moon_sign_uncertain is False
+
+
+def test_sin_hora_dudosa_trae_los_dos_signos_posibles():
+    from core.ephemeris import build_chart
+
+    dudosa = build_chart(_nacimiento(datetime.date(2026, 3, 2), BUENOS_AIRES))
+    estable = build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
+
+    assert dudosa.flags.moon_sign_options == ("Leo", "Vir")
+    luna = next(p for p in dudosa.placements if p.name == "Moon")
+    assert luna.sign in dudosa.flags.moon_sign_options
+    assert estable.flags.moon_sign_options == ()
+
+
+def test_la_ventana_de_la_luna_dudosa_cubre_el_dia_entero(monkeypatch):
+    # El último minuto del día también cuenta: el segundo muestreo es la
+    # medianoche siguiente, no las 23:59.
+    import core.ephemeris as eph
+
+    vistos = []
+    original = eph.AstrologicalSubjectFactory.from_birth_data
+
+    def espia(*args, **kwargs):
+        if kwargs.get("name") == "Luna":
+            vistos.append((kwargs["day"], kwargs["hour"], kwargs["minute"]))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(eph.AstrologicalSubjectFactory, "from_birth_data", espia)
+    eph.build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
+
+    # Buenos Aires es UTC-3: 00:00 del 5 local = 03:00 UTC del 5, y 00:00
+    # del 6 local = 03:00 UTC del 6.
+    assert vistos == [(5, 3, 0), (6, 3, 0)]
+
+
+@pytest.mark.parametrize("zodiaco", ["Tropical", "Sidereal"])
+def test_el_signo_de_la_luna_liviana_es_el_de_la_carta_completa(zodiaco):
+    # El muestreo de la Luna dudosa calcula sólo la Luna; tiene que dar el
+    # mismo signo que la carta entera en el mismo instante, también cerca de
+    # un cambio de signo (2026-03-02 cruza de Leo a Virgo en Buenos Aires).
+    import dataclasses
+
+    from core.ephemeris import _signo_luna, build_chart
+
+    zona = datetime.timezone(datetime.timedelta(hours=-3))
+    for hora in range(0, 24, 2):
+        base = dataclasses.replace(
+            _nacimiento(datetime.date(2026, 3, 2), BUENOS_AIRES, con_hora=True),
+            time=datetime.time(hora, 0), zodiac=zodiaco,
+        )
+        completa = next(p.sign for p in build_chart(base).placements if p.name == "Moon")
+        momento = datetime.datetime.combine(base.date, base.time, tzinfo=zona)
+        assert _signo_luna(momento, base) == completa, hora
+
+
+def test_una_zona_que_tzdata_no_conoce_no_rompe_la_carta_sin_hora(monkeypatch):
+    # Si timezonefinder devuelve un nombre que el tzdata de la imagen todavía
+    # no tiene, la carta sin hora se calcula igual: como un lugar sin zona.
+    import core.ephemeris as eph
+
+    monkeypatch.setattr(eph, "resolve_tz", lambda lat, lng: "Atlantis/Capital")
+    chart = eph.build_chart(_nacimiento(datetime.date(2026, 3, 5), BUENOS_AIRES))
+
+    assert chart.flags.moon_sign_uncertain is True
+    assert chart.flags.moon_sign_options == ()

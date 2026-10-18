@@ -374,6 +374,15 @@ Reglas:
   vacío el 05-10-2026: hasta que junte historia, un cero es lo esperable y no
   hay que marcarlo. Sólo importa si aparece una consulta nueva o si Bing empieza
   a mostrar páginas que Google no.
+- `servidor` es el TOTAL real, contado en el backend sin cookies: cartas
+  calculadas, pagos abiertos y compras pagas, por día (UTC). `total` y `por_dia`
+  son los últimos 7 días completos; `hoy` es lo que va del día y está
+  incompleto: no lo compares con un día entero. Cuenta veces, no personas
+  (quien recalcula su carta suma de nuevo), así que no lo compares uno a uno
+  con las personas de PostHog. Es el número que manda para el volumen. Todo lo
+  de PostHog (`sitio`, `campanas`) es una muestra: sólo cuenta a quien aceptó
+  las cookies, más o menos un tercio. Usá PostHog para el comportamiento (de
+  dónde vienen, dónde se frenan). Que no coincidan es lo esperable.
 - `campanas` es lo que hizo la gente que entró por un anuncio pago de Google, por
   campaña (la actual, `medicion-oct26`, es una medición de tres semanas que
   termina el 26-10-2026): `ultimas_24h` y `acumulado` (30 días), con cuántas
@@ -475,10 +484,24 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
     sitio = datos.get("sitio") or {}
     seo = datos.get("busquedas") or {}
 
+    servidor = datos.get("servidor") or {}
+    total = servidor.get("total") or {}
+
+    # Veces, no personas: quien recalcula su carta suma de nuevo.
+    def _conteo(c: dict) -> str:
+        return (f"cartas calculadas: {c.get('carta_calculada', 0)} · "
+                f"pagos abiertos: {c.get('checkout_abierto', 0)} · "
+                f"compras pagas: {c.get('compra_pagada', 0)}")
+
     partes = [
         "<div style='font-family:system-ui,sans-serif;max-width:640px;line-height:1.5'>",
         f"<p style='white-space:pre-wrap'>{e(cuerpo)}</p>",
         "<hr>",
+        tabla(f"Total real (servidor, sin cookies, últimos {servidor.get('dias', 7)} días)", [
+            f"<b>{_conteo(total)}</b>",
+            f"hoy hasta ahora (parcial): {_conteo(servidor.get('hoy') or {})}",
+            *[f"{e(dia)}: {_conteo(c)}" for dia, c in (servidor.get("por_dia") or {}).items()],
+        ]) if servidor else "",
         tabla("En el sitio (últimas 24 h)", [
             f"{e(ev['evento'])}: {ev['personas']} personas ({ev['veces']} veces)"
             for ev in sitio.get("eventos", [])
@@ -576,7 +599,11 @@ def juntar_fuentes() -> tuple[dict, list[str]]:
     from api import bing
     from api.indexacion import estado_de_indexacion
 
+    from api import conteo
+
     for nombre, clave, fn in (
+        # El total real, contado en el servidor sin cookies (api/conteo.py).
+        ("Servidor", "servidor", lambda: conteo.resumen(dias=7)),
         ("PostHog", "sitio", actividad_del_sitio),
         ("PostHog (campañas)", "campanas", campanas),
         ("Search Console", "busquedas", busquedas),

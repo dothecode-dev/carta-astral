@@ -301,6 +301,14 @@ SECCIONES: tuple[Seccion, ...] = (
     ),
 )
 
+
+def secciones_natal(hora: bool) -> list[Seccion]:
+    """Las secciones del informe natal largo: todas, menos las que dependen de
+    una hora de nacimiento que no está. Una sola regla para el informe
+    (`api.informe_service`) y para el índice del teaser (`api.teaser`): si
+    divergieran, el teaser prometería secciones que el informe no escribe."""
+    return [s for s in SECCIONES if hora or not s.requiere_hora]
+
 # La lectura breve es un informe entero de una sola pieza, no un recorte del
 # largo: no requiere hora (habla de lo que haya) y su `foco` describe la carta
 # completa. Se genera con SYSTEM_PROMPTS —el system del informe entero—, no con

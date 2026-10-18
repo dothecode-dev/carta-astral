@@ -3,112 +3,112 @@
     {
       "name": "Sun",
       "sign": "Can",
-      "position": 22.019958397844604,
-      "abs_pos": 112.0199583978446,
+      "position": 22.139161610896195,
+      "abs_pos": 112.1391616108962,
       "house": null,
       "retrograde": false
     },
     {
       "name": "Moon",
       "sign": "Sag",
-      "position": 0.7664168327785319,
-      "abs_pos": 240.76641683277853,
+      "position": 2.320553579814373,
+      "abs_pos": 242.32055357981437,
       "house": null,
       "retrograde": false
     },
     {
       "name": "Mercury",
       "sign": "Can",
-      "position": 17.439327228187437,
-      "abs_pos": 107.43932722818744,
+      "position": 17.70752351228211,
+      "abs_pos": 107.70752351228211,
       "house": null,
       "retrograde": false
     },
     {
       "name": "Venus",
       "sign": "Leo",
-      "position": 18.44358980826931,
-      "abs_pos": 138.4435898082693,
+      "position": 18.59492515397642,
+      "abs_pos": 138.59492515397642,
       "house": null,
       "retrograde": false
     },
     {
       "name": "Mars",
       "sign": "Leo",
-      "position": 17.40234746483253,
-      "abs_pos": 137.40234746483253,
+      "position": 17.4805596804635,
+      "abs_pos": 137.4805596804635,
       "house": null,
       "retrograde": false
     },
     {
       "name": "Jupiter",
       "sign": "Gem",
-      "position": 26.49862924314668,
-      "abs_pos": 86.49862924314668,
+      "position": 26.526001659882226,
+      "abs_pos": 86.52600165988223,
       "house": null,
       "retrograde": false
     },
     {
       "name": "Saturn",
       "sign": "Cap",
-      "position": 9.747776236457014,
-      "abs_pos": 279.747776236457,
+      "position": 9.738877313120724,
+      "abs_pos": 279.7388773131207,
       "house": null,
       "retrograde": true
     },
     {
       "name": "Uranus",
       "sign": "Cap",
-      "position": 2.56695716994858,
-      "abs_pos": 272.5669571699486,
+      "position": 2.562272728688356,
+      "abs_pos": 272.56227272868836,
       "house": null,
       "retrograde": true
     },
     {
       "name": "Neptune",
       "sign": "Cap",
-      "position": 10.691916849596964,
-      "abs_pos": 280.69191684959696,
+      "position": 10.688623921556427,
+      "abs_pos": 280.6886239215564,
       "house": null,
       "retrograde": true
     },
     {
       "name": "Pluto",
       "sign": "Sco",
-      "position": 12.38723666091542,
-      "abs_pos": 222.38723666091542,
+      "position": 12.3866441565049,
+      "abs_pos": 222.3866441565049,
       "house": null,
       "retrograde": true
     },
     {
       "name": "Chiron",
       "sign": "Can",
-      "position": 10.16037520012894,
-      "abs_pos": 100.16037520012894,
+      "position": 10.172722103915035,
+      "abs_pos": 100.17272210391504,
       "house": null,
       "retrograde": false
     },
     {
       "name": "True_North_Lunar_Node",
       "sign": "Aqu",
-      "position": 26.319268255298027,
-      "abs_pos": 326.319268255298,
+      "position": 26.309456204528715,
+      "abs_pos": 326.3094562045287,
       "house": null,
       "retrograde": true
     },
     {
       "name": "Mean_Lilith",
       "sign": "Lib",
-      "position": 17.346254307917576,
-      "abs_pos": 197.34625430791758,
+      "position": 17.360197315809557,
+      "abs_pos": 197.36019731580956,
       "house": null,
       "retrograde": false
     },
     {
       "name": "True_South_Lunar_Node",
       "sign": "Leo",
-      "position": 26.319268255298027,
-      "abs_pos": 146.31926825529803,
+      "position": 26.309456204528715,
+      "abs_pos": 146.30945620452871,
       "house": null,
       "retrograde": true
     }
@@ -124,8 +124,13 @@
     "moon_approximate": true,
     "precision_degraded": false,
     "dst_ambiguous_resolved": false,
-    "bodies_missing": false
+    "bodies_missing": false,
+    "moon_sign_uncertain": true,
+    "moon_sign_options": [
+      "Sco",
+      "Sag"
+    ]
   },
-  "julian_day": 2447722.0,
-  "utc_iso": "1989-07-14T12:00:00+00:00"
+  "julian_day": 2447722.125,
+  "utc_iso": "1989-07-14T15:00:00+00:00"
 }

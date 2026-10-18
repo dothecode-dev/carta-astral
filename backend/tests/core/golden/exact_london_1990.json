@@ -634,7 +634,9 @@
     "moon_approximate": false,
     "precision_degraded": false,
     "dst_ambiguous_resolved": false,
-    "bodies_missing": false
+    "bodies_missing": false,
+    "moon_sign_uncertain": false,
+    "moon_sign_options": []
   },
   "julian_day": 2447892.5,
   "utc_iso": "1990-01-01T00:00:00+00:00"

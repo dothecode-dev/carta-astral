@@ -207,3 +207,26 @@ describe("buildPdfPayload", () => {
     expect(p.positions.length).toBeGreaterThan(0);
   });
 });
+
+describe("la Luna dudosa en el PDF", () => {
+  // Misma regla que la tabla de la pantalla: sin hora, si la Luna cambia de
+  // signo ese día, el PDF no puede afirmar un grado ni un signo.
+  const dict = getDict("es");
+  const flags = { moon_approximate: true, precision_degraded: false, bodies_missing: false, house_system_fallback: false };
+  const luna = { name: "Moon", sign: "Leo", abs_pos: 145, house: null, retrograde: false };
+
+  it("muestra los dos signos posibles", () => {
+    const chart = apiChart({
+      placements: [luna], houses: null, angles: null, aspects: [],
+      flags: { ...flags, moon_sign_uncertain: true, moon_sign_options: ["Leo", "Vir"] },
+    });
+    const fila = buildPdfPayload(chart, "es", dict).positions.find((p) => p.glyph === "☽");
+    expect(fila?.position).toBe("♌ Leo o ♍ Virgo");
+  });
+
+  it("con la Luna estable muestra el grado", () => {
+    const chart = apiChart({ placements: [luna], houses: null, angles: null, aspects: [], flags });
+    const fila = buildPdfPayload(chart, "es", dict).positions.find((p) => p.glyph === "☽");
+    expect(fila?.position).toMatch(/^25°00′ ♌ Leo$/);
+  });
+});

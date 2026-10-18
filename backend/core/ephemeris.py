@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Any, Literal, cast
 
-from kerykeion import AstrologicalSubject, NatalAspects
+from kerykeion import AstrologicalSubject, AstrologicalSubjectFactory, NatalAspects
 
 from core.models import Angle, Aspect, ChartData, DegradationFlags, House, Placement, BirthInput
+from core.exceptions import GeocodeTimezoneError
 from core.timeconv import resolve_dst, resolve_tz
 
 # espeja el enum interno de kerykeion; sólo usamos los 5 de _HOUSE_CODE
@@ -86,21 +88,84 @@ def sky_now(moment: datetime, lat: float = 0.0, lng: float = 0.0) -> list[Placem
     ]
 
 
+def _zona_local(birth: BirthInput) -> ZoneInfo | None:
+    """La zona horaria del lugar de nacimiento; None en mar abierto, o si el
+    tzdata de la imagen todavía no conoce el nombre que da timezonefinder."""
+    try:
+        return ZoneInfo(resolve_tz(birth.lat, birth.lng))
+    except (GeocodeTimezoneError, ZoneInfoNotFoundError):
+        return None
+
+
+def _signo_luna(momento: datetime, birth: BirthInput) -> str | None:
+    # Mismo zodíaco que la carta: `sky_now` es siempre tropical y en una
+    # carta sidérea el signo que se muestra es el sidéreo.
+    # Sólo la Luna (`active_points`): el mismo motor y la misma configuración
+    # que la carta, sin calcular los otros cuerpos.
+    utc = momento.astimezone(timezone.utc)
+    modelo = AstrologicalSubjectFactory.from_birth_data(
+        name="Luna", year=utc.year, month=utc.month, day=utc.day,
+        hour=utc.hour, minute=utc.minute, seconds=0, lng=birth.lng, lat=birth.lat,
+        tz_str="UTC", online=False,
+        zodiac_type=("Sidereal" if birth.zodiac == "Sidereal" else "Tropical"),
+        active_points=["Moon"], calculate_lunar_phase=False,
+    )
+    luna = modelo.moon
+    return None if luna is None else str(luna.sign)
+
+
+def _signos_luna_del_dia(birth: BirthInput, zona: ZoneInfo | None) -> tuple[bool, tuple[str, ...]]:
+    """¿Cambia la Luna de signo durante el día local del nacimiento? Y si
+    cambia, los dos signos posibles (el de la primera medianoche y el de la
+    siguiente).
+
+    Sin hora sólo sabemos el día: si la Luna cambia de signo en ese día no hay
+    forma de afirmar en cuál nació. Recorre unos 13° por día, así que no puede
+    cruzar dos signos: alcanza con mirar los dos bordes. Sin zona horaria
+    terrestre no podemos acotar el día, así que es dudosa y sin opciones.
+    """
+    if zona is None:
+        return True, ()
+    # Una medianoche que no existe (salto de horario de verano) se normaliza
+    # pasando por UTC: queda en el primer instante válido del día.
+    def medianoche(dia: date) -> datetime:
+        m = datetime.combine(dia, time.min, tzinfo=zona)
+        return m.astimezone(timezone.utc).astimezone(zona)
+
+    al_inicio = _signo_luna(medianoche(birth.date), birth)
+    al_fin = _signo_luna(medianoche(birth.date + timedelta(days=1)), birth)
+    # Sin efeméride de la Luna no hay signo que afirmar.
+    if al_inicio is None or al_fin is None:
+        return True, ()
+    if al_inicio == al_fin:
+        return False, ()
+    return True, (al_inicio, al_fin)
+
+
 def build_chart(birth: BirthInput) -> ChartData:
     precision_degraded = birth.date.year < 1880
     if not birth.time_known or birth.time is None:
+        # Sin hora la carta se calcula al mediodía LOCAL: es el centro del día
+        # de nacimiento. El mediodía UTC caía, en zonas muy corridas, fuera de
+        # ese día y mostraba una Luna que no tuvo ningún minuto de él.
+        zona = _zona_local(birth)
+        mediodia = datetime.combine(birth.date, time(12, 0), tzinfo=zona or timezone.utc)
+        utc = mediodia.astimezone(timezone.utc)
         subj = AstrologicalSubject(
             name=birth.name or "Chart",
-            year=birth.date.year, month=birth.date.month, day=birth.date.day,
-            hour=12, minute=0, lng=birth.lng, lat=birth.lat, tz_str="UTC", online=False,
+            year=utc.year, month=utc.month, day=utc.day,
+            hour=utc.hour, minute=utc.minute, lng=birth.lng, lat=birth.lat, tz_str="UTC", online=False,
             zodiac_type=("Sidereal" if birth.zodiac == "Sidereal" else "Tropical"),
         )
         model = subj.model()
         placements, missing = _placements_from(model, _PLANET_ATTRS, with_house=False)
+        dudosa, opciones = _signos_luna_del_dia(birth, zona)
         return ChartData(
             placements=placements, houses=None, angles=None, aspects=[],
             zodiac=birth.zodiac, house_system=birth.house_system, time_known=False,
             flags=DegradationFlags(moon_approximate=True,
+                                   moon_sign_uncertain=dudosa,
+                                   moon_sign_options=opciones,
                                    precision_degraded=precision_degraded or missing,
                                    bodies_missing=missing),
             julian_day=model.julian_day, utc_iso=model.iso_formatted_utc_datetime,

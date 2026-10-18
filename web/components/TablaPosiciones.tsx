@@ -1,5 +1,5 @@
 import type { CartaDibujable } from "@/lib/chart";
-import { positionLabel } from "@/lib/ephemeris";
+import { positionLabel, posicionCuerpo } from "@/lib/ephemeris";
 import { type Dict, type Locale, PLANET_GLYPHS, PLANET_NAME_BY_KEY } from "@/lib/i18n";
 
 // La tabla de posiciones: ejes y cuerpos con grado, signo y casa. Vivía dentro
@@ -59,7 +59,7 @@ export function TablaPosiciones({
                 <td className="cellGlyph">{PLANET_GLYPHS[p.name] ?? "·"}</td>
                 <td className="cellBody">{names[p.name] ?? p.name.replace(/_/g, " ")}</td>
                 <td>
-                  {positionLabel(p.abs_pos, locale)}
+                  {posicionCuerpo(p, chart.data.flags, dict, locale)}
                 </td>
                 <td className="cellRight">
                   {p.house ? ROMAN[HOUSE_INDEX[p.house] - 1] : "—"}

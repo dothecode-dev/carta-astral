@@ -552,6 +552,12 @@ VINCULO_PREVIEW_ENABLED = os.environ.get("VINCULO_PREVIEW_ENABLED", "0") == "1"
 # La compra del vínculo: catálogo, checkout, cupones y todos sus endpoints
 # (RF19, RF25). Se enciende junto con VINCULO_PREVIEW_ENABLED, nunca uno solo.
 VINCULO_ENABLED = os.environ.get("VINCULO_ENABLED", "0") == "1"
+# La lectura breve gratis por IA: la lectura anónima y el regalo de bienvenida
+# de una cuenta nueva. Apagada (default), las dos puertas se cierran y la
+# primera impresión es el teaser fijo; un derecho `lectura_breve` ya otorgado
+# se sigue canjeando igual. No toca el tombstone: una vida sin regalo cuenta
+# como regalo consumido, así que prender el flag después no regala de más.
+LECTURA_BREVE_GRATIS_ENABLED = os.environ.get("LECTURA_BREVE_GRATIS_ENABLED", "0") == "1"
 
 # Cache compartido entre workers: el throttle, el tope global y el lock viven
 # acá. En prod (multi-worker) DEBE ser compartido y persistente -> DatabaseCache

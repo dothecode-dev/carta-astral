@@ -203,3 +203,10 @@ def test_sin_cuenta_una_moneda_inventada_es_400_y_no_deja_carta(client, stripe_r
     assert r.status_code == 400
     assert r.json()["motivo"] == "moneda_invalida"
     assert Chart.objects.count() == 0
+
+
+def test_abrir_el_pago_cuenta_un_checkout_abierto(client, stripe_responde):
+    from api.models import ConteoDiario
+
+    _post(client)
+    assert ConteoDiario.objects.get(evento="checkout_abierto").cantidad == 1

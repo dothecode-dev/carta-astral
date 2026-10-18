@@ -50,6 +50,12 @@ describe("Derechos", () => {
     expect(screen.getByText(dict.auth.sinDerechos)).toBeInTheDocument();
   });
 
+  it("una cuenta nueva (sin derechos) no muestra nada de regalo", () => {
+    const { container } = render(<Derechos derechos={[]} dict={dict} locale="es" hayCartas={false} />);
+
+    expect(container.textContent).not.toMatch(/regalo|gratis|lecturas? breves?/i);
+  });
+
   it("no nombra lo que ya se agotó", () => {
     render(
       <Derechos

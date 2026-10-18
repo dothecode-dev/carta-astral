@@ -15,7 +15,7 @@ import type { SampleChart } from "@/content/sample-chart";
  * `id` ni interpretaciones —no existe como fila—, pero se dibuja igual: la
  * rueda y las tablas sólo miran `data`. Tipar por lo que se usa es lo que
  * permite reusar los mismos componentes sin inventarle un id falso. */
-export type CartaDibujable = Pick<ApiChart, "data" | "firma">;
+export type CartaDibujable = Pick<ApiChart, "data" | "firma" | "teaser">;
 
 /** Una línea de la firma: Sol, Luna o Ascendente, su signo (abreviatura del
  *  motor) y la frase fija en los tres idiomas. La escribe el backend. */
@@ -23,6 +23,19 @@ export type FirmaLinea = {
   cuerpo: "Sun" | "Moon" | "Ascendant";
   signo: string;
   frases: Record<Locale, string>;
+};
+
+/** El teaser de la carta sin cuenta (spec 2026-10-17): párrafos fijos por
+ *  posición, el índice del informe con sus temas y cuánto trae. Lo arma el
+ *  backend sin llamar al LLM; los temas ya vienen nombrados para quien lee. */
+export type Teaser = {
+  bloques: { cuerpo: string; signo: string; textos: Record<Locale, string> }[];
+  indice: {
+    slug: string;
+    titulos: Record<Locale, string>;
+    temas: Record<Locale, string>[];
+  }[];
+  informe: { secciones: number; palabras: number };
 };
 
 export type ApiChart = {
@@ -41,6 +54,8 @@ export type ApiChart = {
   en_curso: Record<string, ("corto" | "largo")[]>;
   /** Opcional: los fixtures de tests no la traen; el backend siempre sí. */
   firma?: FirmaLinea[];
+  /** Sólo en el preview sin cuenta. Opcional: un backend viejo no lo manda. */
+  teaser?: Teaser;
   birth: {
     name: string | null;
     date: string;
@@ -64,6 +79,12 @@ export type ApiChart = {
       precision_degraded: boolean;
       bodies_missing: boolean;
       house_system_fallback: boolean;
+      /** Carta sin hora en la que la Luna cambia de signo ese día. Opcional:
+       *  las cartas guardadas antes del 17-10-2026 no lo traen. */
+      moon_sign_uncertain?: boolean;
+      /** Los dos signos posibles (abreviaturas del motor), o vacío si el
+       *  lugar no tiene zona horaria. */
+      moon_sign_options?: string[];
     };
   };
 };

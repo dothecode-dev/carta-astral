@@ -370,3 +370,35 @@ def test_el_mail_pone_las_personas_primero_y_nombra_las_veces():
     cuerpo = informe._html("lectura", datos, [])
 
     assert "carta_calculada: 11 personas (18 veces)" in cuerpo
+
+
+def test_juntar_fuentes_trae_el_conteo_del_servidor(posthog_responde, monkeypatch):
+    from api import bing
+
+    monkeypatch.setattr(bing, "busquedas", lambda: {})
+    monkeypatch.setattr("api.indexacion.estado_de_indexacion", lambda: {})
+    from api.conteo import contar
+
+    contar("carta_calculada")
+    datos, _ = informe.juntar_fuentes()
+    assert datos["servidor"]["hoy"]["carta_calculada"] == 1
+
+
+def test_el_mail_muestra_el_conteo_real_arriba_de_lo_de_posthog():
+    datos = {
+        "servidor": {"dias": 7, "total": {"carta_calculada": 40, "checkout_abierto": 2, "compra_pagada": 0},
+                     "hoy": {"carta_calculada": 3, "checkout_abierto": 0, "compra_pagada": 0},
+                     "por_dia": {"2026-10-18": {"carta_calculada": 9, "checkout_abierto": 1, "compra_pagada": 0}}},
+        "sitio": {"eventos": [], "previo": {"dias": 7, "dias_con_actividad": 0, "eventos": []}, "paginas": []},
+    }
+    cuerpo = informe._html("lectura", datos, [])
+    assert "Total real" in cuerpo
+    assert "cartas calculadas: 40" in cuerpo and "pagos abiertos: 2" in cuerpo and "compras pagas: 0" in cuerpo
+    assert cuerpo.index("Total real") < cuerpo.index("En el sitio")
+    assert "hoy hasta ahora (parcial): cartas calculadas: 3" in cuerpo
+
+
+def test_el_analista_sabe_que_el_servidor_es_el_total_y_posthog_una_muestra():
+    assert "servidor" in informe._SISTEMA and "muestra" in informe._SISTEMA
+    # El servidor cuenta veces, no personas: no se comparan uno a uno.
+    assert "veces, no personas" in informe._SISTEMA

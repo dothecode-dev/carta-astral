@@ -35,8 +35,8 @@ from django.utils.html import format_html, format_html_join
 from api import canje, cupones, stripe_client
 from api.catalogo import CATALOGO, a_la_venta, producto
 from api.models import (
-    Account, Chart, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation, MailBloqueado,
-    Movimiento, PasarelaCheckout,
+    Account, Chart, ConteoDiario, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation,
+    MailBloqueado, Movimiento, PasarelaCheckout,
 )
 
 
@@ -196,6 +196,61 @@ class MovimientoAdmin(SoloLectura):
     list_filter = ("tipo", "origen", "codigo_producto")
     search_fields = ("external_id", "account__id", "account__email")
     readonly_fields = list_display + ("sujeto", "note")
+
+
+@admin.register(ConteoDiario)
+class ConteoDiarioAdmin(SoloLectura):
+    """La cuenta real de cada día (UTC), contada en el servidor sin cookies:
+    cartas calculadas y pagos abiertos. Veces, no personas. Las compras pagas
+    están en «Pasarela checkouts» (acreditado_at)."""
+
+    list_display = ("fecha", "evento", "cantidad")
+    list_filter = ("evento",)
+    ordering = ("-fecha", "evento")
+    readonly_fields = list_display
+
+    DIAS_GRAFICO = 90
+
+    def changelist_view(self, request, extra_context=None):
+        # Acá y no arriba: el admin se importa al arrancar y `conteo` toca modelos.
+        from django.utils.safestring import mark_safe
+
+        from api import conteo
+        from api.grafico_conteo import svg_lineas
+
+        datos = conteo.serie(self.DIAS_GRAFICO)
+        extra_context = {
+            **(extra_context or {}),
+            # El SVG sólo interpola números y fechas (api/grafico_conteo.py).
+            # Dos gráficos con su propia escala: cartas (decenas) y pagos (unidades).
+            "grafico": mark_safe(  # noqa: S308
+                svg_lineas(datos, ("carta_calculada",))
+                + svg_lineas(datos, ("checkout_abierto", "compra_pagada"))
+            ),
+            # De dónde viene quien calcula su carta: canal y lugar (zona horaria).
+            "grafico_canal": mark_safe(self._procedencia("canal", "Por canal")),  # noqa: S308
+            "grafico_lugar": mark_safe(self._procedencia("lugar", "Por lugar")),  # noqa: S308
+            "dias_grafico": self.DIAS_GRAFICO,
+        }
+        return super().changelist_view(request, extra_context=extra_context)
+
+    NOMBRES_CANAL = {
+        "google_ads": "Google Ads", "google": "Google (sin pagar)", "otros_buscadores": "Otros buscadores",
+        "redes": "Redes", "email": "Email", "otro_sitio": "Otro sitio", "otra_campana": "Otra campaña",
+        "directo": "Directo",
+    }
+
+    def _procedencia(self, tipo: str, titulo: str) -> str:
+        from api import conteo
+        from api.grafico_conteo import PALETA, svg_series
+
+        # Un color queda para «otros», el resto sumado.
+        datos = conteo.serie_procedencia(tipo, self.DIAS_GRAFICO, top=len(PALETA) - 1)
+        series = [
+            ("Otros" if valor == "otros" else self.NOMBRES_CANAL.get(valor, valor), color, valores)
+            for (valor, valores), color in zip(datos["series"], PALETA)
+        ]
+        return svg_series(datos["fechas"], series, titulo) if series else "<p>Todavía sin datos.</p>"
 
 
 @admin.register(PasarelaCheckout)

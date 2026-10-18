@@ -779,6 +779,56 @@ class CupoDiario(models.Model):
         return f"{self.fecha} {self.ambito}: {self.usados}"
 
 
+class ConteoDiario(models.Model):
+    """Cuántas veces pasó algo en un día (UTC), contado en el servidor.
+
+    PostHog sólo ve a quien acepta las cookies —el 10..16-10-2026, 135 personas
+    contra 481 clics de Google Ads—, así que sus números son una muestra. Esto
+    es el total real: una fila por día y evento con un contador, sin IP, sin
+    cuenta ni ningún dato de quién fue, así que no necesita consentimiento.
+    Lo escribe `api.conteo.contar`; lo lee el informe diario.
+    """
+
+    EVENTOS = (("carta_calculada", "carta_calculada"), ("checkout_abierto", "checkout_abierto"))
+
+    fecha = models.DateField()
+    evento = models.CharField(max_length=30, choices=EVENTOS)
+    cantidad = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["fecha", "evento"], name="uniq_conteo_por_dia_y_evento"),
+        ]
+
+    def __str__(self):
+        return f"{self.fecha} {self.evento}: {self.cantidad}"
+
+
+class ConteoProcedencia(models.Model):
+    """De dónde viene quien calcula su carta, por día (UTC): canal y lugar.
+
+    Igual que `ConteoDiario`, sin dato de quién fue. El valor nunca es lo que
+    mandó el navegador: el canal es de una lista cerrada (`conteo.CANALES`) y el
+    lugar sale de una zona horaria real (`conteo.lugar_de_zona`), así que la
+    tabla no crece con lo que cualquiera quiera inventar.
+    """
+
+    TIPOS = (("canal", "canal"), ("lugar", "lugar"))
+
+    fecha = models.DateField()
+    tipo = models.CharField(max_length=10, choices=TIPOS)
+    valor = models.CharField(max_length=64)
+    cantidad = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["fecha", "tipo", "valor"], name="uniq_procedencia_por_dia"),
+        ]
+
+    def __str__(self):
+        return f"{self.fecha} {self.tipo}={self.valor}: {self.cantidad}"
+
+
 class EntradaCache(models.Model):
     """La tabla de `DatabaseCache`, para que `purgar_codigos_acceso` borre lo
     vencido por el ORM y no con SQL armado a mano. No gestionada: la crea y

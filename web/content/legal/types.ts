@@ -24,7 +24,7 @@ export type LegalContent = {
 };
 
 /** Fecha de la última revisión legal. Cambiarla al tocar cualquier documento. */
-export const LEGAL_UPDATED = "2026-10-10";
+export const LEGAL_UPDATED = "2026-10-17";
 
 // Del mismo dominio que el sitio a propósito: las pasarelas cruzan el dominio
 // del mail de soporte con el de la web y marcan la diferencia como

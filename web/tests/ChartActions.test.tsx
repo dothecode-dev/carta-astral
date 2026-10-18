@@ -37,6 +37,7 @@ function renderActions({
   freeCredits = 3,
   paidCredits = 1,
   precioInforme = "US$ 5",
+  derechos,
 }: {
   interpretations?: Record<string, Tier[]>;
   enCurso?: Record<string, Tier[]>;
@@ -44,6 +45,8 @@ function renderActions({
   freeCredits?: number;
   paidCredits?: number;
   precioInforme?: string | null;
+  /** Pisa los derechos armados con `freeCredits`/`paidCredits` (p. ej. sin fila de breve). */
+  derechos?: DerechoTest[];
 } = {}) {
   return render(
     <ChartActions
@@ -52,7 +55,7 @@ function renderActions({
       timeKnown={timeKnown}
       interpretations={interpretations}
       enCurso={enCurso}
-      derechos={[derecho("lectura_breve", freeCredits), derecho("informe_natal", paidCredits)]}
+      derechos={derechos ?? [derecho("lectura_breve", freeCredits), derecho("informe_natal", paidCredits)]}
       precioInforme={precioInforme}
       dict={dict}
     />,
@@ -888,6 +891,30 @@ describe("ChartActions — medición del momento de decidir", () => {
     expect(track).toHaveBeenCalledWith("acciones_carta_vistas", {
       breve: "agotada",
       completo: "leer",
+    });
+  });
+
+  // Con la breve gratis apagada una cuenta nueva (o una compra sin cuenta) no
+  // tiene ni fila de lectura_breve: no la gastó, nunca la tuvo. Decirle «no
+  // tenés lecturas breves» o medir «agotada» (= gastó las suyas) es falso.
+  it("sin ninguna fila de breve no hay aviso de agotada y se mide que no se ofrece", () => {
+    renderActions({ derechos: [derecho("informe_natal", 0)] });
+
+    expect(screen.queryByText(dict.chart.sinLeerBreve)).toBeNull();
+    expect(screen.queryByRole("button", { name: dict.chart.interpretBreve })).toBeNull();
+    expect(track).toHaveBeenCalledWith("acciones_carta_vistas", {
+      breve: "no_se_ofrece",
+      completo: "comprar",
+    });
+  });
+
+  it("con la fila de breve en cero sí es agotada: la gastó", () => {
+    renderActions({ derechos: [derecho("lectura_breve", 0), derecho("informe_natal", 0)] });
+
+    expect(screen.getByText(dict.chart.sinLeerBreve)).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith("acciones_carta_vistas", {
+      breve: "agotada",
+      completo: "comprar",
     });
   });
 

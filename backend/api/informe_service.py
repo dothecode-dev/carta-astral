@@ -24,7 +24,7 @@ from api.firma_frases import firma
 from api.interpretation_service import renovar_lock
 from api.models import Interpretation, InterpretationSection, Sujeto
 from interpret.generator import build_interpretation, build_seccion, translate_interpretation
-from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, SECCIONES, TIER_CORTO, TIER_LARGO, Seccion
+from interpret.prompts import PROMPT_VERSION, SECCION_BREVE, TIER_CORTO, TIER_LARGO, Seccion, secciones_natal
 from interpret.reparto import bloque as bloque_de_reparto
 from interpret.reparto import parte_de
 from interpret.revision_trato import revisar_personas, revisar_trato
@@ -87,7 +87,7 @@ def secciones_aplicables(sujeto, tier: str) -> list[Seccion]:
     if tier == TIER_CORTO:
         return [SECCION_BREVE]
     hora = _datos(sujeto).get("time_known", True)
-    return [s for s in SECCIONES if hora or not s.requiere_hora]
+    return secciones_natal(hora)
 
 
 def secciones_pendientes(interpretacion) -> list[Seccion]:

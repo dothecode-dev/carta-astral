@@ -1,8 +1,6 @@
 // Diccionarios de la web. Sin librería: son tres idiomas y un puñado de claves,
 // y next-intl traería un middleware y un provider para resolver un objeto.
 
-import { segunRegalo } from "./regalo";
-
 export const LOCALES = ["es", "en", "pt"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "es";
@@ -194,6 +192,11 @@ export const ASPECT_GLYPHS: Record<string, string> = {
  * notación, y de acá lo lee todo el mundo.
  */
 export const SIGNS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
+
+/** Las abreviaturas de signo del motor (kerykeion), en el orden del zodíaco:
+ *  el índice es el de `SIGN_NAMES` y `SIGNS`. */
+export const KERYKEION_SIGNS = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
+                                "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"];
 
 /**
  * Los cuerpos que la carta lista pero la rueda no dibuja.
@@ -567,6 +570,10 @@ export type Dict = {
     verAspectos: string;
     /** El desplegable que guarda posiciones, casas y aspectos, al final. */
     verDatos: string;
+    /** La Luna de una carta sin hora que cambia de signo ese día: «{a} o {b}». */
+    lunaDudosa: string;
+    /** La misma, cuando el lugar no tiene zona horaria y no hay dos signos. */
+    lunaIncierta: string;
     /** Cambiar cómo le hablamos, desde la carta ya creada. */
     tratoTitulo: string;
     tratoAclaracion: string;
@@ -704,16 +711,22 @@ export type Dict = {
     needDate: string;
     badDate: string;
     failed: string;
-    /** 402 con code "sin_leer_breve": no hay lectura breve gratis disponible para esta carta nueva. */
+    /** 402 con code "sin_leer_breve": no hay lectura breve disponible para esta carta nueva. */
     sinLeerBreve: string;
     /** Lo que ve quien calculó su carta sin tener cuenta: la rueda es suya y
-     *  está completa; lo que falta es la lectura, que la primera vez tampoco pide cuenta. */
+     *  está completa; lo que falta es el informe, que se compra sin pasar por /entrar. */
     previewTitle: string;
     previewLede: string;
     previewCta: string;
     previewNote: string;
+    /** Debajo del botón de compra: qué trae el informe. `{n}` y `{palabras}` salen de `teaser.informe`. */
+    informeTrae: string;
+    /** Etiqueta accesible del candado de cada tema del índice. */
+    temaBloqueado: string;
     /** El botón de pago de la vista previa, sin cuenta. `{precio}` sale del catálogo. */
     comprarCta: string;
+    /** El mismo botón cuando el catálogo no respondió y no hay precio. */
+    comprarCtaSinPrecio: string;
     /** Frase legal armada con dos enlaces: antes + términos + y + privacidad + después. */
     legalAntes: string;
     legalTerminos: string;
@@ -722,9 +735,10 @@ export type Dict = {
     legalDespues: string;
     /** Cualquier cupón en el pago sin cuenta (`requiere_cuenta`): sólo con cuenta. */
     comprarRequiereCuenta: string;
+    /** Qué se guarda y qué no al mirar la carta sin cuenta; con y sin botón de compra. */
     previewPrivacidad: string;
-    previewPrivacidadSinCompra: string;
-    /** La breve sin cuenta (spec 2026-10-08). `{idioma}` y `{quien}` se reemplazan. */
+    /** Sin uso desde el 17-10-2026 (la breve gratis está apagada por
+     *  `LECTURA_BREVE_GRATIS_ENABLED`; el hook sigue en el repo). La breve sin cuenta (spec 2026-10-08). `{idioma}` y `{quien}` se reemplazan. */
     lecturaEscribiendo: string;
     lecturaOcupado: string;
     lecturaFallida: string;
@@ -800,7 +814,7 @@ const es: Dict = {
     empty: "Todavía no hay notas publicadas en español. Están en camino.",
     back: "Todas las notas",
     ctaTitle: "Y la tuya, ¿cómo está?",
-    ctaLede: "Poné tu fecha, hora y lugar de nacimiento y mirá tu carta natal, calculada con las mismas efemérides. La primera lectura breve no cuesta nada.",
+    ctaLede: "Poné tu fecha, hora y lugar de nacimiento y mirá tu carta natal, calculada con las mismas efemérides. La carta y un adelanto de lo que dice son gratis, sin crear cuenta.",
     ctaBoton: "Ver mi carta natal",
     publishedOn: "Publicada el",
   },
@@ -825,10 +839,10 @@ const es: Dict = {
   },
   pricing: {
     eyebrow: "Precios",
-    title: `${segunRegalo("Tu primera lectura breve es gratis.", "Tus primeras {n} lecturas breves son gratis.")}\nEl informe completo se compra aparte.`,
+    title: "Tu carta natal es gratis.\nEl informe completo se compra aparte.",
     priceNote: "el informe completo de una carta: ocho secciones, unas 6.000 palabras",
     terms: [
-      { label: segunRegalo("Tu primera lectura breve", "Tus primeras {n} lecturas breves"), value: "Gratis", free: true },
+      { label: "Tu carta natal y un adelanto del informe", value: "Gratis", free: true },
       { label: "Informe completo de una carta", value: "{precio}" },
       { label: "El mismo informe en otro idioma", value: "Sin costo", free: true },
       { label: "Vencimiento", value: "No vencen" },
@@ -854,7 +868,7 @@ const es: Dict = {
       },
       {
         q: "¿Necesito crear una cuenta?",
-        a: "Entrás con tu cuenta de Google. No hay contraseñas que recordar ni formulario que completar.",
+        a: "No hace falta: la carta se calcula sin cuenta. Para guardar tus cartas e informes, entrás con Google o con tu mail, sin contraseñas que recordar.",
       },
       {
         q: "¿Puedo hacer cartas de otras personas?",
@@ -869,7 +883,7 @@ const es: Dict = {
   cierre: {
     eyebrow: "Empezar",
     title: "Empezá por la tuya.",
-    note: "En el navegador, sin instalar nada. Tu primera lectura breve no cuesta nada.",
+    note: "En el navegador, sin instalar nada. La carta y un adelanto de lo que dice son gratis, sin crear cuenta.",
     cta: "Ver mi carta natal",
   },
   chart: {
@@ -893,9 +907,9 @@ const es: Dict = {
     interpretFreeLang: "Sin costo: ya lo leíste en otro idioma.",
     interpreting: "Escribiendo tu lectura…",
     readAgain: "Ver la lectura",
-    capDiario: "Por hoy se agotaron las lecturas breves gratis. Volvé mañana, o leé el informe completo.",
+    capDiario: "Por hoy se alcanzó el límite de lecturas breves que podemos escribir. Volvé mañana: la tuya sigue disponible.",
     demasiados: "Demasiados intentos seguidos. Esperá un momento y probá de nuevo.",
-    sinLeerBreve: segunRegalo("Ya usaste tu lectura breve gratis.", "Te quedaste sin lecturas breves gratis."),
+    sinLeerBreve: "No tenés lecturas breves disponibles. El informe completo se compra aparte.",
     sinLeerInforme: "Todavía no compraste el informe completo.",
     sinDerecho: "No tenés esta lectura disponible.",
     failed: "No pudimos generar la lectura. Probá de nuevo en un rato.",
@@ -906,6 +920,8 @@ const es: Dict = {
     verCasas: "Ver las casas",
     verAspectos: "Ver los {n} aspectos",
     verDatos: "Ver los datos de la carta",
+    lunaDudosa: "{a} o {b}",
+    lunaIncierta: "Signo incierto sin la hora",
     tratoTitulo: "Cómo te hablamos",
     tratoAclaracion: "Vale para lo que se escriba o traduzca desde ahora; lo ya escrito queda como está.",
     tratoError: "No pudimos guardarlo. Probá de nuevo.",
@@ -994,12 +1010,15 @@ const es: Dict = {
     needDate: "Falta la fecha de nacimiento.",
     badDate: "Revisá la fecha: tiene que ser posterior a 1800 y no puede estar en el futuro.",
     failed: "No pudimos calcular la carta. Revisá los datos y probá de nuevo.",
-    sinLeerBreve: segunRegalo("Ya usaste tu lectura breve gratis.", "Ya usaste tus lecturas breves gratis."),
+    sinLeerBreve: "No tenés lecturas breves disponibles. El informe completo se compra aparte.",
     previewTitle: "Tu carta natal",
     previewLede: "Es tuya y está completa: las posiciones, las casas y los aspectos del cielo del día en que naciste.",
     previewCta: "Leer qué dice",
     previewNote: "Gratis y sin crear cuenta.",
+    informeTrae: "{n} secciones escritas para tu carta, unas {palabras} palabras, en tu idioma.",
+    temaBloqueado: "En el informe completo",
     comprarCta: "Leer el informe completo · {precio}",
+    comprarCtaSinPrecio: "Leer el informe completo",
     legalAntes: "Al continuar aceptás los ",
     legalTerminos: "términos",
     legalY: " y la ",
@@ -1007,9 +1026,7 @@ const es: Dict = {
     legalDespues: ".",
     comprarRequiereCuenta: "Para usar este cupón, entrá con tu mail.",
     previewPrivacidad:
-      "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta. Si leés tu lectura gratis, tu carta y tu lectura quedan sólo en este navegador por 24 horas. Si comprás el informe, la carta queda guardada para entregártelo.",
-    previewPrivacidadSinCompra:
-      "Tu carta y tu lectura quedan sólo en este navegador por 24 horas. No guardamos tus datos de nacimiento.",
+      "Tus datos de nacimiento no se guardan en nuestros servidores mientras mirás tu carta. Si comprás el informe, la carta queda guardada para entregártelo.",
     lecturaEscribiendo: "Estamos escribiendo tu lectura…",
     lecturaOcupado: "Estamos escribiendo muchas lecturas, un momento…",
     lecturaFallida: "No pudimos escribir tu lectura.",
@@ -1033,7 +1050,7 @@ const es: Dict = {
       "Se puede calcular igual. Sin hora quedan las posiciones de los planetas por signo, que cambian lento, pero no hay Ascendente ni casas —dependen de la rotación de la Tierra, o sea de la hora— y la Luna queda aproximada, porque se mueve unos trece grados por día.",
     seoGratis: "Hasta dónde es gratis",
     seoGratisBody:
-      "La carta y la primera lectura breve son gratis y no piden cuenta. El informe completo es lo único que se paga.",
+      "La carta y el adelanto de lo que dirá tu informe son gratis y no piden cuenta. El informe completo es lo único que se paga.",
   },
   foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto" },
   consent: {
@@ -1062,9 +1079,9 @@ const es: Dict = {
     abriendo: "Abriendo el pago…",
     fallo: "No pudimos abrir el pago. Probá de nuevo.",
     sinCatalogo: "No pudimos cargar los precios. Volvé a intentar en un momento.",
-    gratisNombre: "Lectura breve",
+    gratisNombre: "Carta natal",
     gratisPrecio: "Gratis",
-    gratisDetalle: `${segunRegalo("Una por cuenta", "{n} por cuenta")}, sin tarjeta. Tu carta en unos párrafos.`,
+    gratisDetalle: "Sin cuenta y sin tarjeta. Tu rueda, tus tablas y un adelanto de lo que dice el informe sobre tu carta.",
     verEjemplo: "Ver un ejemplo",
     nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
     sinCartaNota: "Después de pagar, calculás tu carta y el informe se escribe sobre ella.",
@@ -1084,8 +1101,8 @@ const es: Dict = {
   },
   auth: {
     navEnter: "Entrar",
-    title: "Tu lectura te está esperando.",
-    lede: `Entrá y usala: tenés ${segunRegalo("una lectura breve", "{n} lecturas breves")} de regalo, sin tarjeta.`,
+    title: "Tu cuenta.",
+    lede: "Entrá para ver tus cartas y tus informes.",
     loading: "Cargando…",
     blocked: "No pudimos cargar el acceso de Google — suele pasar con los bloqueadores de rastreadores. Entrá con tu mail acá abajo.",
     failed: "No pudimos iniciar sesión. Probá de nuevo.",
@@ -1209,7 +1226,7 @@ const en: Dict = {
     empty: "No notes published in English yet. They're on the way.",
     back: "All notes",
     ctaTitle: "And yours, how does it look?",
-    ctaLede: "Enter your birth date, time and place and see your own chart, calculated with the same ephemerides. The first short reading costs nothing.",
+    ctaLede: "Enter your birth date, time and place and see your own chart, calculated with the same ephemerides. The chart and a preview of what it says are free, no account needed.",
     ctaBoton: "See my birth chart",
     publishedOn: "Published on",
   },
@@ -1234,10 +1251,10 @@ const en: Dict = {
   },
   pricing: {
     eyebrow: "Pricing",
-    title: `${segunRegalo("Your first short reading is free.", "Your first {n} short readings are free.")}\nThe full report is a separate purchase.`,
+    title: "Your birth chart is free.\nThe full report is a separate purchase.",
     priceNote: "the full report for one chart: eight sections, about 6,000 words",
     terms: [
-      { label: segunRegalo("Your first short reading", "Your first {n} short readings"), value: "Free", free: true },
+      { label: "Your birth chart and a preview of the report", value: "Free", free: true },
       { label: "Full report for one chart", value: "{precio}" },
       { label: "The same report in another language", value: "No charge", free: true },
       { label: "Expiry", value: "They don't expire" },
@@ -1263,7 +1280,7 @@ const en: Dict = {
       },
       {
         q: "Do I need an account?",
-        a: "You sign in with your Google account. No passwords to remember, no form to fill in.",
+        a: "Not to see your chart: it's calculated without an account. To save your charts and reports, sign in with Google or your email, no passwords to remember.",
       },
       {
         q: "Can I make charts for other people?",
@@ -1278,7 +1295,7 @@ const en: Dict = {
   cierre: {
     eyebrow: "Get started",
     title: "Start with yours.",
-    note: "In your browser, nothing to install. Your first short reading costs nothing.",
+    note: "In your browser, nothing to install. The chart and a preview of what it says are free, no account needed.",
     cta: "See my birth chart",
   },
   chart: {
@@ -1302,9 +1319,9 @@ const en: Dict = {
     interpretFreeLang: "No cost: you already read it in another language.",
     interpreting: "Writing your reading…",
     readAgain: "See the reading",
-    capDiario: "Today's free short readings are gone. Come back tomorrow, or read the full report.",
+    capDiario: "Today's limit on short readings we can write has been reached. Come back tomorrow: yours is still available.",
     demasiados: "Too many attempts in a row. Wait a moment and try again.",
-    sinLeerBreve: segunRegalo("You've used your free short reading.", "You're out of free short readings."),
+    sinLeerBreve: "You have no short readings available. The full report is a separate purchase.",
     sinLeerInforme: "You haven't bought the full report yet.",
     sinDerecho: "You don't have this reading available.",
     failed: "We couldn't generate the reading. Try again in a while.",
@@ -1315,6 +1332,8 @@ const en: Dict = {
     verCasas: "Show the houses",
     verAspectos: "Show all {n} aspects",
     verDatos: "Show the chart data",
+    lunaDudosa: "{a} or {b}",
+    lunaIncierta: "Sign uncertain without the time",
     tratoTitulo: "How we address you",
     tratoAclaracion: "Applies to what we write or translate from now on; what's already written stays as it is.",
     tratoError: "We couldn't save it. Please try again.",
@@ -1403,12 +1422,15 @@ const en: Dict = {
     needDate: "The date of birth is missing.",
     badDate: "Check the date: it has to be after 1800 and can't be in the future.",
     failed: "We couldn't compute the chart. Check the details and try again.",
-    sinLeerBreve: segunRegalo("You've used your free short reading.", "You've used up your free short readings."),
+    sinLeerBreve: "You have no short readings available. The full report is a separate purchase.",
     previewTitle: "Your birth chart",
     previewLede: "It's yours and it's complete: the positions, the houses and the aspects of the sky on the day you were born.",
     previewCta: "Read what it says",
     previewNote: "Free, no account needed.",
+    informeTrae: "{n} sections written for your chart, about {palabras} words, in your language.",
+    temaBloqueado: "In the full report",
     comprarCta: "Read the full report · {precio}",
+    comprarCtaSinPrecio: "Read the full report",
     legalAntes: "By continuing you accept the ",
     legalTerminos: "terms",
     legalY: " and the ",
@@ -1416,9 +1438,7 @@ const en: Dict = {
     legalDespues: ".",
     comprarRequiereCuenta: "To use this coupon, sign in with your email.",
     previewPrivacidad:
-      "Your birth details aren't stored on our servers while you look at your chart. If you read your free reading, your chart and your reading stay only in this browser for 24 hours. If you buy the report, the chart is saved so we can deliver it.",
-    previewPrivacidadSinCompra:
-      "Your chart and your reading stay only in this browser for 24 hours. We don't store your birth details.",
+      "Your birth details aren't stored on our servers while you look at your chart. If you buy the report, the chart is saved so we can deliver it.",
     lecturaEscribiendo: "We're writing your reading…",
     lecturaOcupado: "We're writing a lot of readings, one moment…",
     lecturaFallida: "We couldn't write your reading.",
@@ -1442,7 +1462,7 @@ const en: Dict = {
       "It can still be calculated. Without a time you keep the planets' positions by sign, which change slowly, but there's no Ascendant and no houses — they depend on the Earth's rotation, that is, on the time — and the Moon is approximate, because it moves about thirteen degrees a day.",
     seoGratis: "How far it's free",
     seoGratisBody:
-      "The chart and your first short reading are free and need no account. Only the full report is paid.",
+      "The chart and a preview of your report are free and need no account. Only the full report is paid.",
   },
   foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact" },
   consent: {
@@ -1471,9 +1491,9 @@ const en: Dict = {
     abriendo: "Opening checkout…",
     fallo: "We couldn't open the checkout. Please try again.",
     sinCatalogo: "We couldn't load pricing. Please try again in a moment.",
-    gratisNombre: "Short reading",
+    gratisNombre: "Birth chart",
     gratisPrecio: "Free",
-    gratisDetalle: `${segunRegalo("One per account", "{n} per account")}, no card. Your chart in a few paragraphs.`,
+    gratisDetalle: "No account, no card. Your wheel, your tables and a preview of what the report says about your chart.",
     verEjemplo: "See an example",
     nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
     sinCartaNota: "After paying, you calculate your chart and the report is written on it.",
@@ -1493,8 +1513,8 @@ const en: Dict = {
   },
   auth: {
     navEnter: "Sign in",
-    title: "Your reading is waiting.",
-    lede: `Sign in and use it: you have ${segunRegalo("a short reading", "{n} short readings")} on the house, no card needed.`,
+    title: "Your account.",
+    lede: "Sign in to see your charts and your reports.",
     loading: "Loading…",
     blocked: "We couldn't load Google sign-in — usually a tracker blocker. Use your email below instead.",
     failed: "We couldn't sign you in. Try again.",
@@ -1618,7 +1638,7 @@ const pt: Dict = {
     empty: "Ainda não há notas publicadas em português. Estão a caminho.",
     back: "Todas as notas",
     ctaTitle: "E o seu, como está?",
-    ctaLede: "Coloque sua data, hora e local de nascimento e veja seu mapa natal, calculado com as mesmas efemérides. A primeira leitura breve não custa nada.",
+    ctaLede: "Coloque sua data, hora e local de nascimento e veja seu mapa natal, calculado com as mesmas efemérides. O mapa e uma prévia do que ele diz são grátis, sem criar conta.",
     ctaBoton: "Ver meu mapa natal",
     publishedOn: "Publicada em",
   },
@@ -1643,10 +1663,10 @@ const pt: Dict = {
   },
   pricing: {
     eyebrow: "Preços",
-    title: `${segunRegalo("Sua primeira leitura breve é grátis.", "Suas primeiras {n} leituras breves são grátis.")}\nO relatório completo é comprado à parte.`,
+    title: "Seu mapa natal é grátis.\nO relatório completo é comprado à parte.",
     priceNote: "o relatório completo de um mapa: oito seções, cerca de 6.000 palavras",
     terms: [
-      { label: segunRegalo("Sua primeira leitura breve", "Suas primeiras {n} leituras breves"), value: "Grátis", free: true },
+      { label: "Seu mapa natal e um adiantamento do relatório", value: "Grátis", free: true },
       { label: "Relatório completo de um mapa", value: "{precio}" },
       { label: "O mesmo relatório em outro idioma", value: "Sem custo", free: true },
       { label: "Validade", value: "Não expiram" },
@@ -1672,7 +1692,7 @@ const pt: Dict = {
       },
       {
         q: "Preciso criar uma conta?",
-        a: "Você entra com sua conta do Google. Sem senha para lembrar e sem formulário para preencher.",
+        a: "Não para ver seu mapa: ele é calculado sem conta. Para guardar seus mapas e relatórios, você entra com o Google ou com seu e-mail, sem senha para lembrar.",
       },
       {
         q: "Posso fazer mapas de outras pessoas?",
@@ -1687,7 +1707,7 @@ const pt: Dict = {
   cierre: {
     eyebrow: "Começar",
     title: "Comece pelo seu.",
-    note: "No navegador, sem instalar nada. Sua primeira leitura breve não custa nada.",
+    note: "No navegador, sem instalar nada. O mapa e uma prévia do que ele diz são grátis, sem criar conta.",
     cta: "Ver meu mapa natal",
   },
   chart: {
@@ -1711,9 +1731,9 @@ const pt: Dict = {
     interpretFreeLang: "Sem custo: você já leu em outro idioma.",
     interpreting: "Escrevendo sua leitura…",
     readAgain: "Ver a leitura",
-    capDiario: "As leituras breves grátis de hoje acabaram. Volte amanhã, ou leia o relatório completo.",
+    capDiario: "O limite de leituras breves que podemos escrever hoje foi atingido. Volte amanhã: a sua continua disponível.",
     demasiados: "Tentativas demais seguidas. Espere um momento e tente de novo.",
-    sinLeerBreve: segunRegalo("Você já usou sua leitura breve grátis.", "Você ficou sem leituras breves grátis."),
+    sinLeerBreve: "Você não tem leituras breves disponíveis. O relatório completo é comprado à parte.",
     sinLeerInforme: "Você ainda não comprou o relatório completo.",
     sinDerecho: "Você não tem essa leitura disponível.",
     failed: "Não conseguimos gerar a leitura. Tente de novo daqui a pouco.",
@@ -1724,6 +1744,8 @@ const pt: Dict = {
     verCasas: "Ver as casas",
     verAspectos: "Ver os {n} aspectos",
     verDatos: "Ver os dados do mapa",
+    lunaDudosa: "{a} ou {b}",
+    lunaIncierta: "Signo incerto sem a hora",
     tratoTitulo: "Como falamos com você",
     tratoAclaracion: "Vale para o que for escrito ou traduzido a partir de agora; o que já está escrito fica como está.",
     tratoError: "Não conseguimos salvar. Tente de novo.",
@@ -1812,12 +1834,15 @@ const pt: Dict = {
     needDate: "Falta a data de nascimento.",
     badDate: "Revise a data: precisa ser posterior a 1800 e não pode estar no futuro.",
     failed: "Não conseguimos calcular o mapa. Revise os dados e tente de novo.",
-    sinLeerBreve: segunRegalo("Você já usou sua leitura breve grátis.", "Você já usou suas leituras breves grátis."),
+    sinLeerBreve: "Você não tem leituras breves disponíveis. O relatório completo é comprado à parte.",
     previewTitle: "Seu mapa natal",
     previewLede: "É seu e está completo: as posições, as casas e os aspectos do céu do dia em que você nasceu.",
     previewCta: "Ler o que diz",
     previewNote: "Grátis e sem criar conta.",
+    informeTrae: "{n} seções escritas para o seu mapa, cerca de {palabras} palavras, no seu idioma.",
+    temaBloqueado: "No relatório completo",
     comprarCta: "Ler o relatório completo · {precio}",
+    comprarCtaSinPrecio: "Ler o relatório completo",
     legalAntes: "Ao continuar, você aceita os ",
     legalTerminos: "termos",
     legalY: " e a ",
@@ -1825,9 +1850,7 @@ const pt: Dict = {
     legalDespues: ".",
     comprarRequiereCuenta: "Para usar este cupom, entre com o seu e-mail.",
     previewPrivacidad:
-      "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta. Se você ler sua leitura grátis, sua carta e sua leitura ficam só neste navegador por 24 horas. Se você comprar o relatório, a carta fica guardada para entregá-lo.",
-    previewPrivacidadSinCompra:
-      "Sua carta e sua leitura ficam só neste navegador por 24 horas. Não guardamos seus dados de nascimento.",
+      "Seus dados de nascimento não são guardados nos nossos servidores enquanto você olha sua carta. Se você comprar o relatório, a carta fica guardada para entregá-lo.",
     lecturaEscribiendo: "Estamos escrevendo sua leitura…",
     lecturaOcupado: "Estamos escrevendo muitas leituras, um momento…",
     lecturaFallida: "Não conseguimos escrever sua leitura.",
@@ -1851,7 +1874,7 @@ const pt: Dict = {
       "Dá para calcular do mesmo jeito. Sem hora ficam as posições dos planetas por signo, que mudam devagar, mas não há Ascendente nem casas — dependem da rotação da Terra, ou seja, da hora — e a Lua fica aproximada, porque se move uns treze graus por dia.",
     seoGratis: "Até onde é grátis",
     seoGratisBody:
-      "O mapa e a primeira leitura breve são grátis e não pedem conta. Só o informe completo é pago.",
+      "O mapa e um adiantamento do seu relatório são grátis e não pedem conta. Só o relatório completo é pago.",
   },
   foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato" },
   consent: {
@@ -1880,9 +1903,9 @@ const pt: Dict = {
     abriendo: "Abrindo o pagamento…",
     fallo: "Não conseguimos abrir o pagamento. Tente de novo.",
     sinCatalogo: "Não conseguimos carregar os preços. Tente de novo em instantes.",
-    gratisNombre: "Leitura breve",
+    gratisNombre: "Mapa natal",
     gratisPrecio: "Grátis",
-    gratisDetalle: `${segunRegalo("Uma por conta", "{n} por conta")}, sem cartão. Seu mapa em alguns parágrafos.`,
+    gratisDetalle: "Sem conta e sem cartão. Sua roda, suas tabelas e um adiantamento do que o relatório diz sobre seu mapa.",
     verEjemplo: "Ver um exemplo",
     nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
     sinCartaNota: "Depois de pagar, você calcula seu mapa e o relatório é escrito sobre ele.",
@@ -1902,8 +1925,8 @@ const pt: Dict = {
   },
   auth: {
     navEnter: "Entrar",
-    title: "Sua leitura está esperando.",
-    lede: `Entre e use: você tem ${segunRegalo("uma leitura breve", "{n} leituras breves")} de presente, sem cartão.`,
+    title: "Sua conta.",
+    lede: "Entre para ver seus mapas e seus relatórios.",
     loading: "Carregando…",
     blocked: "Não conseguimos carregar o acesso do Google — costuma ser um bloqueador de rastreadores. Entre com seu e-mail abaixo.",
     failed: "Não conseguimos entrar. Tente de novo.",

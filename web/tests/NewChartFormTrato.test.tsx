@@ -145,16 +145,12 @@ describe("el trato llega al backend", () => {
     expect(JSON.parse(init.body)).toMatchObject({ trato: "masculino", locale: "es" });
   });
 
-  it("sin sesión, «Leer qué dice» manda el trato a la lectura sin cuenta", async () => {
+  it("sin sesión, calcular la carta manda el trato al preview", async () => {
     render(<NewChartForm locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA, "neutro");
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ estado: "generando" }), { status: 202 }));
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: t.previewCta }));
-    });
 
     const [url, init] = fetchMock.mock.calls.at(-1)!;
-    expect(url).toBe("/api/lectura-anonima");
+    expect(url).toBe("/api/charts/preview");
     expect(JSON.parse(init.body)).toMatchObject({ trato: "neutro", date: "1976-05-31" });
   });
 

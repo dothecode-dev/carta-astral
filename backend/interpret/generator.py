@@ -42,12 +42,72 @@ _DEGRADED_NOTES = {
     "Não interprete o ascendente nem as casas; limite-se a planetas, signos e aspectos.",
 }
 
+# Sin hora, la Luna puede cambiar de signo en el día de nacimiento
+# (core.ephemeris marca `moon_sign_uncertain`, con los dos signos posibles si
+# pudo acotar el día). La vista previa ya no la nombra; el informe no puede
+# afirmarla después. `{luna}` es «la Luna» o «la Luna de Persona B».
+_LUNA_DUDOSA = {
+    "es": "\n\nIMPORTANTE: ese día {luna} cambió de signo, de {a} a {b} (abreviaturas como "
+    "en el JSON), y sin hora no se sabe cuál corresponde. No afirmes ese signo de Luna: "
+    "presentá las dos posibilidades e invitá a reconocerse en una, sin elegir.",
+    "en": "\n\nIMPORTANT: on that day {luna} changed sign, from {a} to {b} (abbreviations as "
+    "in the JSON), and without a birth time it is unknown which one applies. Do not state "
+    "that Moon sign: present both possibilities and invite recognition in one, without choosing.",
+    "pt": "\n\nIMPORTANTE: nesse dia {luna} mudou de signo, de {a} para {b} (abreviaturas como "
+    "no JSON), e sem hora não se sabe qual vale. Não afirme esse signo de Lua: apresente as "
+    "duas possibilidades e convide a se reconhecer em uma, sem escolher.",
+}
+_LUNA_INCIERTA = {
+    "es": "\n\nIMPORTANTE: sin hora ni zona horaria del lugar no se puede saber el signo de "
+    "{luna}, que pudo cambiar ese día. No afirmes ese signo de Luna: hablá de ella sin darlo "
+    "por cierto.",
+    "en": "\n\nIMPORTANT: without a birth time or a time zone for the place, the sign of {luna} "
+    "cannot be known; it may have changed that day. Do not state that Moon sign: discuss it "
+    "without taking it as certain.",
+    "pt": "\n\nIMPORTANTE: sem hora nem fuso horário do lugar não dá para saber o signo de "
+    "{luna}, que pode ter mudado nesse dia. Não afirme esse signo de Lua: fale dela sem "
+    "tomá-lo como certo.",
+}
+_LA_LUNA = {"es": ("la Luna", "la Luna de {p}"), "en": ("the Moon", "{p}'s Moon"), "pt": ("a Lua", "a Lua de {p}")}
+
+
+def carta_para_prompt(chart_data: dict) -> dict:
+    """La carta como va al prompt. Con la Luna dudosa, su placement viaja sin
+    signo ni grado y con los dos signos posibles (`sign_options`): si el JSON
+    dijera "Leo", el modelo lo afirmaría aunque la nota le pida no hacerlo.
+    No toca el dict original."""
+    flags = chart_data.get("flags") or {}
+    if not flags.get("moon_sign_uncertain"):
+        return chart_data
+    opciones = list(flags.get("moon_sign_options") or [])
+    placements = [
+        {**{k: v for k, v in p.items() if k not in ("position", "abs_pos")}, "sign": None, "sign_options": opciones}
+        if p.get("name") == "Moon" else p
+        for p in chart_data.get("placements") or []
+    ]
+    return {**chart_data, "placements": placements}
+
+
+def nota_luna(chart_data: dict, lang: str, persona: str = "") -> str:
+    """La nota de Luna dudosa para el prompt, o "" si la Luna no lo es.
+    `persona` («Persona B») la atribuye en el vínculo, donde hay dos cartas."""
+    flags = chart_data.get("flags") or {}
+    if not flags.get("moon_sign_uncertain"):
+        return ""
+    sola, de = _LA_LUNA[lang]
+    luna = de.format(p=persona) if persona else sola
+    opciones = flags.get("moon_sign_options") or ()
+    if len(opciones) == 2:
+        return _LUNA_DUDOSA[lang].format(luna=luna, a=opciones[0], b=opciones[1])
+    return _LUNA_INCIERTA[lang].format(luna=luna)
+
 
 def _user_content(chart_data: dict, lang: str, trato: str = "") -> str:
-    body = json.dumps(chart_data, ensure_ascii=False)
+    body = json.dumps(carta_para_prompt(chart_data), ensure_ascii=False)
     content = f"{_INSTRUCTIONS[lang]}\n{body}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
+        content += nota_luna(chart_data, lang)
     if nota := instruccion(trato, lang):
         content += f"\n\n{nota}"
     return content
@@ -208,10 +268,11 @@ def build_seccion(chart_data: dict, seccion: Seccion, lang: str, previo: str, cl
         palabras=seccion.palabras,
         maximo=int(seccion.palabras * _MARGEN_TOPE_SECCION),
     )
-    cuerpo = json.dumps(chart_data, ensure_ascii=False)
+    cuerpo = json.dumps(carta_para_prompt(chart_data), ensure_ascii=False)
     content = f"{pedido}\n\n{cuerpo}"
     if not chart_data.get("time_known", True):
         content += _DEGRADED_NOTES[lang]
+        content += nota_luna(chart_data, lang)
     if reparto:
         # Quién explica qué: lo que impide que la misma oposición se explique
         # en cuatro secciones (interpret/reparto.py, spec 2026-10-07).

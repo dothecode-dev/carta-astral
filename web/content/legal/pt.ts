@@ -21,7 +21,7 @@ export const legalPt: LegalContent = {
           "**Dados de nascimento:** os que você informa para calcular um mapa — nome (opcional), data, hora e lugar de nascimento.",
           "**Compras:** o pagamento é processado pela **Stripe**, que atua como vendedora registrada. Não vemos nem guardamos os dados do seu cartão: da Stripe recebemos a confirmação do pagamento e o identificador da compra, para liberar o que você comprou.",
           "**Comprar sem conta:** se você abrir o pagamento do relatório sem ter entrado, guardamos os dados desse mapa para poder entregar o relatório quando o pagamento for confirmado. Se o pagamento não for concluído, o mapa é apagado quando o checkout expira (uma hora depois de aberto). Você informa seu e-mail no **Stripe**, que nos repassa quando o pagamento é confirmado: usamos esse e-mail para criar sua conta, ou para creditar a compra na conta que você já tinha com ele, e para enviar o código de acesso.",
-          "**Leitura sem conta:** para escrever sua leitura breve sem conta usamos seus dados de nascimento no momento e não os guardamos nos nossos servidores. A leitura fica no nosso servidor só até seu navegador recebê-la (no máximo 15 minutos). Depois, a leitura e os dados da sua carta ficam apenas no seu navegador por 24 horas, para que você possa vê-la de novo ou comprar o relatório completo. Para que a leitura grátis seja uma por navegador, guardamos por 24 horas uma marca que não contém dados pessoais.",
+          "**Mapa sem conta:** para mostrar seu mapa sem conta usamos seus dados de nascimento no momento e não os guardamos nos nossos servidores. Se depois você comprar o relatório, veja «Comprar sem conta» acima.",
         ],
       },
       { kind: "h2", text: "Para que usamos" },
@@ -33,6 +33,7 @@ export const legalPt: LegalContent = {
           "Controlar os relatórios que você tem disponíveis para ler.",
           "Enviar esses e-mails: o envio é feito pela **Resend**, um provedor de envio de e-mails que os processa por nossa conta e apenas para entregá-los a você.",
           "**Detectar falhas e entender o uso do site.** Usamos **Sentry** (relatórios de erro) e **PostHog** (analítica de produto). Eles registram ações como entrar, criar um mapa, gerar uma leitura, baixá-la ou concluir uma compra, junto com o identificador interno da sua conta. **Nunca enviamos a eles seu nome, sua data, hora ou local de nascimento, nem o texto das suas leituras**, tampouco seu email. Seu endereço IP é usado apenas para deduzir o país de onde você acessa e não é armazenado. No site a analítica só é ativada se você aceitar, e você pode mudar de ideia quando quiser pelo link no rodapé. **O registro de uma compra concluída é a exceção: quem faz isso é o nosso servidor quando o pagamento é confirmado, então não depende dessa preferência.** É um dado da operação —qual produto e por quanto—, não da sua navegação, e viaja como o resto: com o identificador interno da sua conta e sem o seu email. Ambos os serviços processam esses dados nos Estados Unidos.",
+          "**Contar as visitas, sem cookies.** Quando você calcula uma carta, nosso servidor soma um a um contador do dia e anota por qual canal você chegou (por exemplo, um anúncio ou um buscador) e o fuso horário do seu navegador, reduzido a uma cidade de referência. São totais por dia sem nada que identifique você: não guardamos seu IP nem a página de onde você veio, e eles não são associados à sua conta.",
         ],
       },
       {
@@ -42,7 +43,7 @@ export const legalPt: LegalContent = {
       { kind: "h2", text: "Apagar seus dados" },
       {
         kind: "p",
-        text: "Você pode apagar seus mapas ou a conta inteira pela sua conta (Conta → Apagar meus dados). A exclusão é definitiva: remove seus dados pessoais, seus mapas, suas leituras e o que você tiver disponível para ler. Guardamos apenas um **hash irreversível** do identificador do seu provedor de login — ele não permite identificar você nem recuperar seus dados; só evita que uma conta nova receba de novo as leituras gratuitas de boas-vindas.",
+        text: "Você pode apagar seus mapas ou a conta inteira pela sua conta (Conta → Apagar meus dados). A exclusão é definitiva: remove seus dados pessoais, seus mapas, suas leituras e o que você tiver disponível para ler. Guardamos apenas um **hash irreversível** do identificador do seu provedor de login — ele não permite identificar você nem recuperar seus dados; só evita que um presente de boas-vindas se repita, se houver.",
       },
       { kind: "h2", text: "Segurança e retenção" },
       {
@@ -69,13 +70,13 @@ export const legalPt: LegalContent = {
       { kind: "h2", text: "Conta" },
       {
         kind: "p",
-        text: "Para usar o ASTRA você precisa de uma conta do Google e ter pelo menos 13 anos. Você é responsável pelo uso feito com sua conta.",
+        text: "Você pode calcular e ver seu mapa natal sem conta. Para guardar seus mapas e ver seus relatórios é preciso uma conta, com o Google ou com o seu e-mail. Para usar o ASTRA você precisa ter pelo menos 13 anos. Você é responsável pelo uso feito com sua conta.",
       },
       { kind: "h2", text: "Compras" },
       {
         kind: "ul",
         items: [
-          "Cada conta nova recebe **leituras breves de presente**, na quantidade indicada na página de preços. O relatório completo de um mapa é comprado à parte.",
+          "O mapa natal é calculado sem custo e sem conta. O relatório completo de um mapa é comprado à parte.",
           "O que você compra é o direito de ler um relatório: **não expira**, não é transferível e não tem valor monetário fora do ASTRA. Ler esse mesmo relatório em outro idioma não consome outro.",
           "O pagamento é processado pela **Stripe**, que atua como vendedora registrada (*merchant of record*): emite o comprovante, cobra o imposto devido no seu país e atende as reclamações da transação.",
           "**Reembolsos:** a Stripe pode reembolsar uma compra em até 60 dias e aplica os prazos de arrependimento exigidos no seu país. Se uma compra for reembolsada, ela é descontada dos relatórios que você tem disponíveis; se você já os usou, fica como saldo pendente que é abatido na próxima compra. **Nunca retiramos um relatório já escrito.**",
