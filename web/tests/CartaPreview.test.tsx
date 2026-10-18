@@ -252,3 +252,10 @@ describe("la página con la carta calculada (18-10-2026)", () => {
     expect(css).toMatch(/\.previewCarta \.wheelHolderWide\s*\{[^}]*width:\s*min\(100%,\s*52rem\)/);
   });
 });
+
+describe("el título de la vista previa", () => {
+  it("tiene el tamaño del título de la home, no el de una página angosta", () => {
+    const css = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
+    expect(css).toMatch(/\.previewTitle\s*\{[^}]*font-size:\s*var\(--step-4\)/);
+  });
+});

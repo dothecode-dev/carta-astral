@@ -1042,8 +1042,11 @@ body:has(.consentBar) .accionFija {
   gap: 0.6rem;
 }
 
+/* El título de la página con la carta calculada: el tamaño del de la home.
+   A todo el ancho, el de una página angosta se leía como un subtítulo. */
 .previewTitle {
-  font-size: var(--step-3);
+  font-size: var(--step-4);
+  line-height: 1.05;
 }
 
 /* El botón de arriba, para quien ya decidió: el mismo que el del cierre, a
