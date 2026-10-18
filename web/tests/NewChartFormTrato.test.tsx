@@ -137,7 +137,7 @@ describe("el trato llega al backend", () => {
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Leer el informe completo · US\$ 29/ }));
+      fireEvent.click(screen.getAllByRole("button", { name: /Leer el informe completo · US\$ 29/ })[0]!);
     });
 
     const [url, init] = fetchMock.mock.calls.at(-1)!;

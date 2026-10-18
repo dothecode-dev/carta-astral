@@ -212,7 +212,8 @@ describe("comprar sin cuenta desde la vista previa", () => {
 
   async function apretar() {
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: BOTON }));
+      // El de arriba: los dos abren el mismo pago.
+      fireEvent.click(screen.getAllByRole("button", { name: BOTON })[0]!);
     });
   }
 
@@ -248,7 +249,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
     const antes = fetchMock.mock.calls.length;
 
     await apretar();
-    const boton = screen.getByRole("button", { name: dict.precios.abriendo });
+    const boton = screen.getAllByRole("button", { name: dict.precios.abriendo })[0]!;
     await act(async () => {
       fireEvent.click(boton);
     });
@@ -275,7 +276,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
     await apretar();
 
     expect(screen.getByRole("alert").textContent).toBe(dict.precios.fallo);
-    expect((screen.getByRole("button", { name: BOTON }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getAllByRole("button", { name: BOTON })[0] as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("un fallo de red también se avisa", async () => {
@@ -292,7 +293,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
     render(<NewChartForm moneda="usd" locale="es" dict={dict} precio={null} />);
     await completarYEnviar(fetchMock, CALCULADA);
 
-    expect(screen.getByRole("button", { name: dict.newChart.comprarCtaSinPrecio })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: dict.newChart.comprarCtaSinPrecio })).toHaveLength(2);
   });
 });
 

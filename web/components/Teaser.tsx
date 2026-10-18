@@ -15,43 +15,49 @@ function Candado() {
 
 /**
  * Lo que se lee de la carta sin cuenta y sin pagar (spec 2026-10-17): un
- * párrafo fijo por posición —Sol, Luna, Ascendente…— y, debajo, el índice del
- * informe con los temas de ESTA carta a la vista pero bloqueados. Lo escribe el
- * backend sin llamar al modelo, ya en los tres idiomas y con los temas
- * nombrados para quien lee: acá sólo se elige el del idioma de la página.
+ * párrafo fijo por posición —Sol, Luna, Ascendente…—. Lo escribe el backend
+ * sin llamar al modelo, ya en los tres idiomas: acá sólo se elige el del
+ * idioma de la página.
  */
-export function Teaser({ teaser, locale, dict }: { teaser: TeaserDatos; locale: Locale; dict: Dict }) {
+export function TeaserBloques({ teaser, locale, dict }: { teaser: TeaserDatos; locale: Locale; dict: Dict }) {
+  return (
+    <div className="teaserBloques">
+      {teaser.bloques.map((bloque) => (
+        <section key={bloque.cuerpo} className="teaserBloque">
+          <h3 className="teaserTitulo">{tituloCuerpoEnSigno(bloque.cuerpo, bloque.signo, dict, locale)}</h3>
+          <p className="teaserTexto">{bloque.textos[locale]}</p>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * El índice del informe con los temas de ESTA carta a la vista pero
+ * bloqueados. Va pegado al botón grande de compra: es lo que se está por
+ * comprar (18-10-2026).
+ */
+export function TeaserIndice({ teaser, locale, dict }: { teaser: TeaserDatos; locale: Locale; dict: Dict }) {
   const t = dict.newChart;
   return (
-    <>
-      <div className="teaserBloques">
-        {teaser.bloques.map((bloque) => (
-          <section key={bloque.cuerpo} className="teaserBloque">
-            <h3 className="teaserTitulo">{tituloCuerpoEnSigno(bloque.cuerpo, bloque.signo, dict, locale)}</h3>
-            <p className="teaserTexto">{bloque.textos[locale]}</p>
-          </section>
-        ))}
-      </div>
-
-      <ol className="teaserIndice">
-        {teaser.indice.map((seccion) => (
-          <li key={seccion.slug} className="teaserSeccion">
-            <h3 className="teaserSeccionTitulo">{seccion.titulos[locale]}</h3>
-            {seccion.temas.length > 0 && (
-              <ul className="teaserTemas">
-                {seccion.temas.map((tema, i) => (
-                  <li key={i} className="teaserTema">
-                    <span role="img" aria-label={t.temaBloqueado} className="teaserCandado">
-                      <Candado />
-                    </span>
-                    {tema[locale]}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
-      </ol>
-    </>
+    <ol className="teaserIndice">
+      {teaser.indice.map((seccion) => (
+        <li key={seccion.slug} className="teaserSeccion">
+          <h3 className="teaserSeccionTitulo">{seccion.titulos[locale]}</h3>
+          {seccion.temas.length > 0 && (
+            <ul className="teaserTemas">
+              {seccion.temas.map((tema, i) => (
+                <li key={i} className="teaserTema">
+                  <span role="img" aria-label={t.temaBloqueado} className="teaserCandado">
+                    <Candado />
+                  </span>
+                  {tema[locale]}
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }

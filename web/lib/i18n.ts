@@ -728,6 +728,8 @@ export type Dict = {
     informeTrae: string;
     /** Etiqueta accesible del candado de cada tema del índice. */
     temaBloqueado: string;
+    /** Título del índice del informe, pegado al botón grande de compra. */
+    indiceTitulo: string;
     /** El botón de pago de la vista previa, sin cuenta. `{precio}` sale del catálogo. */
     comprarCta: string;
     /** El mismo botón cuando el catálogo no respondió y no hay precio. */
@@ -1023,6 +1025,7 @@ const es: Dict = {
     previewNote: "Gratis y sin crear cuenta.",
     informeTrae: "{n} secciones escritas para tu carta, unas {palabras} palabras, en tu idioma.",
     temaBloqueado: "En el informe completo",
+    indiceTitulo: "Lo que trae tu informe",
     comprarCta: "Leer el informe completo · {precio}",
     comprarCtaSinPrecio: "Leer el informe completo",
     legalAntes: "Al continuar aceptás los ",
@@ -1437,6 +1440,7 @@ const en: Dict = {
     previewNote: "Free, no account needed.",
     informeTrae: "{n} sections written for your chart, about {palabras} words, in your language.",
     temaBloqueado: "In the full report",
+    indiceTitulo: "What your report covers",
     comprarCta: "Read the full report · {precio}",
     comprarCtaSinPrecio: "Read the full report",
     legalAntes: "By continuing you accept the ",
@@ -1851,6 +1855,7 @@ const pt: Dict = {
     previewNote: "Grátis e sem criar conta.",
     informeTrae: "{n} seções escritas para o seu mapa, cerca de {palabras} palavras, no seu idioma.",
     temaBloqueado: "No relatório completo",
+    indiceTitulo: "O que tem no seu relatório",
     comprarCta: "Ler o relatório completo · {precio}",
     comprarCtaSinPrecio: "Ler o relatório completo",
     legalAntes: "Ao continuar, você aceita os ",

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -78,22 +81,26 @@ describe("botón de compra de la vista previa", () => {
     pintar(locale);
     const t = getDict(locale).newChart;
 
-    expect(screen.getByRole("button", { name: t.comprarCta.replace("{precio}", "US$ 29") })).toBeTruthy();
+    // Dos: uno arriba, al lado del título, y el grande del cierre (18-10-2026).
+    expect(screen.getAllByRole("button", { name: t.comprarCta.replace("{precio}", "US$ 29") })).toHaveLength(2);
     const terminos = screen.getByRole("link", { name: t.legalTerminos });
     const privacidad = screen.getByRole("link", { name: t.legalPrivacidad });
     expect(terminos.getAttribute("href")).toBe(`/${locale}/legal/terms`);
     expect(privacidad.getAttribute("href")).toBe(`/${locale}/legal/privacy`);
   });
 
-  it("el botón de compra es el principal", () => {
+  it("los dos botones de compra son principales y el del cierre es el grande", () => {
     pintar("es");
-    const pago = screen.getByRole("button", { name: /Leer el informe completo/ });
-    expect(pago.className).toContain("btnPrimary");
+    const [arriba, cierre] = screen.getAllByRole("button", { name: /Leer el informe completo/ });
+    expect(arriba!.className).toContain("btnPrimary");
+    expect(cierre!.className).toContain("btnPrimary");
+    expect(cierre!.className).toContain("btnGrande");
+    expect(arriba!.className).not.toContain("btnGrande");
   });
 
-  it("apretarlo llama a onComprar y no manda a entrar", () => {
+  it.each([0, 1])("apretar el botón %i llama a onComprar y no manda a entrar", (i) => {
     const { onComprar } = pintar("es");
-    fireEvent.click(screen.getByRole("button", { name: /Leer el informe completo/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Leer el informe completo/ })[i]!);
 
     expect(onComprar).toHaveBeenCalledTimes(1);
   });
@@ -129,16 +136,17 @@ describe("botón de compra de la vista previa", () => {
     pintar(locale, { precio: null });
     const t = getDict(locale).newChart;
 
-    expect(screen.getByRole("button", { name: t.comprarCtaSinPrecio })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: t.comprarCtaSinPrecio })).toHaveLength(2);
     expect(screen.getByRole("link", { name: t.legalTerminos })).toBeTruthy();
     expect(t.comprarCtaSinPrecio).not.toContain("{precio}");
   });
 
   it("mientras la compra está en curso el botón queda deshabilitado", () => {
     pintar("es", { comprando: true });
-    const boton = screen.getByRole("button", { name: getDict("es").precios.abriendo });
+    const botones = screen.getAllByRole("button", { name: getDict("es").precios.abriendo });
 
-    expect((boton as HTMLButtonElement).disabled).toBe(true);
+    expect(botones).toHaveLength(2);
+    botones.forEach((b) => expect((b as HTMLButtonElement).disabled).toBe(true));
   });
 
   it("muestra el error de la compra", () => {
@@ -149,14 +157,17 @@ describe("botón de compra de la vista previa", () => {
 });
 
 describe("el teaser y el índice del informe", () => {
-  it.each(LOCALES)("%s: el orden es bloques, índice, compra, rueda y datos", (locale) => {
+  it.each(LOCALES)("%s: el orden es compra, rueda, bloques, índice, compra grande y datos", (locale) => {
     const { container } = render(<CartaPreview {...propsBase(locale)} />);
     const t = getDict(locale).newChart;
+    const [arriba, cierre] = screen.getAllByRole("button", { name: t.comprarCta.replace("{precio}", "US$ 29") });
     const orden = [
-      container.querySelector(".teaserBloques"),
-      container.querySelector(".teaserIndice"),
-      screen.getByRole("button", { name: t.comprarCta.replace("{precio}", "US$ 29") }),
+      arriba,
       container.querySelector(".chartBody"),
+      container.querySelector(".teaserBloques"),
+      screen.getByRole("heading", { name: t.indiceTitulo }),
+      container.querySelector(".teaserIndice"),
+      cierre,
       container.querySelector(".datosCarta"),
     ];
     orden.forEach((el) => expect(el).not.toBeNull());
@@ -206,8 +217,18 @@ describe("el teaser y el índice del informe", () => {
 
   it("sin teaser (backend viejo) muestra la compra, la rueda y los datos sin romper", () => {
     pintar("es", { carta: CARTA });
-    expect(screen.getByRole("button", { name: /Leer el informe completo/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Leer el informe completo/ }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/secciones escritas/)).toBeNull();
     expect(screen.getByText(getDict("es").newChart.previewTitle)).toBeTruthy();
+  });
+});
+
+
+describe("los bloques del adelanto", () => {
+  it("van de a dos por fila, no de a tres (18-10-2026)", () => {
+    // jsdom no calcula el grid: se chequea la regla en el CSS.
+    const css = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
+    const regla = css.match(/\.teaserBloques\s*\{[^}]*\}/)![0];
+    expect(regla).toMatch(/grid-template-columns:\s*repeat\(2,/);
   });
 });

@@ -1038,6 +1038,23 @@ body:has(.consentBar) .accionFija {
   font-size: var(--step-3);
 }
 
+/* El botón de arriba, para quien ya decidió: el mismo que el del cierre, a
+   tamaño normal y alineado con el título. */
+.previewCtaArriba {
+  margin-top: 0.4rem;
+}
+
+/* El cierre: qué trae el informe y, pegado, el botón grande. */
+.previewCierre {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.previewCierreTitulo {
+  font-size: var(--step-2);
+}
+
 /* Sin medida propia: va al ancho de la cabecera, como el párrafo de arriba
    («Poné tu fecha…») y la firma que viene debajo. Con 60ch la última palabra
    saltaba de línea entre dos bloques que ocupaban todo el ancho. */
@@ -1064,9 +1081,16 @@ body:has(.consentBar) .accionFija {
    temas bloqueados. Es lectura, no tabla: columnas que se acomodan al ancho. */
 .teaserBloques {
   display: grid;
-  gap: 1.5rem 2rem;
-  /* min(100%, …): a 320 px de ancho la columna mínima no entra y desborda. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1.75rem 2.5rem;
+  /* De a dos por fila (18-10-2026): de a tres, los párrafos quedaban angostos
+     y largos, y el cuarto bloque solo en su fila. En el celular, uno. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 40rem) {
+  .teaserBloques {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .teaserTitulo,
@@ -1512,6 +1536,12 @@ body:has(.consentBar) .accionFija {
 
 .btnPrimary:hover {
   opacity: 0.86;
+}
+
+/* La acción principal de una pantalla, cuando hay otra igual más arriba. */
+.btnGrande {
+  font-size: 1.125rem;
+  padding: 1rem 2.25rem;
 }
 
 .btnGhost {
