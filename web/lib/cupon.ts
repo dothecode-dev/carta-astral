@@ -31,6 +31,8 @@ const TIMEOUT_MS = 3000;
 export type ProductoConCupon = ProductoCatalogo & {
   precio_final_centavos: number;
   descuento_centavos: number;
+  /** Por moneda: el final y el descuento en cada una en que se vende. */
+  finales?: Record<string, { precio_final_centavos: number; descuento_centavos: number }>;
 };
 
 export type CuponRespuesta =

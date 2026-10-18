@@ -27,8 +27,18 @@ export type ProductoCatalogo = {
   codigo: string;
   precio_centavos: number;
   moneda: string;
+  /** Precio por moneda, en centavos de esa moneda: `{ usd: 500, brl: 2490 }`. */
+  precios?: Record<string, number>;
   otorga: { codigo: string; cantidad: number }[];
 };
+
+/** `[centavos, moneda]` del producto para quien ve `moneda`: en esa si el
+ * producto la tiene, si no en USD (EC2). */
+export function precioEn(producto: ProductoCatalogo, moneda: string): [number, string] {
+  const enEsa = producto.precios?.[moneda];
+  if (enEsa !== undefined) return [enEsa, moneda];
+  return [producto.precios?.usd ?? producto.precio_centavos, "usd"];
+}
 
 export async function fetchCatalogo(): Promise<ProductoCatalogo[] | null> {
   try {
@@ -57,6 +67,9 @@ export function formatearPrecio(centavos: number, moneda: string, locale: string
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: moneda.toUpperCase(),
+    // «US$» y no «$» para el dólar —en es-AR «$» es el peso—, pero «R$» y no
+    // «BRL» para el real, que con `symbol` sale así en español.
+    currencyDisplay: moneda.toLowerCase() === "usd" ? "symbol" : "narrowSymbol",
     // Los precios del catálogo son enteros; mostrar ",00" sólo agrega ruido.
     minimumFractionDigits: centavos % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
@@ -73,9 +86,12 @@ export function precioDe(
   productos: ProductoCatalogo[] | null,
   codigo: string,
   locale: string,
+  moneda = "usd",
 ): string | null {
   const producto = productos?.find((p) => p.codigo === codigo);
-  return producto ? formatearPrecio(producto.precio_centavos, producto.moneda, locale) : null;
+  if (!producto) return null;
+  const [centavos, enMoneda] = precioEn(producto, moneda);
+  return formatearPrecio(centavos, enMoneda, locale);
 }
 
 /**

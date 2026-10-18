@@ -185,3 +185,100 @@ describe("/precios con sesión", () => {
     expect(screen.queryByText(dict.precios.sinCartaNota)).toBeNull();
   });
 });
+
+// RF25/RF26: la página en la moneda del visitante. Acá la decide el backend
+// por IP (sin cookie); el pack no tiene precio en reales y queda en dólares.
+const CATALOGO_BRL = {
+  productos: [
+    {
+      codigo: "informe_natal", precio_centavos: 500, moneda: "usd", precios: { usd: 500, brl: 2490 },
+      otorga: [{ codigo: "informe_natal", cantidad: 1 }],
+    },
+    {
+      codigo: "pack_5_natal", precio_centavos: 12500, moneda: "usd", precios: { usd: 12500 },
+      otorga: [{ codigo: "informe_natal", cantidad: 5 }],
+    },
+  ],
+};
+const CUPON_BRL = {
+  valido: true, codigo: "PROMO30", porcentaje: 30,
+  productos: [{
+    ...CATALOGO_BRL.productos[0], precio_final_centavos: 350, descuento_centavos: 150,
+    finales: {
+      usd: { precio_final_centavos: 350, descuento_centavos: 150 },
+      brl: { precio_final_centavos: 1743, descuento_centavos: 747 },
+    },
+  }],
+};
+
+function stubBackendBrl(cupon?: unknown) {
+  const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+    void _init;
+    const u = String(url);
+    if (u.includes("/api/moneda/")) return json({ moneda: "brl", pais: "BR" });
+    if (u.includes("/api/cupones/")) return json(cupon);
+    if (u.includes("/api/checkout")) return json({ url: "https://checkout" });
+    return json(CATALOGO_BRL);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+const sinEspacios = (s: string | null | undefined) => (s ?? "").replace(/\s/g, " ");
+
+describe("/precios en la moneda del visitante", () => {
+  it("muestra cada producto en la moneda del visitante, o en dólares si no la tiene", async () => {
+    stubBackendBrl();
+    const { container } = await pagina({});
+
+    const montos = [...container.querySelectorAll(".precioMonto")].map((n) => sinEspacios(n.textContent));
+    expect(montos[0]).toMatch(/R\$ 24,90/);
+    expect(montos[1]).toMatch(/US\$ 125|125/);
+    expect(montos[1]).not.toMatch(/R\$/);
+  });
+
+  it("el JSON-LD declara cada oferta en la moneda en que se muestra", async () => {
+    stubBackendBrl();
+    const { container } = await pagina({});
+
+    const ld = JSON.parse(container.querySelector('script[type="application/ld+json"]')!.innerHTML);
+    const ofertas = ld.itemListElement.map((i: { item: { offers: unknown } }) => i.item.offers);
+    expect(ofertas[0]).toMatchObject({ price: "24.90", priceCurrency: "BRL" });
+    expect(ofertas[1]).toMatchObject({ price: "125.00", priceCurrency: "USD" });
+  });
+
+  it("el cupón muestra el precio final en la misma moneda", async () => {
+    stubBackendBrl(CUPON_BRL);
+    const { container } = await pagina({ cupon: "PROMO30" });
+
+    const informe = sinEspacios(container.querySelector(".precioMonto")!.textContent);
+    expect(informe).toMatch(/R\$ 24,90/);
+    expect(informe).toMatch(/R\$ 17,43/);
+  });
+
+  it("el botón compra en la moneda que se mostró", async () => {
+    sesion = true;
+    vi.stubGlobal("location", { assign: vi.fn(), href: "" });
+    const fetchMock = stubBackendBrl();
+    await pagina({});
+
+    await userEvent.click(screen.getAllByRole("button", { name: dict.precios.comprar })[0]);
+
+    const pedido = fetchMock.mock.calls.find(([u]) => String(u) === "/api/checkout")!;
+    expect(JSON.parse(pedido[1]!.body as string)).toMatchObject({
+      producto: "informe_natal", moneda: "brl",
+    });
+  });
+
+  it("tiene el selector de moneda, que vuelve a esta página", async () => {
+    stubBackendBrl();
+    const { container } = await pagina({});
+
+    const form = container.querySelector('form[action="/api/moneda"]') as HTMLFormElement;
+    expect(form).not.toBeNull();
+    expect(form.method.toLowerCase()).toBe("post");
+    expect((form.querySelector('input[name="volver"]') as HTMLInputElement).value).toBe("/es/precios");
+    const opciones = [...form.querySelectorAll('button[name="moneda"]')].map((b) => (b as HTMLButtonElement).value);
+    expect(opciones).toEqual(["usd", "brl"]);
+  });
+});

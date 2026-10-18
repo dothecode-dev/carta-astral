@@ -88,7 +88,7 @@ afterEach(() => {
 
 describe("el selector del trato", () => {
   it("está debajo del nombre, con las tres opciones y «sin elegir» inicial", () => {
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     const select = screen.getByLabelText(t.tratoLabel) as HTMLSelectElement;
 
     expect(select.value).toBe("");
@@ -122,7 +122,7 @@ describe("el selector del trato", () => {
 
 describe("el trato llega al backend", () => {
   it("con sesión, crear la carta manda el trato en POST /api/charts", async () => {
-    render(<NewChartForm locale="es" dict={dict} signedIn />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} signedIn />);
     await completarYEnviar(fetchMock, { ok: true, status: 201, json: async () => ({ id: "abc" }) }, "femenino");
 
     const [url, init] = fetchMock.mock.calls.at(-1)!;
@@ -131,7 +131,7 @@ describe("el trato llega al backend", () => {
   });
 
   it("sin sesión, «Leer el informe completo» manda el trato al checkout anónimo", async () => {
-    render(<NewChartForm locale="es" dict={dict} precio="US$ 29" />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} precio="US$ 29" />);
     await completarYEnviar(fetchMock, CALCULADA, "masculino");
     fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ url: "https://stripe.test/c" }) });
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
@@ -146,7 +146,7 @@ describe("el trato llega al backend", () => {
   });
 
   it("sin sesión, calcular la carta manda el trato al preview", async () => {
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA, "neutro");
 
     const [url, init] = fetchMock.mock.calls.at(-1)!;
@@ -155,7 +155,7 @@ describe("el trato llega al backend", () => {
   });
 
   it("sin elegir, el trato va vacío", async () => {
-    render(<NewChartForm locale="es" dict={dict} signedIn />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} signedIn />);
     await completarYEnviar(fetchMock, { ok: true, status: 201, json: async () => ({ id: "abc" }) });
 
     const [, init] = fetchMock.mock.calls.at(-1)!;

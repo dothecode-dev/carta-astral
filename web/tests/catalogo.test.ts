@@ -10,6 +10,7 @@ const PACK = {
   codigo: "pack_5_natal",
   precio_centavos: 12500,
   moneda: "usd",
+  precios: { usd: 12500 },
   otorga: [{ codigo: "informe_natal", cantidad: 5 }],
 };
 
@@ -54,6 +55,7 @@ describe("el precio en los textos", () => {
     codigo: "informe_natal",
     precio_centavos: 500,
     moneda: "usd",
+    precios: { usd: 500, brl: 2490 },
     otorga: [{ codigo: "informe_natal", cantidad: 1 }],
   };
 
@@ -62,6 +64,22 @@ describe("el precio en los textos", () => {
     // anunciaba uno y Stripe cobraba otro hasta que alguien se acordara.
     expect(precioDe([INFORME], "informe_natal", "es-AR")).toMatch(/5/);
     expect(precioDe([INFORME], "informe_natal", "es-AR")).not.toMatch(/29/);
+  });
+
+  // RF25: el mismo test por moneda, no uno duplicado por cada una.
+  it.each([
+    ["usd", "en-US", "$5"],
+    ["brl", "pt-BR", "R$ 24,90"],
+    // En español el real no sale «BRL 24,90», y el dólar sigue siendo «US$».
+    ["brl", "es-AR", "R$ 24,90"],
+    ["usd", "es-AR", "US$ 5"],
+  ])("en %s lo muestra en esa moneda", (moneda, locale, esperado) => {
+    expect(precioDe([INFORME], "informe_natal", locale, moneda)?.replace(/\s/g, " ")).toBe(esperado);
+  });
+
+  it("en una moneda que el producto no tiene, muestra el de usd (EC2)", () => {
+    const vinculo = { ...INFORME, codigo: "informe_vinculo", precios: { usd: 900 } };
+    expect(precioDe([vinculo], "informe_vinculo", "en-US", "brl")).toBe("$9");
   });
 
   it("sin catálogo, o sin ese producto, no inventa un precio", () => {

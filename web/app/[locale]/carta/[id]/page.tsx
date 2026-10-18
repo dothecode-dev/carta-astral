@@ -18,6 +18,7 @@ import { conQuery } from "@/lib/consultaBackend";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import type { Derecho } from "@/lib/derechos";
 import { INTL_LOCALE, type Locale, getDict, isLocale } from "@/lib/i18n";
+import { monedaDelVisitante, monedaPara } from "@/lib/moneda";
 import { buildPdfPayload } from "@/lib/pdfPayload";
 import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
 import { uuidValido } from "@/lib/uuid";
@@ -100,7 +101,10 @@ export default async function ChartPage({
 
   // El precio del informe sale del catálogo del backend, el mismo contra el que
   // el webhook valida lo que Stripe cobró. Sin respuesta, la nota va sin precio.
-  const precioInforme = precioDe(await fetchCatalogo(), "informe_natal", INTL_LOCALE[locale]);
+  // En la moneda del visitante (RF25), y esa misma viaja al checkout (RF26).
+  const [catalogo, monedaVisitante] = await Promise.all([fetchCatalogo(), monedaDelVisitante()]);
+  const precioInforme = precioDe(catalogo, "informe_natal", INTL_LOCALE[locale], monedaVisitante);
+  const monedaInforme = monedaPara(catalogo?.find((p) => p.codigo === "informe_natal"), monedaVisitante);
 
   // Se arma una vez y se ubica según haya lectura o no (ver abajo). El mismo
   // elemento en los dos lugares: duplicarlo sería duplicarle el estado.
@@ -113,6 +117,7 @@ export default async function ChartPage({
       derechos={account.derechos}
       timeKnown={chart.birth.time_known}
       precioInforme={precioInforme}
+      moneda={monedaInforme}
       dict={dict}
     />
   );

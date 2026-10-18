@@ -12,6 +12,7 @@ import { armarDatosCarta, errorDeFecha, TRATOS, type DatosCarta, type Trato } fr
 import type { Dict, Locale } from "@/lib/i18n";
 import { limpiarRestosDeLectura } from "@/lib/lecturaLocal";
 import { leerProcedencia } from "@/lib/procedencia";
+import type { Moneda } from "@/lib/monedas";
 
 // El formulario no calcula nada: junta los datos y se los manda al backend, que
 // es el único que sabe de efemérides. Lo único que resuelve acá es que no se
@@ -53,9 +54,12 @@ export function NewChartForm({
   dict,
   signedIn = false,
   precio = null,
+  moneda,
 }: {
   locale: Locale;
   dict: Dict;
+  /** La moneda en que se mostró `precio`: la compra sin cuenta se cobra en esa (RF26). */
+  moneda: Moneda;
   signedIn?: boolean;
   /** Precio del informe ya formateado; `null` si el catálogo no respondió. */
   precio?: string | null;
@@ -154,7 +158,7 @@ export function NewChartForm({
       const res = await fetch("/api/checkout/anonimo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...datos.current, locale }),
+        body: JSON.stringify({ ...datos.current, locale, moneda }),
       });
       if (!res.ok) {
         setComprando(false);

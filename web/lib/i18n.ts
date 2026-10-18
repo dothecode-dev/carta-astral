@@ -269,7 +269,10 @@ export type Dict = {
     title: string;
     priceNote: string;
     terms: { label: string; value: string; free?: boolean }[];
+    /** Lleva `{moneda}`: el nombre de la moneda en que se muestra el precio. */
     note: string;
+    /** Nombre de cada moneda para la nota (RF27). */
+    monedas: { usd: string; brl: string };
     /** A la página de precios. La sección no tenía ni un enlace: la tabla
      *  terminaba en una nota y ahí se cortaba el camino a comprar. */
     cta: string;
@@ -288,6 +291,8 @@ export type Dict = {
   consent: { text: string; accept: string; reject: string; more: string; footLink: string };
   precios: {
     title: string;
+    /** Etiqueta accesible del selector de moneda (RF24). */
+    monedaLabel: string;
     /** El `<title>` de la página, que no es el encabezado.
      *
      *  `title` es lo que se lee arriba de la página y está escrito para quien
@@ -847,7 +852,8 @@ const es: Dict = {
       { label: "El mismo informe en otro idioma", value: "Sin costo", free: true },
       { label: "Vencimiento", value: "No vencen" },
     ],
-    note: "Precios en dólares, con el impuesto de tu país ya incluido. Se paga directo en la web.",
+    note: "Precios en {moneda}, con el impuesto de tu país ya incluido. El total en tu moneda lo ves al pagar, directo en la web.",
+    monedas: { usd: "dólares", brl: "reales" },
     cta: "Ver todos los precios",
   },
   faq: {
@@ -1062,6 +1068,7 @@ const es: Dict = {
   },
   precios: {
     title: "Elegí cómo querés leerte.",
+    monedaLabel: "Moneda",
     seoTitle: "Precios: cuánto sale tu carta natal completa",
     lede: "Comprás una vez y lo usás cuando quieras: el informe no vence.",
     nombre: {
@@ -1259,7 +1266,8 @@ const en: Dict = {
       { label: "The same report in another language", value: "No charge", free: true },
       { label: "Expiry", value: "They don't expire" },
     ],
-    note: "Prices in US dollars, with your country's tax already included. You pay directly on the web.",
+    note: "Prices in {moneda}, with your country's tax already included. You see the total in your currency when you pay, directly on the web.",
+    monedas: { usd: "US dollars", brl: "Brazilian reais" },
     cta: "See all pricing",
   },
   faq: {
@@ -1474,6 +1482,7 @@ const en: Dict = {
   },
   precios: {
     title: "Choose how you want to read yourself.",
+    monedaLabel: "Currency",
     seoTitle: "Pricing: what a full birth chart reading costs",
     lede: "Buy once, use it whenever: the report doesn't expire.",
     nombre: {
@@ -1671,7 +1680,8 @@ const pt: Dict = {
       { label: "O mesmo relatório em outro idioma", value: "Sem custo", free: true },
       { label: "Validade", value: "Não expiram" },
     ],
-    note: "Preços em dólares, com o imposto do seu país já incluído. O pagamento é feito direto pela web.",
+    note: "Preços em {moneda}, com o imposto do seu país já incluído. O total na sua moeda aparece na hora de pagar, direto pela web.",
+    monedas: { usd: "dólares", brl: "reais" },
     cta: "Ver todos os preços",
   },
   faq: {
@@ -1886,6 +1896,7 @@ const pt: Dict = {
   },
   precios: {
     title: "Escolha como quer se ler.",
+    monedaLabel: "Moeda",
     seoTitle: "Preços: quanto custa seu mapa natal completo",
     lede: "Compre uma vez e use quando quiser: o relatório não expira.",
     nombre: {

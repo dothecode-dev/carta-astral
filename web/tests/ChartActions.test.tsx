@@ -37,6 +37,7 @@ function renderActions({
   freeCredits = 3,
   paidCredits = 1,
   precioInforme = "US$ 5",
+  moneda = "usd",
   derechos,
 }: {
   interpretations?: Record<string, Tier[]>;
@@ -45,6 +46,7 @@ function renderActions({
   freeCredits?: number;
   paidCredits?: number;
   precioInforme?: string | null;
+  moneda?: "usd" | "brl";
   /** Pisa los derechos armados con `freeCredits`/`paidCredits` (p. ej. sin fila de breve). */
   derechos?: DerechoTest[];
 } = {}) {
@@ -57,6 +59,7 @@ function renderActions({
       enCurso={enCurso}
       derechos={derechos ?? [derecho("lectura_breve", freeCredits), derecho("informe_natal", paidCredits)]}
       precioInforme={precioInforme}
+      moneda={moneda}
       dict={dict}
     />,
   );
@@ -784,7 +787,7 @@ describe("volver a la carta después de cerrar la pestaña", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    renderActions({ paidCredits: 0 });
+    renderActions({ paidCredits: 0, moneda: "brl" });
     await clickBoton(enlaceCompra());
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -794,6 +797,8 @@ describe("volver a la carta después de cerrar la pestaña", () => {
       chart_id: CHART,
       // Vuelve a la página en el idioma en que estaba navegando.
       locale: "es",
+      // La moneda en que se le mostró el precio (RF26).
+      moneda: "brl",
     });
     expect(assign).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_test_xyz");
   });

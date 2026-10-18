@@ -6,10 +6,11 @@ import { ComprarBoton } from "@/components/ComprarBoton";
 import { CuponInput } from "@/components/CuponInput";
 import { Footer } from "@/components/Footer";
 import { Nav } from "@/components/Nav";
-import { fetchCatalogo, formatearPrecio, unidades } from "@/lib/catalogo";
+import { fetchCatalogo, formatearPrecio, precioEn, unidades } from "@/lib/catalogo";
 import { fetchCupon, normalizarCupon } from "@/lib/cupon";
 import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
+import { MONEDAS, monedaDelVisitante, monedaPara } from "@/lib/moneda";
 import { callApi, haySesion } from "@/lib/session";
 import type { ChartSummary } from "@/components/AccountCharts";
 
@@ -17,6 +18,11 @@ import type { ChartSummary } from "@/components/AccountCharts";
 // tiene que poder saber cuánto sale antes de que le pidan registrarse. Era el
 // agujero de la navegación —el único lugar donde se podía comprar estaba dentro
 // de una carta ya generada, y los packs no se podían comprar en ningún lado—.
+
+// Lo que dice cada botón del selector. Acá y no en los diccionarios: es el
+// símbolo de la moneda, igual en los tres idiomas (y `check` prohíbe el
+// literal en los textos).
+const SIMBOLO: Record<(typeof MONEDAS)[number], string> = { usd: "US$", brl: "R$" };
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -81,10 +87,13 @@ export default async function PreciosPage({
   // backend —la misma función que cobra— y sólo con forma de código: lo
   // demás ni se consulta. Sin respuesta, precio de lista.
   const codigoCupon = normalizarCupon(query.cupon);
-  const [productos, signedIn, cupon] = await Promise.all([
+  const [productos, signedIn, cupon, moneda] = await Promise.all([
     fetchCatalogo(),
     haySesion(),
     codigoCupon ? fetchCupon(codigoCupon) : Promise.resolve(null),
+    // RF25: la del selector (cookie) o la de la IP. Cada producto se muestra
+    // —y se cobra— en esa si tiene precio en ella, si no en dólares (EC2).
+    monedaDelVisitante(),
   ]);
   // Si la cuenta tiene alguna carta, sólo con sesión: decide si la tarjeta
   // tiene que explicar qué pasa después de pagar sin una. El listado viene
@@ -97,9 +106,13 @@ export default async function PreciosPage({
     : true;
   const cuponValido = cupon?.valido ? cupon : null;
   const estadoCupon = cupon === null ? null : cupon.valido ? "valido" : cupon.motivo;
-  // El precio final por producto, sólo para los que el cupón abarca.
+  // El precio final por producto, sólo para los que el cupón abarca, en la
+  // moneda en que se muestra ese producto.
   const finales = new Map(
-    (cuponValido?.productos ?? []).map((p) => [p.codigo, p.precio_final_centavos]),
+    (cuponValido?.productos ?? []).map((p) => {
+      const m = monedaPara(p, moneda);
+      return [p.codigo, p.finales?.[m]?.precio_final_centavos ?? p.precio_final_centavos];
+    }),
   );
   // Lo que pidió comprar antes de que el login se interpusiera (lo puso
   // `ComprarBoton` al mandarlo a /entrar). Se contrasta contra el catálogo que
@@ -118,7 +131,9 @@ export default async function PreciosPage({
   const jsonLd = productos && {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    itemListElement: productos.map((producto, i) => ({
+    itemListElement: productos.map((producto, i) => {
+      const [centavos, enMoneda] = precioEn(producto, moneda);
+      return {
       "@type": "ListItem",
       position: i + 1,
       item: {
@@ -127,13 +142,14 @@ export default async function PreciosPage({
         description: dict.precios.detalle[producto.codigo] ?? "",
         offers: {
           "@type": "Offer",
-          price: (producto.precio_centavos / 100).toFixed(2),
-          priceCurrency: producto.moneda.toUpperCase(),
+          price: (centavos / 100).toFixed(2),
+          priceCurrency: enMoneda.toUpperCase(),
           availability: "https://schema.org/InStock",
           url: `${SITE_URL}/${locale}/precios`,
         },
       },
-    })),
+      };
+    }),
   };
 
   return (
@@ -144,6 +160,22 @@ export default async function PreciosPage({
         <section className="preciosHead">
           <h1 className="display">{dict.precios.title}</h1>
           <p className="preciosLede">{dict.precios.lede}</p>
+          {/* RF24: un formulario común, sin JS. Guarda la elección en una
+              cookie y vuelve acá; todas las páginas con precio la leen. */}
+          <form className="switch monedaSelector" action="/api/moneda" method="post" aria-label={dict.precios.monedaLabel}>
+            <input type="hidden" name="volver" value={`/${locale}/precios`} />
+            {MONEDAS.map((m) => (
+              <button
+                key={m}
+                type="submit"
+                name="moneda"
+                value={m}
+                aria-pressed={m === moneda}
+              >
+                {SIMBOLO[m]}
+              </button>
+            ))}
+          </form>
         </section>
 
         {/* Antes de todo lo que se cobra, y fuera de la grilla: no es un producto
@@ -177,9 +209,8 @@ export default async function PreciosPage({
           <ul className="preciosGrid">
             {productos.map((producto) => {
               const n = unidades(producto);
-              const precio = formatearPrecio(
-                producto.precio_centavos, producto.moneda, INTL_LOCALE[locale],
-              );
+              const [lista, enMoneda] = precioEn(producto, moneda);
+              const precio = formatearPrecio(lista, enMoneda, INTL_LOCALE[locale]);
               const final = finales.get(producto.codigo);
               return (
                 <li key={producto.codigo} className="precioCard">
@@ -193,7 +224,7 @@ export default async function PreciosPage({
                     // ANTES de ir a pagar, que es lo que pide el cupón.
                     <p className="precioMonto">
                       <s className="precioTachado">{precio}</s>{" "}
-                      {formatearPrecio(final, producto.moneda, INTL_LOCALE[locale])}
+                      {formatearPrecio(final, enMoneda, INTL_LOCALE[locale])}
                     </p>
                   )}
                   {n > 1 && (
@@ -205,8 +236,8 @@ export default async function PreciosPage({
                         // Sobre lo que se paga: con cupón, «US$ 25 cada uno»
                         // al lado de US$ 87,50 era la cuenta del precio viejo.
                         formatearPrecio(
-                          Math.round((final ?? producto.precio_centavos) / n),
-                          producto.moneda,
+                          Math.round((final ?? lista) / n),
+                          enMoneda,
                           INTL_LOCALE[locale],
                         ),
                       )}
@@ -216,6 +247,7 @@ export default async function PreciosPage({
                     {dict.precios.detalle[producto.codigo] ?? ""}
                   </p>
                   <ComprarBoton
+                    moneda={monedaPara(producto, moneda)}
                     codigo={producto.codigo}
                     locale={locale}
                     dict={dict}

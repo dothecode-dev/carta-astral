@@ -19,6 +19,8 @@ export type Compra = {
   acreditada: boolean;
   created_at: string;
   monto_centavos: number;
+  /** En qué moneda se pagó (`usd`, `brl`); las compras viejas no la traen. */
+  moneda?: string;
   cupon: string | null;
   reembolsado_centavos: number;
   /** La sesión de Stripe, sólo mientras se puede retomar el pago. */
@@ -46,7 +48,8 @@ export function Compras({
   }
 
   const fecha = new Intl.DateTimeFormat(INTL_LOCALE[locale], { dateStyle: "medium" });
-  const precio = (centavos: number) => formatearPrecio(centavos, "usd", INTL_LOCALE[locale]);
+  // En la moneda en que se pagó cada una; las anteriores a las monedas, en USD.
+  const precio = (centavos: number, moneda = "usd") => formatearPrecio(centavos, moneda, INTL_LOCALE[locale]);
 
   return (
     <ul className="compras">
@@ -63,7 +66,7 @@ export function Compras({
             </span>
             {/* Un regalo del 100 % no vale «US$ 0»: vale gratis, y dice con qué. */}
             <span className="compraMonto">
-              {compra.monto_centavos === 0 ? dict.precios.gratisPrecio : precio(compra.monto_centavos)}
+              {compra.monto_centavos === 0 ? dict.precios.gratisPrecio : precio(compra.monto_centavos, compra.moneda)}
             </span>
             {compra.cupon && (
               <span className="compraCupon">
@@ -83,7 +86,7 @@ export function Compras({
             {reembolsada && <span className="compraEstado">{dict.auth.compraReembolsada}</span>}
             {parcial && (
               <span className="compraEstado">
-                {dict.auth.compraReembolsoParcial.replace("{monto}", precio(compra.reembolsado_centavos))}
+                {dict.auth.compraReembolsoParcial.replace("{monto}", precio(compra.reembolsado_centavos, compra.moneda))}
               </span>
             )}
           </li>

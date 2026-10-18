@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Dict, Locale } from "@/lib/i18n";
 import { track } from "@/lib/telemetry";
+import type { Moneda } from "@/lib/monedas";
 
 async function motivoDe(res: Response): Promise<string | null> {
   try {
@@ -35,8 +36,11 @@ export function ComprarBoton({
   signedIn,
   reanudar = false,
   cupon = null,
+  moneda,
 }: {
   codigo: string;
+  /** La moneda en que la página mostró el precio: se cobra en esa (RF26). */
+  moneda: Moneda;
   locale: Locale;
   dict: Dict;
   signedIn: boolean;
@@ -63,7 +67,7 @@ export function ComprarBoton({
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ producto: codigo, locale, ...(cupon ? { cupon } : {}) }),
+        body: JSON.stringify({ producto: codigo, locale, moneda, ...(cupon ? { cupon } : {}) }),
       });
       if (res.status === 401) {
         // La sesión se venció mientras miraba la página. `haySesion()` sólo
@@ -97,7 +101,7 @@ export function ComprarBoton({
       setBusy(false);
       setError(dict.precios.fallo);
     }
-  }, [codigo, locale, cupon, cuponQuery, dict.precios]);
+  }, [codigo, locale, moneda, cupon, cuponQuery, dict.precios]);
 
   // Una sola vez por montaje: sin el guard, volver de Stripe con el botón
   // "atrás" —que restaura la URL con `?comprar=` incluido— relanzaría el

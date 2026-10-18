@@ -9,7 +9,7 @@ import { ApiError, callApi, motivoDe } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  let cuerpo: { producto?: string; chart_id?: string; locale?: string; cupon?: string } = {};
+  let cuerpo: { producto?: string; chart_id?: string; locale?: string; cupon?: string; moneda?: string } = {};
   try {
     cuerpo = await request.json();
   } catch {
@@ -31,6 +31,9 @@ export async function POST(request: Request) {
         locale: cuerpo.locale,
         // El backend lo valida y decide el descuento; acá sólo viaja.
         cupon: cuerpo.cupon,
+        // La moneda en que la página mostró el precio. El backend la valida
+        // contra las del producto; sin ella cobra en USD.
+        moneda: cuerpo.moneda,
       }),
     });
     return NextResponse.json(data);

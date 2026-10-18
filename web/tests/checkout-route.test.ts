@@ -34,6 +34,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("/api/checkout y la moneda (RF26)", () => {
+  it("reenvía la moneda al backend", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ url: "https://checkout" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await checkoutPost(post({ producto: "informe_natal", locale: "pt", moneda: "brl" }));
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ producto: "informe_natal", moneda: "brl" });
+  });
+});
+
 describe("/api/checkout con cupón", () => {
   it("pasa el cupón al backend tal cual", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ url: "https://checkout" }));

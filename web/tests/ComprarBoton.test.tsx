@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe("ComprarBoton", () => {
   it("sin sesión manda a entrar en vez de fallar con un 401", () => {
-    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn={false} />);
+    render(<ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn={false} />);
 
     // Con a dónde volver y qué venía a comprar: sin eso, el login lo depositaba
     // en su cuenta vacía y la compra se perdía en el camino.
@@ -41,14 +41,14 @@ describe("ComprarBoton", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { rerender } = render(
-      <ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn reanudar />,
+      <ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn reanudar />,
     );
     await screen.findByRole("button");
-    rerender(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn reanudar />);
+    rerender(<ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn reanudar />);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      producto: "pack_5_natal", locale: "es",
+      producto: "pack_5_natal", locale: "es", moneda: "usd",
     });
     // La URL queda sin el pedido: volver de Stripe con el botón "atrás" no
     // puede relanzarle el pago a quien acaba de decidir que no.
@@ -59,7 +59,7 @@ describe("ComprarBoton", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn />);
+    render(<ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn />);
     await screen.findByRole("button");
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -76,12 +76,12 @@ describe("ComprarBoton", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn />);
+    render(<ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn />);
     await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
 
     // El producto viaja: es lo que hacía falta para poder vender los packs.
     const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(enviado).toEqual({ producto: "pack_5_natal", locale: "es" });
+    expect(enviado).toEqual({ producto: "pack_5_natal", locale: "es", moneda: "usd" });
     // Y sin carta atada: el derecho se usa después, en la que la persona elija.
     expect(enviado.chart_id).toBeUndefined();
     expect(assign).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_test_1");
@@ -90,7 +90,7 @@ describe("ComprarBoton", () => {
   it("si el checkout no abre, lo dice y deja reintentar", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
 
-    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    render(<ComprarBoton moneda="usd" codigo="informe_natal" locale="es" dict={dict} signedIn />);
     await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(dict.precios.fallo);
@@ -110,7 +110,7 @@ describe("medición del embudo de pago", () => {
       ok: true, json: async () => ({ url: "https://checkout.stripe.com/c/pay/cs_test_1" }),
     }));
 
-    render(<ComprarBoton codigo="pack_3_natal" locale="es" dict={dict} signedIn />);
+    render(<ComprarBoton moneda="usd" codigo="pack_3_natal" locale="es" dict={dict} signedIn />);
     await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
 
     expect(track).toHaveBeenCalledWith("checkout_iniciado", {
@@ -121,7 +121,7 @@ describe("medición del embudo de pago", () => {
   it("también cuando el checkout no abre: querer comprar y no poder es el dato", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
-    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    render(<ComprarBoton moneda="usd" codigo="informe_natal" locale="es" dict={dict} signedIn />);
     await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
 
     expect(track).toHaveBeenCalledWith("checkout_iniciado", {
@@ -130,7 +130,7 @@ describe("medición del embudo de pago", () => {
   });
 
   it("sin sesión no mide nada: es un enlace al login, no una compra", () => {
-    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn={false} />);
+    render(<ComprarBoton moneda="usd" codigo="informe_natal" locale="es" dict={dict} signedIn={false} />);
 
     expect(track).not.toHaveBeenCalled();
   });
@@ -149,7 +149,7 @@ describe("cuando la sesión se venció mirando la página", () => {
     });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
 
-    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    render(<ComprarBoton moneda="usd" codigo="informe_natal" locale="es" dict={dict} signedIn />);
     await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
 
     // Por `expirada` y no derecho a /entrar: la cookie muerta tiene que
@@ -165,7 +165,7 @@ describe("cuando la sesión se venció mirando la página", () => {
     });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
 
-    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    render(<ComprarBoton moneda="usd" codigo="informe_natal" locale="es" dict={dict} signedIn />);
     await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
 
     expect(screen.queryByRole("alert")).toBeNull();
@@ -174,7 +174,7 @@ describe("cuando la sesión se venció mirando la página", () => {
   it("un fallo que sí es nuestro sigue mostrando el error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 502 }));
 
-    render(<ComprarBoton codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    render(<ComprarBoton moneda="usd" codigo="informe_natal" locale="es" dict={dict} signedIn />);
     await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
 
     expect(screen.getByRole("alert")).toHaveTextContent(dict.precios.fallo);
@@ -184,7 +184,7 @@ describe("cuando la sesión se venció mirando la página", () => {
 describe("ComprarBoton con cupón", () => {
   it("sin sesión, el cupón viaja al login junto con la compra", () => {
     render(
-      <ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn={false} cupon="PROMO30" />,
+      <ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn={false} cupon="PROMO30" />,
     );
 
     expect(screen.getByRole("link", { name: dict.precios.comprar })).toHaveAttribute(
@@ -197,11 +197,11 @@ describe("ComprarBoton con cupón", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: "https://x" }) });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
+    render(<ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
     await userEvent.click(screen.getByRole("button"));
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      producto: "pack_5_natal", locale: "es", cupon: "PROMO30",
+      producto: "pack_5_natal", locale: "es", moneda: "usd", cupon: "PROMO30",
     });
     expect(track).toHaveBeenCalledWith("checkout_iniciado", {
       producto: "pack_5_natal", desde: "precios", cupon: "PROMO30",
@@ -214,7 +214,7 @@ describe("ComprarBoton con cupón", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
+    render(<ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
     await userEvent.click(screen.getByRole("button"));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(dict.precios.cuponMotivo.agotado);
@@ -225,11 +225,25 @@ describe("ComprarBoton con cupón", () => {
     Object.defineProperty(window, "location", { value: { assign }, writable: true, configurable: true });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }));
 
-    render(<ComprarBoton codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
+    render(<ComprarBoton moneda="usd" codigo="pack_5_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
     await userEvent.click(screen.getByRole("button"));
 
     expect(assign).toHaveBeenCalledWith(
       "/api/session/expirada?locale=es&next=%2Fes%2Fprecios&comprar=pack_5_natal&cupon=PROMO30",
     );
+  });
+});
+
+
+describe("la moneda viaja al checkout (RF26)", () => {
+  it("manda la moneda en que se mostró el precio", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ url: "https://x" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("location", { assign: vi.fn(), href: "" });
+    render(<ComprarBoton moneda="brl" codigo="informe_natal" locale="es" dict={dict} signedIn />);
+
+    await userEvent.click(screen.getByRole("button", { name: dict.precios.comprar }));
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ moneda: "brl" });
   });
 });

@@ -5,6 +5,7 @@ import { Nav } from "@/components/Nav";
 import { NewChartForm } from "@/components/NewChartForm";
 import { fetchCatalogo, precioDe } from "@/lib/catalogo";
 import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
+import { monedaDelVisitante, monedaPara } from "@/lib/moneda";
 import { SITE_URL } from "@/lib/config";
 import { haySesion } from "@/lib/session";
 import { Footer } from "@/components/Footer";
@@ -71,7 +72,12 @@ export default async function NewChartPage({
   const t = dict.newChart;
   // Sólo hace falta para el botón de la vista previa, que es de quien no
   // entró. Sin respuesta del catálogo, `null`: el botón no se dibuja.
-  const precio = signedIn ? null : precioDe(await fetchCatalogo(), "informe_natal", INTL_LOCALE[locale]);
+  // En la moneda del visitante (RF25), y esa misma viaja al checkout (RF26).
+  const [catalogo, monedaVisitante] = signedIn
+    ? [null, "usd" as const]
+    : await Promise.all([fetchCatalogo(), monedaDelVisitante()]);
+  const precio = signedIn ? null : precioDe(catalogo, "informe_natal", INTL_LOCALE[locale], monedaVisitante);
+  const moneda = monedaPara(catalogo?.find((p) => p.codigo === "informe_natal"), monedaVisitante);
 
   return (
     <>
@@ -83,7 +89,7 @@ export default async function NewChartPage({
           <p className="formLede">{signedIn ? t.lede : t.seoIntro}</p>
         </section>
 
-        <NewChartForm locale={locale} dict={dict} signedIn={signedIn} precio={precio} />
+        <NewChartForm locale={locale} dict={dict} signedIn={signedIn} precio={precio} moneda={moneda} />
 
         {/* El texto va DEBAJO del formulario y sólo para quien no entró: es lo
             que hace la página indexable —un formulario solo no es contenido

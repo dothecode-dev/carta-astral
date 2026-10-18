@@ -11,6 +11,7 @@ import { conPrecio } from "@/lib/catalogo";
 import { cantidad, puede, type Derecho } from "@/lib/derechos";
 import type { Dict, Locale } from "@/lib/i18n";
 import { track, type EventoProps } from "@/lib/telemetry";
+import type { Moneda } from "@/lib/monedas";
 
 // Los dos botones de la carta, y la espera mientras se escribe el producto
 // elegido.
@@ -184,6 +185,7 @@ export function ChartActions({
   derechos,
   timeKnown,
   precioInforme,
+  moneda,
   dict,
 }: {
   locale: Locale;
@@ -216,6 +218,8 @@ export function ChartActions({
    * que con uno que quizá ya no es el que se cobra.
    */
   precioInforme: string | null;
+  /** La moneda en que se mostró `precioInforme`: se cobra en esa (RF26). */
+  moneda: Moneda;
   dict: Dict;
 }) {
   const tiersAqui = interpretations[locale] ?? [];
@@ -443,7 +447,7 @@ export function ChartActions({
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ producto: "informe_natal", chart_id: chartId, locale }),
+        body: JSON.stringify({ producto: "informe_natal", chart_id: chartId, locale, moneda }),
       });
       if (res.status === 401) {
         // Misma salida que en /precios: la cookie muerta se borra y se vuelve

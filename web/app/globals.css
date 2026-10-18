@@ -2922,6 +2922,12 @@ body:has(.consentBar) .accionFija {
   font-size: 1.0625rem;
 }
 
+/* El selector de moneda (RF24): el mismo control que el del tema. */
+.monedaSelector {
+  align-self: flex-start;
+  margin-top: 0.75rem;
+}
+
 .preciosGrid {
   list-style: none;
   margin: 0;

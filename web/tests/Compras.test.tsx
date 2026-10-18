@@ -131,3 +131,40 @@ describe("Compras: cuánto, con qué cupón, y si volvió la plata", () => {
     expect(screen.getByText(parcial)).toBeInTheDocument();
   });
 });
+
+describe("Compras en la moneda en que se pagó (RF25)", () => {
+  it("una compra en reales se muestra en reales, también lo reembolsado", () => {
+    render(
+      <Compras
+        compras={[
+          {
+            codigo_producto: "informe_natal", acreditada: true, created_at: "2026-10-18T12:00:00Z",
+            monto_centavos: 2490, moneda: "brl", cupon: null, reembolsado_centavos: 1000, url: null,
+          },
+        ]}
+        locale="es"
+        dict={dict}
+      />,
+    );
+
+    expect(document.body.textContent?.replace(/\s/g, " ")).toMatch(/R\$ 24,90/);
+    expect(document.body.textContent?.replace(/\s/g, " ")).toMatch(/R\$ 10/);
+  });
+
+  it("una compra vieja, sin moneda, sigue en dólares", () => {
+    render(
+      <Compras
+        compras={[
+          {
+            codigo_producto: "informe_natal", acreditada: true, created_at: "2026-09-03T12:00:00Z",
+            monto_centavos: 2900, cupon: null, reembolsado_centavos: 0, url: null,
+          },
+        ]}
+        locale="es"
+        dict={dict}
+      />,
+    );
+
+    expect(document.body.textContent?.replace(/\s/g, " ")).toMatch(/US\$ 29/);
+  });
+});

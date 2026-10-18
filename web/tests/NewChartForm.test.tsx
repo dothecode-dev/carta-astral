@@ -55,7 +55,7 @@ beforeEach(() => {
   replace.mockClear();
   refresh.mockClear();
   localStorage.clear();
-  render(<NewChartForm locale="es" dict={dict} signedIn />);
+  render(<NewChartForm moneda="usd" locale="es" dict={dict} signedIn />);
 });
 
 afterEach(() => {
@@ -243,7 +243,7 @@ describe("restos de la lectura anónima", () => {
     localStorage.setItem(CLAVE_LECTURA, JSON.stringify({ vence: 1 }));
     localStorage.setItem(CLAVE_PEDIDO, JSON.stringify({ vence: 1 }));
     localStorage.setItem("otra-clave", "queda");
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     expect(localStorage.getItem(CLAVE_LECTURA)).toBeNull();
     expect(localStorage.getItem(CLAVE_PEDIDO)).toBeNull();
     expect(localStorage.getItem("otra-clave")).toBe("queda");

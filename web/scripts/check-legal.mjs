@@ -30,6 +30,8 @@ const REQUIRED = {
     ["sin cuenta", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
     ["Carta sin cuenta:", "la política documenta qué se guarda al mostrar la carta sin cuenta"],
     ["Contar las visitas, sin cookies", "el conteo propio del servidor: canal y zona horaria agregados"],
+    ["MaxMind", "la base de países que decide la moneda: atribución que exige su licencia (GeoLite2)"],
+    ["astra_moneda", "la cookie funcional que recuerda la moneda elegida"],
   ],
   "en.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
@@ -47,6 +49,8 @@ const REQUIRED = {
     ["without an account", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
     ["Chart without an account:", "la política documenta qué se guarda al mostrar la carta sin cuenta"],
     ["Counting visits, without cookies", "el conteo propio del servidor: canal y zona horaria agregados"],
+    ["MaxMind", "la base de países que decide la moneda: atribución que exige su licencia (GeoLite2)"],
+    ["astra_moneda", "la cookie funcional que recuerda la moneda elegida"],
   ],
   "pt.ts": [
     ["dothecode", "identificar al responsable del tratamiento de datos"],
@@ -64,6 +68,8 @@ const REQUIRED = {
     ["sem conta", "la política documenta qué se almacena cuando alguien compra sin cuenta"],
     ["Mapa sem conta:", "la política documenta qué se guarda al mostrar la carta sin cuenta"],
     ["Contar as visitas, sem cookies", "el conteo propio del servidor: canal y zona horaria agregados"],
+    ["MaxMind", "la base de países que decide la moneda: atribución que exige su licencia (GeoLite2)"],
+    ["astra_moneda", "la cookie funcional que recuerda la moneda elegida"],
   ],
 };
 

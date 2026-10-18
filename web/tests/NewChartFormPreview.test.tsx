@@ -102,7 +102,7 @@ describe("sin cuenta", () => {
   });
 
   it("manda de dónde llegó la visita junto con la carta", async () => {
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA);
 
     const [, init] = fetchMock.mock.calls.find((c) => c[0] === "/api/charts/preview")!;
@@ -110,7 +110,7 @@ describe("sin cuenta", () => {
   });
 
   it("calcula contra el preview y no crea ninguna carta", async () => {
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA);
 
     const urls = fetchMock.mock.calls.map((c) => c[0]);
@@ -120,7 +120,7 @@ describe("sin cuenta", () => {
   });
 
   it("no manda a entrar antes de mostrar la carta", async () => {
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA);
 
     expect(push).not.toHaveBeenCalled();
@@ -128,7 +128,7 @@ describe("sin cuenta", () => {
 
   it("tras el preview mide teaser_visto una sola vez, con la hora y las secciones", async () => {
     track.mockClear();
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     fireEvent.change(screen.getByLabelText(t.time), { target: { value: "19:30" } });
     await completarYEnviar(fetchMock, { ok: true, status: 200, json: async () => CARTA_CON_TEASER });
 
@@ -139,7 +139,7 @@ describe("sin cuenta", () => {
 
   it("sin hora de nacimiento teaser_visto lo dice", async () => {
     track.mockClear();
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, { ok: true, status: 200, json: async () => CARTA_CON_TEASER });
 
     expect(track).toHaveBeenCalledWith("teaser_visto", { con_hora: false, secciones: 8 });
@@ -147,7 +147,7 @@ describe("sin cuenta", () => {
 
   it("si el backend no manda teaser no mide teaser_visto y la pantalla sigue andando", async () => {
     track.mockClear();
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, CALCULADA);
 
     expect(track.mock.calls.some((c) => c[0] === "teaser_visto")).toBe(false);
@@ -162,7 +162,7 @@ describe("sin cuenta", () => {
     localStorage.setItem("astra-lectura-pedido", JSON.stringify({
       pedido: "00000000-0000-4000-8000-0000000000aa", carta: CARTA, datos: DATOS_GUARDADOS, vence: Date.now() + 60_000,
     }));
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
 
     expect(screen.queryByRole("button", { name: /Ver tu lectura de/ })).toBeNull();
@@ -171,7 +171,7 @@ describe("sin cuenta", () => {
   });
 
   it("el preview nunca llama a /api/lectura-anonima y no ofrece pedirla", async () => {
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, { ok: true, status: 200, json: async () => CARTA_CON_TEASER });
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
 
@@ -180,7 +180,7 @@ describe("sin cuenta", () => {
   });
 
   it("si el techo por IP corta, avisa en vez de quedarse mudo", async () => {
-    render(<NewChartForm locale="es" dict={dict} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} />);
     await completarYEnviar(fetchMock, { ok: false, status: 429, json: async () => ({}) });
 
     expect(screen.getByRole("alert").textContent).toBe(t.failed);
@@ -217,7 +217,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
   }
 
   it("abre el checkout anónimo con los datos de la carta, mide y redirige a Stripe", async () => {
-    render(<NewChartForm locale="es" dict={dict} precio="US$ 29" />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} precio="US$ 29" />);
     await completarYEnviar(fetchMock, CALCULADA);
     fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ url: "https://stripe.test/c" }) });
 
@@ -230,6 +230,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
       lat: ROSARIO.lat,
       lng: ROSARIO.lng,
       locale: "es",
+      moneda: "usd",
     });
     expect(track).toHaveBeenCalledWith("checkout_iniciado", {
       producto: "informe_natal",
@@ -241,7 +242,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
   });
 
   it("un doble clic abre un solo checkout", async () => {
-    render(<NewChartForm locale="es" dict={dict} precio="US$ 29" />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} precio="US$ 29" />);
     await completarYEnviar(fetchMock, CALCULADA);
     fetchMock.mockReturnValueOnce(new Promise(() => {}));
     const antes = fetchMock.mock.calls.length;
@@ -256,7 +257,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
   });
 
   it("el cupón de 100 % pide entrar con el mail", async () => {
-    render(<NewChartForm locale="es" dict={dict} precio="US$ 29" />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} precio="US$ 29" />);
     await completarYEnviar(fetchMock, CALCULADA);
     fetchMock.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ motivo: "requiere_cuenta" }) });
 
@@ -267,7 +268,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
   });
 
   it.each([429, 503, 502])("con %s muestra el texto de error del pago y deja reintentar", async (status) => {
-    render(<NewChartForm locale="es" dict={dict} precio="US$ 29" />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} precio="US$ 29" />);
     await completarYEnviar(fetchMock, CALCULADA);
     fetchMock.mockResolvedValueOnce({ ok: false, status, json: async () => ({}) });
 
@@ -278,7 +279,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
   });
 
   it("un fallo de red también se avisa", async () => {
-    render(<NewChartForm locale="es" dict={dict} precio="US$ 29" />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} precio="US$ 29" />);
     await completarYEnviar(fetchMock, CALCULADA);
     fetchMock.mockRejectedValueOnce(new Error("red"));
 
@@ -288,7 +289,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
   });
 
   it("sin precio del catálogo el botón de pago sigue, sin precio", async () => {
-    render(<NewChartForm locale="es" dict={dict} precio={null} />);
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} precio={null} />);
     await completarYEnviar(fetchMock, CALCULADA);
 
     expect(screen.getByRole("button", { name: dict.newChart.comprarCtaSinPrecio })).toBeTruthy();
@@ -303,7 +304,7 @@ describe("con sesión (RF12b)", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     try {
-      render(<NewChartForm locale="es" dict={dict} signedIn precio="US$ 29" />);
+      render(<NewChartForm moneda="usd" locale="es" dict={dict} signedIn precio="US$ 29" />);
       await completarYEnviar(fetchMock, { ok: true, status: 201, json: async () => ({ id: "abc" }) });
 
       expect(fetchMock.mock.calls.map((c) => c[0])).toContain("/api/charts");
@@ -341,7 +342,7 @@ describe("con sesión, al montar", () => {
     );
 
     await act(async () => {
-      render(<NewChartForm locale="es" dict={dict} signedIn />);
+      render(<NewChartForm moneda="usd" locale="es" dict={dict} signedIn />);
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -351,7 +352,7 @@ describe("con sesión, al montar", () => {
 
   it("sin nada pendiente muestra el formulario y no crea nada", async () => {
     await act(async () => {
-      render(<NewChartForm locale="es" dict={dict} signedIn />);
+      render(<NewChartForm moneda="usd" locale="es" dict={dict} signedIn />);
     });
 
     expect(fetchMock).not.toHaveBeenCalled();

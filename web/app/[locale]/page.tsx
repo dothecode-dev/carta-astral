@@ -6,6 +6,7 @@ import { Nav } from "@/components/Nav";
 import { SkyWheel } from "@/components/SkyWheel";
 import { conPrecio, fetchCatalogo, precioDe } from "@/lib/catalogo";
 import { INTL_LOCALE, NOTES_SLUG, getDict, isLocale } from "@/lib/i18n";
+import { monedaDelVisitante, monedaPara } from "@/lib/moneda";
 import { fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
 import { fetchSky } from "@/lib/sky";
 import { SITE_URL } from "@/lib/config";
@@ -25,7 +26,10 @@ export default async function Home({
   const sky = await fetchSky();
   // El precio sale del catálogo del backend, como en /precios: la home no
   // puede anunciar un número distinto del que cobra Stripe.
-  const precioInforme = precioDe(await fetchCatalogo(), "informe_natal", INTL_LOCALE[locale]);
+  // En la moneda del visitante (RF25): la cookie del selector o la de su IP.
+  const [catalogo, moneda] = await Promise.all([fetchCatalogo(), monedaDelVisitante()]);
+  const precioInforme = precioDe(catalogo, "informe_natal", INTL_LOCALE[locale], moneda);
+  const monedaInforme = monedaPara(catalogo?.find((p) => p.codigo === "informe_natal"), moneda);
   const notes = await fetchNotesOrNone(locale, 3);
 
   // El header es el mismo en todo el sitio: sin esto la página se sirve
@@ -195,7 +199,7 @@ export default async function Home({
             </table>
 
             <p className="caption" style={{ marginTop: "1.25rem" }}>
-              {dict.pricing.note}
+              {dict.pricing.note.replace("{moneda}", dict.pricing.monedas[monedaInforme])}
             </p>
 
             {/* La sección terminaba en la nota, sin un solo enlace: la tabla
