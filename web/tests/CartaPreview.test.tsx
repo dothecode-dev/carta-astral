@@ -157,18 +157,20 @@ describe("botón de compra de la vista previa", () => {
 });
 
 describe("el teaser y el índice del informe", () => {
-  it.each(LOCALES)("%s: el orden es compra, rueda, bloques, índice, compra grande y datos", (locale) => {
+  it.each(LOCALES)("%s: el orden es compra, rueda, datos, bloques, índice y compra grande", (locale) => {
     const { container } = render(<CartaPreview {...propsBase(locale)} />);
     const t = getDict(locale).newChart;
     const [arriba, cierre] = screen.getAllByRole("button", { name: t.comprarCta.replace("{precio}", "US$ 29") });
     const orden = [
       arriba,
       container.querySelector(".chartBody"),
+      // Los datos son de la rueda: van con ella, y la compra grande queda
+      // última antes del pie (18-10-2026).
+      container.querySelector(".datosCarta"),
       container.querySelector(".teaserBloques"),
       screen.getByRole("heading", { name: t.indiceTitulo }),
       container.querySelector(".teaserIndice"),
       cierre,
-      container.querySelector(".datosCarta"),
     ];
     orden.forEach((el) => expect(el).not.toBeNull());
     for (let i = 0; i < orden.length - 1; i++) {

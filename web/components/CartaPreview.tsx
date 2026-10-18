@@ -11,8 +11,8 @@ import type { Dict, Locale } from "@/lib/i18n";
 // Lo que ve quien calculó su carta sin tener cuenta. Es la carta entera —la
 // misma rueda y las mismas tablas que ve un usuario registrado— y lo que ya se
 // puede leer de ella: el teaser y el índice del informe (spec 2026-10-17).
-// Orden desde el 18-10-2026: compra chica, rueda, bloques de a dos, índice y
-// compra grande, datos. Hasta el 17-10-2026 acá se ofrecía una lectura breve por
+// Orden desde el 18-10-2026: compra chica, rueda con sus datos, bloques de a
+// dos, índice y compra grande, que queda última antes del pie. Hasta el 17-10-2026 acá se ofrecía una lectura breve por
 // IA gratis; se apagó porque costaba por visita y no llevaba a ninguna compra.
 // El código de esa lectura sigue en el repo (`useLecturaAnonima`), sin usarse
 // desde esta pantalla.
@@ -69,6 +69,9 @@ export function CartaPreview({
       {/* La rueda primero: es lo que vino a buscar. */}
       <ChartBody chart={carta} dict={dict} locale={locale} soloRueda />
 
+      {/* Los datos son de la rueda: van con ella, plegados. */}
+      <DatosCarta chart={carta} dict={dict} locale={locale} />
+
       {/* Sin teaser (un backend viejo) se muestra todo lo demás. */}
       {carta.teaser && <TeaserBloques teaser={carta.teaser} locale={locale} dict={dict} />}
 
@@ -109,8 +112,6 @@ export function CartaPreview({
           </p>
         </div>
       </section>
-
-      <DatosCarta chart={carta} dict={dict} locale={locale} />
 
       <footer className="previewPie">
         <p className="fieldNote">{t.previewPrivacidad}</p>
