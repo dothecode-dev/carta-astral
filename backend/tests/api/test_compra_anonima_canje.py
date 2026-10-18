@@ -532,3 +532,22 @@ def test_entrar_con_codigo_a_una_cuenta_verificada_no_cierra_las_otras_sesiones(
     assert r.status_code == 200 and r.json()["account_id"] == cuenta.pk
     assert Session.objects.filter(account=cuenta).count() == 2
     assert Session.objects.filter(token_hash=hash_token(otro)).exists()
+
+
+# --- RF16: un mail bloqueado no entra tampoco por acá (revisión 18-10-2026) --
+
+
+def test_un_mail_bloqueado_no_recibe_sesion_aunque_la_compra_cree_la_cuenta(client, anonima, make_account):
+    """La compra se acredita (R8: la plata entró), pero quien disputó un pago
+    no entra: ni por código, ni por Google, ni volviendo de Stripe."""
+    from api.models import MailBloqueado
+
+    cuenta = make_account(email="bloq@mail.com", email_verified=False)
+    _acreditada(anonima, cuenta, nueva=True)
+    MailBloqueado.bloquear("bloq@mail.com", motivo="disputa")
+
+    r = _canje(client)
+
+    # La misma respuesta genérica que cualquier otra falla del canje.
+    assert r.status_code == 404
+    assert not Session.objects.filter(account=cuenta).exists()

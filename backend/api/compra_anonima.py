@@ -17,7 +17,9 @@ from api.accounts import cerrar_sesiones, resolver_cuenta
 from api.auth import create_session
 from api.chart_service import create_chart
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
-from api.models import Account, BirthData, Chart, CodigoAcceso, PasarelaCheckout, ProviderIdentity, Sujeto
+from api.models import (
+    Account, BirthData, Chart, CodigoAcceso, MailBloqueado, PasarelaCheckout, ProviderIdentity, Sujeto,
+)
 from api.sujetos import sujeto_natal
 from api.sso import VerifiedIdentity
 
@@ -347,6 +349,12 @@ def canjear(checkout_id: str, nonce: str) -> dict:
         if fila.acreditado_at is None or fila.account_id is None:
             return {"estado": "pendiente"}
         if timezone.now() - fila.acreditado_at > VIDA_CANJE_POR_NONCE:
+            return {"estado": "invalido"}
+        if MailBloqueado.bloqueado(fila.account.email or ""):
+            # RF16: quien disputó un pago no entra por ningún lado, tampoco
+            # volviendo de Stripe. La compra igual se acreditó (R8). Después
+            # del nonce, así el bloqueo sólo se le revela a quien pagó.
+            logger.warning("compra anónima %s de un mail bloqueado: no se abre sesión", checkout_id)
             return {"estado": "invalido"}
         destino = (
             f"/{fila.locale}/carta/{fila.sujeto.natal_de.uuid}"
