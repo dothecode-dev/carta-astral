@@ -46,17 +46,19 @@
      elemento, daba cuatro anchos distintos en la misma página. */
   --measure: 100%;
 
-  /* Los tres anchos del sitio (18-10-2026). Antes cada página tenía el suyo
-     —1180, 1080, 960, 860, 720 y 560 px— y se centraba, así que el título de
-     cada una arrancaba en otro lugar y ninguno donde el logo. Ahora todas las
-     páginas usan el del sitio (el de la navegación) con el mismo margen, y lo
-     angosto se acota ADENTRO, alineado a la izquierda. En rem y no en ch: el
-     ch se mide sobre la letra de cada elemento (ver --measure).
-     Lo chequea tests/anchos.test.ts. */
+  /* Los tres anchos de página (18-10-2026). Antes cada página tenía el suyo
+     —1180, 1080, 960, 860, 720 y 560 px—, así que cada una arrancaba en otro
+     lugar. Ahora toda página se centra en la pantalla con UNO de estos tres:
+     - columna: formularios, textos, notas, cuenta. Los párrafos la llenan.
+     - sitio: lo que necesita espacio (la carta, los precios); es el de la
+       navegación.
+     - angosto: una tarjeta sola (entrar).
+     En rem y no en ch: el ch se mide sobre la letra de cada elemento (ver
+     --measure). Lo chequea tests/anchos.test.ts. */
   --ancho-sitio: 1180px;
-  --margen-sitio: clamp(1.25rem, 4vw, 3rem);
-  --ancho-lectura: 42rem;
+  --ancho-columna: 42rem;
   --ancho-angosto: 35rem;
+  --margen-sitio: clamp(1.25rem, 4vw, 3rem);
   --step-0: 1rem;
   --step-1: 1.1875rem;
   --step-2: 1.5rem;
@@ -336,10 +338,6 @@ a {
   justify-content: center;
 }
 
-.authFrame > * {
-  max-width: var(--ancho-angosto);
-}
-
 .authCard {
   display: flex;
   flex-direction: column;
@@ -535,10 +533,6 @@ a {
 /* --- Panel de cuenta ------------------------------------------------------
    Una sola columna con secciones separadas por aire, no tarjetas sueltas: el
    saldo es lo único que pesa, y lo destructivo vive lejos de lo cotidiano. */
-.accountFrame > * {
-  max-width: var(--ancho-lectura);
-}
-
 .accountFrame {
   gap: clamp(2.5rem, 6vw, 3.5rem);
 }
@@ -1010,10 +1004,7 @@ body:has(.consentBar) .accionFija {
 /* --- Formulario ----------------------------------------------------------
    Los campos son datos: mismo registro mono que la efeméride y la tabla de la
    carta, para que se lea como parte del instrumento y no como un trámite. */
-/* El formulario angosto, al borde de la página (no centrado). */
-.formFrame > form {
-  max-width: var(--ancho-angosto);
-}
+
 
 .formHead {
   display: flex;
@@ -1933,15 +1924,15 @@ body:has(.consentBar) .accionFija {
 /* --- Documentos legales -------------------------------------------------
    Medida de lectura angosta y jerarquía tranquila: son textos que se leen
    enteros, no se escanean. */
-/* Párrafos a un ancho de lectura, alineados al borde de la página. */
+/* En una página ancha, los párrafos sueltos no pasan del ancho de la columna. */
 .docFrame p {
-  max-width: var(--ancho-lectura);
+  max-width: var(--ancho-columna);
 }
 
 .docFrame {
-  /* El ancho del sitio, como la navegación: el título de cada página arranca
-     donde el logo. Lo angosto (párrafos, formularios) se acota adentro. */
-  max-width: var(--ancho-sitio);
+  /* Por defecto, la columna centrada. Las páginas anchas (carta, precios)
+     pasan al ancho del sitio con su clase. */
+  max-width: calc(var(--ancho-columna) + 2 * var(--margen-sitio));
   /* Sin esto el main, que es un ítem flex del body, se encoge al ancho de su
      contenido y se centra: cada página volvía a arrancar en otro lugar. */
   width: 100%;
@@ -1955,7 +1946,6 @@ body:has(.consentBar) .accionFija {
 .doc {
   display: flex;
   flex-direction: column;
-  max-width: var(--ancho-lectura);
 }
 
 .docTitle {
@@ -2029,6 +2019,16 @@ body:has(.consentBar) .accionFija {
 /* --- Carta de ejemplo ---------------------------------------------------
    La rueda y la tabla en paralelo: el dibujo y el dato dicen lo mismo de dos
    maneras, y conviene poder pasar de uno al otro sin scrollear. */
+.chartFrame,
+.preciosFrame {
+  max-width: var(--ancho-sitio);
+}
+
+/* Después de .docFrame a propósito: misma especificidad, gana la última. */
+.authFrame {
+  max-width: calc(var(--ancho-angosto) + 2 * var(--margen-sitio));
+}
+
 .chartFrame {
   gap: clamp(2.5rem, 6vw, 3.5rem);
   /* Lugar para la barra fija al final de la página, que si no cubre el pie. */
