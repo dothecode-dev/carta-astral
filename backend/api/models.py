@@ -814,6 +814,9 @@ class Disputa(models.Model):
     revocado_entera = models.BooleanField(default=False)
     unidades_revocadas = models.PositiveIntegerField(default=0)
     monto_anotado = models.PositiveIntegerField(default=0)
+    # Un reembolso posterior tomó (parte de) lo revocado: ver
+    # `disputas.ceder_a_reembolso`.
+    cedido_a_reembolso = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     resuelta_at = models.DateTimeField(null=True, blank=True)
 

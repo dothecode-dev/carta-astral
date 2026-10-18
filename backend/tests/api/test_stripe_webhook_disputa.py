@@ -696,3 +696,62 @@ def test_disputa_en_otra_moneda_antes_del_pago_no_entrega_hasta_que_se_resuelve(
     _disputa(client, tipo="charge.dispute.funds_reinstated", currency="usd")
     client.post(URL, data=cuerpo, content_type="application/json", HTTP_STRIPE_SIGNATURE=firmar(cuerpo))
     assert PasarelaCheckout.objects.get(checkout_id="cs_du").acreditado_at is not None
+
+
+# --- Cuarta revisión del 18-10-2026 ------------------------------------------
+
+
+def test_un_combo_reembolsado_en_dos_mitades_se_revoca_entero(client, make_account, monkeypatch, avisos_enviados):
+    from django.utils import timezone
+
+    from api import catalogo
+    from api.canje import aplicar_compra
+
+    combo = catalogo.Producto(
+        "combo_x", {"usd": 1000}, catalogo.CONSUMIBLE, ("leer_informe",),
+        (("informe_natal", 1), ("informe_vinculo", 1)),
+    )
+    monkeypatch.setitem(catalogo.CATALOGO, "combo_x", combo)
+    cuenta = make_account(email="ana@mail.com")
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_combo", account=cuenta, codigo_producto="combo_x", moneda="usd",
+        precio_centavos=1000, payment_intent="pi_1", acreditado_at=timezone.now(),
+    )
+    aplicar_compra(cuenta, "combo_x", 1000, external_id="stripe:session:cs_combo", precio_centavos=1000)
+
+    _refund(client, "re_1", 500)
+    _refund(client, "re_2", 500)
+
+    fila.refresh_from_db()
+    assert fila.unidades_revocadas == 1
+    assert fila.reembolsado_centavos == 1000
+    assert _restante(cuenta) == 0
+
+
+def test_el_reembolso_que_toma_unidades_de_la_disputa_no_cuenta_el_monto_dos_veces(
+    client, pack_acreditado, avisos_enviados,
+):
+    _disputa(client, amount=12500, currency="usd")
+    _refund(client, "re_x", 5000)
+
+    pack_acreditado.refresh_from_db()
+    assert pack_acreditado.reembolsado_centavos == 12500
+
+
+def test_un_reembolso_sin_id_no_se_aplica_ni_frena_a_otros(client, compra_acreditada):
+    from api.models import Reembolso
+
+    _refund(client, "", 14900, moneda="brl")
+
+    assert not Reembolso.objects.filter(refund_id="").exists()
+    assert _restante(compra_acreditada.account) == 1
+
+
+def test_la_reposicion_dice_que_lo_revocado_paso_a_un_reembolso(client, compra_acreditada, avisos_enviados):
+    _disputa(client)
+    _refund(client, "re_x", 14900, moneda="brl")
+    _disputa(client, tipo="charge.dispute.funds_reinstated")
+
+    resuelta = [a for a in avisos_enviados if "resuelta a favor" in a]
+    assert resuelta and "reembolso" in resuelta[0] and "no había revocado nada" not in resuelta[0]
+    assert _restante(compra_acreditada.account) == 0

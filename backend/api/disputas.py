@@ -84,6 +84,45 @@ def _bloquear_fila(fila_pk):
     return PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila_pk)
 
 
+def ceder_a_reembolso(fila, unidades: int, monto: int) -> tuple[int, int]:
+    """Pasa hasta `unidades` ya revocadas por una disputa ABIERTA de la compra
+    —y hasta `monto` de lo que esa disputa anotó— a la cuenta de un
+    reembolso. Devuelve `(unidades, monto)` cedidos. Corre con la compra
+    bloqueada por quien reembolsa.
+
+    Stripe no ordena los eventos: el reembolso de una disputa ya ganada puede
+    llegar antes que su `funds_reinstated`. Sin esto, el reembolso no
+    encontraba unidades que revocar (las tenía la disputa) y la reposición
+    las devolvía todas: producto y plata. Lo que la disputa conserva pasa a
+    ser unidades sueltas, que es como se van a reponer.
+
+    Si la disputa se termina perdiendo, la compra igual queda bien (las
+    unidades siguen revocadas y el monto anotado una vez); lo que cambia es
+    de cuál de las dos constancias cuelga. Stripe no deja reembolsar un cargo
+    con una disputa abierta, así que el caso pide un reembolso en etapa de
+    consulta."""
+    disputa = (
+        Disputa.objects.select_for_update()
+        .filter(fila=fila, estado=Disputa.ABIERTA, unidades_revocadas__gt=0)
+        .order_by("created_at", "pk").first()
+    )
+    if disputa is None or unidades <= 0:
+        return 0, 0
+    tomadas = min(unidades, disputa.unidades_revocadas)
+    cedido = min(monto, disputa.monto_anotado)
+    codigo, _total = devoluciones.unidades_de(fila)
+    disputa.unidades_revocadas -= tomadas
+    disputa.monto_anotado -= cedido
+    disputa.revocado_codigo, disputa.revocado_cantidad = codigo, disputa.unidades_revocadas
+    disputa.revocado_entera = False
+    disputa.cedido_a_reembolso = True
+    disputa.save(update_fields=[
+        "unidades_revocadas", "monto_anotado", "revocado_codigo", "revocado_cantidad", "revocado_entera",
+        "cedido_a_reembolso",
+    ])
+    return tomadas, cedido
+
+
 def _bloquear_y_lockear(email: str, dispute_id: str) -> None:
     """Bloquea el mail y deja lockeada su fila de `MailBloqueado` hasta el
     commit. Si una reposición concurrente la borró entre el alta y el lock, la
@@ -215,6 +254,8 @@ def _devolver_lo_revocado(fila, disputa) -> str:
             "nunca se entregó: si su pago llega, se entrega solo; si ya había llegado, "
             "acreditar a mano con acreditar_sesion"
         )
+    if not disputa.revocado_cantidad and disputa.cedido_a_reembolso:
+        return "lo que el retiro revocó pasó a cubrir un reembolso, no se repone"
     if not disputa.revocado_cantidad:
         # El retiro no revocó nada (ya estaba reembolsada o revocada, o vino
         # en otra moneda): reponer ahora regalaría producto.

@@ -86,3 +86,50 @@ def test_reponer_una_y_retirar_otra_del_mismo_mail_a_la_vez_deja_el_mail_bloquea
     assert not errores, errores
     assert Disputa.objects.get(dispute_id="du_b").estado == Disputa.ABIERTA
     assert MailBloqueado.bloqueado(email), "mail libre con una disputa abierta"
+
+
+@requiere_postgres
+@pytest.mark.django_db(transaction=True)
+def test_si_la_reposicion_borra_el_bloqueo_antes_del_lock_el_retiro_lo_vuelve_a_crear(make_account, monkeypatch):
+    """El otro orden: la reposición de A borra la fila entre el alta del
+    bloqueo de B y su lock. `_bloquear_y_lockear` lo detecta y la recrea."""
+    monkeypatch.setattr(disputas, "avisar_admin", lambda _texto: None)
+    email = "ana@mail.com"
+    cuenta = make_account(email=email)
+    _compra(cuenta, "cs_a", "pi_a")
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_b", account=None, codigo_producto="informe_natal", moneda="usd",
+        precio_centavos=500, anonimo=True, nonce_hash="x" * 64,
+    )
+    monkeypatch.setattr(
+        disputas, "sesion_por_payment_intent",
+        lambda pi: {"id": "cs_b", "customer_details": {"email": email}} if pi == "pi_b" else None,
+    )
+    disputas.procesar(_evento("du_a", "pi_a"), disputas.RETIRO)
+
+    b_bloqueo = threading.Event()
+    a_termino = threading.Event()
+    bloquear_real = MailBloqueado.bloquear.__func__
+    pausas = []
+
+    def bloquear_y_esperar(cls, mail, motivo, dispute_id=""):
+        bloquear_real(cls, mail, motivo, dispute_id)
+        if dispute_id == "du_b" and not pausas:
+            pausas.append(1)
+            b_bloqueo.set()
+            a_termino.wait(ESPERA)
+
+    monkeypatch.setattr(MailBloqueado, "bloquear", classmethod(bloquear_y_esperar))
+
+    def operar(i):
+        if i == 0:
+            assert b_bloqueo.wait(ESPERA)
+            disputas.procesar(_evento("du_a", "pi_a"), disputas.REPOSICION)
+            a_termino.set()
+        else:
+            disputas.procesar(_evento("du_b", "pi_b"), disputas.RETIRO)
+
+    _resultados, errores = en_hilos(operar, 2)
+
+    assert not errores, errores
+    assert MailBloqueado.bloqueado(email), "mail libre con una disputa abierta"

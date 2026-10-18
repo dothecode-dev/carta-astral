@@ -41,7 +41,7 @@ from api import analitica, catalogo, compra_anonima, devoluciones, disputas, not
 from api.avisos import avisar_admin
 from api.canje import MontoInvalido, aplicar_compra
 from api.compra_service import arrancar_informe
-from api.models import Account, CuponUso, MailBloqueado, Movimiento, PasarelaCheckout, Reembolso
+from api.models import Account, CuponUso, MailBloqueado, PasarelaCheckout, Reembolso
 from api.stripe_client import (
     FirmaInvalida, codigo_de_product, obtener_sesion, verificar_firma,
 )
@@ -576,7 +576,12 @@ def _reembolsar(refund: dict) -> None:
     con la misma clave que el pago, el reembolso se descartaría como duplicado
     de la compra que lo precedió.
     """
-    refund_id = refund.get("id", "")
+    refund_id = refund.get("id") or ""
+    if not refund_id:
+        # Sin id no hay constancia posible: el primero se guardaría con "" y
+        # todos los siguientes sin id se darían por aplicados.
+        logger.error("reembolso sin id (pi=%s): no se aplica", refund.get("payment_intent"))
+        return
     payment_intent = refund.get("payment_intent") or ""
     if not payment_intent:
         # Sin `payment_intent` no hay forma de atribuir el reembolso, y buscar
@@ -621,13 +626,9 @@ def _reembolsar(refund: dict) -> None:
         # actualiza, y dos reembolsos (o un reembolso y una disputa) pueden
         # llegar a la vez. `of=("self",)`: `account` es nullable.
         fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila.pk)
-        # La constancia es `Reembolso`; los aplicados antes de que existiera
-        # (18-10-2026) dejaron sólo su `Movimiento`, y una reentrega de esos
-        # anotaría el monto otra vez.
-        if (
-            Reembolso.objects.filter(refund_id=refund_id).exists()
-            or Movimiento.objects.filter(external_id=f"stripe:refund:{refund_id}").exists()
-        ):
+        # La constancia es `Reembolso` (la 0059 la completó para los
+        # reembolsos aplicados antes de que existiera).
+        if Reembolso.objects.filter(refund_id=refund_id).exists():
             logger.info("reembolso %s ya aplicado", refund_id)
             return
         prod = catalogo.producto(fila.codigo_producto)
@@ -635,7 +636,7 @@ def _reembolsar(refund: dict) -> None:
         # reembolsado entero caía en la rama parcial y revocaba 3. Con un
         # regalo del 100 % lo pagado es 0: cualquier reembolso es total.
         base = devoluciones.pagado(fila)
-        if not (base <= 0 or monto >= base) and len(prod.otorga) != 1:
+        if not devoluciones.cubre_todo(fila, monto) and len(prod.otorga) != 1:
             # Un combo devuelto a medias no tiene una respuesta obvia —¿qué
             # mitad de "carta + horóscopo" se revoca?— y hoy no existe ninguno
             # en el catálogo. No se revoca nada, pero el monto se anota y queda
@@ -659,9 +660,10 @@ def _reembolsar(refund: dict) -> None:
             if unidades and devoluciones.revocar_unidades(fila, unidades, f"stripe:refund:{refund_id}") is None:
                 logger.info("reembolso %s ya revocado en el ledger", refund_id)
                 return
-            tomadas = devoluciones.tomar_de_disputa(fila, pedidas - unidades)
+            tomadas, cedido = disputas.ceder_a_reembolso(fila, pedidas - unidades, monto)
             Reembolso.objects.create(refund_id=refund_id, fila=fila, monto=monto, unidades=unidades + tomadas)
-            devoluciones.registrar(fila, unidades, monto)
+            # Lo que la disputa ya había anotado de este monto no se suma dos veces.
+            devoluciones.registrar(fila, unidades, monto - cedido)
             logger.info(
                 "reembolso %s (%s de %s): revocadas %s unidades de %s, %s tomadas de una disputa",
                 refund_id, monto, base, unidades, fila.codigo_producto, tomadas,

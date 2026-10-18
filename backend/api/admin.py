@@ -36,7 +36,7 @@ from api import canje, cupones, stripe_client
 from api.catalogo import CATALOGO, a_la_venta, producto
 from api.models import (
     Account, Chart, ConteoDiario, CreditTransaction, Cupon, CuponUso, Derecho, Disputa, Interpretation,
-    MailBloqueado, Movimiento, PasarelaCheckout,
+    MailBloqueado, Movimiento, PasarelaCheckout, Reembolso,
 )
 
 
@@ -565,6 +565,25 @@ class DisputaAdmin(admin.ModelAdmin):
     list_select_related = ("fila",)
     list_filter = ("estado",)
     search_fields = ("dispute_id", "email")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Reembolso)
+class ReembolsoAdmin(admin.ModelAdmin):
+    """Constancia de cada `refund.created` aplicado. Sólo lectura: es la
+    idempotencia del webhook."""
+
+    list_display = ("refund_id", "fila", "monto", "unidades", "created_at")
+    list_select_related = ("fila",)
+    search_fields = ("refund_id",)
 
     def has_add_permission(self, request):
         return False
