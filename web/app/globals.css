@@ -2056,7 +2056,8 @@ body:has(.consentBar) .accionFija {
 }
 
 .chartName {
-  font-size: clamp(2.5rem, 5.5vw, 3.75rem);
+  font-size: var(--step-4);
+  line-height: 1.05;
 }
 
 .birth {
@@ -2112,15 +2113,12 @@ body:has(.consentBar) .accionFija {
 
 /* La rueda comparte ancho y eje con la lectura: la pagina tiene dos medidas,
    la del ancho completo para los datos y esta para lo que va centrado. */
+/* La rueda grande (vista previa y carta con cuenta): 52rem en las páginas
+   del ancho del sitio. Hasta el 18-10-2026 era 62ch (~600 px) y los glifos
+   apretados se leían mal. */
 .wheelHolderWide {
-  width: min(100%, 62ch);
-  margin-inline: auto;
-}
-
-/* En la vista previa la rueda es lo que se vino a ver: más grande que la de
-   la página de la carta, donde comparte eje con la lectura. */
-.previewCarta .wheelHolderWide {
   width: min(100%, 52rem);
+  margin-inline: auto;
 }
 
 /* Las tablas usan el ancho de la columna, el mismo que la lectura: la unica

@@ -155,10 +155,11 @@ export default async function ChartPage({
           )}
         </section>
 
-        <ChartBody chart={chart} dict={dict} locale={locale} soloRueda />
-
         {/* Los botones van acá SIEMPRE, tenga lectura o no: es lo único que
-            hay para hacer en esta página.
+            hay para hacer en esta página. Desde el 18-10-2026, ARRIBA de la
+            rueda, como el botón de compra de la vista previa sin cuenta: la
+            rueda grande ocupa una pantalla entera y los dejaba abajo del
+            pliegue.
 
             Hasta el 08-09-2026 se movían al final cuando ya había una lectura
             escrita, con la idea de que el momento de decidir era al terminar
@@ -176,6 +177,8 @@ export default async function ChartPage({
             denominador del embudo. Si alguna vez se quiere el botón repetido
             abajo, primero hay que sacar esa medición del componente. */}
         {acciones}
+
+        <ChartBody chart={chart} dict={dict} locale={locale} soloRueda />
 
         {reading && (
           <section className="reading">

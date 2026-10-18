@@ -248,8 +248,12 @@ describe("la página con la carta calculada (18-10-2026)", () => {
     expect(css).toMatch(/\.formFrame:has\(\.previewCarta\)\s*>\s*\.formHead\s*\{[^}]*display:\s*none/);
   });
 
-  it("la rueda de la vista previa es más ancha que la de la columna de lectura", () => {
-    expect(css).toMatch(/\.previewCarta \.wheelHolderWide\s*\{[^}]*width:\s*min\(100%,\s*52rem\)/);
+  it("la rueda grande es la misma en la vista previa y en la carta con cuenta", () => {
+    expect(css).toMatch(/\n\.wheelHolderWide\s*\{[^}]*width:\s*min\(100%,\s*52rem\)/);
+  });
+
+  it("el título de la carta con cuenta usa el mismo paso que el de la vista previa", () => {
+    expect(css).toMatch(/\.chartName\s*\{[^}]*font-size:\s*var\(--step-4\)/);
   });
 });
 
