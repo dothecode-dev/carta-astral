@@ -2029,6 +2029,17 @@ body:has(.consentBar) .accionFija {
   max-width: calc(var(--ancho-angosto) + 2 * var(--margen-sitio));
 }
 
+/* Con la carta calculada, /nueva deja de ser un formulario: pasa al ancho del
+   sitio, para que la rueda y los textos lo usen, y el encabezado del
+   formulario se esconde (el título pasa a ser el de la vista previa). */
+.formFrame:has(.previewCarta) {
+  max-width: var(--ancho-sitio);
+}
+
+.formFrame:has(.previewCarta) > .formHead {
+  display: none;
+}
+
 .chartFrame {
   gap: clamp(2.5rem, 6vw, 3.5rem);
   /* Lugar para la barra fija al final de la página, que si no cubre el pie. */
@@ -2101,6 +2112,12 @@ body:has(.consentBar) .accionFija {
 .wheelHolderWide {
   width: min(100%, 62ch);
   margin-inline: auto;
+}
+
+/* En la vista previa la rueda es lo que se vino a ver: más grande que la de
+   la página de la carta, donde comparte eje con la lectura. */
+.previewCarta .wheelHolderWide {
+  width: min(100%, 52rem);
 }
 
 /* Las tablas usan el ancho de la columna, el mismo que la lectura: la unica

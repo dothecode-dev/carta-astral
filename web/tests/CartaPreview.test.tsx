@@ -234,3 +234,21 @@ describe("los bloques del adelanto", () => {
     expect(regla).toMatch(/grid-template-columns:\s*repeat\(2,/);
   });
 });
+
+describe("la página con la carta calculada (18-10-2026)", () => {
+  const css = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
+
+  it("«Tu carta natal» es el título de la página", () => {
+    pintar("es");
+    expect(screen.getByRole("heading", { level: 1, name: getDict("es").newChart.previewTitle })).toBeTruthy();
+  });
+
+  it("la página pasa al ancho del sitio y el encabezado del formulario se esconde", () => {
+    expect(css).toMatch(/\.formFrame:has\(\.previewCarta\)\s*\{[^}]*max-width:\s*var\(--ancho-sitio\)/);
+    expect(css).toMatch(/\.formFrame:has\(\.previewCarta\)\s*>\s*\.formHead\s*\{[^}]*display:\s*none/);
+  });
+
+  it("la rueda de la vista previa es más ancha que la de la columna de lectura", () => {
+    expect(css).toMatch(/\.previewCarta \.wheelHolderWide\s*\{[^}]*width:\s*min\(100%,\s*52rem\)/);
+  });
+});

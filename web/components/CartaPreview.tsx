@@ -61,7 +61,9 @@ export function CartaPreview({
   return (
     <section className="previewCarta">
       <header className="previewHead">
-        <h2 className="display previewTitle">{t.previewTitle}</h2>
+        {/* El título de la página: con la carta a la vista, el encabezado del
+            formulario se esconde (CSS: .formFrame:has(.previewCarta)). */}
+        <h1 className="display previewTitle">{t.previewTitle}</h1>
         <p className="previewLede">{t.previewLede}</p>
         <div className="previewCtaArriba">{boton(false)}</div>
       </header>
