@@ -10,7 +10,7 @@ pytestmark = pytest.mark.django_db
 
 def test_el_vinculo_esta_en_el_catalogo_a_9_dolares():
     p = catalogo.producto("informe_vinculo")
-    assert p.precio_centavos == 900 and p.capacidades == ("leer_vinculo",) and p.sujeto == "vinculo"
+    assert p.precio_en("usd") == 900 and p.capacidades == ("leer_vinculo",) and p.sujeto == "vinculo"
 
 
 @pytest.fixture
@@ -31,11 +31,6 @@ def test_apagado_no_aparece_en_el_catalogo_publico(apagado, client):
 def test_apagado_no_es_elegible_en_el_admin_de_cupones(apagado):
     from api.admin import _productos_con_precio
     assert "informe_vinculo" not in {p.codigo for p in _productos_con_precio()}
-
-
-def test_apagado_verificar_precios_no_lo_pide(apagado):
-    from api.management.commands.verificar_precios_stripe import _codigos_vendibles
-    assert "informe_vinculo" not in {p.codigo for p in _codigos_vendibles()}
 
 
 def test_apagado_un_cupon_que_lo_nombra_no_lo_lista(apagado, client):

@@ -27,7 +27,7 @@ from api import (
     stripe_client,
 )
 from api.auth import AccountTokenAuthentication
-from api.models import Chart, PasarelaCheckout, Sujeto
+from api.models import Chart, MailBloqueado, PasarelaCheckout, Sujeto
 from api.permissions import HasAccount
 from api.sujetos import sujeto_natal
 
@@ -39,6 +39,34 @@ def idioma_pedido(request) -> str:
     y termina en una URL y en la base, así que no se guarda tal cual."""
     pedido = request.data.get("locale") or stripe_client.LOCALE_POR_DEFECTO
     return pedido if pedido in stripe_client.LOCALES else stripe_client.LOCALE_POR_DEFECTO
+
+
+class MonedaInvalida(Exception):
+    """El cliente pidió una moneda que no conocemos o en la que ese producto
+    no se vende."""
+
+
+def moneda_pedida(request, codigo_producto: str) -> str:
+    """En qué moneda se cobra: la que manda el cliente (RF4), y si no manda
+    ninguna, `usd`. La IP NO decide el cobro (decisión del 18-10-2026): sólo
+    sugiere qué mostrar por `/api/moneda/`. Si decidiera, una web que muestra
+    US$ abriría un pago en reales sin que nadie lo vea.
+
+    Se normaliza —`BRL ` llega de un cliente que no es la web— y se valida
+    contra las monedas del producto: no se inventa un precio en una moneda que
+    el catálogo no tiene (EC2). Un producto desconocido no es un problema de
+    moneda: lo rechaza quien ya lo rechazaba."""
+    explicita = request.data.get("moneda")
+    pedida = str(explicita).strip().lower() if explicita else catalogo.MONEDA_BASE
+    prod = catalogo.CATALOGO.get(codigo_producto)
+    if prod is None:
+        return pedida
+    if pedida not in prod.monedas():
+        raise MonedaInvalida(pedida)
+    return pedida
+
+
+_MONEDA_INVALIDA = {"error": "moneda inválida", "motivo": "moneda_invalida"}
 
 
 def respuesta_de_stripe(exc, codigo) -> Response:
@@ -80,6 +108,10 @@ class CheckoutView(APIView):
                 {"error": "estamos actualizando el sitio, probá en unos minutos"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        if MailBloqueado.bloqueado(request.user.email or ""):
+            # RF16: quien disputó un pago no vuelve a comprar con cuenta.
+            logger.warning("checkout de una cuenta con mail bloqueado: %s", request.user.pk)
+            return Response({"error": "cuenta bloqueada", "motivo": "bloqueado"}, status=status.HTTP_403_FORBIDDEN)
 
         codigo = request.data.get("producto")
         if not codigo:
@@ -123,6 +155,13 @@ class CheckoutView(APIView):
         # blanca acá —no se concatena ni se guarda tal cual— porque viene del
         # navegador y termina en una URL y en la base.
         idioma = idioma_pedido(request)
+        # Antes del cupón: el regalo del 100 % no cobra, pero un 400 por
+        # moneda tiene que ganar igual para que la web no dependa del orden.
+        try:
+            moneda = moneda_pedida(request, codigo)
+        except MonedaInvalida as exc:
+            logger.info("checkout de %r en moneda rechazada: %s", codigo, exc)
+            return Response(_MONEDA_INVALIDA, status=status.HTTP_400_BAD_REQUEST)
 
         cupon = None
         codigo_cupon = request.data.get("cupon")
@@ -140,7 +179,7 @@ class CheckoutView(APIView):
 
         try:
             checkout_id, url = stripe_client.crear_checkout(
-                request.user, codigo, sujeto=sujeto, locale=idioma, cupon=cupon,
+                request.user, codigo, sujeto=sujeto, locale=idioma, cupon=cupon, moneda=moneda,
             )
         except (KeyError, ValueError) as exc:
             # Producto que no está en el catálogo, o gratis. Es un pedido mal
@@ -154,11 +193,11 @@ class CheckoutView(APIView):
         # de otra orden resolviera contra ella. El descuento queda congelado
         # acá, y el precio también: es contra ESTO que el webhook valida lo que
         # Stripe cobró, aunque el catálogo cambie mientras la sesión sigue viva.
-        precio, descuento = cupones.precio_y_descuento(codigo, cupon)
+        precio, descuento = cupones.precio_y_descuento(codigo, cupon, moneda)
         PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
             sujeto=sujeto, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
-            precio_centavos=precio,
+            precio_centavos=precio, moneda=moneda,
         )
         return Response({"url": url})
 

@@ -28,17 +28,17 @@ NONCE = "n0nce-deuda"
 
 def _sesion(checkout_id):
     return {
-        "id": checkout_id, "payment_status": "paid", "amount_subtotal": 2900,
+        "id": checkout_id, "payment_status": "paid", "currency": "usd", "amount_subtotal": 2900,
         "amount_total": 2900, "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": f"pi_{checkout_id}", "metadata": {},
-        "line_items": {"data": [{"price": {"id": "price_natal"}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
     }
 
 
 @pytest.fixture
 def entregar(client, monkeypatch, settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal"}
 
     def _entregar(checkout_id):
         sesion = _sesion(checkout_id)

@@ -38,3 +38,19 @@ def test_dos_compras_sin_payment_intent_conviven(make_account):
     )
 
     assert PasarelaCheckout.objects.filter(payment_intent="").count() == 2
+
+
+def test_la_fila_nace_en_usd_y_su_precio_de_lista_sigue_su_moneda(make_account):
+    from api.models import PasarelaCheckout
+
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_x", account=make_account(), codigo_producto="informe_natal",
+    )
+    assert fila.moneda == "usd"
+    assert fila.precio_de_lista() == 2900
+
+    fila.moneda = "brl"
+    assert fila.precio_de_lista() == 14900  # sin precio congelado cae al catálogo EN SU moneda
+
+    fila.precio_centavos = 777
+    assert fila.precio_de_lista() == 777

@@ -16,18 +16,45 @@ def test_catalogo_tiene_exactamente_los_productos_de_esta_iteracion():
 
 
 @pytest.mark.parametrize(
-    "codigo,precio,otorga,capacidades",
+    "codigo,precios,otorga,capacidades",
     [
-        ("lectura_breve", 0, (("lectura_breve", 1),), ("leer_breve",)),
-        ("informe_natal", 500, (("informe_natal", 1),), ("leer_informe",)),
-        ("pack_3_natal", 7900, (("informe_natal", 3),), ("leer_informe",)),
-        ("pack_5_natal", 12500, (("informe_natal", 5),), ("leer_informe",)),
+        ("lectura_breve", {"usd": 0}, (("lectura_breve", 1),), ("leer_breve",)),
+        ("informe_natal", {"usd": 500, "brl": 2490}, (("informe_natal", 1),), ("leer_informe",)),
+        ("pack_3_natal", {"usd": 7900}, (("informe_natal", 3),), ("leer_informe",)),
+        ("pack_5_natal", {"usd": 12500}, (("informe_natal", 5),), ("leer_informe",)),
     ],
 )
-def test_precios_y_otorgamientos_exactos(codigo, precio, otorga, capacidades):
+def test_precios_y_otorgamientos_exactos(codigo, precios, otorga, capacidades):
     p = producto(codigo)
-    assert (p.precio_centavos, p.otorga, p.capacidades) == (precio, otorga, capacidades)
+    assert (p.precios, p.otorga, p.capacidades) == (precios, otorga, capacidades)
     assert p.naturaleza == CONSUMIBLE
+
+
+def test_precio_en_devuelve_el_monto_de_esa_moneda_y_falla_sin_ella():
+    natal = producto("informe_natal")
+    assert natal.precio_en("usd") == 500
+    assert natal.precio_en("brl") == 2490
+    assert natal.monedas() == ("usd", "brl")
+    with pytest.raises(KeyError):
+        natal.precio_en("ars")
+
+
+def test_usd_es_obligatoria():
+    with pytest.raises(ValueError, match="usd"):
+        Producto("x", {"brl": 100}, CONSUMIBLE, ("leer_informe",), (("x", 1),))
+
+
+def test_el_real_no_se_aleja_del_dolar_sin_que_alguien_lo_vea():
+    """Precio BRL fijo (RNF4): si la relación brl/usd se mueve más de ±25 %
+    respecto de la fijada el 13-10-2026 (2490/500 = 4,98), este test lo dice."""
+    natal = producto("informe_natal")
+    assert 3.7 <= natal.precio_en("brl") / natal.precio_en("usd") <= 6.2
+
+
+def test_ninguna_moneda_viene_en_mayusculas():
+    for p in CATALOGO.values():
+        for moneda in p.precios:
+            assert moneda == moneda.lower() and len(moneda) == 3
 
 
 def test_todo_producto_declara_capacidades_no_vacias_y_naturaleza_valida():
@@ -40,7 +67,7 @@ def test_un_producto_de_acceso_declara_duracion():
     # El tipo existe aunque el catálogo no tenga ninguno hoy: agregarlo después
     # obligaría a migrar compras con plata real adentro (spec RF3).
     plan = Producto(
-        codigo="plan_demo", precio_centavos=999, naturaleza=ACCESO,
+        codigo="plan_demo", precios={"usd": 999}, naturaleza=ACCESO,
         capacidades=("leer_informe",), otorga=(("plan_demo", 1),), duracion_dias=30,
     )
     assert plan.duracion_dias == 30
@@ -49,7 +76,7 @@ def test_un_producto_de_acceso_declara_duracion():
 def test_producto_de_acceso_sin_duracion_es_invalido():
     with pytest.raises(ValueError, match="duracion_dias"):
         Producto(
-            codigo="malo", precio_centavos=1, naturaleza=ACCESO,
+            codigo="malo", precios={"usd": 1}, naturaleza=ACCESO,
             capacidades=("x",), otorga=(("malo", 1),), duracion_dias=None,
         )
 
@@ -78,7 +105,7 @@ def test_ningun_producto_pago_otorga_lectura_breve():
     tocar el catálogo.
     """
     pagos = [p.codigo for p in CATALOGO.values()
-             if p.precio_centavos > 0 and p.otorga[0] == "lectura_breve"]
+             if not p.es_gratis and p.otorga[0] == "lectura_breve"]
     assert pagos == []
 
 
@@ -98,12 +125,12 @@ def test_ningun_pack_sale_mas_caro_que_comprar_de_a_uno():
         for codigo, cantidad in prod.otorga:
             if cantidad <= 1 or codigo not in CATALOGO:
                 continue
-            suelto = CATALOGO[codigo].precio_centavos
+            suelto = CATALOGO[codigo].precio_en("usd")
             if suelto == 0:
                 continue
             sumados = suelto * cantidad
-            assert prod.precio_centavos < sumados, (
-                f"{prod.codigo} cuesta {prod.precio_centavos} y las {cantidad} "
+            assert prod.precio_en("usd") < sumados, (
+                f"{prod.codigo} cuesta {prod.precio_en('usd')} y las {cantidad} "
                 f"unidades sueltas de {codigo} cuestan {sumados}: "
                 "el pack sale más caro que comprar de a uno"
             )

@@ -79,7 +79,7 @@ def test_no_expone_el_payment_intent_ni_el_id_de_stripe(account_client):
     compra = account_client.get("/api/compras/").json()["compras"][0]
 
     assert set(compra) == {
-        "codigo_producto", "acreditada", "created_at", "monto_centavos", "cupon",
+        "codigo_producto", "acreditada", "created_at", "monto_centavos", "moneda", "cupon",
         "reembolsado_centavos", "url",
     }
 
@@ -215,8 +215,17 @@ def test_una_compra_vieja_muestra_lo_que_se_pago_aunque_el_precio_cambie(
     )
     monkeypatch.setitem(
         catalogo.CATALOGO, "informe_natal",
-        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=500),
+        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precios={"usd": 500}),
     )
 
     compra = account_client.get("/api/compras/").json()["compras"][0]
     assert compra["monto_centavos"] == 2900
+
+
+def test_cada_compra_dice_su_moneda(account_client):
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_brl", account=account_client.account, codigo_producto="informe_natal",
+        moneda="brl", precio_centavos=14900, acreditado_at=timezone.now(),
+    )
+    compra = account_client.get("/api/compras/").json()["compras"][0]
+    assert (compra["moneda"], compra["monto_centavos"]) == ("brl", 14900)

@@ -38,7 +38,7 @@ def panel_montado(monkeypatch):
 @pytest.fixture(autouse=True)
 def config(settings):
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
     # Mismo motivo que `sin_manifiesto` en test_admin.py: renderizar el admin
     # sin haber corrido collectstatic.
     settings.STORAGES = {
@@ -176,10 +176,20 @@ def test_el_preview_dice_lo_que_precio_final_dice(staff):
     r = staff.get("/panel-test/api/cupon/precios/", {"porcentaje": "30", "productos": ["informe_natal", "pack_5_natal"]})
 
     assert r.status_code == 200
-    filas = {f["codigo"]: f for f in r.json()["precios"]}
+    filas = {(f["codigo"], f["moneda"]): f for f in r.json()["precios"]}
     final, descuento = precio_final(2900, 30)
-    assert filas["informe_natal"] == {"codigo": "informe_natal", "lista": 2900, "final": final, "descuento": descuento}
-    assert set(filas) == {"informe_natal", "pack_5_natal"}
+    assert filas["informe_natal", "usd"] == {
+        "codigo": "informe_natal", "moneda": "usd", "lista": 2900, "final": final, "descuento": descuento,
+    }
+    assert {codigo for codigo, _ in filas} == {"informe_natal", "pack_5_natal"}
+
+
+def test_la_vista_de_precios_del_admin_da_una_fila_por_moneda(staff):
+    r = staff.get("/panel-test/api/cupon/precios/", {"porcentaje": "30", "productos": "informe_natal"})
+    assert r.json()["precios"] == [
+        {"codigo": "informe_natal", "moneda": "usd", "lista": 2900, "final": 2030, "descuento": 870},
+        {"codigo": "informe_natal", "moneda": "brl", "lista": 14900, "final": 10430, "descuento": 4470},
+    ]
 
 
 def test_el_preview_no_es_publico():

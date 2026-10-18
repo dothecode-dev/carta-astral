@@ -15,7 +15,9 @@
       return Array.prototype.map.call(
         document.querySelectorAll('input[name="productos"]:checked'), function (i) { return i.value; });
     }
-    function dolares(c) { return "US$ " + Math.floor(c / 100) + "," + String(c % 100).padStart(2, "0"); }
+    function monto(c, moneda) {
+      return new Intl.NumberFormat("es-AR", { style: "currency", currency: moneda.toUpperCase() }).format(c / 100);
+    }
     function pintar() {
       var p = parseInt(porcentaje.value, 10), prods = productos();
       if (!(p >= 1 && p <= 100) || prods.length === 0) { caja.textContent = "—"; return; }
@@ -26,10 +28,10 @@
         .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
         .then(function (d) {
           var t = document.createElement("table");
-          t.innerHTML = "<tr><th>producto</th><th>lista</th><th>descuento</th><th>final</th></tr>";
+          t.innerHTML = "<tr><th>producto · moneda</th><th>lista</th><th>descuento</th><th>final</th></tr>";
           d.precios.forEach(function (f) {
             var tr = t.insertRow();
-            [f.codigo, dolares(f.lista), "−" + dolares(f.descuento), dolares(f.final)].forEach(function (v) {
+            [f.codigo + " · " + f.moneda, monto(f.lista, f.moneda), "−" + monto(f.descuento, f.moneda), monto(f.final, f.moneda)].forEach(function (v) {
               tr.insertCell().textContent = v;
             });
           });

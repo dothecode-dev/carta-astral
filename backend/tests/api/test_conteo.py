@@ -111,7 +111,7 @@ def test_abrir_cualquier_checkout_de_stripe_lo_cuenta(settings, monkeypatch):
     from api import stripe_client
 
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal"}
     settings.STRIPE_SUCCESS_URL = "https://astraguia.com/{locale}/compra?checkout_id={CHECKOUT_SESSION_ID}"
 
     class _Sesion:

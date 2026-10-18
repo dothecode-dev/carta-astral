@@ -18,12 +18,12 @@ SESSION = "cs_manual"
 
 @pytest.fixture(autouse=True)
 def _configurado(settings, monkeypatch):
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal"}
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda sid: {
-        "id": SESSION, "payment_status": "paid", "amount_subtotal": 2900, "amount_total": 2320,
+        "id": SESSION, "payment_status": "paid", "currency": "usd", "amount_subtotal": 2900, "amount_total": 2320,
         "total_details": {"amount_discount": 580}, "discounts": [{"promotion_code": "promo_1"}],
         "payment_intent": "pi_manual", "metadata": {},
-        "line_items": {"data": [{"price": {"id": "price_natal"}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
     })
     monkeypatch.setattr(webhooks_stripe, "arrancar_informe", lambda cuenta, fila: None)
 
@@ -70,3 +70,38 @@ def test_correrlo_dos_veces_no_otorga_dos(compra):
 def test_una_sesion_que_no_registramos_no_se_acredita():
     with pytest.raises(CommandError):
         call_command("acreditar_sesion", "cs_desconocida", "--si-estoy-seguro")
+
+
+def test_muestra_la_moneda_de_los_dos_lados(compra, capsys):
+    """Un 2900 contra un 2900 no dicen nada si uno es `brl` y el otro `usd`."""
+    compra.moneda = "brl"
+    compra.precio_centavos = 14900
+    compra.save(update_fields=["moneda", "precio_centavos"])
+
+    call_command("acreditar_sesion", SESSION)
+
+    salida = capsys.readouterr().out
+    assert "14900 brl" in salida
+    assert "2900 usd" in salida
+
+
+def test_una_fila_disputada_no_se_acredita_sin_el_segundo_flag(compra, capsys):
+    compra.disputa_id = "du_manual"
+    compra.save(update_fields=["disputa_id"])
+
+    with pytest.raises(CommandError):
+        call_command("acreditar_sesion", SESSION, "--si-estoy-seguro")
+
+    assert "DISPUTADA" in capsys.readouterr().out
+    assert _restante(compra.account) == 0
+    compra.refresh_from_db()
+    assert compra.acreditado_at is None
+
+
+def test_una_fila_disputada_se_acredita_con_los_dos_flags(compra):
+    compra.disputa_id = "du_manual"
+    compra.save(update_fields=["disputa_id"])
+
+    call_command("acreditar_sesion", SESSION, "--si-estoy-seguro", "--aunque-disputada")
+
+    assert _restante(compra.account) == 1

@@ -13,6 +13,17 @@ fi
 # NOTA: el dataset GeoNames NO se carga acá (trunca+recarga ~234k filas y tarda).
 # Correr una sola vez, manualmente, post-deploy:  python manage.py import_geonames
 
+# Chequeo de STRIPE_PRODUCTOS: devuelve warnings (exit 0) y avisa por Telegram
+# una vez, acá. El `||` es para que `set -e` no aborte por cualquier otra cosa.
+AVISAR_CHECKS=1 python manage.py check --tag stripe || echo "check de Stripe con avisos; ver arriba"
+
+# La base de países que sugiere la moneda a mostrar (RF3). En segundo plano:
+# gunicorn no espera a MaxMind (hasta 60 s, con el cartel de mantenimiento
+# puesto durante un deploy), y `geo` toma el archivo nuevo apenas aparece
+# (mira su mtime). Si falla —sin clave, sin red— todos ven USD hasta que el
+# Scheduled Task semanal reintente. El `||` porque arriba hay `set -e`.
+(python manage.py actualizar_geoip || echo "geoip: sin base, se sigue en usd") &
+
 exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \
     --workers "${GUNICORN_WORKERS:-3}" \

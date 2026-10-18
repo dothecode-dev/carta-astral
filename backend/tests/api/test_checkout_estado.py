@@ -25,19 +25,19 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
 
 
 @pytest.fixture
 def acreditar(client, monkeypatch):
     """Hace llegar el `checkout.session.completed` que acredita esa compra."""
-    def _acreditar(checkout_id="cs_1", price="price_natal", monto=2900):
+    def _acreditar(checkout_id="cs_1", price="prod_natal", monto=2900):
         sesion = {
-            "id": checkout_id, "payment_status": "paid",
+            "id": checkout_id, "payment_status": "paid", "currency": "usd",
             "amount_subtotal": monto, "amount_total": monto,
             "total_details": {"amount_tax": 0, "amount_discount": 0},
             "payment_intent": f"pi_{checkout_id}", "metadata": {},
-            "line_items": {"data": [{"price": {"id": price}, "quantity": 1}]},
+            "line_items": {"data": [{"price": {"product": price}, "quantity": 1}]},
         }
         monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _sid: sesion)
         cuerpo = json.dumps({
@@ -108,8 +108,8 @@ def test_un_pack_manda_a_la_cuenta(account_client, make_chart, acreditar):
         codigo_producto="pack_5_natal", sujeto=sujeto_natal(carta),
     )
 
-    acreditar(checkout_id="cs_5", price="price_pack",
-              monto=producto("pack_5_natal").precio_centavos)
+    acreditar(checkout_id="cs_5", price="prod_pack",
+              monto=producto("pack_5_natal").precio_en("usd"))
 
     datos = account_client.get("/api/checkout/cs_5/").json()
     assert datos["estado"] == "acreditado"

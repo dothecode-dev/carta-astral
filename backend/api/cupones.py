@@ -91,7 +91,10 @@ def canjear_gratis(
     Lo que sigue al commit —avisar, medir, arrancar el informe— lo hace quien
     llama, fuera de la transacción, igual que `_acreditar` en el webhook.
     """
-    prod = producto(codigo_producto)
+    # Un regalo del 100 % se registra en la moneda base: no pasa por Stripe y
+    # no hay cobro que decida otra.
+    moneda = "usd"
+    precio = producto(codigo_producto).precio_en(moneda)
     with transaction.atomic():
         cupon = Cupon.objects.select_for_update().get(pk=cupon.pk)
         _chequear(cupon, codigo_producto, account, timezone.now())
@@ -99,17 +102,16 @@ def canjear_gratis(
         external_id = f"cupon:{checkout_id}"
         aplicar_compra(
             account, codigo_producto, 0, external_id, sujeto=sujeto,
-            descuento_centavos=prod.precio_centavos, origen="cupon",
+            descuento_centavos=precio, origen="cupon", precio_centavos=precio,
         )
         fila = PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=account, codigo_producto=codigo_producto,
             sujeto=sujeto, locale=locale, acreditado_at=timezone.now(),
-            cupon=cupon, descuento_centavos=prod.precio_centavos,
-            precio_centavos=prod.precio_centavos,
+            cupon=cupon, descuento_centavos=precio, precio_centavos=precio, moneda=moneda,
         )
         CuponUso.objects.create(
             cupon=cupon, account=account, codigo_producto=codigo_producto,
-            descuento_centavos=prod.precio_centavos, monto_pagado_centavos=0,
+            descuento_centavos=precio, monto_pagado_centavos=0, moneda=moneda,
             checkout=fila, external_id=external_id,
         )
     logger.info("cupón %s canjeado gratis por acc=%s: %s", cupon.codigo, account.pk, codigo_producto)
@@ -148,23 +150,25 @@ def cambiar_activo(cupon, activo: bool) -> None:
     cupon.save(update_fields=["activo"])
 
 
-def precio_y_descuento(codigo_producto: str, cupon) -> tuple[int, int]:
-    """`(precio de lista, descuento)` que se congelan en la fila del checkout:
-    es contra esto que el webhook valida lo que Stripe cobró."""
-    precio = producto(codigo_producto).precio_centavos
+def precio_y_descuento(codigo_producto: str, cupon, moneda: str = "usd") -> tuple[int, int]:
+    """`(precio de lista, descuento)` EN `moneda`, que se congelan en la fila
+    del checkout: es contra esto que el webhook valida lo que Stripe cobró."""
+    precio = producto(codigo_producto).precio_en(moneda)
     descuento = precio_final(precio, cupon.porcentaje)[1] if cupon is not None else 0
     return precio, descuento
 
 
 def precio_final(precio_centavos: int, porcentaje: int) -> tuple[int, int]:
-    """`(final, descuento)` en centavos, exactos, para un porcentaje entero.
+    """`(final, descuento)` en centavos, para un porcentaje entero.
 
-    Es lo que Stripe cobra con `percent_off`: no se redondea al dólar, y como
-    los precios del catálogo son múltiplos de 100 no hay fracción de centavo
-    que perder. Siempre `final + descuento == precio`, que es lo que
-    `canje.aplicar_compra` exige para acreditar.
+    Redondea como Stripe con `percent_off`, MEDIDO en sandbox el 13-10-2026
+    sobre 2490 centavos de real: 15 % → 374 (373,5 hacia arriba), 5 % → 125,
+    30 % → 747. Es «al más cercano, mitad hacia arriba», que NO es el
+    `round()` de Python (bancario: 124,5 → 124). Con precios múltiplos de 100
+    no se nota; con R$ 24,90 sí, y el webhook exige igualdad exacta.
+    Siempre `final + descuento == precio`.
     """
     if not 1 <= porcentaje <= 100:
         raise ValueError(f"porcentaje fuera de 1..100: {porcentaje}")
-    descuento = precio_centavos * porcentaje // 100
+    descuento = (precio_centavos * porcentaje + 50) // 100
     return precio_centavos - descuento, descuento

@@ -18,7 +18,7 @@ pytestmark = pytest.mark.django_db
 
 def _precio() -> int:
     # El precio NO es el real: `tests/api/conftest.py` fija uno de prueba (autouse).
-    return producto("informe_natal").precio_centavos
+    return producto("informe_natal").precio_en("usd")
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ def test_devolver_por_sujeto_libera_el_canje(cuenta, carta):
 
 def test_aplicar_compra_con_sujeto_canjea_ese_sujeto(cuenta):
     s = Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
-    precio = producto("informe_vinculo").precio_centavos
+    precio = producto("informe_vinculo").precio_en("usd")
     aplicar_compra(cuenta, "informe_vinculo", precio, external_id="stripe:1", sujeto=s)
     assert _consumos(cuenta).get().sujeto_id == s.pk
     assert _restante(cuenta, "informe_vinculo") == 0

@@ -19,7 +19,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def combo(monkeypatch):
     p = Producto(
-        "combo_carta_horoscopo", 3900, "consumible",
+        "combo_carta_horoscopo", {"usd": 3900}, "consumible",
         ("leer_informe", "leer_horoscopo"),
         (("informe_natal", 1), ("horoscopo", 1)),
     )

@@ -54,6 +54,7 @@ class ComprasView(APIView):
                     "acreditada": c.acreditado_at is not None,
                     "created_at": c.created_at,
                     "monto_centavos": _pagado(c),
+                    "moneda": c.moneda,
                     "cupon": c.cupon.codigo if c.cupon is not None else None,
                     "reembolsado_centavos": c.reembolsado_centavos,
                     # Sólo mientras se puede retomar: la pantalla no decide nada.

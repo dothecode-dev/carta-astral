@@ -53,6 +53,7 @@ _TEXTOS = {
             "asunto": "Recibimos tu pago", "eyebrow": "Pago recibido",
             "titulo": "Recibimos tu pago",
             "parrafos": ("Lo que compraste ya está en tu cuenta.",),
+            "nota_pix": "Pagaste con Pix: en tu banco el cargo aparece a nombre de Ebanx, el procesador de Stripe en Brasil.",
             "boton": "Ver mi cuenta",
             "motivo": "Recibís este mail porque hiciste una compra en astraguia.com.",
         },
@@ -60,6 +61,7 @@ _TEXTOS = {
             "asunto": "We received your payment", "eyebrow": "Payment received",
             "titulo": "We received your payment",
             "parrafos": ("What you bought is now in your account.",),
+            "nota_pix": "You paid with Pix: on your bank statement the charge shows as Ebanx, Stripe's processor in Brazil.",
             "boton": "Go to my account",
             "motivo": "You're receiving this email because you made a purchase on astraguia.com.",
         },
@@ -67,6 +69,7 @@ _TEXTOS = {
             "asunto": "Recebemos seu pagamento", "eyebrow": "Pagamento recebido",
             "titulo": "Recebemos seu pagamento",
             "parrafos": ("O que você comprou já está na sua conta.",),
+            "nota_pix": "Você pagou com Pix: no seu banco a cobrança aparece em nome da Ebanx, o processador da Stripe no Brasil.",
             "boton": "Ver minha conta",
             "motivo": "Você recebe este e-mail porque fez uma compra em astraguia.com.",
         },
@@ -81,6 +84,7 @@ _TEXTOS = {
             "parrafos": (
                 "Tarda unos minutos: te mandamos otro mail cuando esté listo.",
             ),
+            "nota_pix": "Pagaste con Pix: en tu banco el cargo aparece a nombre de Ebanx, el procesador de Stripe en Brasil.",
             "boton": "Ver mi cuenta",
             "motivo": "Recibís este mail porque compraste un informe en astraguia.com.",
         },
@@ -90,6 +94,7 @@ _TEXTOS = {
             "parrafos": (
                 "It takes a few minutes: we'll email you again when it's ready.",
             ),
+            "nota_pix": "You paid with Pix: on your bank statement the charge shows as Ebanx, Stripe's processor in Brazil.",
             "boton": "Go to my account",
             "motivo": "You're receiving this email because you bought a report on astraguia.com.",
         },
@@ -99,6 +104,7 @@ _TEXTOS = {
             "parrafos": (
                 "Leva alguns minutos: mandamos outro e-mail quando estiver pronto.",
             ),
+            "nota_pix": "Você pagou com Pix: no seu banco a cobrança aparece em nome da Ebanx, o processador da Stripe no Brasil.",
             "boton": "Ver minha conta",
             "motivo": "Você recebe este e-mail porque comprou um relatório em astraguia.com.",
         },
@@ -346,9 +352,12 @@ def _armar(evento: str, contexto: dict, lang: str, url: str) -> tuple[str, str, 
     else:
         t = _TEXTOS[evento][lang]
         asunto = t["asunto"]
+        parrafos = t["parrafos"]
+        if contexto.get("medio") == "pix" and t.get("nota_pix"):
+            parrafos = (*parrafos, t["nota_pix"])
         mail = Mail(
-            preheader=t["parrafos"][0], eyebrow=t["eyebrow"], titulo=t["titulo"],
-            parrafos=t["parrafos"], boton=t["boton"], url=url, motivo=t["motivo"],
+            preheader=parrafos[0], eyebrow=t["eyebrow"], titulo=t["titulo"],
+            parrafos=parrafos, boton=t["boton"], url=url, motivo=t["motivo"],
         )
     return asunto, _html(mail, lang), render_texto(mail, lang)
 

@@ -15,7 +15,7 @@ DATOS = {"date": "1990-05-10", "time": "14:30", "time_known": True, "lat": -34.6
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
     settings.STRIPE_SUCCESS_URL = (
         "https://astraguia.com/{locale}/compra?checkout_id={CHECKOUT_SESSION_ID}"
     )
@@ -188,8 +188,37 @@ def test_campo_faltante_dice_cual_falta_sin_repr_de_la_excepcion(client, stripe_
     assert r.json() == {"error": "falta el campo date", "motivo": "datos_invalidos"}
 
 
+def test_sin_cuenta_tambien_se_puede_pagar_en_reales(client, stripe_responde):
+    r = _post(client, {**DATOS, "moneda": "brl"})
+
+    assert r.status_code == 200
+    fila = PasarelaCheckout.objects.get(checkout_id=r.json()["checkout_id"])
+    assert (fila.moneda, fila.precio_centavos) == ("brl", 14900)
+    assert stripe_responde[0]["payment_method_options"]["pix"]["amount_includes_iof"] == "always"
+
+
+def test_sin_cuenta_una_moneda_inventada_es_400_y_no_deja_carta(client, stripe_responde):
+    r = _post(client, {**DATOS, "moneda": "ars"})
+
+    assert r.status_code == 400
+    assert r.json()["motivo"] == "moneda_invalida"
+    assert Chart.objects.count() == 0
+
+
 def test_abrir_el_pago_cuenta_un_checkout_abierto(client, stripe_responde):
     from api.models import ConteoDiario
 
     _post(client)
     assert ConteoDiario.objects.get(evento="checkout_abierto").cantidad == 1
+
+
+def test_sin_moneda_se_cobra_en_usd_aunque_la_ip_sea_de_brasil(client, stripe_responde, monkeypatch):
+    """La IP sólo sugiere qué mostrar; el cobro es en lo que el cliente mandó
+    (decisión del 18-10-2026). Sin `moneda`, USD."""
+    from api import geo
+
+    monkeypatch.setattr(geo, "moneda_de", lambda request: "brl")
+    r = client.post(URL, DATOS, content_type="application/json", HTTP_X_FORWARDED_FOR="200.1.2.3")
+
+    assert r.status_code == 200
+    assert PasarelaCheckout.objects.get(checkout_id=r.json()["checkout_id"]).moneda == "usd"

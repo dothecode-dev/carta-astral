@@ -21,7 +21,7 @@ from api.accounts import probar_mail, resolve_account
 from api.auth import create_session
 from api.canje import derechos_de
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
-from api.models import CodigoAcceso, Session
+from api.models import CodigoAcceso, MailBloqueado, Session
 from api.sso import VerifiedIdentity
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,10 @@ class PedirCodigoView(APIView):
     cuenta: el envío del mail ocurre en las dos ramas, así que tampoco hay
     diferencia de tiempo explotable. Distinguir revelaría quién tiene cuenta
     en un sitio de astrología. Ninguna rama loguea la dirección ni el código.
+
+    Un mail bloqueado (RF16) también recibe 202, pero sin código ni envío: es
+    la única rama que se ahorra el mail, y lo que delata es tiempo de
+    respuesta sobre quién disputó un pago, no quién tiene cuenta.
     """
 
     authentication_classes = []
@@ -59,6 +63,11 @@ class PedirCodigoView(APIView):
         email = request.data.get("email") or ""
         if not email:
             return Response({"error": "email requerido"}, status=status.HTTP_400_BAD_REQUEST)
+        if MailBloqueado.bloqueado(email):
+            # Misma respuesta que el caso normal: no se revela quién está
+            # bloqueado (RF16). No se crea código ni se manda nada.
+            logger.warning("pedido de código de un mail bloqueado")
+            return Response({}, status=status.HTTP_202_ACCEPTED)
         lang = request.data.get("lang") or "es"
         destino = request.data.get("destino") or ""
 
@@ -81,6 +90,10 @@ class PedirCodigoView(APIView):
             return Response({"error": "login no disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         return Response({}, status=status.HTTP_202_ACCEPTED)
+
+
+class _MailBloqueadoAlCanjear(Exception):
+    """El código era válido, pero el mail está bloqueado (RF16)."""
 
 
 class CanjearCodigoView(APIView):
@@ -124,6 +137,14 @@ class CanjearCodigoView(APIView):
             # por `codigos_acceso.pedir`/`canjear`), nunca con el string
             # crudo del request (Ruling 11b): si no, dos casings de la misma
             # dirección terminan en dos cuentas.
+            if MailBloqueado.bloqueado(fila.email):
+                # RF16: un código pedido antes del bloqueo no abre la puerta
+                # después. Recién acá, con el código ya validado: chequearlo
+                # antes respondería distinto a un código cualquiera y
+                # revelaría quién disputó un pago. Levantar adentro del
+                # atomic de `canjear()` deshace el canje: el código no se
+                # quema y no se crea ni cuenta ni sesión.
+                raise _MailBloqueadoAlCanjear
             vid = VerifiedIdentity(
                 provider="email", sub=fila.email, email=fila.email, email_verified=True,
             )
@@ -150,6 +171,9 @@ class CanjearCodigoView(APIView):
             )
         except codigos_acceso.CodigoInvalido:
             return Response({"error": "código inválido"}, status=status.HTTP_401_UNAUTHORIZED)
+        except _MailBloqueadoAlCanjear:
+            logger.warning("canje de código de un mail bloqueado")
+            return Response({"error": "cuenta bloqueada", "motivo": "bloqueado"}, status=status.HTTP_403_FORBIDDEN)
         except ImproperlyConfigured as exc:
             # Defensa en profundidad ante un TOCTOU con el precheck de
             # arriba (la clave se cae justo entre medio) — la única causa

@@ -17,7 +17,9 @@ from api.accounts import cerrar_sesiones, resolver_cuenta
 from api.auth import create_session
 from api.chart_service import create_chart
 from api.identity import hash_token, normalizar, tombstone_hmac_configurada
-from api.models import Account, BirthData, Chart, CodigoAcceso, PasarelaCheckout, ProviderIdentity, Sujeto
+from api.models import (
+    Account, BirthData, Chart, CodigoAcceso, MailBloqueado, PasarelaCheckout, ProviderIdentity, Sujeto,
+)
 from api.sujetos import sujeto_natal
 from api.sso import VerifiedIdentity
 
@@ -36,7 +38,7 @@ def comprobar_disponible() -> None:
         raise NoDisponible("TOMBSTONE_HMAC_KEY")
 
 
-def abrir(datos: dict, locale: str):
+def abrir(datos: dict, locale: str, moneda: str = "usd"):
     """Crea la carta sin dueño, abre la sesión de Stripe y guarda la fila.
 
     Devuelve `(fila, nonce_en_claro)`; en la base sólo queda el hash del nonce.
@@ -47,7 +49,7 @@ def abrir(datos: dict, locale: str):
     Sin cupón, siempre al precio de lista (review 07-10): sin cuenta no se
     puede aplicar «uno por cuenta», y la adjudicación podía llevar la compra
     a una cuenta que ya lo había usado. La vista rechaza cualquier cupón
-    antes de llegar acá.
+    antes de llegar acá. `moneda` ya viene validada contra el producto.
     """
     comprobar_disponible()
     nonce = secrets.token_urlsafe(32)
@@ -55,13 +57,13 @@ def abrir(datos: dict, locale: str):
         carta = create_chart(datos, account=None)
         sujeto = sujeto_natal(carta)
         checkout_id, url = stripe_client.crear_checkout(
-            None, PRODUCTO, sujeto=sujeto, locale=locale, terminos=True,
+            None, PRODUCTO, sujeto=sujeto, locale=locale, terminos=True, moneda=moneda,
         )
-        precio, descuento = cupones.precio_y_descuento(PRODUCTO, None)
+        precio, descuento = cupones.precio_y_descuento(PRODUCTO, None, moneda)
         fila = PasarelaCheckout.objects.create(
             checkout_id=checkout_id, account=None, codigo_producto=PRODUCTO,
             sujeto=sujeto, locale=locale, descuento_centavos=descuento, url=url,
-            precio_centavos=precio, anonimo=True, nonce_hash=hash_token(nonce),
+            precio_centavos=precio, moneda=moneda, anonimo=True, nonce_hash=hash_token(nonce),
         )
     return fila, nonce
 
@@ -347,6 +349,12 @@ def canjear(checkout_id: str, nonce: str) -> dict:
         if fila.acreditado_at is None or fila.account_id is None:
             return {"estado": "pendiente"}
         if timezone.now() - fila.acreditado_at > VIDA_CANJE_POR_NONCE:
+            return {"estado": "invalido"}
+        if MailBloqueado.bloqueado(fila.account.email or ""):
+            # RF16: quien disputó un pago no entra por ningún lado, tampoco
+            # volviendo de Stripe. La compra igual se acreditó (R8). Después
+            # del nonce, así el bloqueo sólo se le revela a quien pagó.
+            logger.warning("compra anónima %s de un mail bloqueado: no se abre sesión", checkout_id)
             return {"estado": "invalido"}
         destino = (
             f"/{fila.locale}/carta/{fila.sujeto.natal_de.uuid}"

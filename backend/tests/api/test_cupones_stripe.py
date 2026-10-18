@@ -16,24 +16,17 @@ from api.models import Cupon
 @pytest.fixture(autouse=True)
 def stripe_config(settings):
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
 
 
 @pytest.fixture
 def stripe_captura(monkeypatch):
-    """Captura las llamadas a Coupon, PromotionCode y Price."""
+    """Captura las llamadas a Coupon y PromotionCode."""
     llamadas = {"coupon": [], "promo": [], "modify": []}
 
     class _Obj:
         def __init__(self, id):
             self.id = id
-
-    class _Price:
-        def __init__(self, product):
-            self.product = product
-
-    def price_retrieve(price_id):
-        return _Price({"price_natal": "prod_natal", "price_pack": "prod_pack"}[price_id])
 
     def coupon_create(**p):
         llamadas["coupon"].append(p)
@@ -47,7 +40,6 @@ def stripe_captura(monkeypatch):
         llamadas["modify"].append((id, p))
         return _Obj(id)
 
-    monkeypatch.setattr(stripe_client.stripe.Price, "retrieve", staticmethod(price_retrieve))
     monkeypatch.setattr(stripe_client.stripe.Coupon, "create", staticmethod(coupon_create))
     monkeypatch.setattr(stripe_client.stripe.PromotionCode, "create", staticmethod(promo_create))
     monkeypatch.setattr(stripe_client.stripe.PromotionCode, "modify", staticmethod(promo_modify))

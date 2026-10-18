@@ -1,6 +1,6 @@
 """Una variable JSON mal escrita no puede tumbar el proceso entero.
 
-`STRIPE_PRECIOS` y `REVENUECAT_PRODUCT_CREDITS` se parsean al IMPORTAR
+`STRIPE_PRODUCTOS` y `REVENUECAT_PRODUCT_CREDITS` se parsean al IMPORTAR
 settings. Con `json.loads` a secas, una coma de más o unas comillas sobrantes
 —lo más fácil de hacer pegando una variable en el panel de deploy— levantan
 `JSONDecodeError` antes de que Django termine de arrancar: no falla el cobro,

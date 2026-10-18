@@ -24,7 +24,7 @@ from api.canje import derechos_de
 from api.firma_frases import firma
 from interpret.prompts import PROMPT_VERSION
 from api import apple
-from api.models import Chart, ProviderIdentity, Sujeto
+from api.models import Chart, MailBloqueado, ProviderIdentity, Sujeto
 from api.permissions import HasAccount
 from api.serializers import serialize_chart_data
 from api.sujetos import sujeto_natal
@@ -413,6 +413,11 @@ class _BaseAuthView(APIView):
         except SSOError as exc:
             logger.warning("id_token inválido: %s", exc)
             return Response({"error": "token inválido"}, status=status.HTTP_401_UNAUTHORIZED)
+        # RF16: antes de `resolve_account`, que crearía la cuenta. Un mail
+        # vacío (algún proveedor no lo manda) nunca está bloqueado.
+        if MailBloqueado.bloqueado(vid.email):
+            logger.warning("login SSO de un mail bloqueado")
+            return Response({"error": "cuenta bloqueada", "motivo": "bloqueado"}, status=status.HTTP_403_FORBIDDEN)
         account = resolve_account(vid)
         self.after_login(request, vid)
         token = create_session(account)

@@ -97,21 +97,41 @@ ssh -N -L 8009:localhost:8000 -i ~/.ssh/astraguia_vps root@<ip-del-vps>
 Si el comando se renombra, hay que cambiarlo también ahí: nada en el repo lo
 verifica.
 
+Hay un segundo Scheduled Task, también a mano: `python manage.py actualizar_geoip`
+una vez por semana («Actualizar GeoLite2», `0 5 * * 1`, timeout 300). Renueva la
+base de países que decide la moneda inicial, y la EULA de MaxMind obliga a
+renovarla cada 30 días. Si falta, nadie se entera: todos ven USD. El entrypoint
+también la baja al arrancar el contenedor.
+
 ## El webhook de Stripe escucha eventos que se dan de alta a mano
 
 El endpoint del dashboard de Stripe (live y sandbox por separado) tiene que estar
-suscripto a los cinco eventos que `api/webhooks_stripe.py` despacha:
+suscripto a los siete eventos que `api/webhooks_stripe.py` despacha:
 `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
 `refund.created`, `checkout.session.expired` y
-`checkout.session.async_payment_failed`. Nada en el repo lo verifica: si
+`checkout.session.async_payment_failed`, `charge.dispute.funds_withdrawn` y
+`charge.dispute.funds_reinstated`. Nada en el repo lo verifica: si
 falta uno, Stripe nunca lo manda y el backend no se entera. El síntoma de
 `expired` es una compra sin terminar que la cuenta sigue mostrando como
 «Procesando el pago…» hasta el corte de 24 horas. El de
 `async_payment_failed` es peor y no se ve: con Managed Payments un medio
 asincrónico que falla deja la sesión `complete` y `expired` no llega nunca,
 así que la carta de una compra sin cuenta queda guardada para siempre, contra
-lo que dice la política de privacidad. Si sumás un evento al
+lo que dice la política de privacidad. Los dos de disputa van juntos: una
+disputa revierte la compra, avisa por Telegram y bloquea el mail; sin estos dos
+eventos la plata se va y el informe queda entregado. Si sumás un evento al
 despacho, sumalo también en el dashboard.
+
+## El precio no vive en Stripe
+
+Cada sesión se abre con `price_data` (Product + moneda + monto) desde
+`api/catalogo.py`, que tiene un precio por moneda. `STRIPE_PRODUCTOS` mapea
+código → `prod_…` (distinto en test y live) y lo verifica
+`manage.py verificar_productos_stripe` y un check de arranque
+(`manage.py check --tag stripe`) que avisa por Telegram. Ese aviso sale una vez
+por arranque de contenedor, porque el entrypoint corre el check con
+`AVISAR_CHECKS=1`; los crons nunca avisan. Cambiar un precio es una línea del
+catálogo y un deploy.
 
 ## El webhook de Resend escucha eventos que se dan de alta a mano
 

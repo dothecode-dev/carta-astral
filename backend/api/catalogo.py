@@ -13,11 +13,17 @@ from dataclasses import dataclass
 CONSUMIBLE = "consumible"
 ACCESO = "acceso"
 
+#: Moneda base. Todo producto la tiene; las demás son opcionales (RF1).
+MONEDA_BASE = "usd"
+
 
 @dataclass(frozen=True)
 class Producto:
     codigo: str
-    precio_centavos: int
+    #: Precio por moneda, en centavos de ESA moneda: `{"usd": 500, "brl": 2490}`.
+    #: `usd` es obligatoria. Un producto sin precio en una moneda no se vende
+    #: en ella (la web muestra USD y el checkout rechaza la otra con 400).
+    precios: dict[str, int]
     naturaleza: str
     capacidades: tuple[str, ...]
     #: Qué derechos deja al comprarlo: una o más `(código de producto, cantidad)`.
@@ -45,25 +51,50 @@ class Producto:
             raise ValueError(f"{self.codigo} es de acceso y no declara duracion_dias")
         if not self.otorga:
             raise ValueError(f"{self.codigo} no otorga nada")
+        if MONEDA_BASE not in self.precios:
+            raise ValueError(f"{self.codigo} no tiene precio en {MONEDA_BASE}")
+        for moneda, monto in self.precios.items():
+            if moneda != moneda.lower() or len(moneda) != 3:
+                raise ValueError(f"{self.codigo}: moneda {moneda!r} no es ISO 4217 en minúscula")
+            if not isinstance(monto, int) or monto < 0:
+                raise ValueError(f"{self.codigo}: precio en {moneda} inválido: {monto!r}")
+
+    def precio_en(self, moneda: str) -> int:
+        """Centavos en esa moneda. `KeyError` si el producto no se vende en ella:
+        inventar una conversión acá es inventar un precio."""
+        return self.precios[moneda]
+
+    def monedas(self) -> tuple[str, ...]:
+        return tuple(self.precios)
+
+    @property
+    def es_gratis(self) -> bool:
+        return self.precio_en(MONEDA_BASE) == 0
 
 
 _PRODUCTOS = (
-    Producto("lectura_breve", 0, CONSUMIBLE, ("leer_breve",), (("lectura_breve", 1),)),
-    Producto("informe_natal", 500, CONSUMIBLE, ("leer_informe",), (("informe_natal", 1),)),
+    Producto("lectura_breve", {"usd": 0}, CONSUMIBLE, ("leer_breve",), (("lectura_breve", 1),)),
+    # R$ 24,90 decidido el 13-10-2026 (spec cobro-brl-pix, R3): un poco bajo la
+    # paridad y deja margen al IOF (3,5 %), que absorbemos. Fijo: el riesgo
+    # cambiario es nuestro y lo vigila el informe diario.
+    Producto(
+        "informe_natal", {"usd": 500, "brl": 2490}, CONSUMIBLE, ("leer_informe",),
+        (("informe_natal", 1),),
+    ),
     # Retirados el 04-10-2026, cuando el informe pasó de US$ 29 a US$ 5: a ese
     # precio un pack ahorra centavos y sólo complica la elección. Quedan con
     # su precio de entonces porque hay compras y reembolsos que los nombran.
     Producto(
-        "pack_3_natal", 7900, CONSUMIBLE, ("leer_informe",), (("informe_natal", 3),),
+        "pack_3_natal", {"usd": 7900}, CONSUMIBLE, ("leer_informe",), (("informe_natal", 3),),
         vendible=False,
     ),
     Producto(
-        "pack_5_natal", 12500, CONSUMIBLE, ("leer_informe",), (("informe_natal", 5),),
+        "pack_5_natal", {"usd": 12500}, CONSUMIBLE, ("leer_informe",), (("informe_natal", 5),),
         vendible=False,
     ),
     # Precio provisorio (decisión del 10-10-2026); el definitivo se fija al lanzar.
     Producto(
-        "informe_vinculo", 900, CONSUMIBLE, ("leer_vinculo",), (("informe_vinculo", 1),),
+        "informe_vinculo", {"usd": 900}, CONSUMIBLE, ("leer_vinculo",), (("informe_vinculo", 1),),
         flag="VINCULO_ENABLED", sujeto="vinculo",
     ),
 )
@@ -88,9 +119,7 @@ def a_la_venta() -> list[Producto]:
     """Lo que se cobra hoy: con precio, no retirado y con su flag encendido
     (RF19). Es la única definición; el catálogo público, los cupones, el admin
     y la verificación contra Stripe preguntan acá."""
-    return [
-        p for p in CATALOGO.values() if p.precio_centavos > 0 and p.vendible and _encendido(p)
-    ]
+    return [p for p in CATALOGO.values() if not p.es_gratis and p.vendible and _encendido(p)]
 
 
 def disponible(codigo: str) -> bool:

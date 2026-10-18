@@ -18,7 +18,7 @@ URL = "/api/checkout/"
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
     settings.STRIPE_SUCCESS_URL = (
         "https://astraguia.com/{locale}/compra?checkout_id={CHECKOUT_SESSION_ID}"
     )
@@ -71,12 +71,39 @@ def test_la_sesion_vence_a_la_hora(account_client, stripe_responde):
 
 
 def test_el_cliente_no_elige_el_precio(account_client, stripe_responde):
-    """El precio lo pone el catálogo: del navegador sólo viene el producto."""
+    """El precio lo pone el catálogo: del navegador sólo viene el producto. Va
+    como `price_data` —producto + moneda + monto— y no como un Price id: así
+    cambiar un precio es una línea del catálogo (spec cobro-brl-pix, RF5)."""
     account_client.post(URL, {"producto": "informe_natal", "amount": 1})
 
     enviado = stripe_responde[0]
-    assert enviado["line_items"] == [{"price": "price_natal", "quantity": 1}]
+    assert enviado["line_items"] == [{
+        "price_data": {
+            "product": "prod_natal", "currency": "usd", "unit_amount": 2900,
+            "tax_behavior": "inclusive",
+        },
+        "quantity": 1,
+    }]
     assert "amount" not in enviado
+    assert "payment_method_options" not in enviado
+
+
+def test_en_reales_lleva_pix_con_iof_absorbido_y_vence_con_la_sesion(account_client, stripe_responde):
+    account_client.post(URL, {"producto": "informe_natal", "moneda": "brl"})
+
+    enviado = stripe_responde[0]
+    assert enviado["line_items"][0]["price_data"]["currency"] == "brl"
+    assert enviado["line_items"][0]["price_data"]["unit_amount"] == 14900
+    assert enviado["payment_method_options"] == {
+        "pix": {"amount_includes_iof": "always", "expires_after_seconds": 3600},
+    }
+
+
+def test_el_portugues_viaja_como_pt_br(account_client, stripe_responde):
+    account_client.post(URL, {"producto": "informe_natal", "locale": "pt"})
+
+    assert stripe_responde[0]["locale"] == "pt-BR"
+    assert stripe_responde[0]["success_url"].startswith("https://astraguia.com/pt/compra")
 
 
 def test_la_carta_queda_atada_a_la_compra(account_client, stripe_responde, make_chart):
@@ -116,12 +143,12 @@ def test_sin_credenciales_el_cobro_no_esta_disponible(account_client, settings, 
     assert not stripe_responde
 
 
-def test_un_producto_sin_precio_en_stripe_no_abre_la_sesion(
+def test_un_producto_sin_product_en_stripe_no_abre_la_sesion(
     account_client, settings, stripe_responde,
 ):
-    """El catálogo y Stripe son dos listas que hay que mantener alineadas:
-    mejor fallar acá que abrir un pago que después nadie puede acreditar."""
-    settings.STRIPE_PRECIOS = {"price_pack": "pack_5_natal"}
+    """El catálogo y `STRIPE_PRODUCTOS` son dos listas que hay que mantener
+    alineadas: mejor fallar acá que abrir un pago que nadie puede acreditar."""
+    settings.STRIPE_PRODUCTOS = {"pack_5_natal": "prod_pack"}
 
     assert account_client.post(URL, {"producto": "informe_natal"}).status_code == 503
     assert not stripe_responde
@@ -144,7 +171,7 @@ def test_el_idioma_viaja_a_stripe_y_a_la_url_de_vuelta(account_client, stripe_re
     account_client.post(URL, {"producto": "informe_natal", "locale": "pt"})
 
     enviado = stripe_responde[0]
-    assert enviado["locale"] == "pt"
+    assert enviado["locale"] == "pt-BR"  # Stripe lo pide así; la fila guarda el nuestro
     assert enviado["success_url"].startswith("https://astraguia.com/pt/compra")
     assert PasarelaCheckout.objects.get(checkout_id="cs_test_nueva").locale == "pt"
 
@@ -211,6 +238,50 @@ def test_un_pack_retirado_no_se_puede_comprar(account_client, stripe_responde):
 
     assert r.status_code == 400
     assert stripe_responde == []
+
+
+def test_la_moneda_se_normaliza_y_queda_congelada_en_la_fila(account_client, stripe_responde):
+    """Un cliente que no es la web puede mandar `BRL ` (Review Focus 1)."""
+    account_client.post(URL, {"producto": "informe_natal", "moneda": "BRL "})
+
+    fila = PasarelaCheckout.objects.get(checkout_id="cs_test_nueva")
+    assert (fila.moneda, fila.precio_centavos) == ("brl", 14900)
+    assert stripe_responde[0]["line_items"][0]["price_data"]["currency"] == "brl"
+
+
+def test_sin_moneda_se_cobra_en_usd(account_client, stripe_responde):
+    account_client.post(URL, {"producto": "informe_natal"})
+
+    assert PasarelaCheckout.objects.get(checkout_id="cs_test_nueva").moneda == "usd"
+
+
+@pytest.mark.parametrize("moneda", ["ars", "eur", "x", "pesos"])
+def test_una_moneda_desconocida_es_400_y_no_abre_nada(account_client, stripe_responde, moneda):
+    r = account_client.post(URL, {"producto": "informe_natal", "moneda": moneda})
+
+    assert r.status_code == 400
+    assert r.json()["motivo"] == "moneda_invalida"
+    assert not stripe_responde
+    assert PasarelaCheckout.objects.count() == 0
+
+
+def test_una_moneda_que_el_producto_no_tiene_es_400(account_client, stripe_responde, settings):
+    """El vínculo sólo tiene precio en USD (EC2): `brl` no inventa uno."""
+    settings.VINCULO_ENABLED = True
+    r = account_client.post(URL, {"producto": "informe_vinculo", "moneda": "brl"})
+
+    assert r.status_code == 400
+    assert r.json()["motivo"] == "moneda_invalida"
+    assert not stripe_responde
+
+
+def test_un_producto_desconocido_sigue_siendo_producto_invalido_aunque_venga_moneda(account_client, stripe_responde):
+    r = account_client.post(URL, {"producto": "pack_100", "moneda": "brl"})
+
+    assert r.status_code == 400
+    assert r.json()["error"] == "producto inválido"
+    assert r.json().get("motivo") != "moneda_invalida"
+    assert not stripe_responde
 
 
 def test_abrir_el_pago_con_cuenta_cuenta_un_checkout_abierto(account_client, stripe_responde):

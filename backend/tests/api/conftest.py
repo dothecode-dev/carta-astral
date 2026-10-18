@@ -12,6 +12,9 @@ from api.sujetos import sujeto_natal
 #: nada que ver. Cuánto vale de verdad lo fijan los tests marcados
 #: `catalogo_real` (test_catalogo.py).
 PRECIO_DE_PRUEBA = 2900
+#: El precio en reales de los tests. 14900 y no 2490 a propósito: un número
+#: que no se parece al de USD delata una mezcla de monedas en un assert.
+PRECIO_DE_PRUEBA_BRL = 14900
 
 
 @pytest.fixture(autouse=True)
@@ -20,7 +23,10 @@ def _precio_de_prueba(request, monkeypatch):
         return
     monkeypatch.setitem(
         catalogo.CATALOGO, "informe_natal",
-        dataclasses.replace(catalogo.CATALOGO["informe_natal"], precio_centavos=PRECIO_DE_PRUEBA),
+        dataclasses.replace(
+            catalogo.CATALOGO["informe_natal"],
+            precios={"usd": PRECIO_DE_PRUEBA, "brl": PRECIO_DE_PRUEBA_BRL},
+        ),
     )
 
 
@@ -40,7 +46,7 @@ def cupon_100():
 #: para no confundirse con el `SESSION` local de cada archivo de webhooks.
 SESSION_ANONIMA = "cs_test_anonima"
 PI_ANONIMA = "pi_anonima"
-PRECIO_ANONIMA = "price_natal"
+PRECIO_ANONIMA = "prod_natal"
 
 
 def sesion_anonima(**cambios) -> dict:
@@ -48,12 +54,13 @@ def sesion_anonima(**cambios) -> dict:
     sesion = {
         "id": SESSION_ANONIMA,
         "payment_status": "paid",
+        "currency": "usd",
         "amount_subtotal": 2900,
         "amount_total": 2900,
         "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": PI_ANONIMA,
         "metadata": {},
-        "line_items": {"data": [{"price": {"id": PRECIO_ANONIMA}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": PRECIO_ANONIMA}, "quantity": 1}]},
     }
     sesion.update(cambios)
     return sesion
@@ -103,7 +110,7 @@ def entregar_anonima(client, monkeypatch, settings):
     from tests.api.stripe_firma import SECRETO, firmar
 
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {PRECIO_ANONIMA: "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": PRECIO_ANONIMA}
 
     def _entregar(sesion, tipo="checkout.session.completed", evt="evt_anonima"):
         monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _sid: sesion)

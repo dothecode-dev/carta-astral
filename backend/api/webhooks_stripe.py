@@ -1,10 +1,12 @@
 """El webhook de Stripe: por acá entra la plata.
 
-Despacha cinco eventos, que el endpoint del dashboard de Stripe (live y
+Despacha siete eventos, que el endpoint del dashboard de Stripe (live y
 sandbox) tiene que tener dados de alta a mano —ver el CLAUDE.md del repo—:
 `checkout.session.completed` y `checkout.session.async_payment_succeeded`
-(acreditar), `refund.created` (revocar), y `checkout.session.expired` y
-`checkout.session.async_payment_failed` (vencer y descartar).
+(acreditar), `refund.created` (revocar), `checkout.session.expired` y
+`checkout.session.async_payment_failed` (vencer y descartar), y
+`charge.dispute.funds_withdrawn` y `charge.dispute.funds_reinstated`
+(revertir por disputa, y reponer si Stripe devuelve los fondos).
 
 La URL es pública, así que la firma es la única autenticación. Sin
 `STRIPE_WEBHOOK_SECRET` configurado se rechaza todo (fail-closed): aceptar
@@ -33,13 +35,16 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db import IntegrityError, models
+from django.db import IntegrityError, transaction
 
-from api import analitica, catalogo, compra_anonima, notificaciones
-from api.canje import MontoInvalido, aplicar_compra, revocar
+from api import analitica, catalogo, compra_anonima, devoluciones, disputas, notificaciones
+from api.avisos import avisar_admin
+from api.canje import MontoInvalido, aplicar_compra
 from api.compra_service import arrancar_informe
-from api.models import Account, CuponUso, PasarelaCheckout
-from api.stripe_client import FirmaInvalida, codigo_de_producto, obtener_sesion, verificar_firma
+from api.models import Account, CuponUso, MailBloqueado, PasarelaCheckout, Reembolso
+from api.stripe_client import (
+    FirmaInvalida, codigo_de_product, obtener_sesion, verificar_firma,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +67,9 @@ EVENTOS_REEMBOLSO = ("refund.created",)
 # `expired` no llega nunca, así que sin él la carta anónima quedaba guardada
 # para siempre.
 EVENTOS_VENCIMIENTO = ("checkout.session.expired", "checkout.session.async_payment_failed")
+
+# Stripe retiró los fondos por una disputa (o los devolvió): ver `api/disputas.py`.
+EVENTOS_DISPUTA = disputas.EVENTOS
 
 
 class StripeWebhookView(APIView):
@@ -86,7 +94,7 @@ class StripeWebhookView(APIView):
 
         tipo = evento.get("type", "")
         objeto = (evento.get("data") or {}).get("object") or {}
-        if tipo not in EVENTOS_PAGO + EVENTOS_REEMBOLSO + EVENTOS_VENCIMIENTO:
+        if tipo not in EVENTOS_PAGO + EVENTOS_REEMBOLSO + EVENTOS_VENCIMIENTO + EVENTOS_DISPUTA:
             logger.info("evento de stripe ignorado: %s", tipo)
             return Response(status=status.HTTP_200_OK)
 
@@ -95,6 +103,8 @@ class StripeWebhookView(APIView):
                 _acreditar(objeto.get("id", ""))
             elif tipo in EVENTOS_VENCIMIENTO:
                 _vencer(objeto.get("id", ""))
+            elif tipo in EVENTOS_DISPUTA:
+                disputas.procesar(objeto, tipo)
             else:
                 _reembolsar(objeto)
         except Exception:
@@ -165,13 +175,23 @@ def _adjudicar_si_es_anonima(session_id: str, sesion: dict) -> None:
         # vista lo loguea con nivel error y responde 5xx.
         raise SesionAnonimaSinEmail(f"sesión anónima {session_id} pagada sin email")
     compra_anonima.adjudicar(session_id, email)
+    if MailBloqueado.bloqueado(email):
+        # R8: la plata entró, se entrega igual; pero se mira.
+        logger.warning("sesión %s: compra sin cuenta de un mail bloqueado; se acredita igual", session_id)
+        # Enmascarado: el texto va a Telegram y, sin token, al log.
+        avisar_admin(
+            f"Stripe {session_id}: compra sin cuenta de un mail BLOQUEADO "
+            f"({compra_anonima.enmascarar(email)}). Se acredita igual.",
+        )
 
 
-def _precio_de(sesion: dict) -> str:
+def _product_de(sesion: dict) -> str:
+    """El Product de Stripe del único line item. Con `price_data` Stripe crea
+    un Price efímero por sesión: su id no dice nada, el Product sí."""
     items = ((sesion.get("line_items") or {}).get("data")) or []
     if not items:
         return ""
-    return ((items[0].get("price") or {}).get("id")) or ""
+    return ((items[0].get("price") or {}).get("product")) or ""
 
 
 def _acreditar(session_id: str) -> None:
@@ -203,23 +223,59 @@ def _acreditar(session_id: str) -> None:
     cuenta, fila = _resolver_cuenta_y_fila(sesion)
     if cuenta is None:
         logger.error("sesión %s sin cuenta que la reclame: no se acredita", session_id)
+        avisar_admin(f"Stripe {session_id}: pagada y sin cuenta que la reclame. No se acreditó.")
         return
 
-    try:
-        codigo = codigo_de_producto(_precio_de(sesion))
-    except KeyError:
-        logger.error("sesión %s con un precio que no mapeamos: no se acredita", session_id)
-        return
-
-    if fila is not None and fila.codigo_producto != codigo:
-        # El checkout se abrió para un producto y la sesión dice otro. No es un
-        # caso que sepamos resolver, y elegir mal significa entregar de más o
-        # de menos: se registra y no se acredita.
-        logger.error(
-            "sesión %s: el checkout era de %s y la sesión dice %s",
-            session_id, fila.codigo_producto, codigo,
+    if fila is not None and fila.disputa_id:
+        # EC16: la disputa llegó antes que el pago. Esos fondos ya se los
+        # llevó Stripe: entregar ahora sería regalar lo disputado.
+        logger.error("sesión %s con disputa %s: no se entrega", session_id, fila.disputa_id)
+        avisar_admin(
+            f"Stripe {session_id}: llegó el pago de una compra ya disputada ({fila.disputa_id}). No se entregó.",
         )
         return
+
+    # El Product de la sesión dice qué cobró Stripe; la fila dice qué abrimos.
+    # Los dos tienen que coincidir: elegir uno solo es entregar de más o de menos.
+    product_id = _product_de(sesion)
+    try:
+        codigo_sesion = codigo_de_product(product_id)
+    except KeyError:
+        logger.error("sesión %s con un Product que no mapeamos (%s): no se acredita", session_id, product_id)
+        avisar_admin(f"Stripe {session_id}: Product {product_id} no está en STRIPE_PRODUCTOS. No se acreditó.")
+        return
+    if fila is not None and fila.codigo_producto != codigo_sesion:
+        logger.error(
+            "sesión %s: el checkout era de %s y la sesión dice %s", session_id, fila.codigo_producto, codigo_sesion,
+        )
+        avisar_admin(
+            f"Stripe {session_id}: la fila es de {fila.codigo_producto} y la sesión trae {product_id} "
+            f"({codigo_sesion}). No se acreditó.",
+        )
+        return
+    codigo = fila.codigo_producto if fila is not None else codigo_sesion
+
+    # La moneda de la sesión tiene que ser la congelada: 14900 centavos de
+    # dólar no son 14900 de real, y `aplicar_compra` sólo compara enteros.
+    # Sin fila sólo se acepta la base, que es la única con la que el catálogo
+    # puede comparar (RF10).
+    moneda_sesion = (sesion.get("currency") or "").lower()
+    moneda_fila = fila.moneda if fila is not None else "usd"
+    if moneda_sesion != moneda_fila:
+        logger.error(
+            "sesión %s en %s y la fila en %s: no se acredita", session_id, moneda_sesion, moneda_fila,
+        )
+        avisar_admin(
+            f"Stripe {session_id}: la sesión vino en {moneda_sesion} y la fila está en {moneda_fila} "
+            f"(subtotal {sesion.get('amount_subtotal')}). No se acreditó.",
+        )
+        return
+
+    if fila is not None and fila.vencido_at is not None and fila.acreditado_at is None:
+        # EC15: un Pix pagado después de que la sesión venció. La plata entró
+        # y manda; se entrega, y se mira por qué llegó tarde.
+        logger.warning("sesión %s pagada sobre una fila vencida: se acredita igual", session_id)
+        avisar_admin(f"Stripe {session_id}: pago sobre una fila vencida; se acreditó igual.")
 
     monto = sesion.get("amount_subtotal")
     if monto is None:
@@ -227,6 +283,7 @@ def _acreditar(session_id: str) -> None:
         # se lee como "el monto no coincide", que es otro problema con otro
         # arreglo. Se rechaza acá, con su propio log.
         logger.error("sesión %s sin monto (amount_subtotal nulo): no se acredita", session_id)
+        avisar_admin(f"Stripe {session_id}: sin amount_subtotal. No se acreditó.")
         return
 
     _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto)
@@ -275,6 +332,10 @@ def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
                 "sesión %s trae un descuento que no abrimos nosotros (promos=%s, "
                 "amount_discount=%s): no se acredita", session_id, promos, reportado,
             )
+            avisar_admin(
+                f"Stripe {session_id}: el descuento no cierra (promos={promos}, reportado={reportado}). "
+                "No se acreditó.",
+            )
             raise DescuentoNoCierra
         return 0, None
 
@@ -293,46 +354,38 @@ def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
             "promos=%s descuento esperado=%s reportado=%s: no se acredita",
             session_id, cupon.codigo, cupon.stripe_promotion_code_id, promos, esperado, reportado,
         )
+        avisar_admin(
+            f"Stripe {session_id}: el descuento no cierra (promos={promos}, reportado={reportado}). "
+            "No se acreditó.",
+        )
         raise DescuentoNoCierra
     return esperado, cupon
 
 
-def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon) -> None:
+class CompraDisputada(Exception):
+    """La fila tiene una disputa: esos fondos ya se los llevó Stripe."""
+
+
+def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon, a_mano=False) -> None:
     """Otorga, marca la fila, deja constancia del cupón, avisa, mide y arranca
-    el informe. Lo comparten el webhook y `acreditar_sesion`."""
+    el informe. Lo comparten el webhook y `acreditar_sesion` (`a_mano`, que
+    entrega aunque la fila tenga disputa: quien lo corre ya miró)."""
     external_id = f"stripe:session:{session_id}"
     pagado = monto - descuento
     try:
-        # `amount_subtotal` y no `amount_total`: MEDIDO el 03-09-2026 contra una
-        # sesión pagada de verdad con dirección española. Con Managed Payments
-        # el subtotal NO baja —los dos campos llegan en el precio de lista y el
-        # impuesto va aparte, en `total_details`—, así que el subtotal vale 2900
-        # con impuesto incluido y también con impuesto encima. `amount_total`
-        # sólo coincide con el catálogo mientras el precio esté en `inclusive`.
-        # Con cupón (medido el 06-09-2026) tampoco baja: el descuento va en
-        # `total_details.amount_discount`, y acá se resta el congelado.
-        aplicado = aplicar_compra(
-            cuenta, codigo, pagado,
-            external_id=external_id,
-            sujeto=fila.sujeto if fila is not None else None,
-            descuento_centavos=descuento,
-            precio_centavos=fila.precio_de_lista() if fila is not None else None,
-            al_saldar_deuda=(lambda: _marcar_saldo_deuda(fila)) if fila is not None else None,
-        )
+        aplicado = _otorgar_y_marcar(sesion, cuenta, fila, codigo, pagado, descuento, external_id, a_mano)
     except MontoInvalido:
         # Ya lo logueó `aplicar_compra` con los dos montos: acá no se repite.
         # Reintentar no lo arregla, así que la entrega se da por buena.
+        avisar_admin(
+            f"Stripe {session_id}: el monto no coincide (pagado {pagado} {fila.moneda if fila else 'usd'}, "
+            f"lista {fila.precio_de_lista() if fila else '?'}). No se acreditó.",
+        )
         return
-
-    if fila is not None:
-        # Fuera del `if aplicado`: en un reintento posterior a un fallo tardío,
-        # `aplicar_compra` devuelve False porque el external_id ya está aplicado
-        # y la compra YA fue entregada. Si la marca dependiera de ese True, la
-        # página de retorno diría "pendiente" para siempre sobre un informe que
-        # la persona ya tiene.
-        fila.payment_intent = sesion.get("payment_intent") or ""
-        fila.acreditado_at = fila.acreditado_at or timezone.now()
-        fila.save(update_fields=["payment_intent", "acreditado_at"])
+    except CompraDisputada as e:
+        logger.error("sesión %s con disputa %s: no se entrega", session_id, e)
+        avisar_admin(f"Stripe {session_id}: llegó el pago de una compra ya disputada ({e}). No se entregó.")
+        return
 
     if cupon is not None:
         _registrar_uso(cupon, cuenta, fila, codigo, descuento, pagado, external_id)
@@ -354,6 +407,7 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
             {
                 "producto": codigo, "monto_centavos": pagado, "locale": lang,
                 "cupon": cupon.codigo if cupon is not None else None,
+                "moneda": fila.moneda if fila is not None else "usd",
             },
         )
 
@@ -379,7 +433,73 @@ def _entregar(session_id, sesion, cuenta, fila, codigo, monto, descuento, cupon)
         # `notificar` no lanza, así que no tapa la excepción del arranque.
         if aplicado:
             evento = "informe_en_curso" if informe_en_curso else "compra_acreditada"
-            notificaciones.notificar(cuenta, evento, {"producto": codigo}, lang=lang)
+            notificaciones.notificar(
+                cuenta, evento, {"producto": codigo, "medio": _medio_de_pago(sesion)}, lang=lang,
+            )
+
+
+def _payment_intent_id(sesion: dict) -> str:
+    """El PI expandido es un dict; en sesiones viejas (y en los tests) es el id."""
+    pi = sesion.get("payment_intent")
+    if isinstance(pi, dict):
+        return pi.get("id") or ""
+    return pi or ""
+
+
+def _medio_de_pago(sesion: dict) -> str:
+    """El `type` del PaymentMethod usado (`pix`, `card`, ...); vacío si el PI no
+    vino expandido. `payment_method_types[0]` sólo de respaldo (medido el
+    13-10-2026: Checkout deja el PI con un solo tipo, el usado)."""
+    pi = sesion.get("payment_intent")
+    if not isinstance(pi, dict):
+        return ""
+    pm = pi.get("payment_method")
+    if isinstance(pm, dict) and pm.get("type"):
+        return pm["type"]
+    tipos = pi.get("payment_method_types") or []
+    return tipos[0] if tipos else ""
+
+
+def _otorgar_y_marcar(sesion, cuenta, fila, codigo, pagado, descuento, external_id, a_mano) -> bool:
+    """Otorga y marca la fila acreditada en UN átomo, con la fila bloqueada.
+
+    La disputa se vuelve a mirar acá: una que se procesó entre el chequeo de
+    `_acreditar` y este punto no se pierde. `_retirar_por_disputa` bloquea la
+    misma fila, así que o ve `acreditado_at` puesto y revoca, o deja la marca
+    y acá no se entrega.
+    """
+    with transaction.atomic():
+        if fila is not None:
+            bloqueada = PasarelaCheckout.objects.select_for_update().only("disputa_id").get(pk=fila.pk)
+            if bloqueada.disputa_id and not a_mano:
+                raise CompraDisputada(bloqueada.disputa_id)
+        # `amount_subtotal` y no `amount_total`: MEDIDO el 03-09-2026 contra una
+        # sesión pagada de verdad con dirección española. Con Managed Payments
+        # el subtotal NO baja —los dos campos llegan en el precio de lista y el
+        # impuesto va aparte, en `total_details`—, así que el subtotal vale el
+        # precio de lista en la moneda de la sesión con impuesto incluido y
+        # también con impuesto encima. `amount_total` sólo coincide con el
+        # catálogo mientras el precio esté en `inclusive`. Con cupón (medido el
+        # 06-09-2026) tampoco baja: el descuento va en
+        # `total_details.amount_discount`, y acá se resta el congelado.
+        aplicado = aplicar_compra(
+            cuenta, codigo, pagado,
+            external_id=external_id,
+            sujeto=fila.sujeto if fila is not None else None,
+            descuento_centavos=descuento,
+            precio_centavos=fila.precio_de_lista() if fila is not None else None,
+            al_saldar_deuda=(lambda: _marcar_saldo_deuda(fila)) if fila is not None else None,
+        )
+        if fila is not None:
+            # Fuera del `if aplicado`: en un reintento posterior a un fallo
+            # tardío, `aplicar_compra` devuelve False porque el external_id ya
+            # está aplicado y la compra YA fue entregada. Si la marca dependiera
+            # de ese True, la página de retorno diría "pendiente" para siempre
+            # sobre un informe que la persona ya tiene.
+            fila.payment_intent = _payment_intent_id(sesion)
+            fila.acreditado_at = fila.acreditado_at or timezone.now()
+            fila.save(update_fields=["payment_intent", "acreditado_at"])
+    return aplicado
 
 
 def _marcar_saldo_deuda(fila) -> None:
@@ -401,6 +521,7 @@ def _registrar_uso(cupon, cuenta, fila, codigo, descuento, pagado, external_id) 
             defaults=dict(
                 cupon=cupon, account=cuenta, codigo_producto=codigo, checkout=fila,
                 descuento_centavos=descuento, monto_pagado_centavos=pagado,
+                moneda=fila.moneda if fila is not None else "usd",
             ),
         )
     except IntegrityError:
@@ -419,6 +540,7 @@ def acreditar_a_mano(fila, sesion: dict) -> None:
     _entregar(
         fila.checkout_id, sesion, fila.account, fila, codigo,
         precio, fila.descuento_centavos, fila.cupon if fila.descuento_centavos else None,
+        a_mano=True,
     )
 
 
@@ -439,14 +561,6 @@ def _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto
         )
 
 
-def _anotar_reembolso(fila, monto: int) -> None:
-    """Suma lo devuelto a la compra. Sólo cuando `revocar` hizo algo: así el
-    mismo `refund.created` reentregado no cuenta dos veces."""
-    PasarelaCheckout.objects.filter(pk=fila.pk).update(
-        reembolsado_centavos=models.F("reembolsado_centavos") + monto,
-    )
-
-
 class ReembolsoSinCompra(Exception):
     """No hay ninguna compra nuestra con ese `payment_intent`... todavía."""
 
@@ -462,7 +576,12 @@ def _reembolsar(refund: dict) -> None:
     con la misma clave que el pago, el reembolso se descartaría como duplicado
     de la compra que lo precedió.
     """
-    refund_id = refund.get("id", "")
+    refund_id = refund.get("id") or ""
+    if not refund_id:
+        # Sin id no hay constancia posible: el primero se guardaría con "" y
+        # todos los siguientes sin id se darían por aplicados.
+        logger.error("reembolso sin id (pi=%s): no se aplica", refund.get("payment_intent"))
+        return
     payment_intent = refund.get("payment_intent") or ""
     if not payment_intent:
         # Sin `payment_intent` no hay forma de atribuir el reembolso, y buscar
@@ -480,6 +599,19 @@ def _reembolsar(refund: dict) -> None:
             f"reembolso {refund_id}: ninguna compra con payment_intent {payment_intent}",
         )
 
+    # Los montos sólo se comparan en la moneda de la compra: un reembolso de
+    # 2900 `brl` sobre una compra en `usd` no son 2900 de nada.
+    moneda_refund = (refund.get("currency") or "").lower()
+    if moneda_refund != fila.moneda:
+        logger.error(
+            "reembolso %s en %s sobre una compra en %s: no se revoca", refund_id, moneda_refund, fila.moneda,
+        )
+        avisar_admin(
+            f"Stripe refund {refund_id}: vino en {moneda_refund} y la compra {fila.checkout_id} está en "
+            f"{fila.moneda}. No se revocó nada.",
+        )
+        return
+
     # `fila.account` puede ser None si la cuenta se borró después de comprar
     # (RF22): `revocar` lo contempla y registra el movimiento igual, para que
     # la contabilidad cierre aunque no haya a quién cobrarle la deuda.
@@ -488,49 +620,53 @@ def _reembolsar(refund: dict) -> None:
     # cuenta —Managed Payments los emite sin nuestra aprobación—: decidido el
     # 03-09-2026, porque el payload no dice quién inició el reembolso y
     # `flagged` no bloquea nada, sólo marca la cuenta para mirarla.
-    external_id = f"stripe:refund:{refund_id}"
-    prod = catalogo.producto(fila.codigo_producto)
     monto = refund.get("amount") or 0
-    # Sobre LO PAGADO, no sobre la lista: un pack de 5 al 50 % (paga 6250)
-    # reembolsado entero caía en la rama parcial y revocaba 3, y la persona se
-    # quedaba con dos informes y toda la plata. Con un regalo del 100 % lo
-    # pagado es 0: cualquier reembolso es total, y no hay división que hacer.
-    precio_pagado = fila.precio_de_lista() - fila.descuento_centavos
-
-    if precio_pagado == 0 or monto >= precio_pagado:
-        # Reembolso total: se revoca el producto COMPRADO, que es lo que deja
-        # el Movimiento diciendo qué se reembolsó, y `revocar` traduce a lo que
-        # ese producto otorgó.
-        if revocar(fila.account, fila.codigo_producto, 1, external_id=external_id):
-            _anotar_reembolso(fila, monto)
-        logger.info("reembolso %s revocado entero: %s", refund_id, fila.codigo_producto)
-        return
-
-    if len(prod.otorga) != 1:
-        # Un combo devuelto a medias no tiene una respuesta obvia —¿qué mitad
-        # de "carta + horóscopo" se revoca?— y hoy no existe ninguno en el
-        # catálogo. Antes que inventar una regla, queda a la vista.
-        logger.error(
-            "reembolso %s parcial sobre un producto que otorga %s cosas (%s): "
-            "no se revoca, resolver a mano",
-            refund_id, len(prod.otorga), fila.codigo_producto,
-        )
-        return
-
-    # Proporción redondeada HACIA ARRIBA (decidido el 03-09-2026): media
-    # devolución de un pack de 5 revoca 3, y cualquier reembolso parcial de un
-    # producto suelto revoca su única unidad, porque no existe medio informe.
-    # Ante la duda no se regala producto; lo que ya se usó no se le saca a
-    # nadie igual, eso va a deuda. En enteros, para no arrastrar floats.
-    codigo_otorgado, multiplicador = prod.otorga[0]
-    unidades = -(-monto * multiplicador // precio_pagado)
-    if unidades <= 0:
-        logger.error("reembolso %s por %s: no alcanza a una unidad", refund_id, monto)
-        return
-
-    if revocar(fila.account, codigo_otorgado, unidades, external_id=external_id):
-        _anotar_reembolso(fila, monto)
-    logger.info(
-        "reembolso %s parcial (%s de %s): revocadas %s de %s unidades de %s",
-        refund_id, monto, precio_pagado, unidades, multiplicador, codigo_otorgado,
-    )
+    with transaction.atomic():
+        # Bloqueada: la cuenta de unidades lee `unidades_revocadas` y la
+        # actualiza, y dos reembolsos (o un reembolso y una disputa) pueden
+        # llegar a la vez. `of=("self",)`: `account` es nullable.
+        fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila.pk)
+        # La constancia es `Reembolso` (la 0059 la completó para los
+        # reembolsos aplicados antes de que existiera).
+        if Reembolso.objects.filter(refund_id=refund_id).exists():
+            logger.info("reembolso %s ya aplicado", refund_id)
+            return
+        prod = catalogo.producto(fila.codigo_producto)
+        # Sobre LO PAGADO, no sobre la lista: un pack de 5 al 50 % (paga 6250)
+        # reembolsado entero caía en la rama parcial y revocaba 3. Con un
+        # regalo del 100 % lo pagado es 0: cualquier reembolso es total.
+        base = devoluciones.pagado(fila)
+        if not devoluciones.cubre_todo(fila, monto) and len(prod.otorga) != 1:
+            # Un combo devuelto a medias no tiene una respuesta obvia —¿qué
+            # mitad de "carta + horóscopo" se revoca?— y hoy no existe ninguno
+            # en el catálogo. No se revoca nada, pero el monto se anota y queda
+            # la constancia: una disputa posterior no lo cuenta como no devuelto.
+            Reembolso.objects.create(refund_id=refund_id, fila=fila, monto=monto)
+            devoluciones.registrar(fila, 0, monto)
+            logger.error("reembolso %s parcial sobre el combo %s: no se revoca", refund_id, fila.codigo_producto)
+            aviso = (
+                f"Stripe refund {refund_id}: parcial ({monto} {fila.moneda}) sobre el combo "
+                f"{fila.codigo_producto} {fila.checkout_id}. No se revocó nada: resolver a mano."
+            )
+        else:
+            aviso = None
+            # Proporción redondeada HACIA ARRIBA (decidido el 03-09-2026) y
+            # nunca más de lo que queda sin revocar: la suma de varios
+            # parciales redondeados no puede pasarse de lo que el pack dio. Lo
+            # que no queda puede tenerlo una disputa abierta (ver
+            # `tomar_de_disputa`).
+            pedidas = devoluciones.unidades_pedidas(fila, monto)
+            unidades = min(pedidas, devoluciones.quedan(fila))
+            if unidades and devoluciones.revocar_unidades(fila, unidades, f"stripe:refund:{refund_id}") is None:
+                logger.info("reembolso %s ya revocado en el ledger", refund_id)
+                return
+            tomadas, cedido = disputas.ceder_a_reembolso(fila, pedidas - unidades, monto)
+            Reembolso.objects.create(refund_id=refund_id, fila=fila, monto=monto, unidades=unidades + tomadas)
+            # Lo que la disputa ya había anotado de este monto no se suma dos veces.
+            devoluciones.registrar(fila, unidades, monto - cedido)
+            logger.info(
+                "reembolso %s (%s de %s): revocadas %s unidades de %s, %s tomadas de una disputa",
+                refund_id, monto, base, unidades, fila.codigo_producto, tomadas,
+            )
+    if aviso:
+        avisar_admin(aviso)

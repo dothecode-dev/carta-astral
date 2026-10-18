@@ -20,7 +20,7 @@ URL = "/api/webhooks/stripe/"
 @pytest.fixture(autouse=True)
 def _configurado(settings):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {"price_pack": "pack_5_natal", "price_natal": "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"pack_5_natal": "prod_pack", "informe_natal": "prod_natal"}
 
 
 def _entregar(client, amount, pi):
@@ -35,7 +35,7 @@ def _comprado(cuenta, producto, descuento, pi, porcentaje=50):
     fila = PasarelaCheckout.objects.create(checkout_id=f"cs_{pi}", account=cuenta, codigo_producto=producto,
                                            cupon=cupon, descuento_centavos=descuento, payment_intent=pi)
     from api.catalogo import producto as prod
-    aplicar_compra(cuenta, producto, prod(producto).precio_centavos - descuento, external_id=f"stripe:session:cs_{pi}",
+    aplicar_compra(cuenta, producto, prod(producto).precio_en("usd") - descuento, external_id=f"stripe:session:cs_{pi}",
                    descuento_centavos=descuento)
     return fila
 

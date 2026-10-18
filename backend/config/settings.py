@@ -505,18 +505,32 @@ REVENUECAT_PRODUCT_CREDITS = _mapa_json("REVENUECAT_PRODUCT_CREDITS")
 # ocupa del IVA en más de 80 países y avisa por webhook.
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-# `price_id → código del catálogo`, en la dirección en que lo consulta el
-# webhook. Los ids de Stripe no se comparten entre modo test y live, así que
-# este mapeo es distinto en cada entorno y el código, el mismo.
-STRIPE_PRECIOS = _mapa_json("STRIPE_PRECIOS")
-# Precios que ya no se venden pero se siguen ACEPTANDO al acreditar: una sesión
-# de Stripe vive una hora y cobra el precio con el que se abrió, así que al
-# cambiar un precio el id viejo pasa de `STRIPE_PRECIOS` a éste. Dejarlo en
-# `STRIPE_PRECIOS` no sirve: el checkout abriría pagos con él.
-STRIPE_PRECIOS_RETIRADOS = _mapa_json("STRIPE_PRECIOS_RETIRADOS")
+# `código del catálogo → id del Product de Stripe`. El PRECIO no vive en
+# Stripe: cada sesión se abre con `price_data` (producto + moneda + monto del
+# catálogo), así que cambiar un precio es una línea en `api/catalogo.py` y
+# nada acá. Los ids de Product son distintos en modo test y en live.
+STRIPE_PRODUCTOS = _mapa_json("STRIPE_PRODUCTOS")
 # Plantilla con `{locale}` (lo pone el checkout, de la lista blanca) y con
 # `{CHECKOUT_SESSION_ID}`, que reemplaza Stripe al redirigir.
 STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL", "")
+
+# --- Avisos al admin por Telegram ------------------------------------------
+# Un bot de BotFather y el chat al que escribe. Sin token, `avisar_admin` no
+# hace nada (desarrollo y tests). `strip()` porque pegado en el panel de deploy
+# suele venir con un salto de línea al final, y Telegram responde 404 a un
+# token con `\n` sin decir por qué.
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+
+# --- Moneda por país (GeoLite2) ----------------------------------------------
+# La base de MaxMind la baja `manage.py actualizar_geoip` (en el arranque y en
+# un Scheduled Task semanal de Coolify: la EULA exige destruir versiones
+# viejas a los 30 días). Sin base, todo es `usd`. Vive en /tmp: es del
+# contenedor y se vuelve a bajar en cada arranque.
+GEOIP_PATH = os.environ.get("GEOIP_PATH", "/tmp/GeoLite2-Country.mmdb")
+MAXMIND_ACCOUNT_ID = os.environ.get("MAXMIND_ACCOUNT_ID", "").strip()
+MAXMIND_LICENSE_KEY = os.environ.get("MAXMIND_LICENSE_KEY", "").strip()
+
 # Cantidad de reembolsos que marca una cuenta como abuso.
 REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 

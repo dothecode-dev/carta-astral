@@ -7,6 +7,11 @@ persona ya pagó. Esto es el procedimiento: se mira qué dice cada lado, y con
 `--si-estoy-seguro` se acredita confiando en la fila. Deja todo lo que deja el
 webhook —derecho, `acreditado_at`, constancia del cupón, mail, evento, informe
 arrancado— y es idempotente por el `external_id` de la sesión.
+
+Los montos se muestran con su moneda: 14900 contra 14900 no dicen nada si uno
+es `brl` y el otro `usd`. Una fila con disputa no se acredita sin
+`--aunque-disputada`: esos fondos ya se los llevó Stripe, y entregar encima es
+regalar el producto.
 """
 from django.core.management.base import BaseCommand, CommandError
 
@@ -20,6 +25,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("session_id")
         parser.add_argument("--si-estoy-seguro", action="store_true", dest="confirmado")
+        parser.add_argument("--aunque-disputada", action="store_true", dest="aunque_disputada")
 
     def handle(self, *args, **opts):
         session_id = opts["session_id"]
@@ -34,15 +40,23 @@ class Command(BaseCommand):
         self.stdout.write(
             f"  fila:   cupón={fila.cupon.codigo if fila.cupon else '—'} "
             f"promo={fila.cupon.stripe_promotion_code_id if fila.cupon else '—'} "
-            f"descuento={fila.descuento_centavos}"
+            f"descuento={fila.descuento_centavos} {fila.moneda} lista={fila.precio_de_lista()} {fila.moneda}"
         )
+        moneda_sesion = (sesion.get("currency") or "?").lower()
         self.stdout.write(
-            f"  stripe: promos={promos} amount_discount={total.get('amount_discount')} "
-            f"subtotal={sesion.get('amount_subtotal')} total={sesion.get('amount_total')}"
+            f"  stripe: promos={promos} amount_discount={total.get('amount_discount')} {moneda_sesion} "
+            f"subtotal={sesion.get('amount_subtotal')} {moneda_sesion} "
+            f"total={sesion.get('amount_total')} {moneda_sesion}"
         )
+        if fila.disputa_id:
+            self.stdout.write(self.style.ERROR(f"⚠️ fila DISPUTADA: {fila.disputa_id}"))
         if not opts["confirmado"]:
             self.stdout.write("Sin --si-estoy-seguro no se acreditó nada.")
             return
+        if fila.disputa_id and not opts["aunque_disputada"]:
+            raise CommandError(
+                f"la fila tiene la disputa {fila.disputa_id}: sin --aunque-disputada no se acredita",
+            )
         if sesion.get("payment_status") != "paid":
             raise CommandError("la sesión no está pagada: no se acredita")
 

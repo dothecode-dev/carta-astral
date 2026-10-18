@@ -536,9 +536,18 @@ class PasarelaCheckout(models.Model):
     # momento le cobraría a alguien sin darle nada. Nulo en las filas
     # anteriores a este campo, que siguen validando contra el catálogo.
     precio_centavos = models.PositiveIntegerField(null=True, blank=True)
+    # En qué moneda se abrió (ISO 4217 en minúscula, como la manda Stripe en
+    # `currency`). `precio_centavos`, `descuento_centavos` y
+    # `reembolsado_centavos` están en ESTA moneda. El webhook exige que la
+    # sesión venga en la misma: un monto sin su moneda no se puede comparar
+    # con nada (spec cobro-brl-pix, RF9/RF11).
+    moneda = models.CharField(max_length=3, default="usd")
     # Cuánto devolvió Stripe de esta compra, sumando reembolsos. Es lo que
     # deja que la pantalla de cuenta diga «reembolsada» sin sumar movimientos.
     reembolsado_centavos = models.PositiveIntegerField(default=0)
+    # Cuántas unidades de lo que la compra otorgó se revocaron (reembolsos y
+    # disputas). Se guarda y no se deduce del monto: ver `api/devoluciones.py`.
+    unidades_revocadas = models.PositiveIntegerField(default=0)
     # La URL de la sesión de Stripe. Mientras la sesión sigue abierta es lo
     # que deja retomar un pago a medias desde la cuenta; después no sirve.
     # Vacía en las filas anteriores a este campo. Las URLs de Checkout pasan
@@ -563,6 +572,11 @@ class PasarelaCheckout(models.Model):
     # canje anónimo lo devuelven para que la web no espere un informe que no
     # va a arrancar.
     saldo_deuda = models.BooleanField(default=False)
+    # La disputa que retiró los fondos de esta compra (`charge.dispute.*`,
+    # spec cobro-brl-pix RF15). Único: es la idempotencia del evento. Una fila
+    # con disputa no se entrega aunque después llegue su `completed` (EC16:
+    # medido el 13-10-2026 que la disputa puede llegar antes).
+    disputa_id = models.CharField(max_length=100, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -570,13 +584,14 @@ class PasarelaCheckout(models.Model):
 
 
     def precio_de_lista(self) -> int:
-        """El precio con el que se abrió. Las filas sin él caen al catálogo,
-        pero la migración `0037` se lo completó a todas las anteriores."""
+        """El precio con el que se abrió, en `self.moneda`. Las filas sin él
+        caen al catálogo EN SU MONEDA; la migración `0037` se lo completó a
+        todas las anteriores (que son `usd`)."""
         if self.precio_centavos is not None:
             return self.precio_centavos
         from api.catalogo import producto
 
-        return producto(self.codigo_producto).precio_centavos
+        return producto(self.codigo_producto).precio_en(self.moneda)
 
     def __str__(self):
         return f"{self.checkout_id} ({self.codigo_producto})"
@@ -651,7 +666,7 @@ class Cupon(models.Model):
             prod = CATALOGO.get(codigo)
             if prod is None:
                 raise ValidationError({"productos": f"{codigo} no está en el catálogo."})
-            if prod.precio_centavos <= 0:
+            if prod.es_gratis:
                 raise ValidationError({"productos": f"{codigo} es gratis: no admite descuento."})
 
     def save(self, *args, **kwargs):
@@ -692,6 +707,8 @@ class CuponUso(models.Model):
     codigo_producto = models.CharField(max_length=40)
     descuento_centavos = models.PositiveIntegerField()
     monto_pagado_centavos = models.PositiveIntegerField()
+    #: La moneda de los dos montos de arriba.
+    moneda = models.CharField(max_length=3, default="usd")
     checkout = models.ForeignKey(
         "PasarelaCheckout", on_delete=models.SET_NULL, null=True, blank=True, related_name="usos_cupon",
     )
@@ -705,6 +722,111 @@ class CuponUso(models.Model):
 
     def __str__(self):
         return f"{self.cupon_id} → acc={self.account_id} ({self.codigo_producto})"
+
+
+class MailBloqueado(models.Model):
+    """Un mail que no entra ni compra con cuenta (RF16): el de quien disputó
+    un pago. Se guarda normalizado. Una compra sin cuenta con este mail se
+    acredita igual —la plata ya entró— y avisa al admin (R8). Alta y baja a
+    mano desde el admin; `funds_reinstated` lo da de baja solo."""
+
+    email = models.EmailField(unique=True)
+    motivo = models.CharField(max_length=40)
+    dispute_id = models.CharField(max_length=100, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "mail bloqueado"
+        verbose_name_plural = "mails bloqueados"
+
+    @staticmethod
+    def normalizar(email: str) -> str:
+        return (email or "").strip().lower()
+
+    @classmethod
+    def bloqueado(cls, email: str) -> bool:
+        limpio = cls.normalizar(email)
+        return bool(limpio) and cls.objects.filter(email=limpio).exists()
+
+    @classmethod
+    def bloquear(cls, email: str, motivo: str, dispute_id: str = "") -> None:
+        limpio = cls.normalizar(email)
+        if limpio:
+            cls.objects.get_or_create(email=limpio, defaults={"motivo": motivo, "dispute_id": dispute_id})
+
+    def __str__(self):
+        return f"{self.email} ({self.motivo})"
+
+
+class Reembolso(models.Model):
+    """Un `refund.created` de Stripe ya aplicado a una compra: la constancia
+    de idempotencia del reembolso, aunque no haya revocado nada (no quedaban
+    unidades, o un combo devuelto a medias). Antes la constancia era el
+    `Movimiento` de `canje.revocar`, que obligaba a llamarlo con 0 unidades:
+    eso sumaba al contador de reembolsos de la cuenta, que con tres la marca
+    `flagged` y le cierra el checkout (revisión del 18-10-2026)."""
+
+    refund_id = models.CharField(max_length=100, unique=True)
+    fila = models.ForeignKey(
+        "PasarelaCheckout", null=True, on_delete=models.SET_NULL, related_name="reembolsos",
+    )
+    monto = models.PositiveIntegerField()
+    # Unidades que cubre este reembolso: las que revocó más las que tomó de
+    # una disputa abierta que ya las había revocado.
+    unidades = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "reembolso"
+        verbose_name_plural = "reembolsos"
+
+    def __str__(self):
+        return f"{self.refund_id} ({self.monto})"
+
+
+class Disputa(models.Model):
+    """Una disputa de Stripe sobre una compra nuestra, y lo que se hizo con
+    ella (RF15). Es la constancia de que el evento ya se aplicó: la marca
+    `disputa_id` de la fila se borra al reponer, y los movimientos del ledger
+    no existen en todas las ramas (sin entregar, ya reembolsada), así que
+    ninguno de los dos alcanza para saber si un `funds_withdrawn` reentregado
+    ya pasó (revisión del 18-10-2026).
+
+    `email` es el mail que se bloqueó, normalizado y tomado al retirar: el
+    bloqueo dura mientras ese mail tenga alguna disputa abierta, aunque la
+    cuenta cambie de mail después. `revocado_*` dice qué se le sacó a la
+    cuenta, para reponer exactamente eso y no el producto entero."""
+
+    ABIERTA = "abierta"
+    RESUELTA = "resuelta"
+    ESTADOS = [(ABIERTA, "abierta"), (RESUELTA, "resuelta a favor")]
+
+    dispute_id = models.CharField(max_length=100, unique=True)
+    fila = models.ForeignKey(
+        "PasarelaCheckout", null=True, on_delete=models.SET_NULL, related_name="disputas",
+    )
+    email = models.EmailField(blank=True, default="")
+    estado = models.CharField(max_length=10, choices=ESTADOS, default=ABIERTA)
+    # Lo que se le pasó a `canje.revocar` (para reponer exactamente eso) y
+    # cuánto se sumó a la compra (para restarlo si Stripe devuelve los fondos).
+    revocado_codigo = models.CharField(max_length=50, blank=True, default="")
+    revocado_cantidad = models.PositiveIntegerField(default=0)
+    revocado_entera = models.BooleanField(default=False)
+    unidades_revocadas = models.PositiveIntegerField(default=0)
+    monto_anotado = models.PositiveIntegerField(default=0)
+    # Un reembolso posterior tomó (parte de) lo revocado: ver
+    # `disputas.ceder_a_reembolso`.
+    cedido_a_reembolso = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resuelta_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "disputa"
+        verbose_name_plural = "disputas"
+        indexes = [models.Index(fields=["email", "estado"])]
+
+    def __str__(self):
+        return f"{self.dispute_id} ({self.estado})"
 
 
 class CupoDiario(models.Model):

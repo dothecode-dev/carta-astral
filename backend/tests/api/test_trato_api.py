@@ -61,7 +61,7 @@ def test_crear_con_trato_invalido_da_400_y_no_crea_carta(cuenta):
 @pytest.fixture
 def stripe_responde(monkeypatch, settings):
     settings.STRIPE_SECRET_KEY = "sk_test_de_prueba"
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal", "price_pack": "pack_5_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
     settings.STRIPE_SUCCESS_URL = (
         "https://astraguia.com/{locale}/compra?checkout_id={CHECKOUT_SESSION_ID}"
     )

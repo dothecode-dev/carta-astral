@@ -40,16 +40,25 @@ class CuponPublicoView(APIView):
             return Response({"valido": False, "motivo": cupones.motivo_publico(exc.motivo)})
 
         productos = []
-        for p in sorted(a_la_venta(), key=lambda p: p.precio_centavos):
+        for p in sorted(a_la_venta(), key=lambda p: p.precio_en("usd")):
             if p.codigo not in cupon.productos:
                 continue
-            final, descuento = cupones.precio_final(p.precio_centavos, cupon.porcentaje)
+            finales = {
+                moneda: dict(zip(
+                    ("precio_final_centavos", "descuento_centavos"),
+                    cupones.precio_final(monto, cupon.porcentaje),
+                ))
+                for moneda, monto in p.precios.items()
+            }
             productos.append({
                 "codigo": p.codigo,
-                "precio_centavos": p.precio_centavos,
-                "precio_final_centavos": final,
-                "descuento_centavos": descuento,
+                # `precio_centavos`/`moneda` (usd) siguen hasta que la web lea `precios`/`finales`.
+                "precio_centavos": p.precio_en("usd"),
+                "precio_final_centavos": finales["usd"]["precio_final_centavos"],
+                "descuento_centavos": finales["usd"]["descuento_centavos"],
                 "moneda": "usd",
+                "precios": dict(p.precios),
+                "finales": finales,
                 "otorga": [{"codigo": c, "cantidad": n} for c, n in p.otorga],
             })
         return Response({

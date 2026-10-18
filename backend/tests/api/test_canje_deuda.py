@@ -45,7 +45,7 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
     client, monkeypatch, settings, make_account, make_chart,
 ):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
-    settings.STRIPE_PRECIOS = {"price_natal": "informe_natal"}
+    settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal"}
     cuenta = make_account()
     cuenta.deuda = 1
     cuenta.save(update_fields=["deuda"])
@@ -54,10 +54,10 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     sesion = {
-        "id": "cs_deuda", "payment_status": "paid", "amount_subtotal": 2900,
+        "id": "cs_deuda", "payment_status": "paid", "currency": "usd", "amount_subtotal": 2900,
         "amount_total": 2900, "total_details": {"amount_tax": 0, "amount_discount": 0},
         "payment_intent": "pi_d", "metadata": {},
-        "line_items": {"data": [{"price": {"id": "price_natal"}, "quantity": 1}]},
+        "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
     }
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _id: sesion)
     avisos = []
