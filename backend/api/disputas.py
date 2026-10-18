@@ -1,0 +1,243 @@
+"""Disputas de Stripe (RF15, EC11, EC16): retirar y reponer.
+
+Una disputa que retira fondos se trata como un reembolso de lo que queda sin
+devolver: se revoca lo que corresponde, se avisa y se bloquea el mail. Si
+Stripe devuelve los fondos, se repone exactamente lo que se revocó y el mail
+se libera cuando no le queda ninguna disputa abierta.
+
+La constancia de que un evento ya se aplicó es la fila `Disputa`, no la marca
+`disputa_id` de la compra (que se borra al reponer) ni el ledger (que no se
+mueve en todas las ramas). Stripe reentrega y no garantiza el orden.
+
+Todo `return` es definitivo y el webhook responde 200: acá ya se le preguntó a
+Stripe por la sesión, así que reintentar no hace aparecer una compra que no
+está. Cada rama es un átomo sobre la compra bloqueada; el aviso sale después
+del commit, una sola vez.
+"""
+
+import logging
+
+from django.db import models, transaction
+from django.utils import timezone
+
+from api import catalogo, compra_anonima
+from api.avisos import avisar_admin
+from api.canje import aplicar_compra, otorgar, revocar
+from api.models import Disputa, MailBloqueado, PasarelaCheckout
+from api.stripe_client import sesion_por_payment_intent
+
+logger = logging.getLogger(__name__)
+
+RETIRO = "charge.dispute.funds_withdrawn"
+REPOSICION = "charge.dispute.funds_reinstated"
+EVENTOS = (RETIRO, REPOSICION)
+
+
+def anotar_reembolso(fila, monto: int) -> None:
+    """Suma lo devuelto a la compra. Quien llama garantiza que no se cuente
+    dos veces: el reembolso, porque `revocar` ya lo aplicó; la disputa,
+    porque su fila `Disputa` se crea en el mismo átomo."""
+    PasarelaCheckout.objects.filter(pk=fila.pk).update(
+        reembolsado_centavos=models.F("reembolsado_centavos") + monto,
+    )
+
+
+def procesar(dispute: dict, tipo: str) -> None:
+    dispute_id = dispute.get("id", "")
+    pi = dispute.get("payment_intent") or ""
+    monto = dispute.get("amount") or 0
+    moneda = (dispute.get("currency") or "").lower()
+    fila, sesion = _fila_de_disputa(dispute)
+    if fila is None:
+        logger.error("disputa %s sin compra conocida (pi=%s): no se toca nada", dispute_id, pi)
+        avisar_admin(f"Stripe disputa {dispute_id} ({tipo}) sobre {pi}: no encuentro la compra. {monto} {moneda}.")
+        return
+
+    if tipo == RETIRO:
+        aviso = _retirar(fila.pk, sesion, dispute_id, monto, moneda, dispute.get("reason"))
+    else:
+        aviso = _reponer(fila.pk, dispute_id)
+    if aviso:
+        avisar_admin(aviso)
+
+
+def _fila_de_disputa(dispute: dict) -> tuple:
+    """`(fila, sesion)` de esta disputa. Primero por el `payment_intent` de la
+    fila; si la disputa llegó antes que `completed` (EC16) la fila todavía no
+    lo tiene, y se pregunta a Stripe de qué sesión es. `sesion` es None cuando
+    alcanzó con la fila."""
+    pi = dispute.get("payment_intent") or ""
+    if not pi:
+        # Buscar por vacío engancharía cualquier fila abierta.
+        return None, None
+    fila = PasarelaCheckout.objects.filter(payment_intent=pi).first()
+    if fila is not None:
+        return fila, None
+    sesion = sesion_por_payment_intent(pi)
+    if sesion is None:
+        return None, None
+    return PasarelaCheckout.objects.filter(checkout_id=sesion.get("id", "")).first(), sesion
+
+
+def _mail_de_disputa(fila, sesion) -> str:
+    """De quién bloquear el mail. Una compra sin cuenta disputada antes de su
+    `completed` (EC16) todavía no tiene cuenta: el mail sale del pago."""
+    if fila.account is not None:
+        return fila.account.email or ""
+    return ((sesion or {}).get("customer_details") or {}).get("email") or ""
+
+
+def _bloquear_fila(fila_pk):
+    # `of=("self",)`: `account` es nullable y el JOIN es OUTER; Postgres no
+    # acepta FOR UPDATE sobre ese lado (medido 13-10-2026, SQLite lo ignora).
+    return PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila_pk)
+
+
+def _que_revocar(fila) -> tuple[str, int]:
+    """`(codigo, cantidad)` que la disputa tiene que sacarle a la cuenta, o
+    `("", 0)` si no queda nada.
+
+    Con la misma cuenta que el reembolso parcial (`_reembolsar`, redondeo
+    hacia arriba): lo que ya revocó un reembolso no se revoca otra vez. Sin
+    reembolso previo, o con un combo (que el parcial no toca), se revoca el
+    producto comprado entero, que `revocar` traduce a lo que otorgó."""
+    pagado = fila.precio_de_lista() - fila.descuento_centavos
+    reembolsado = fila.reembolsado_centavos
+    if reembolsado > 0 and reembolsado >= pagado:
+        return "", 0
+    prod = catalogo.producto(fila.codigo_producto)
+    if reembolsado == 0 or len(prod.otorga) != 1:
+        return fila.codigo_producto, 1
+    codigo_otorgado, multiplicador = prod.otorga[0]
+    ya_revocadas = min(multiplicador, -(-reembolsado * multiplicador // pagado))
+    return (codigo_otorgado, multiplicador - ya_revocadas) if ya_revocadas < multiplicador else ("", 0)
+
+
+def _retirar(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> str | None:
+    with transaction.atomic():
+        fila = _bloquear_fila(fila_pk)
+        if Disputa.objects.filter(dispute_id=dispute_id).exists():
+            # Reentrega, o un retiro que llega después de su reposición: en los
+            # dos casos ya no hay nada que aplicar.
+            logger.info("disputa %s ya registrada: el retiro no se aplica de nuevo", dispute_id)
+            return None
+        if moneda != fila.moneda:
+            logger.error("disputa %s en %s sobre compra en %s: no se revoca", dispute_id, moneda, fila.moneda)
+            return (
+                f"Stripe disputa {dispute_id}: vino en {moneda} y la compra {fila.checkout_id} está en "
+                f"{fila.moneda}. No se revocó."
+            )
+        mail = MailBloqueado.normalizar(_mail_de_disputa(fila, sesion))
+        disputa = Disputa.objects.create(dispute_id=dispute_id, fila=fila, email=mail)
+        fila.disputa_id = dispute_id
+        fila.save(update_fields=["disputa_id"])
+
+        pagado = fila.precio_de_lista() - fila.descuento_centavos
+        codigo, cantidad = _que_revocar(fila)
+        ya_reembolsada = fila.reembolsado_centavos > 0 and not cantidad and fila.reembolsado_centavos >= pagado
+        # Sin acreditar no hay nada que revocar: la marca alcanza para que el
+        # `completed` que llegue después no entregue (EC16). `acreditado_at`
+        # se lee con la fila bloqueada: `_entregar` lo pone dentro de su
+        # propio átomo sobre la misma fila, así que acá nunca está a medias.
+        revoco = False
+        if fila.acreditado_at is not None and not ya_reembolsada:
+            if cantidad and revocar(fila.account, codigo, cantidad, external_id=f"stripe:dispute:{dispute_id}"):
+                disputa.revocado_codigo, disputa.revocado_cantidad = codigo, cantidad
+                disputa.save(update_fields=["revocado_codigo", "revocado_cantidad"])
+                revoco = True
+            # Nunca más de lo que quedaba sin devolver: el contador no pasa
+            # de lo pagado aunque Stripe dispute el cargo entero.
+            anotar_reembolso(fila, min(monto, pagado - fila.reembolsado_centavos))
+        MailBloqueado.bloquear(mail, motivo="disputa", dispute_id=dispute_id)
+    logger.warning("disputa %s aplicada sobre %s (ya reembolsada: %s)", dispute_id, fila.checkout_id, ya_reembolsada)
+    if ya_reembolsada:
+        hecho = "ya reembolsada; no se revoca de nuevo. Mail bloqueado"
+    elif revoco:
+        hecho = "Revocado y mail bloqueado"
+    else:
+        hecho = "Nada que revocar (sin entregar o ya revocado por un reembolso). Mail bloqueado"
+    return (
+        f"⚠️ Disputa {dispute_id} ({motivo}): {fila.codigo_producto} {fila.checkout_id}, "
+        f"{monto} {moneda}. {hecho}: {compra_anonima.enmascarar(mail) if mail else 'sin mail'}."
+    )
+
+
+def _reponer(fila_pk, dispute_id) -> str | None:
+    with transaction.atomic():
+        fila = _bloquear_fila(fila_pk)
+        disputa = Disputa.objects.select_for_update().filter(dispute_id=dispute_id).first()
+        if disputa is None:
+            # La reposición llegó antes que el retiro (Stripe no garantiza el
+            # orden), o el retiro se rechazó por moneda. Se registra resuelta:
+            # el retiro que llegue después ya no se aplica.
+            Disputa.objects.create(
+                dispute_id=dispute_id, fila=fila, estado=Disputa.RESUELTA, resuelta_at=timezone.now(),
+            )
+            logger.error("disputa %s: fondos devueltos sin retiro previo registrado", dispute_id)
+            return (
+                f"Stripe disputa {dispute_id}: fondos devueltos sobre {fila.checkout_id} "
+                "sin retiro previo registrado."
+            )
+        if disputa.estado == Disputa.RESUELTA:
+            logger.info("disputa %s ya repuesta", dispute_id)
+            return None
+
+        estado = _devolver_lo_revocado(fila, disputa)
+        disputa.estado, disputa.resuelta_at = Disputa.RESUELTA, timezone.now()
+        disputa.save(update_fields=["estado", "resuelta_at"])
+        desbloqueado = _desbloquear_si_no_quedan_abiertas(disputa.email)
+        # La marca ya no dice nada cierto: dejada puesta haría que un
+        # `completed` reentregado avisara «compra ya disputada» sobre una que
+        # no lo está. En el mismo átomo que la reposición.
+        fila.disputa_id = None
+        fila.save(update_fields=["disputa_id"])
+    logger.info("disputa %s resuelta a favor sobre %s: %s", dispute_id, fila.checkout_id, estado)
+    mail = "mail desbloqueado" if desbloqueado else "el mail sigue bloqueado (otra disputa abierta o bloqueo a mano)"
+    return f"Disputa {dispute_id} resuelta a favor: {fila.checkout_id} {estado}; {mail}."
+
+
+def _devolver_lo_revocado(fila, disputa) -> str:
+    repuesto_id = f"stripe:dispute:{disputa.dispute_id}:reinstated"
+    if fila.acreditado_at is None:
+        # EC16: la disputa llegó antes que la entrega. Con la marca borrada
+        # (abajo), un `completed` que llegue ahora entrega solo; uno que ya
+        # llegó se rechazó por la disputa y no se repite.
+        return (
+            "nunca se entregó: si su pago llega, se entrega solo; si ya había llegado, "
+            "acreditar a mano con acreditar_sesion"
+        )
+    if not disputa.revocado_cantidad:
+        # El retiro no revocó nada (la compra ya estaba reembolsada):
+        # reponer ahora le daría el producto a quien ya recibió la plata.
+        return "no se había revocado (ya reembolsada), no se repone"
+    if fila.account is None:
+        # La cuenta se borró después de comprar (RF22): no hay a quién
+        # reponerle, y reintentar no lo cambia.
+        logger.error("disputa %s resuelta a favor sobre una cuenta borrada: no se repone", disputa.dispute_id)
+        return "la cuenta se borró, no hay a quién reponerle"
+    if disputa.revocado_codigo == fila.codigo_producto:
+        # Se revocó la compra entera: se repone como compra, con otro
+        # `external_id` que el de la sesión (con el mismo, `aplicar_compra`
+        # la descartaría como duplicada).
+        aplicar_compra(
+            fila.account, fila.codigo_producto, fila.precio_de_lista() - fila.descuento_centavos,
+            external_id=repuesto_id, sujeto=fila.sujeto,
+            descuento_centavos=fila.descuento_centavos, precio_centavos=fila.precio_de_lista(),
+        )
+    else:
+        # Se revocaron unidades sueltas (había un reembolso parcial antes):
+        # vuelven esas, no el pack entero. `otorgar` salda deuda primero.
+        otorgar(
+            fila.account, disputa.revocado_codigo, disputa.revocado_cantidad,
+            origen="compra", external_id=repuesto_id,
+        )
+    return "repuesto"
+
+
+def _desbloquear_si_no_quedan_abiertas(email: str) -> bool:
+    """Libera el mail si ya no le queda ninguna disputa abierta. Un bloqueo
+    puesto a mano (otro `motivo`) no lo levanta una disputa."""
+    if not email or Disputa.objects.filter(email=email, estado=Disputa.ABIERTA).exists():
+        return False
+    borrados, _ = MailBloqueado.objects.filter(email=email, motivo="disputa").delete()
+    return bool(borrados)

@@ -35,7 +35,7 @@ from django.utils.html import format_html, format_html_join
 from api import canje, cupones, stripe_client
 from api.catalogo import CATALOGO, a_la_venta, producto
 from api.models import (
-    Account, Chart, ConteoDiario, CreditTransaction, Cupon, CuponUso, Derecho, Interpretation,
+    Account, Chart, ConteoDiario, CreditTransaction, Cupon, CuponUso, Derecho, Disputa, Interpretation,
     MailBloqueado, Movimiento, PasarelaCheckout,
 )
 
@@ -550,3 +550,23 @@ class MailBloqueadoAdmin(admin.ModelAdmin):
 
     list_display = ("email", "motivo", "dispute_id", "created_at")
     search_fields = ("email", "dispute_id")
+
+
+@admin.register(Disputa)
+class DisputaAdmin(admin.ModelAdmin):
+    """Constancia de cada disputa de Stripe y lo que se hizo con ella. Sólo
+    lectura: la escribe el webhook, y editarla a mano rompería la
+    idempotencia de los eventos que Stripe reentrega."""
+
+    list_display = ("dispute_id", "estado", "email", "fila", "revocado_codigo", "revocado_cantidad", "created_at")
+    list_filter = ("estado",)
+    search_fields = ("dispute_id", "email")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

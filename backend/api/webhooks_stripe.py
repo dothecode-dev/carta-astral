@@ -35,15 +35,15 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, transaction
 
-from api import analitica, catalogo, compra_anonima, notificaciones
+from api import analitica, catalogo, compra_anonima, disputas, notificaciones
 from api.avisos import avisar_admin
 from api.canje import MontoInvalido, aplicar_compra, revocar
 from api.compra_service import arrancar_informe
-from api.models import Account, CuponUso, MailBloqueado, Movimiento, PasarelaCheckout
+from api.models import Account, CuponUso, MailBloqueado, PasarelaCheckout
 from api.stripe_client import (
-    FirmaInvalida, codigo_de_product, obtener_sesion, sesion_por_payment_intent, verificar_firma,
+    FirmaInvalida, codigo_de_product, obtener_sesion, verificar_firma,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,11 +68,8 @@ EVENTOS_REEMBOLSO = ("refund.created",)
 # para siempre.
 EVENTOS_VENCIMIENTO = ("checkout.session.expired", "checkout.session.async_payment_failed")
 
-# Stripe retiró los fondos por una disputa (o los devolvió). Con Pix no se
-# puede contestar; con tarjeta Managed Payments la gestiona y no nos avisaba
-# del resultado. MEDIDO el 13-10-2026: llegan con `payment_intent`, `amount`,
-# `currency`, y pueden llegar ANTES que `completed`.
-EVENTOS_DISPUTA = ("charge.dispute.funds_withdrawn", "charge.dispute.funds_reinstated")
+# Stripe retiró los fondos por una disputa (o los devolvió): ver `api/disputas.py`.
+EVENTOS_DISPUTA = disputas.EVENTOS
 
 
 class StripeWebhookView(APIView):
@@ -107,7 +104,7 @@ class StripeWebhookView(APIView):
             elif tipo in EVENTOS_VENCIMIENTO:
                 _vencer(objeto.get("id", ""))
             elif tipo in EVENTOS_DISPUTA:
-                _disputar(objeto, tipo)
+                disputas.procesar(objeto, tipo)
             else:
                 _reembolsar(objeto)
         except Exception:
@@ -564,14 +561,6 @@ def _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto
         )
 
 
-def _anotar_reembolso(fila, monto: int) -> None:
-    """Suma lo devuelto a la compra. Sólo cuando `revocar` hizo algo: así el
-    mismo `refund.created` reentregado no cuenta dos veces."""
-    PasarelaCheckout.objects.filter(pk=fila.pk).update(
-        reembolsado_centavos=models.F("reembolsado_centavos") + monto,
-    )
-
-
 class ReembolsoSinCompra(Exception):
     """No hay ninguna compra nuestra con ese `payment_intent`... todavía."""
 
@@ -640,7 +629,7 @@ def _reembolsar(refund: dict) -> None:
         # el Movimiento diciendo qué se reembolsó, y `revocar` traduce a lo que
         # ese producto otorgó.
         if revocar(fila.account, fila.codigo_producto, 1, external_id=external_id):
-            _anotar_reembolso(fila, monto)
+            disputas.anotar_reembolso(fila, monto)
         logger.info("reembolso %s revocado entero: %s", refund_id, fila.codigo_producto)
         return
 
@@ -667,168 +656,8 @@ def _reembolsar(refund: dict) -> None:
         return
 
     if revocar(fila.account, codigo_otorgado, unidades, external_id=external_id):
-        _anotar_reembolso(fila, monto)
+        disputas.anotar_reembolso(fila, monto)
     logger.info(
         "reembolso %s parcial (%s de %s): revocadas %s de %s unidades de %s",
         refund_id, monto, precio_pagado, unidades, multiplicador, codigo_otorgado,
     )
-
-
-
-def _fila_de_disputa(dispute: dict) -> tuple:
-    """`(fila, sesion)` de esta disputa. Primero por el `payment_intent` de la
-    fila; si la disputa llegó antes que `completed` (EC16) la fila todavía no
-    lo tiene, y se pregunta a Stripe de qué sesión es. `sesion` es None cuando
-    alcanzó con la fila."""
-    pi = dispute.get("payment_intent") or ""
-    if not pi:
-        # Buscar por vacío engancharía cualquier fila abierta (ver `_reembolsar`).
-        return None, None
-    fila = PasarelaCheckout.objects.filter(payment_intent=pi).first()
-    if fila is not None:
-        return fila, None
-    sesion = sesion_por_payment_intent(pi)
-    if sesion is None:
-        return None, None
-    return PasarelaCheckout.objects.filter(checkout_id=sesion.get("id", "")).first(), sesion
-
-
-def _disputar(dispute: dict, tipo: str) -> None:
-    """RF15: una disputa que retira fondos se trata como reembolso total, se
-    avisa y se bloquea el mail; si Stripe devuelve los fondos, se repone.
-
-    Todo `return` es definitivo (200). Una disputa sin compra nuestra también:
-    a diferencia del reembolso, acá ya se le preguntó a Stripe por la sesión,
-    así que reintentar no la va a hacer aparecer.
-
-    Cada rama es un átomo sobre la fila bloqueada: la marca `disputa_id` es la
-    idempotencia, así que si se comiteara sola y lo que sigue fallara, el
-    reintento la encontraría puesta y daría por aplicada una disputa que no
-    revocó nada. El aviso sale después del commit, una sola vez.
-    """
-    dispute_id = dispute.get("id", "")
-    pi = dispute.get("payment_intent") or ""
-    monto = dispute.get("amount") or 0
-    moneda = (dispute.get("currency") or "").lower()
-    fila, sesion = _fila_de_disputa(dispute)
-    if fila is None:
-        logger.error("disputa %s sin compra conocida (pi=%s): no se toca nada", dispute_id, pi)
-        avisar_admin(f"Stripe disputa {dispute_id} ({tipo}) sobre {pi}: no encuentro la compra. {monto} {moneda}.")
-        return
-
-    if tipo == "charge.dispute.funds_withdrawn":
-        aviso = _retirar_por_disputa(fila.pk, sesion, dispute_id, monto, moneda, dispute.get("reason"))
-    else:
-        aviso = _reponer_por_disputa(fila.pk, dispute_id)
-    if aviso:
-        avisar_admin(aviso)
-
-
-def _mail_de_disputa(fila, sesion) -> str:
-    """De quién bloquear el mail. Una compra sin cuenta disputada antes de su
-    `completed` (EC16) todavía no tiene cuenta: el mail sale del pago."""
-    if fila.account is not None:
-        return fila.account.email or ""
-    return ((sesion or {}).get("customer_details") or {}).get("email") or ""
-
-
-def _retirar_por_disputa(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> str | None:
-    with transaction.atomic():
-        # `of=("self",)`: `account` es nullable y el JOIN es OUTER; Postgres no
-        # acepta FOR UPDATE sobre ese lado (medido 13-10-2026, SQLite lo ignora).
-        fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila_pk)
-        if fila.disputa_id == dispute_id:
-            logger.info("disputa %s ya aplicada", dispute_id)
-            return None
-        if Movimiento.objects.filter(external_id=f"stripe:dispute:{dispute_id}:reinstated").exists():
-            # Reentrega de un `withdrawn` DESPUÉS de su `reinstated`: la
-            # disputa ya se cerró a favor y la marca se borró al reponer. El
-            # ledger no movería plata (mismo `external_id`), pero volver a
-            # marcar la fila bloquearía el mail de una compra ya repuesta.
-            logger.info("disputa %s ya repuesta: el retiro reentregado no se aplica", dispute_id)
-            return None
-        if moneda != fila.moneda:
-            logger.error("disputa %s en %s sobre compra en %s: no se revoca", dispute_id, moneda, fila.moneda)
-            return (
-                f"Stripe disputa {dispute_id}: vino en {moneda} y la compra {fila.checkout_id} está en "
-                f"{fila.moneda}. No se revocó."
-            )
-        fila.disputa_id = dispute_id
-        fila.save(update_fields=["disputa_id"])
-        # Ya reembolsada entera: el producto ya se revocó con el reembolso, y
-        # revocarlo otra vez dejaría deuda por algo devuelto y sumaría un
-        # reembolso más al contador de la cuenta. Las dos cifras son de la
-        # fila, así que están en su moneda. `> 0`: lo pagado de un regalo del
-        # 100 % es 0, y sin nada devuelto no hay reembolso que respetar.
-        pagado = fila.precio_de_lista() - fila.descuento_centavos
-        ya_reembolsada = fila.reembolsado_centavos > 0 and fila.reembolsado_centavos >= pagado
-        # Sin acreditar no hay nada que revocar: la marca alcanza para que el
-        # `completed` que llegue después no entregue (EC16). `acreditado_at`
-        # se lee con la fila bloqueada: `_entregar` lo pone dentro de su
-        # propio átomo sobre la misma fila, así que acá nunca está a medias.
-        if fila.acreditado_at is not None and not ya_reembolsada and revocar(
-            fila.account, fila.codigo_producto, 1, external_id=f"stripe:dispute:{dispute_id}",
-        ):
-            _anotar_reembolso(fila, monto)
-        mail = MailBloqueado.normalizar(_mail_de_disputa(fila, sesion))
-        MailBloqueado.bloquear(mail, motivo="disputa", dispute_id=dispute_id)
-    logger.warning("disputa %s aplicada sobre %s (ya reembolsada: %s)", dispute_id, fila.checkout_id, ya_reembolsada)
-    hecho = "ya reembolsada; no se revoca de nuevo. Mail bloqueado" if ya_reembolsada else "Revocado y mail bloqueado"
-    return (
-        f"⚠️ Disputa {dispute_id} ({motivo}): {fila.codigo_producto} {fila.checkout_id}, "
-        f"{monto} {moneda}. {hecho}: {compra_anonima.enmascarar(mail) if mail else 'sin mail'}."
-    )
-
-
-def _reponer_por_disputa(fila_pk, dispute_id) -> str | None:
-    with transaction.atomic():
-        # `of=("self",)`: `account` es nullable y el JOIN es OUTER; Postgres no
-        # acepta FOR UPDATE sobre ese lado (medido 13-10-2026, SQLite lo ignora).
-        fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila_pk)
-        repuesto_id = f"stripe:dispute:{dispute_id}:reinstated"
-        if fila.disputa_id != dispute_id:
-            if Movimiento.objects.filter(external_id=repuesto_id).exists():
-                # Reentrega de un `reinstated` ya aplicado: la marca se borró
-                # al reponer, y el movimiento de la reposición es la constancia.
-                logger.info("disputa %s ya repuesta", dispute_id)
-                return None
-            logger.error("disputa %s: fondos devueltos sin retiro previo registrado", dispute_id)
-            return (
-                f"Stripe disputa {dispute_id}: fondos devueltos sobre {fila.checkout_id} "
-                "sin retiro previo registrado."
-            )
-        # Por `dispute_id` y no por el mail actual de la cuenta: si cambió
-        # desde la disputa, el bloqueo se quedaba puesto.
-        MailBloqueado.objects.filter(dispute_id=dispute_id).delete()
-        if fila.acreditado_at is None:
-            # La disputa llegó antes que el pago (EC16) y la fila sigue
-            # marcada: su `completed` ya no entrega solo.
-            estado = "nunca se entregó, resolver a mano con acreditar_sesion"
-        elif not Movimiento.objects.filter(external_id=f"stripe:dispute:{dispute_id}").exists():
-            # El retiro no revocó nada porque la compra ya estaba reembolsada
-            # entera: reponer ahora le daría el producto a quien ya recibió la
-            # plata de vuelta.
-            estado = "no se había revocado (ya reembolsada), no se repone"
-        elif fila.account is None:
-            # La cuenta se borró después de comprar (RF22): no hay a quién
-            # reponerle, y reintentar no lo cambia.
-            logger.error("disputa %s resuelta a favor sobre una cuenta borrada: no se repone", dispute_id)
-            estado = "la cuenta se borró, no hay a quién reponerle"
-        else:
-            # Otro `external_id` que el de la compra: con el mismo,
-            # `aplicar_compra` lo descartaría como duplicado. Idempotente por
-            # ese id.
-            aplicar_compra(
-                fila.account, fila.codigo_producto, fila.precio_de_lista() - fila.descuento_centavos,
-                external_id=repuesto_id, sujeto=fila.sujeto,
-                descuento_centavos=fila.descuento_centavos, precio_centavos=fila.precio_de_lista(),
-            )
-            estado = "repuesto"
-        # La disputa se resolvió a favor: la marca ya no dice nada cierto, y
-        # dejada puesta haría que un `completed` reentregado avisara «compra
-        # ya disputada» sobre una que no lo está (y que `acreditar_sesion`
-        # pidiera `--aunque-disputada`). En el mismo átomo que la reposición.
-        fila.disputa_id = None
-        fila.save(update_fields=["disputa_id"])
-    logger.info("disputa %s resuelta a favor sobre %s: %s", dispute_id, fila.checkout_id, estado)
-    return f"Disputa {dispute_id} resuelta a favor: {fila.checkout_id} {estado}; mail desbloqueado."

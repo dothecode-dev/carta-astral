@@ -755,6 +755,43 @@ class MailBloqueado(models.Model):
         return f"{self.email} ({self.motivo})"
 
 
+class Disputa(models.Model):
+    """Una disputa de Stripe sobre una compra nuestra, y lo que se hizo con
+    ella (RF15). Es la constancia de que el evento ya se aplicó: la marca
+    `disputa_id` de la fila se borra al reponer, y los movimientos del ledger
+    no existen en todas las ramas (sin entregar, ya reembolsada), así que
+    ninguno de los dos alcanza para saber si un `funds_withdrawn` reentregado
+    ya pasó (revisión del 18-10-2026).
+
+    `email` es el mail que se bloqueó, normalizado y tomado al retirar: el
+    bloqueo dura mientras ese mail tenga alguna disputa abierta, aunque la
+    cuenta cambie de mail después. `revocado_*` dice qué se le sacó a la
+    cuenta, para reponer exactamente eso y no el producto entero."""
+
+    ABIERTA = "abierta"
+    RESUELTA = "resuelta"
+    ESTADOS = [(ABIERTA, "abierta"), (RESUELTA, "resuelta a favor")]
+
+    dispute_id = models.CharField(max_length=100, unique=True)
+    fila = models.ForeignKey(
+        "PasarelaCheckout", null=True, on_delete=models.SET_NULL, related_name="disputas",
+    )
+    email = models.EmailField(blank=True, default="")
+    estado = models.CharField(max_length=10, choices=ESTADOS, default=ABIERTA)
+    revocado_codigo = models.CharField(max_length=50, blank=True, default="")
+    revocado_cantidad = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resuelta_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "disputa"
+        verbose_name_plural = "disputas"
+        indexes = [models.Index(fields=["email", "estado"])]
+
+    def __str__(self):
+        return f"{self.dispute_id} ({self.estado})"
+
+
 class CupoDiario(models.Model):
     """Cuántas generaciones gratis se reservaron en un día (UTC) por ámbito.
 
