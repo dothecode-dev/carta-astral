@@ -17,10 +17,12 @@ fi
 # una vez, acá. El `||` es para que `set -e` no aborte por cualquier otra cosa.
 AVISAR_CHECKS=1 python manage.py check --tag stripe || echo "check de Stripe con avisos; ver arriba"
 
-# La base de países para la moneda inicial (RF3). Si falla —sin clave, sin
-# red— el sitio arranca igual y cobra en USD; el Scheduled Task semanal
-# reintenta. El `||` porque arriba hay `set -e`.
-python manage.py actualizar_geoip || echo "geoip: sin base, se sigue en usd"
+# La base de países que sugiere la moneda a mostrar (RF3). En segundo plano:
+# gunicorn no espera a MaxMind (hasta 60 s, con el cartel de mantenimiento
+# puesto durante un deploy), y `geo` toma el archivo nuevo apenas aparece
+# (mira su mtime). Si falla —sin clave, sin red— todos ven USD hasta que el
+# Scheduled Task semanal reintente. El `||` porque arriba hay `set -e`.
+(python manage.py actualizar_geoip || echo "geoip: sin base, se sigue en usd") &
 
 exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \
