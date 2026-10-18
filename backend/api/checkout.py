@@ -22,7 +22,6 @@ from api import (
     catalogo,
     compra_service,
     cupones,
-    geo,
     mantenimiento,
     notificaciones,
     stripe_client,
@@ -48,21 +47,20 @@ class MonedaInvalida(Exception):
 
 
 def moneda_pedida(request, codigo_producto: str) -> str:
-    """En qué moneda se cobra. La pide el cliente (RF4: puede cambiarla, es
-    la decisión del 13-10); ausente, la de la IP (RF2). Se normaliza —`BRL `
-    llega de un cliente que no es la web— y se valida contra las monedas del
-    producto: no se inventa un precio en una moneda que el catálogo no tiene
-    (EC2). Si la moneda es la de la IP y el producto no la vende (un vínculo
-    desde Brasil), cae a `usd`: la persona no la eligió. Un producto
-    desconocido no es un problema de moneda: lo rechaza quien ya lo
-    rechazaba."""
+    """En qué moneda se cobra: la que manda el cliente (RF4), y si no manda
+    ninguna, `usd`. La IP NO decide el cobro (decisión del 18-10-2026): sólo
+    sugiere qué mostrar por `/api/moneda/`. Si decidiera, una web que muestra
+    US$ abriría un pago en reales sin que nadie lo vea.
+
+    Se normaliza —`BRL ` llega de un cliente que no es la web— y se valida
+    contra las monedas del producto: no se inventa un precio en una moneda que
+    el catálogo no tiene (EC2). Un producto desconocido no es un problema de
+    moneda: lo rechaza quien ya lo rechazaba."""
     explicita = request.data.get("moneda")
-    pedida = str(explicita).strip().lower() if explicita else geo.moneda_de(request)
+    pedida = str(explicita).strip().lower() if explicita else catalogo.MONEDA_BASE
     prod = catalogo.CATALOGO.get(codigo_producto)
     if prod is None:
         return pedida
-    if not explicita and pedida not in prod.monedas():
-        return "usd"
     if pedida not in prod.monedas():
         raise MonedaInvalida(pedida)
     return pedida

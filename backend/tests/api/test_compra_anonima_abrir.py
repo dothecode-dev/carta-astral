@@ -210,3 +210,15 @@ def test_abrir_el_pago_cuenta_un_checkout_abierto(client, stripe_responde):
 
     _post(client)
     assert ConteoDiario.objects.get(evento="checkout_abierto").cantidad == 1
+
+
+def test_sin_moneda_se_cobra_en_usd_aunque_la_ip_sea_de_brasil(client, stripe_responde, monkeypatch):
+    """La IP sólo sugiere qué mostrar; el cobro es en lo que el cliente mandó
+    (decisión del 18-10-2026). Sin `moneda`, USD."""
+    from api import geo
+
+    monkeypatch.setattr(geo, "moneda_de", lambda request: "brl")
+    r = client.post(URL, DATOS, content_type="application/json", HTTP_X_FORWARDED_FOR="200.1.2.3")
+
+    assert r.status_code == 200
+    assert PasarelaCheckout.objects.get(checkout_id=r.json()["checkout_id"]).moneda == "usd"

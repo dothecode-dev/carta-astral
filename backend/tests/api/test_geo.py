@@ -56,7 +56,10 @@ def test_el_endpoint_sin_header_es_usd(client, base):
     assert client.get("/api/moneda/").json() == {"moneda": "usd", "pais": None}
 
 
-def test_el_checkout_sin_moneda_usa_la_de_la_ip(account_client, base, settings, monkeypatch):
+def test_el_checkout_sin_moneda_cobra_en_usd_aunque_la_ip_sea_de_brasil(account_client, base, settings, monkeypatch):
+    """Se cobra en la moneda que el cliente vio y mandó. La IP sólo sugiere
+    qué mostrar (`/api/moneda/`): si decidiera el cobro, una web que muestra
+    US$ abriría un pago en reales (decisión del 18-10-2026)."""
     from api import stripe_client
     from api.models import PasarelaCheckout
 
@@ -72,7 +75,7 @@ def test_el_checkout_sin_moneda_usa_la_de_la_ip(account_client, base, settings, 
 
     account_client.post("/api/checkout/", {"producto": "informe_natal"}, HTTP_X_FORWARDED_FOR="200.1.2.3")
 
-    assert PasarelaCheckout.objects.get(checkout_id="cs_geo").moneda == "brl"
+    assert PasarelaCheckout.objects.get(checkout_id="cs_geo").moneda == "usd"
 
 
 def test_el_checkout_desde_brasil_puede_pedir_usd(account_client, base, settings, monkeypatch):
@@ -110,3 +113,4 @@ def test_una_base_invalida_no_tumba_nada_y_avisa_una_sola_vez(client, settings, 
     assert r.status_code == 200
     assert r.json() == {"moneda": "usd", "pais": None}
     assert len([x for x in caplog.records if "inválida" in x.getMessage()]) == 1
+
