@@ -545,6 +545,9 @@ class PasarelaCheckout(models.Model):
     # Cuánto devolvió Stripe de esta compra, sumando reembolsos. Es lo que
     # deja que la pantalla de cuenta diga «reembolsada» sin sumar movimientos.
     reembolsado_centavos = models.PositiveIntegerField(default=0)
+    # Cuántas unidades de lo que la compra otorgó se revocaron (reembolsos y
+    # disputas). Se guarda y no se deduce del monto: ver `api/devoluciones.py`.
+    unidades_revocadas = models.PositiveIntegerField(default=0)
     # La URL de la sesión de Stripe. Mientras la sesión sigue abierta es lo
     # que deja retomar un pago a medias desde la cuenta; después no sirve.
     # Vacía en las filas anteriores a este campo. Las URLs de Checkout pasan
@@ -778,8 +781,13 @@ class Disputa(models.Model):
     )
     email = models.EmailField(blank=True, default="")
     estado = models.CharField(max_length=10, choices=ESTADOS, default=ABIERTA)
+    # Lo que se le pasó a `canje.revocar` (para reponer exactamente eso) y
+    # cuánto se sumó a la compra (para restarlo si Stripe devuelve los fondos).
     revocado_codigo = models.CharField(max_length=50, blank=True, default="")
     revocado_cantidad = models.PositiveIntegerField(default=0)
+    revocado_entera = models.BooleanField(default=False)
+    unidades_revocadas = models.PositiveIntegerField(default=0)
+    monto_anotado = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     resuelta_at = models.DateTimeField(null=True, blank=True)
 

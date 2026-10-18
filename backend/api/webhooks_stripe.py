@@ -37,9 +37,9 @@ from rest_framework.views import APIView
 
 from django.db import IntegrityError, transaction
 
-from api import analitica, catalogo, compra_anonima, disputas, notificaciones
+from api import analitica, catalogo, compra_anonima, devoluciones, disputas, notificaciones
 from api.avisos import avisar_admin
-from api.canje import MontoInvalido, aplicar_compra, revocar
+from api.canje import MontoInvalido, aplicar_compra
 from api.compra_service import arrancar_informe
 from api.models import Account, CuponUso, MailBloqueado, PasarelaCheckout
 from api.stripe_client import (
@@ -616,48 +616,41 @@ def _reembolsar(refund: dict) -> None:
     # 03-09-2026, porque el payload no dice quién inició el reembolso y
     # `flagged` no bloquea nada, sólo marca la cuenta para mirarla.
     external_id = f"stripe:refund:{refund_id}"
-    prod = catalogo.producto(fila.codigo_producto)
     monto = refund.get("amount") or 0
-    # Sobre LO PAGADO, no sobre la lista: un pack de 5 al 50 % (paga 6250)
-    # reembolsado entero caía en la rama parcial y revocaba 3, y la persona se
-    # quedaba con dos informes y toda la plata. Con un regalo del 100 % lo
-    # pagado es 0: cualquier reembolso es total, y no hay división que hacer.
-    precio_pagado = fila.precio_de_lista() - fila.descuento_centavos
-
-    if precio_pagado == 0 or monto >= precio_pagado:
-        # Reembolso total: se revoca el producto COMPRADO, que es lo que deja
-        # el Movimiento diciendo qué se reembolsó, y `revocar` traduce a lo que
-        # ese producto otorgó.
-        if revocar(fila.account, fila.codigo_producto, 1, external_id=external_id):
-            disputas.anotar_reembolso(fila, monto)
-        logger.info("reembolso %s revocado entero: %s", refund_id, fila.codigo_producto)
-        return
-
-    if len(prod.otorga) != 1:
-        # Un combo devuelto a medias no tiene una respuesta obvia —¿qué mitad
-        # de "carta + horóscopo" se revoca?— y hoy no existe ninguno en el
-        # catálogo. Antes que inventar una regla, queda a la vista.
-        logger.error(
-            "reembolso %s parcial sobre un producto que otorga %s cosas (%s): "
-            "no se revoca, resolver a mano",
-            refund_id, len(prod.otorga), fila.codigo_producto,
-        )
-        return
-
-    # Proporción redondeada HACIA ARRIBA (decidido el 03-09-2026): media
-    # devolución de un pack de 5 revoca 3, y cualquier reembolso parcial de un
-    # producto suelto revoca su única unidad, porque no existe medio informe.
-    # Ante la duda no se regala producto; lo que ya se usó no se le saca a
-    # nadie igual, eso va a deuda. En enteros, para no arrastrar floats.
-    codigo_otorgado, multiplicador = prod.otorga[0]
-    unidades = -(-monto * multiplicador // precio_pagado)
-    if unidades <= 0:
-        logger.error("reembolso %s por %s: no alcanza a una unidad", refund_id, monto)
-        return
-
-    if revocar(fila.account, codigo_otorgado, unidades, external_id=external_id):
-        disputas.anotar_reembolso(fila, monto)
+    with transaction.atomic():
+        # Bloqueada: la cuenta de unidades lee `unidades_revocadas` y la
+        # actualiza, y dos reembolsos (o un reembolso y una disputa) pueden
+        # llegar a la vez. `of=("self",)`: `account` es nullable.
+        fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila.pk)
+        prod = catalogo.producto(fila.codigo_producto)
+        # Sobre LO PAGADO, no sobre la lista: un pack de 5 al 50 % (paga 6250)
+        # reembolsado entero caía en la rama parcial y revocaba 3. Con un
+        # regalo del 100 % lo pagado es 0: cualquier reembolso es total.
+        base = devoluciones.pagado(fila)
+        total = base <= 0 or monto >= base
+        if not total and len(prod.otorga) != 1:
+            # Un combo devuelto a medias no tiene una respuesta obvia —¿qué
+            # mitad de "carta + horóscopo" se revoca?— y hoy no existe ninguno
+            # en el catálogo. Antes que inventar una regla, queda a la vista.
+            logger.error(
+                "reembolso %s parcial sobre un producto que otorga %s cosas (%s): "
+                "no se revoca, resolver a mano",
+                refund_id, len(prod.otorga), fila.codigo_producto,
+            )
+            return
+        # Proporción redondeada HACIA ARRIBA (decidido el 03-09-2026) y nunca
+        # más de lo que queda sin revocar: la suma de varios parciales
+        # redondeados no puede pasarse de lo que el pack dio. Si ya no queda
+        # nada, `revocar` con 0 deja igual la constancia idempotente del
+        # reembolso y su monto se anota una sola vez.
+        unidades = devoluciones.unidades_por_monto(fila, monto)
+        revocado = devoluciones.revocar_unidades(fila, unidades, external_id)
+        if revocado is None:
+            logger.info("reembolso %s ya aplicado", refund_id)
+            return
+        devoluciones.registrar(fila, unidades, monto)
     logger.info(
-        "reembolso %s parcial (%s de %s): revocadas %s de %s unidades de %s",
-        refund_id, monto, precio_pagado, unidades, multiplicador, codigo_otorgado,
+        "reembolso %s (%s de %s): revocadas %s unidades de %s (%s)",
+        refund_id, monto, devoluciones.pagado(fila), unidades, fila.codigo_producto,
+        "entero" if revocado[2] else revocado[0],
     )

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from api import disputas, stripe_client, webhooks_stripe
+from api import devoluciones, disputas, stripe_client, webhooks_stripe
 from api.models import Derecho, MailBloqueado, Movimiento, PasarelaCheckout
 from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
@@ -119,7 +119,8 @@ def test_el_withdrawn_reentregado_tras_el_reinstate_no_vuelve_a_marcar_ni_bloque
     assert compra_acreditada.disputa_id is None
     assert not MailBloqueado.bloqueado("ana@mail.com")
     assert _restante(compra_acreditada.account) == 1
-    assert compra_acreditada.reembolsado_centavos == 14900
+    # Resuelta a favor, la compra deja de contar como reembolsada.
+    assert compra_acreditada.reembolsado_centavos == 0
     assert len(avisos_enviados) == antes
 
 
@@ -161,7 +162,7 @@ def test_una_disputa_sobre_una_compra_ya_reembolsada_no_revoca_de_nuevo(client, 
     from api.canje import revocar
 
     revocar(compra_acreditada.account, "informe_natal", 1, external_id="stripe:refund:re_1")
-    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(reembolsado_centavos=14900)
+    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(reembolsado_centavos=14900, unidades_revocadas=1)
 
     assert _disputa(client).status_code == 200
 
@@ -236,7 +237,7 @@ def test_una_compra_anonima_de_un_mail_bloqueado_se_acredita_y_avisa(client, ano
 def test_un_fallo_a_mitad_del_retiro_no_deja_la_disputa_marcada(client, monkeypatch, compra_acreditada, avisos_enviados):
     """Todo el retiro es un átomo: si `revocar` falla, la marca `disputa_id`
     se deshace con él y el reintento de Stripe aplica la disputa entera."""
-    revocar_real = disputas.revocar
+    revocar_real = devoluciones.revocar
     llamadas = []
 
     def revocar_que_falla_una_vez(*args, **kwargs):
@@ -245,7 +246,7 @@ def test_un_fallo_a_mitad_del_retiro_no_deja_la_disputa_marcada(client, monkeypa
             raise RuntimeError("la base se cayó")
         return revocar_real(*args, **kwargs)
 
-    monkeypatch.setattr(disputas, "revocar", revocar_que_falla_una_vez)
+    monkeypatch.setattr(devoluciones, "revocar", revocar_que_falla_una_vez)
 
     assert _disputa(client).status_code == 500
     compra_acreditada.refresh_from_db()
@@ -338,7 +339,7 @@ def test_el_reinstated_de_una_disputa_sobre_compra_reembolsada_no_repone(client,
     from api.canje import revocar
 
     revocar(compra_acreditada.account, "informe_natal", 1, external_id="stripe:refund:re_1")
-    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(reembolsado_centavos=14900)
+    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(reembolsado_centavos=14900, unidades_revocadas=1)
     _disputa(client)
 
     assert _disputa(client, tipo="charge.dispute.funds_reinstated").status_code == 200
@@ -356,7 +357,7 @@ def _reembolsada_entera(fila):
     from api.canje import revocar
 
     revocar(fila.account, "informe_natal", 1, external_id="stripe:refund:re_1")
-    PasarelaCheckout.objects.filter(pk=fila.pk).update(reembolsado_centavos=14900)
+    PasarelaCheckout.objects.filter(pk=fila.pk).update(reembolsado_centavos=14900, unidades_revocadas=1)
 
 
 def test_resuelta_a_favor_sobre_compra_reembolsada_el_retiro_reentregado_no_vuelve_a_bloquear(
@@ -426,7 +427,7 @@ def test_reembolso_parcial_y_despues_disputa_no_revoca_dos_veces_ni_anota_de_mas
     from api.canje import revocar
 
     revocar(compra_acreditada.account, "informe_natal", 1, external_id="stripe:refund:re_p")
-    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(reembolsado_centavos=5000)
+    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(reembolsado_centavos=5000, unidades_revocadas=1)
 
     _disputa(client, amount=14900)
 
@@ -451,7 +452,7 @@ def test_pack_con_reembolso_parcial_la_disputa_revoca_solo_lo_que_queda(
     aplicar_compra(cuenta, "pack_5_natal", 12500, external_id="stripe:session:cs_pack", precio_centavos=12500)
     # 2500 de 12500 es una unidad de cinco, como la revoca `_reembolsar`.
     revocar(cuenta, "informe_natal", 1, external_id="stripe:refund:re_p")
-    PasarelaCheckout.objects.filter(pk=fila.pk).update(reembolsado_centavos=2500)
+    PasarelaCheckout.objects.filter(pk=fila.pk).update(reembolsado_centavos=2500, unidades_revocadas=1)
     assert _restante(cuenta) == 4
 
     _disputa(client, amount=10000, currency="usd")
@@ -491,3 +492,109 @@ def test_disputa_antes_del_pago_resuelta_a_favor_el_pago_que_llega_se_entrega_y_
     fila = PasarelaCheckout.objects.get(checkout_id="cs_du")
     assert fila.acreditado_at is not None
     assert fila.disputa_id is None
+
+
+# --- Segunda revisión del 18-10-2026: unidades revocadas en la compra -------
+
+
+def _refund(client, refund_id, monto, pi="pi_1", moneda="usd"):
+    obj = {"id": refund_id, "object": "refund", "amount": monto, "currency": moneda,
+           "charge": "ch_1", "payment_intent": pi, "reason": None, "status": "succeeded"}
+    cuerpo = json.dumps({"id": f"evt_{refund_id}", "type": "refund.created", "data": {"object": obj}}).encode()
+    return client.post(URL, data=cuerpo, content_type="application/json", HTTP_STRIPE_SIGNATURE=firmar(cuerpo))
+
+
+@pytest.fixture
+def pack_acreditado(make_account):
+    from django.utils import timezone
+
+    from api.canje import aplicar_compra
+
+    cuenta = make_account(email="ana@mail.com")
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal", moneda="usd",
+        precio_centavos=12500, payment_intent="pi_1", acreditado_at=timezone.now(),
+    )
+    aplicar_compra(cuenta, "pack_5_natal", 12500, external_id="stripe:session:cs_pack", precio_centavos=12500)
+    return fila
+
+
+def test_varios_reembolsos_parciales_nunca_revocan_mas_de_lo_que_el_pack_dio(client, pack_acreditado):
+    """Cada parcial redondea para arriba: 6 de 1000 sobre 12500 son 6 × ceil(0,4)."""
+    for i in range(6):
+        _refund(client, f"re_{i}", 1000)
+
+    pack_acreditado.refresh_from_db()
+    pack_acreditado.account.refresh_from_db()
+    assert pack_acreditado.unidades_revocadas == 5
+    assert pack_acreditado.account.deuda == 0
+    assert _restante(pack_acreditado.account) == 0
+
+
+def test_parciales_y_despues_disputa_no_revoca_mas_de_lo_que_el_pack_dio(client, pack_acreditado, avisos_enviados):
+    for i in range(3):
+        _refund(client, f"re_{i}", 1000)
+    assert _restante(pack_acreditado.account) == 2
+
+    _disputa(client, amount=9500, currency="usd")
+
+    pack_acreditado.refresh_from_db()
+    pack_acreditado.account.refresh_from_db()
+    assert _restante(pack_acreditado.account) == 0
+    assert pack_acreditado.account.deuda == 0
+    assert pack_acreditado.unidades_revocadas == 5
+    assert pack_acreditado.reembolsado_centavos == 12500
+
+
+def test_parciales_disputa_y_reposicion_devuelve_solo_lo_que_la_disputa_saco(client, pack_acreditado, avisos_enviados):
+    for i in range(3):
+        _refund(client, f"re_{i}", 1000)
+    _disputa(client, amount=9500, currency="usd")
+    _disputa(client, tipo="charge.dispute.funds_reinstated", currency="usd")
+
+    pack_acreditado.refresh_from_db()
+    assert _restante(pack_acreditado.account) == 2
+    assert pack_acreditado.unidades_revocadas == 3
+    assert pack_acreditado.reembolsado_centavos == 3000
+
+
+def test_resuelta_a_favor_la_compra_deja_de_contar_como_reembolsada_y_un_reembolso_real_revoca(
+    client, compra_acreditada, avisos_enviados,
+):
+    _disputa(client)
+    _disputa(client, tipo="charge.dispute.funds_reinstated")
+    compra_acreditada.refresh_from_db()
+    assert compra_acreditada.reembolsado_centavos == 0
+    assert compra_acreditada.unidades_revocadas == 0
+    assert _restante(compra_acreditada.account) == 1
+
+    _refund(client, "re_real", 14900, moneda="brl")
+
+    assert _restante(compra_acreditada.account) == 0
+
+
+def test_una_disputa_en_otra_moneda_bloquea_el_mail_y_avisa_una_sola_vez(client, compra_acreditada, avisos_enviados):
+    _disputa(client, currency="usd")
+    _disputa(client, currency="usd")
+
+    assert MailBloqueado.bloqueado("ana@mail.com")
+    assert _restante(compra_acreditada.account) == 1
+    assert len([a for a in avisos_enviados if "du_1" in a]) == 1
+
+    _disputa(client, tipo="charge.dispute.funds_reinstated", currency="usd")
+    assert not MailBloqueado.bloqueado("ana@mail.com")
+    assert not any("sin retiro previo" in a for a in avisos_enviados)
+
+
+def test_reposicion_sin_mail_bloqueado_no_dice_que_sigue_bloqueado(client, monkeypatch, make_chart, avisos_enviados):
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_du", account=None, codigo_producto="informe_natal", moneda="brl",
+        precio_centavos=14900, anonimo=True, nonce_hash="x" * 64,
+        sujeto=sujeto_natal(make_chart(account=None)),
+    )
+    monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"})
+    _disputa(client)
+    _disputa(client, tipo="charge.dispute.funds_reinstated")
+
+    resuelta = [a for a in avisos_enviados if "resuelta a favor" in a]
+    assert resuelta and "sigue bloqueado" not in resuelta[0]
