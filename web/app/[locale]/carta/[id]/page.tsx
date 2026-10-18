@@ -13,12 +13,12 @@ import { Nav } from "@/components/Nav";
 import { TratoCarta } from "@/components/TratoCarta";
 import { Reading } from "@/components/Reading";
 import { ResumenCompleto, type SeccionIndice } from "@/components/ResumenCompleto";
-import { fetchCatalogo, precioDe } from "@/lib/catalogo";
+import { fetchCatalogo, ofertaDe } from "@/lib/catalogo";
 import { conQuery } from "@/lib/consultaBackend";
 import { type ApiChart, toWheel } from "@/lib/chart";
 import type { Derecho } from "@/lib/derechos";
 import { INTL_LOCALE, type Locale, getDict, isLocale } from "@/lib/i18n";
-import { monedaDelVisitante, monedaPara } from "@/lib/moneda";
+import { monedaDelVisitante } from "@/lib/moneda";
 import { buildPdfPayload } from "@/lib/pdfPayload";
 import { ApiError, RUTA_SESION_EXPIRADA, callApi, getSessionToken } from "@/lib/session";
 import { uuidValido } from "@/lib/uuid";
@@ -103,8 +103,9 @@ export default async function ChartPage({
   // el webhook valida lo que Stripe cobró. Sin respuesta, la nota va sin precio.
   // En la moneda del visitante (RF25), y esa misma viaja al checkout (RF26).
   const [catalogo, monedaVisitante] = await Promise.all([fetchCatalogo(), monedaDelVisitante()]);
-  const precioInforme = precioDe(catalogo, "informe_natal", INTL_LOCALE[locale], monedaVisitante);
-  const monedaInforme = monedaPara(catalogo?.find((p) => p.codigo === "informe_natal"), monedaVisitante);
+  const { precio: precioInforme, moneda: monedaInforme } = ofertaDe(
+    catalogo, "informe_natal", INTL_LOCALE[locale], monedaVisitante,
+  );
 
   // Se arma una vez y se ubica según haya lectura o no (ver abajo). El mismo
   // elemento en los dos lugares: duplicarlo sería duplicarle el estado.

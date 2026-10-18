@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { ChartBody } from "@/components/ChartBody";
 import { DatosCarta } from "@/components/DatosCarta";
@@ -40,6 +41,14 @@ export function CartaPreview({
   errorCompra: string | null;
 }) {
   const t = dict.newChart;
+  // Cuál se apretó: el error va junto a ese, no a una pantalla de distancia.
+  const [origen, setOrigen] = useState<"arriba" | "cierre">("cierre");
+  const error = (donde: "arriba" | "cierre") =>
+    errorCompra && origen === donde ? (
+      <p className="compraError" role="alert">
+        {errorCompra}
+      </p>
+    ) : null;
 
   // Los dos botones hacen lo mismo y comparten estado: el de arriba para quien
   // ya decidió, el grande del cierre para quien leyó todo (18-10-2026).
@@ -48,7 +57,10 @@ export function CartaPreview({
       type="button"
       className={grande ? "btn btnPrimary btnGrande" : "btn btnPrimary"}
       disabled={comprando}
-      onClick={() => void onComprar()}
+      onClick={() => {
+        setOrigen(grande ? "cierre" : "arriba");
+        void onComprar();
+      }}
     >
       {comprando
         ? dict.precios.abriendo
@@ -65,7 +77,10 @@ export function CartaPreview({
             formulario se esconde (CSS: .formFrame:has(.previewCarta)). */}
         <h1 className="display previewTitle">{t.previewTitle}</h1>
         <p className="previewLede">{t.previewLede}</p>
-        <div className="previewCtaArriba">{boton(false)}</div>
+        <div className="previewCtaArriba">
+          {error("arriba")}
+          {boton(false)}
+        </div>
       </header>
 
       {/* La rueda primero: es lo que vino a buscar. */}
@@ -89,11 +104,7 @@ export function CartaPreview({
           </>
         )}
         <div className="previewCta">
-          {errorCompra && (
-            <p className="compraError" role="alert">
-              {errorCompra}
-            </p>
-          )}
+          {error("cierre")}
           {boton(true)}
           {carta.teaser && (
             <p className="fieldNote">

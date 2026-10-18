@@ -1,4 +1,5 @@
 import { API_URL } from "./config";
+import { monedaPara, type Moneda } from "./monedas";
 
 // Qué se vende y a cuánto. El precio lo pone el backend —`catalogo.py`, la
 // misma fuente con la que el webhook valida lo que Stripe cobró—, así que la
@@ -32,12 +33,12 @@ export type ProductoCatalogo = {
   otorga: { codigo: string; cantidad: number }[];
 };
 
-/** `[centavos, moneda]` del producto para quien ve `moneda`: en esa si el
- * producto la tiene, si no en USD (EC2). */
-export function precioEn(producto: ProductoCatalogo, moneda: string): [number, string] {
-  const enEsa = producto.precios?.[moneda];
-  if (enEsa !== undefined) return [enEsa, moneda];
-  return [producto.precios?.usd ?? producto.precio_centavos, "usd"];
+/** `[centavos, moneda]` del producto para quien ve `moneda`. La moneda la
+ * decide `monedaPara` —la misma que viaja al checkout—, así lo que se muestra
+ * y lo que se cobra no pueden salir de dos reglas distintas. */
+export function precioEn(producto: ProductoCatalogo, moneda: string): [number, Moneda] {
+  const enMoneda = monedaPara(producto, moneda);
+  return [producto.precios?.[enMoneda] ?? producto.precio_centavos, enMoneda];
 }
 
 export async function fetchCatalogo(): Promise<ProductoCatalogo[] | null> {
@@ -92,6 +93,23 @@ export function precioDe(
   if (!producto) return null;
   const [centavos, enMoneda] = precioEn(producto, moneda);
   return formatearPrecio(centavos, enMoneda, locale);
+}
+
+/**
+ * Lo que una página ofrece de un producto: el precio ya formateado (o `null`
+ * sin catálogo) y la moneda que tiene que viajar al checkout. Las dos salen de
+ * `precioEn`: es la única forma de que el botón cobre en la moneda que muestra.
+ */
+export function ofertaDe(
+  productos: ProductoCatalogo[] | null,
+  codigo: string,
+  locale: string,
+  moneda: string,
+): { precio: string | null; moneda: Moneda } {
+  const producto = productos?.find((p) => p.codigo === codigo);
+  if (!producto) return { precio: null, moneda: "usd" };
+  const [centavos, enMoneda] = precioEn(producto, moneda);
+  return { precio: formatearPrecio(centavos, enMoneda, locale), moneda: enMoneda };
 }
 
 /**

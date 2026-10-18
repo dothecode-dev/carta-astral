@@ -43,4 +43,16 @@ describe("POST /api/moneda", () => {
       expect(res.headers.get("location")).toBe("/");
     },
   );
+
+  it("conserva el cupón de la página al volver", async () => {
+    const res = await pedir({ moneda: "brl", volver: "/pt/precios", cupon: "amigos30" });
+
+    expect(res.headers.get("location")).toBe("/pt/precios?cupon=AMIGOS30");
+  });
+
+  it("un cupón sin forma de cupón no viaja", async () => {
+    const res = await pedir({ moneda: "brl", volver: "/pt/precios", cupon: "../x?y=1" });
+
+    expect(res.headers.get("location")).toBe("/pt/precios");
+  });
 });

@@ -27,9 +27,10 @@ export async function monedaDelVisitante(): Promise<Moneda> {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     return esMoneda(moneda) ? moneda : "usd";
-  } catch {
-    // Sin log: el backend ya registra lo suyo, y un precio en USD es una
-    // respuesta correcta para cualquiera.
+  } catch (error) {
+    // Un timeout o un error de red no llegan nunca al backend: sin este log,
+    // un endpoint roto mostraría USD a todo Brasil sin que nadie se entere.
+    console.warn("moneda del visitante: falló /api/moneda/, se muestra usd", error);
     return "usd";
   }
 }

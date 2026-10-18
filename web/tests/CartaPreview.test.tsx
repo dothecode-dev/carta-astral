@@ -263,3 +263,36 @@ describe("el título de la vista previa", () => {
     expect(css).toMatch(/\.previewTitle\s*\{[^}]*font-size:\s*var\(--step-4\)/);
   });
 });
+
+
+describe("el error de la compra aparece junto al botón que se apretó", () => {
+  it("si se apretó el de arriba, el error va arriba, antes de la rueda", () => {
+    const props = propsBase("es");
+    const { container, rerender } = render(<CartaPreview {...props} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Leer el informe completo/ })[0]!);
+    rerender(<CartaPreview {...props} errorCompra="No pudimos abrir el pago." />);
+
+    const alertas = screen.getAllByRole("alert");
+    expect(alertas).toHaveLength(1);
+    const rueda = container.querySelector(".chartBody")!;
+    expect(alertas[0]!.compareDocumentPosition(rueda) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("si se apretó el grande, el error va abajo, junto a él", () => {
+    const props = propsBase("es");
+    const { container, rerender } = render(<CartaPreview {...props} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Leer el informe completo/ })[1]!);
+    rerender(<CartaPreview {...props} errorCompra="No pudimos abrir el pago." />);
+
+    const alerta = screen.getByRole("alert");
+    expect(container.querySelector(".previewCta")!.contains(alerta)).toBe(true);
+  });
+});
+
+describe("la medida de los párrafos no pisa la de cada componente", () => {
+  it("la regla general no tiene especificidad (:where), así gana la clase del párrafo", () => {
+    const css = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
+    expect(css).toMatch(/:where\(\.docFrame\) p\s*\{/);
+    expect(css).not.toMatch(/\n\.docFrame p\s*\{/);
+  });
+});

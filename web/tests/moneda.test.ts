@@ -58,8 +58,18 @@ describe("monedaDelVisitante", () => {
     ["el backend responde una moneda que no conocemos", () => Promise.resolve(json({ moneda: "ars" }))],
   ])("si %s, usd", async (_caso, respuesta) => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(respuesta));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect(await monedaDelVisitante()).toBe("usd");
+  });
+
+  it("una falla de la consulta deja rastro en el log (no se traga en silencio)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await monedaDelVisitante();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("moneda"), expect.anything());
   });
 });
 

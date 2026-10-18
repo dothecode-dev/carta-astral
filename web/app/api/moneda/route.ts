@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { normalizarCupon } from "@/lib/cupon";
 import { COOKIE_MONEDA, esMoneda } from "@/lib/moneda";
 
 // El selector de moneda de /precios (RF24). Un formulario común, sin JS: guarda
@@ -31,7 +32,12 @@ export async function POST(request: Request) {
 
   // Location relativo a propósito, como `session/expirada`: detrás del proxy
   // `request.url` es la URL interna del contenedor.
-  const res = new NextResponse(null, { status: 303, headers: { Location: destinoInterno(datos.get("volver")) } });
+  // El cupón de la página viaja aparte y vuelve sólo con forma de cupón: sin
+  // esto, cambiar de moneda en /precios?cupon=X lo perdía y se pagaba de lista.
+  const cupon = normalizarCupon(datos.get("cupon"));
+  const destino = destinoInterno(datos.get("volver"));
+  const location = cupon ? `${destino}?cupon=${encodeURIComponent(cupon)}` : destino;
+  const res = new NextResponse(null, { status: 303, headers: { Location: location } });
   res.cookies.set(COOKIE_MONEDA, moneda, {
     path: "/",
     maxAge: UN_ANIO,

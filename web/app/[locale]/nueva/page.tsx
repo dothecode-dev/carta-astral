@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 
 import { Nav } from "@/components/Nav";
 import { NewChartForm } from "@/components/NewChartForm";
-import { fetchCatalogo, precioDe } from "@/lib/catalogo";
+import { fetchCatalogo, ofertaDe } from "@/lib/catalogo";
 import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
-import { monedaDelVisitante, monedaPara } from "@/lib/moneda";
+import { monedaDelVisitante } from "@/lib/moneda";
 import { SITE_URL } from "@/lib/config";
 import { haySesion } from "@/lib/session";
 import { Footer } from "@/components/Footer";
@@ -76,8 +76,9 @@ export default async function NewChartPage({
   const [catalogo, monedaVisitante] = signedIn
     ? [null, "usd" as const]
     : await Promise.all([fetchCatalogo(), monedaDelVisitante()]);
-  const precio = signedIn ? null : precioDe(catalogo, "informe_natal", INTL_LOCALE[locale], monedaVisitante);
-  const moneda = monedaPara(catalogo?.find((p) => p.codigo === "informe_natal"), monedaVisitante);
+  const oferta = ofertaDe(catalogo, "informe_natal", INTL_LOCALE[locale], monedaVisitante);
+  const precio = signedIn ? null : oferta.precio;
+  const moneda = oferta.moneda;
 
   return (
     <>

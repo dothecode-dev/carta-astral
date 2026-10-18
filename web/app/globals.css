@@ -1927,8 +1927,10 @@ body:has(.consentBar) .accionFija {
 /* --- Documentos legales -------------------------------------------------
    Medida de lectura angosta y jerarquía tranquila: son textos que se leen
    enteros, no se escanean. */
-/* En una página ancha, los párrafos sueltos no pasan del ancho de la columna. */
-.docFrame p {
+/* En una página ancha, los párrafos sueltos no pasan del ancho de la columna.
+   `:where` le saca la especificidad: la medida propia de un párrafo
+   (.waitingBody, .notaCtaLede, .disclaimer…) sigue ganando. */
+:where(.docFrame) p {
   max-width: var(--ancho-columna);
 }
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { conPrecio, fetchCatalogo, formatearPrecio, precioDe, unidades } from "@/lib/catalogo";
+import { conPrecio, fetchCatalogo, formatearPrecio, ofertaDe, precioDe, unidades } from "@/lib/catalogo";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -99,5 +99,33 @@ describe("el precio en los textos", () => {
 describe("conPrecio con el precio al final", () => {
   it("sin precio, no deja el separador colgando", () => {
     expect(conPrecio("Comprar el informe completo · {precio}", null)).toBe("Comprar el informe completo");
+  });
+});
+
+
+describe("ofertaDe: lo que se muestra y lo que se cobra salen de la misma regla", () => {
+  const INFORME = {
+    codigo: "informe_natal", precio_centavos: 500, moneda: "usd",
+    precios: { usd: 500, brl: 2490 }, otorga: [{ codigo: "informe_natal", cantidad: 1 }],
+  };
+  const VINCULO = { ...INFORME, codigo: "informe_vinculo", precios: { usd: 900 } };
+
+  it("en la moneda del visitante si el producto la tiene", () => {
+    const o = ofertaDe([INFORME], "informe_natal", "pt-BR", "brl");
+    expect(o.moneda).toBe("brl");
+    expect(o.precio?.replace(/\s/g, " ")).toBe("R$ 24,90");
+  });
+
+  it("si no la tiene, precio Y moneda en dólares (EC2)", () => {
+    const o = ofertaDe([VINCULO], "informe_vinculo", "en-US", "brl");
+    expect(o).toEqual({ precio: "$9", moneda: "usd" });
+  });
+
+  it("una moneda desconocida no llega al precio: dólares", () => {
+    expect(ofertaDe([INFORME], "informe_natal", "en-US", "ars")).toEqual({ precio: "$5", moneda: "usd" });
+  });
+
+  it("sin catálogo, sin precio y en dólares", () => {
+    expect(ofertaDe(null, "informe_natal", "en-US", "brl")).toEqual({ precio: null, moneda: "usd" });
   });
 });

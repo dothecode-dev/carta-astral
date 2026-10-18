@@ -164,6 +164,7 @@ export default async function PreciosPage({
               cookie y vuelve acá; todas las páginas con precio la leen. */}
           <form className="switch monedaSelector" action="/api/moneda" method="post" aria-label={dict.precios.monedaLabel}>
             <input type="hidden" name="volver" value={`/${locale}/precios`} />
+            {codigoCupon && <input type="hidden" name="cupon" value={codigoCupon} />}
             {MONEDAS.map((m) => (
               <button
                 key={m}

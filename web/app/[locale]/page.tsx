@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 import { EphemerisRail } from "@/components/EphemerisRail";
 import { Nav } from "@/components/Nav";
 import { SkyWheel } from "@/components/SkyWheel";
-import { conPrecio, fetchCatalogo, precioDe } from "@/lib/catalogo";
+import { conPrecio, fetchCatalogo, ofertaDe } from "@/lib/catalogo";
 import { INTL_LOCALE, NOTES_SLUG, getDict, isLocale } from "@/lib/i18n";
-import { monedaDelVisitante, monedaPara } from "@/lib/moneda";
+import { monedaDelVisitante } from "@/lib/moneda";
 import { fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
 import { fetchSky } from "@/lib/sky";
 import { SITE_URL } from "@/lib/config";
@@ -23,20 +23,24 @@ export default async function Home({
   const dict = getDict(locale);
   // Del backend, con Swiss Ephemeris. Si no contesta, la rueda se calcula en
   // el navegador y la portada no se entera.
-  const sky = await fetchSky();
-  // El precio sale del catálogo del backend, como en /precios: la home no
-  // puede anunciar un número distinto del que cobra Stripe.
-  // En la moneda del visitante (RF25): la cookie del selector o la de su IP.
-  const [catalogo, moneda] = await Promise.all([fetchCatalogo(), monedaDelVisitante()]);
-  const precioInforme = precioDe(catalogo, "informe_natal", INTL_LOCALE[locale], moneda);
-  const monedaInforme = monedaPara(catalogo?.find((p) => p.codigo === "informe_natal"), moneda);
-  const notes = await fetchNotesOrNone(locale, 3);
-
-  // El header es el mismo en todo el sitio: sin esto la página se sirve
-  // estática y le dice "Entrar" a alguien que ya tiene la sesión abierta.
-  // Leer la cookie la vuelve dinámica, que es el precio de reconocer a quien
-  // entra — y no toca lo que ve Google, que nunca trae cookie.
-  const signedIn = await haySesion();
+  // Todo en paralelo: ninguna depende de otra, y en serie cada una sumaba su
+  // espera a la del primer byte.
+  // - El cielo: del backend, con Swiss Ephemeris. Si no contesta, la rueda se
+  //   calcula en el navegador y la portada no se entera.
+  // - El precio: del catálogo del backend, como en /precios, en la moneda del
+  //   visitante (RF25: la cookie del selector o la de su IP).
+  // - La sesión: el header es el mismo en todo el sitio; leer la cookie vuelve
+  //   dinámica la página, que es el precio de reconocer a quien entra.
+  const [sky, catalogo, moneda, notes, signedIn] = await Promise.all([
+    fetchSky(),
+    fetchCatalogo(),
+    monedaDelVisitante(),
+    fetchNotesOrNone(locale, 3),
+    haySesion(),
+  ]);
+  const { precio: precioInforme, moneda: monedaInforme } = ofertaDe(
+    catalogo, "informe_natal", INTL_LOCALE[locale], moneda,
+  );
 
   // Lo que le dice a Google qué es este sitio y quién lo hace. Sin esto,
   // `Article` en las notas era el único dato estructurado del dominio: la
