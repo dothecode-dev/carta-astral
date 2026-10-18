@@ -31,3 +31,24 @@ Por qué existe la regla: el 03-09-2026 `/precios` tenía el `Footer` fuera del
 propio, su ancho lo decidía quien lo envolviera: se estiraba hasta el borde de
 la ventana contra un header contenido. Dos páginas, además, usaban `<div
 className="docFrame">` en vez de `<main>` y no tenían landmark principal.
+
+# Los anchos de página
+
+Toda página se centra en la pantalla con **uno** de tres anchos, y **no es prosa:
+lo chequea `tests/anchos.test.ts`**.
+
+- `--ancho-columna` (42rem): formularios, textos, notas, cuenta. Es el default de
+  `.docFrame`.
+- `--ancho-sitio` (1180px, el de la navegación): lo que necesita espacio —la
+  carta, precios, y `/nueva` cuando ya muestra la carta calculada—.
+- `--ancho-angosto` (35rem): una tarjeta sola (entrar).
+
+Un marco (`.algoFrame`) no declara otro `max-width`, y si cambia el ancho va
+**después** de `.docFrame` en `globals.css` (misma especificidad: gana la
+última). Los párrafos toman la medida de `:where(.docFrame) p`, sin
+especificidad, así la clase propia de un párrafo sigue ganando.
+
+Por qué existe la regla: hasta el 18-10-2026 cada página tenía su propio ancho
+(1180, 1080, 960, 860, 720 y 560 px) y el título de cada una arrancaba en otro
+lugar. Alinear todo al borde del logo se probó y se descartó: dejaba los
+formularios contra la izquierda y tres cuartos de pantalla vacíos.
