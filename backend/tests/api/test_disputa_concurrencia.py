@@ -10,7 +10,7 @@ fila y no creaba otra, dejaba el mail libre con una disputa abierta.
 Sólo corre contra Postgres: en SQLite `SELECT ... FOR UPDATE` se ignora. El
 orden malo se FUERZA con eventos (dejarlo al planificador no lo reproducía:
 medido el 18-10-2026, sin el lock pasaba diez de diez): el retiro de B se
-detiene después de bloquear el mail y antes de commitear, y recién ahí corre
+detiene después de bloquear el mail y antes de crear su disputa, y recién ahí corre
 la reposición de A entera. Con el lock, la reposición espera al retiro.
 """
 
@@ -61,15 +61,17 @@ def test_reponer_una_y_retirar_otra_del_mismo_mail_a_la_vez_deja_el_mail_bloquea
 
     b_bloqueo = threading.Event()
     a_termino = threading.Event()
-    bloquear_real = MailBloqueado.bloquear.__func__
+    asegurar_real = disputas._bloquear_y_lockear
 
-    def bloquear_y_esperar(cls, mail, motivo, dispute_id=""):
-        bloquear_real(cls, mail, motivo, dispute_id)
+    def asegurar_y_esperar(mail, dispute_id):
+        asegurar_real(mail, dispute_id)
         if dispute_id == "du_b":
+            # El mail ya está bloqueado (y, con el lock, la fila tomada): acá
+            # se cuela la reposición de A antes de que B cree su disputa.
             b_bloqueo.set()
-            a_termino.wait(ESPERA)  # sin lock, A termina acá adentro
+            a_termino.wait(ESPERA)
 
-    monkeypatch.setattr(MailBloqueado, "bloquear", classmethod(bloquear_y_esperar))
+    monkeypatch.setattr(disputas, "_bloquear_y_lockear", asegurar_y_esperar)
 
     def operar(i):
         if i == 0:

@@ -19,7 +19,7 @@ from django.db import models
 
 from api import catalogo
 from api.canje import revocar
-from api.models import PasarelaCheckout
+from api.models import Disputa, PasarelaCheckout
 
 
 def unidades_de(fila) -> tuple[str, int]:
@@ -41,16 +41,42 @@ def quedan(fila) -> int:
     return max(0, total - fila.unidades_revocadas)
 
 
-def unidades_por_monto(fila, monto: int) -> int:
-    """Cuántas unidades cubre un reembolso de `monto`, redondeando hacia
-    arriba (decidido el 03-09-2026: ante la duda no se regala producto) y sin
-    pasar de las que quedan. Lo pagado en 0 (regalo del 100 %) o un monto que
-    cubre todo lo pagado: todas las que quedan."""
+def unidades_pedidas(fila, monto: int) -> int:
+    """Cuántas unidades cubre un reembolso de `monto`, sin mirar cuántas
+    quedan: redondeando hacia arriba (decidido el 03-09-2026: ante la duda no
+    se regala producto). Lo pagado en 0 (regalo del 100 %) o un monto que
+    cubre todo lo pagado: todas."""
     _codigo, total = unidades_de(fila)
     base = pagado(fila)
     if base <= 0 or monto >= base:
-        return quedan(fila)
-    return min(quedan(fila), -(-monto * total // base))
+        return total
+    return min(total, -(-monto * total // base))
+
+
+def tomar_de_disputa(fila, unidades: int) -> int:
+    """Pasa hasta `unidades` ya revocadas por una disputa ABIERTA de la compra
+    a la cuenta de un reembolso, y devuelve cuántas pasó.
+
+    Stripe no ordena los eventos: el reembolso de una disputa ya ganada puede
+    llegar antes que su `funds_reinstated`. Sin esto, el reembolso no
+    encontraba unidades que revocar (las tenía la disputa) y la reposición
+    las devolvía todas: producto y plata. Lo que la disputa conserva pasa a
+    ser unidades sueltas, que es como se van a reponer."""
+    if unidades <= 0:
+        return 0
+    disputa = (
+        Disputa.objects.select_for_update()
+        .filter(fila=fila, estado=Disputa.ABIERTA, unidades_revocadas__gt=0).first()
+    )
+    if disputa is None:
+        return 0
+    tomadas = min(unidades, disputa.unidades_revocadas)
+    codigo, _total = unidades_de(fila)
+    disputa.unidades_revocadas -= tomadas
+    disputa.revocado_codigo, disputa.revocado_cantidad = codigo, disputa.unidades_revocadas
+    disputa.revocado_entera = False
+    disputa.save(update_fields=["unidades_revocadas", "revocado_codigo", "revocado_cantidad", "revocado_entera"])
+    return tomadas
 
 
 def revocar_unidades(fila, unidades: int, external_id: str) -> tuple[str, int, bool] | None:

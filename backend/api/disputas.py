@@ -84,13 +84,26 @@ def _bloquear_fila(fila_pk):
     return PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila_pk)
 
 
-def _bloquear_mail(email: str):
-    """Lockea la fila de `MailBloqueado` de ese mail, si existe. Retiro y
-    reposición la toman antes de decidir: sin eso, una reposición que no ve
-    todavía la disputa abierta de OTRA compra del mismo mail borraba el
-    bloqueo que esa disputa necesitaba (revisión del 18-10-2026)."""
-    if email:
-        MailBloqueado.objects.select_for_update().filter(email=email).first()
+def _bloquear_y_lockear(email: str, dispute_id: str) -> None:
+    """Bloquea el mail y deja lockeada su fila de `MailBloqueado` hasta el
+    commit. Si una reposición concurrente la borró entre el alta y el lock, la
+    vuelve a crear: el mail de una disputa abierta no puede quedar libre."""
+    if not email:
+        return
+    for _ in range(2):
+        MailBloqueado.bloquear(email, motivo="disputa", dispute_id=dispute_id)
+        if MailBloqueado.objects.select_for_update().filter(email=email).exists():
+            return
+    raise RuntimeError(f"no se pudo bloquear el mail de la disputa {dispute_id}")  # 5xx: Stripe reintenta
+
+
+def _lockear_bloqueo(email: str):
+    """La fila de `MailBloqueado` de ese mail, lockeada, o None. La reposición
+    sólo borra esta fila: un bloqueo que otra disputa cree después no lo
+    toca, aunque todavía no lo vea."""
+    if not email:
+        return None
+    return MailBloqueado.objects.select_for_update().filter(email=email).first()
 
 
 def _retirar(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> str | None:
@@ -102,7 +115,7 @@ def _retirar(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> str | None:
             logger.info("disputa %s ya registrada: el retiro no se aplica de nuevo", dispute_id)
             return None
         mail = MailBloqueado.normalizar(_mail_de_disputa(fila, sesion))
-        _bloquear_mail(mail)
+        _bloquear_y_lockear(mail, dispute_id)
         disputa = Disputa.objects.create(dispute_id=dispute_id, fila=fila, email=mail)
         fila.disputa_id = dispute_id
         fila.save(update_fields=["disputa_id"])
@@ -121,7 +134,6 @@ def _retirar(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> str | None:
             hecho = "todavía sin entregar: no se entrega. Mail bloqueado"
         else:
             hecho = _revocar_lo_que_queda(fila, disputa, monto)
-        MailBloqueado.bloquear(mail, motivo="disputa", dispute_id=dispute_id)
     logger.warning("disputa %s aplicada sobre %s: %s", dispute_id, fila.checkout_id, hecho)
     return (
         f"⚠️ Disputa {dispute_id} ({motivo}): {fila.codigo_producto} {fila.checkout_id}, "
@@ -135,9 +147,9 @@ def _revocar_lo_que_queda(fila, disputa, monto) -> str:
     aunque Stripe dispute el cargo entero. Guarda en `disputa` qué hizo, para
     deshacer exactamente eso si Stripe devuelve los fondos."""
     sin_devolver = max(0, devoluciones.pagado(fila) - fila.reembolsado_centavos)
-    if not sin_devolver and not devoluciones.quedan(fila):
-        return "ya reembolsada; no se revoca de nuevo. Mail bloqueado"
     unidades = devoluciones.quedan(fila)
+    if not sin_devolver and not unidades:
+        return "ya reembolsada; no se revoca de nuevo. Mail bloqueado"
     revocado = None
     if unidades:
         revocado = devoluciones.revocar_unidades(fila, unidades, f"stripe:dispute:{disputa.dispute_id}")
@@ -175,11 +187,11 @@ def _reponer(fila_pk, dispute_id) -> str | None:
             logger.info("disputa %s ya repuesta", dispute_id)
             return None
 
-        _bloquear_mail(disputa.email)
+        bloqueo = _lockear_bloqueo(disputa.email)
         estado = _devolver_lo_revocado(fila, disputa)
         disputa.estado, disputa.resuelta_at = Disputa.RESUELTA, timezone.now()
         disputa.save(update_fields=["estado", "resuelta_at"])
-        mail = _desbloquear_si_no_quedan_abiertas(disputa.email)
+        mail = _desbloquear_si_no_quedan_abiertas(disputa.email, bloqueo)
         # La marca ya no dice nada cierto: dejada puesta haría que un
         # `completed` reentregado avisara «compra ya disputada» sobre una que
         # no lo está. En el mismo átomo que la reposición.
@@ -231,17 +243,17 @@ def _devolver_lo_revocado(fila, disputa) -> str:
     return "repuesto"
 
 
-def _desbloquear_si_no_quedan_abiertas(email: str) -> str:
+def _desbloquear_si_no_quedan_abiertas(email: str, bloqueo) -> str:
     """Libera el mail si ya no le queda ninguna disputa abierta, y dice qué
-    pasó. Un bloqueo puesto a mano (otro `motivo`) no lo levanta una disputa.
-    Corre con la fila de `MailBloqueado` lockeada (`_bloquear_mail`)."""
+    pasó. Sólo borra `bloqueo`, la fila que esta reposición lockeó. Un
+    bloqueo puesto a mano (otro `motivo`) no lo levanta una disputa."""
     if not email:
         return "sin mail bloqueado"
     if Disputa.objects.filter(email=email, estado=Disputa.ABIERTA).exists():
         return "el mail sigue bloqueado: tiene otra disputa abierta"
-    borrados, _ = MailBloqueado.objects.filter(email=email, motivo="disputa").delete()
-    if borrados:
-        return "mail desbloqueado"
-    if MailBloqueado.bloqueado(email):
+    if bloqueo is None:
+        return "el mail no estaba bloqueado"
+    if bloqueo.motivo != "disputa":
         return "el mail sigue bloqueado: el bloqueo es a mano"
-    return "el mail no estaba bloqueado"
+    bloqueo.delete()
+    return "mail desbloqueado"

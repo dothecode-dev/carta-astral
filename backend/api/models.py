@@ -758,6 +758,32 @@ class MailBloqueado(models.Model):
         return f"{self.email} ({self.motivo})"
 
 
+class Reembolso(models.Model):
+    """Un `refund.created` de Stripe ya aplicado a una compra: la constancia
+    de idempotencia del reembolso, aunque no haya revocado nada (no quedaban
+    unidades, o un combo devuelto a medias). Antes la constancia era el
+    `Movimiento` de `canje.revocar`, que obligaba a llamarlo con 0 unidades:
+    eso sumaba al contador de reembolsos de la cuenta, que con tres la marca
+    `flagged` y le cierra el checkout (revisión del 18-10-2026)."""
+
+    refund_id = models.CharField(max_length=100, unique=True)
+    fila = models.ForeignKey(
+        "PasarelaCheckout", null=True, on_delete=models.SET_NULL, related_name="reembolsos",
+    )
+    monto = models.PositiveIntegerField()
+    # Unidades que cubre este reembolso: las que revocó más las que tomó de
+    # una disputa abierta que ya las había revocado.
+    unidades = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "reembolso"
+        verbose_name_plural = "reembolsos"
+
+    def __str__(self):
+        return f"{self.refund_id} ({self.monto})"
+
+
 class Disputa(models.Model):
     """Una disputa de Stripe sobre una compra nuestra, y lo que se hizo con
     ella (RF15). Es la constancia de que el evento ya se aplicó: la marca

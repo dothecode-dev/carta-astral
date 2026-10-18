@@ -558,7 +558,10 @@ class DisputaAdmin(admin.ModelAdmin):
     lectura: la escribe el webhook, y editarla a mano rompería la
     idempotencia de los eventos que Stripe reentrega."""
 
-    list_display = ("dispute_id", "estado", "email", "fila", "unidades_revocadas", "monto_anotado", "created_at")
+    list_display = (
+        "dispute_id", "estado", "email", "fila", "revocado_codigo", "revocado_cantidad", "revocado_entera",
+        "unidades_revocadas", "monto_anotado", "created_at",
+    )
     list_select_related = ("fila",)
     list_filter = ("estado",)
     search_fields = ("dispute_id", "email")

@@ -598,3 +598,101 @@ def test_reposicion_sin_mail_bloqueado_no_dice_que_sigue_bloqueado(client, monke
 
     resuelta = [a for a in avisos_enviados if "resuelta a favor" in a]
     assert resuelta and "sigue bloqueado" not in resuelta[0]
+
+
+# --- Tercera revisión del 18-10-2026: constancia de cada reembolso ----------
+
+
+def test_un_reembolso_que_ya_no_tiene_unidades_no_suma_al_contador_ni_deja_revocacion_vacia(
+    client, compra_acreditada,
+):
+    from api.models import Account
+
+    _refund(client, "re_a", 1000, moneda="brl")
+    _refund(client, "re_b", 1000, moneda="brl")
+    _refund(client, "re_b", 1000, moneda="brl")  # reentrega
+
+    cuenta = Account.objects.get(pk=compra_acreditada.account_id)
+    compra_acreditada.refresh_from_db()
+    assert cuenta.refund_count == 1
+    assert Movimiento.objects.filter(account=cuenta, tipo="revocacion").count() == 1
+    assert compra_acreditada.reembolsado_centavos == 2000
+
+
+def test_reembolso_entre_disputa_ganada_y_su_reposicion_no_deja_producto_y_plata(
+    client, pack_acreditado, avisos_enviados,
+):
+    """Stripe no ordena los eventos: el reembolso de una disputa ya ganada puede
+    llegar antes que `funds_reinstated`. Las unidades que la disputa revocó
+    pasan a cubrir el reembolso, y la reposición devuelve sólo lo que sobra."""
+    _disputa(client, amount=12500, currency="usd")
+    _refund(client, "re_x", 2500)
+    _disputa(client, tipo="charge.dispute.funds_reinstated", currency="usd")
+
+    pack_acreditado.refresh_from_db()
+    assert _restante(pack_acreditado.account) == 4
+    assert pack_acreditado.unidades_revocadas == 1
+    assert pack_acreditado.reembolsado_centavos == 2500
+
+
+def test_reembolso_total_entre_disputa_y_reposicion_no_repone_nada(client, pack_acreditado, avisos_enviados):
+    _disputa(client, amount=12500, currency="usd")
+    _refund(client, "re_x", 12500)
+    _disputa(client, tipo="charge.dispute.funds_reinstated", currency="usd")
+
+    pack_acreditado.refresh_from_db()
+    assert _restante(pack_acreditado.account) == 0
+    assert pack_acreditado.unidades_revocadas == 5
+    assert pack_acreditado.reembolsado_centavos == 12500
+
+
+def test_un_combo_reembolsado_a_medias_anota_el_monto_una_vez_y_avisa(client, make_account, monkeypatch, avisos_enviados):
+    from django.utils import timezone
+
+    from api import catalogo
+
+    combo = catalogo.Producto(
+        "combo_x", {"usd": 1000}, catalogo.CONSUMIBLE, ("leer_informe",),
+        (("informe_natal", 1), ("informe_vinculo", 1)),
+    )
+    monkeypatch.setitem(catalogo.CATALOGO, "combo_x", combo)
+    cuenta = make_account(email="ana@mail.com")
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_combo", account=cuenta, codigo_producto="combo_x", moneda="usd",
+        precio_centavos=1000, payment_intent="pi_1", acreditado_at=timezone.now(),
+    )
+
+    _refund(client, "re_c", 400)
+    _refund(client, "re_c", 400)
+
+    fila.refresh_from_db()
+    assert fila.reembolsado_centavos == 400
+    assert fila.unidades_revocadas == 0
+    assert len([a for a in avisos_enviados if "re_c" in a]) == 1
+
+
+def test_disputa_en_otra_moneda_antes_del_pago_no_entrega_hasta_que_se_resuelve(
+    client, monkeypatch, make_account, make_chart, avisos_enviados, sin_hilo,
+):
+    cuenta = make_account(email="ana@mail.com")
+    PasarelaCheckout.objects.create(
+        checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
+        precio_centavos=14900, sujeto=sujeto_natal(make_chart(account=cuenta)),
+    )
+    monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
+    _disputa(client, currency="usd")
+
+    sesion = {
+        "id": "cs_du", "payment_status": "paid", "currency": "brl", "amount_subtotal": 14900,
+        "amount_total": 14900, "total_details": {"amount_tax": 0, "amount_discount": 0},
+        "payment_intent": "pi_1", "metadata": {},
+        "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
+    }
+    monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _sid: sesion)
+    cuerpo = json.dumps({"id": "evt_c", "type": "checkout.session.completed", "data": {"object": {"id": "cs_du"}}}).encode()
+    client.post(URL, data=cuerpo, content_type="application/json", HTTP_STRIPE_SIGNATURE=firmar(cuerpo))
+    assert PasarelaCheckout.objects.get(checkout_id="cs_du").acreditado_at is None
+
+    _disputa(client, tipo="charge.dispute.funds_reinstated", currency="usd")
+    client.post(URL, data=cuerpo, content_type="application/json", HTTP_STRIPE_SIGNATURE=firmar(cuerpo))
+    assert PasarelaCheckout.objects.get(checkout_id="cs_du").acreditado_at is not None

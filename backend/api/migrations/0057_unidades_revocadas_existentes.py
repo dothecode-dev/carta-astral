@@ -3,27 +3,28 @@
 Se deduce del monto devuelto con el mismo redondeo que usaba el webhook. Con
 un solo reembolso por compra es exacto; con varios parciales puede quedar por
 debajo de lo que de verdad se revocó, que es justo el error que el campo nuevo
-evita de acá en adelante. Un combo devuelto a medias no se revocaba: queda 0.
+evita de acá en adelante.
 """
 
 from django.db import migrations
 
 
-def completar(apps, schema_editor):
-    from api import catalogo
+# Congelado del catálogo al 18-10-2026: una migración de datos no puede
+# depender del catálogo vigente el día que corra. Unidades que otorga cada
+# producto; ningún combo existe a esta fecha.
+UNIDADES = {"lectura_breve": 1, "informe_natal": 1, "pack_3_natal": 3, "pack_5_natal": 5, "informe_vinculo": 1}
 
+
+def completar(apps, schema_editor):
     PasarelaCheckout = apps.get_model("api", "PasarelaCheckout")
     for fila in PasarelaCheckout.objects.filter(reembolsado_centavos__gt=0):
-        prod = catalogo.CATALOGO.get(fila.codigo_producto)
-        if prod is None:
+        total = UNIDADES.get(fila.codigo_producto)
+        if total is None or fila.precio_centavos is None:
+            # La 0037 completó `precio_centavos` en todas las filas viejas.
             continue
-        total = prod.otorga[0][1] if len(prod.otorga) == 1 else 1
-        precio = fila.precio_centavos if fila.precio_centavos is not None else prod.precios.get(fila.moneda, 0)
-        pagado = precio - fila.descuento_centavos
+        pagado = fila.precio_centavos - fila.descuento_centavos
         if pagado <= 0 or fila.reembolsado_centavos >= pagado:
             unidades = total
-        elif len(prod.otorga) != 1:
-            unidades = 0
         else:
             unidades = min(total, -(-fila.reembolsado_centavos * total // pagado))
         PasarelaCheckout.objects.filter(pk=fila.pk).update(unidades_revocadas=unidades)
