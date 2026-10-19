@@ -459,3 +459,38 @@ def test_contracargo_por_exactamente_lo_pagado_revoca(client, api_mp, avisos, ac
 
     assert _notificar_contracargo(client).status_code == 200
     assert Disputa.objects.get().monto_anotado == PRECIO_ARS
+
+
+# --- code review D: la moneda del contracargo ---------------------------------------------
+
+
+def test_contracargo_en_otra_moneda_registra_bloquea_y_no_revoca(client, api_mp, avisos, acreditada):
+    """La guarda de moneda de `disputas._retirar` recibe la moneda del
+    contracargo, no "ars" fijo: en otra moneda no se comparan montos."""
+    api_mp.contracargos[CONTRACARGO] = {**_contracargo(), "currency": "USD"}
+
+    r = _notificar_contracargo(client)
+
+    assert r.status_code == 200
+    assert Disputa.objects.filter(dispute_id=f"mp:chargeback:{CONTRACARGO}").exists()
+    assert _restante(acreditada) == 1
+    assert MailBloqueado.bloqueado(MAIL)
+    assert len(avisos) == 1 and "usd" in avisos[0] and "resolver a mano" in avisos[0]
+
+
+@pytest.mark.parametrize("moneda", [None, "", 840, "dólares", "US"])
+def test_contracargo_sin_moneda_valida_avisa_y_no_revoca(client, api_mp, avisos, acreditada, moneda):
+    contracargo = _contracargo()
+    if moneda is None:
+        del contracargo["currency"]
+    else:
+        contracargo["currency"] = moneda
+    api_mp.contracargos[CONTRACARGO] = contracargo
+
+    r = _notificar_contracargo(client)
+
+    assert r.status_code == 200
+    assert not Disputa.objects.exists()
+    assert _restante(acreditada) == 1
+    assert not MailBloqueado.bloqueado(MAIL)
+    assert len(avisos) == 1 and "a mano" in avisos[0]

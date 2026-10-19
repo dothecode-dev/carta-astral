@@ -96,6 +96,9 @@ class FilaInexistente(Exception):
 #: aunque empiece con `mp_`, es de otra integración de la misma cuenta.
 _REFERENCIA_NUESTRA = re.compile(r"mp_[0-9a-f]{32}")
 
+#: Un código de moneda ISO 4217 como lo informa MP (`ARS`).
+_MONEDA = re.compile(r"[A-Za-z]{3}")
+
 #: Estados conocidos de un reembolso de MP que no devolvieron plata (todavía o
 #: nunca). Sólo `approved` revoca; un estado fuera de los dos conjuntos se avisa.
 _REEMBOLSO_SIN_EFECTO = {"rejected", "cancelled", "in_process", "pending"}
@@ -327,8 +330,9 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
         raise ContracargoSinCompra(chargeback_id)
 
     monto = _centavos(contracargo["amount"])
+    moneda = contracargo["currency"].lower()
     pagado = devoluciones.pagado(fila)
-    if monto > pagado:
+    if moneda == fila.moneda and monto > pagado:
         # Un contracargo por más de lo que se cobró no es creíble.
         _contracargo_a_mano(
             chargeback_id, payment_id, f"el monto ({monto} centavos) supera lo pagado ({pagado}) en {fila.checkout_id}",
@@ -336,7 +340,9 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
         return
 
     dispute_id = f"mp:chargeback:{chargeback_id}"
-    aviso = disputas._retirar(fila.pk, None, dispute_id, monto, "ars", "contracargo MP")
+    # La moneda del contracargo, no la de la fila: si no coinciden, `_retirar`
+    # registra y bloquea sin comparar montos ni revocar.
+    aviso = disputas._retirar(fila.pk, None, dispute_id, monto, moneda, "contracargo MP")
     if aviso is None:
         # D3 (spec de cobro en pesos): qué campos dicen que un contracargo se
         # resolvió a favor no se pudo medir en el sandbox, así que la
@@ -374,6 +380,9 @@ def _forma_invalida(contracargo) -> str:
         return f"`amount` inválido ({monto!r})"
     if centavos <= 0:
         return f"`amount` no positivo ({monto!r})"
+    moneda = contracargo.get("currency")
+    if not isinstance(moneda, str) or not _MONEDA.fullmatch(moneda):
+        return f"`currency` inválida ({moneda!r})"
     return ""
 
 
