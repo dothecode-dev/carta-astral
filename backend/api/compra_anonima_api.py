@@ -27,6 +27,7 @@ from api.checkout import (
     respuesta_de_stripe,
 )
 from api.identity import normalizar
+from api.models import MailBloqueado
 from api.pasarelas import mercadopago_api
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,12 @@ class CheckoutAnonimoView(APIView):
                     {"error": "hace falta un mail válido", "motivo": "email_invalido"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            # Como `CheckoutView` con una cuenta bloqueada, y antes de guardar
+            # la carta o abrir la preferencia (decisión de Gustavo, 19-10). En
+            # dólares el mail no se pide y Stripe sigue como estaba.
+            if MailBloqueado.bloqueado(email):
+                logger.warning("checkout anónimo en pesos con un mail bloqueado: no se abre")
+                return Response({"error": "cuenta bloqueada", "motivo": "bloqueado"}, status=status.HTTP_403_FORBIDDEN)
         # Misma validación que la vista previa (`calcular`), ANTES de crear
         # nada. Sin `exc_info` ni payload en el log: es la fecha de nacimiento
         # de alguien que todavía no aceptó nada.

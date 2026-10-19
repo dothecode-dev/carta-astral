@@ -123,3 +123,47 @@ def test_usd_sin_email_sigue_como_hoy(client, monkeypatch, mp):
     fila = PasarelaCheckout.objects.get()
     assert fila.pasarela == PasarelaCheckout.STRIPE and fila.mail_comprador == ""
     assert mp == []
+
+
+# --- code review F: mail bloqueado (decisión de Gustavo, 19-10) ---------------------------
+
+
+def test_ars_con_mail_bloqueado_es_403_sin_crear_nada(client, mp, stripe_prohibido):
+    """Mismo 403 que `CheckoutView` le da a una cuenta bloqueada, antes de
+    guardar la carta y de abrir la preferencia."""
+    from api.models import MailBloqueado
+
+    MailBloqueado.bloquear("ana@example.com", "disputa")
+
+    r = _post(client, {**DATOS, "moneda": "ars", "email": " Ana@Example.com "})
+
+    assert r.status_code == 403
+    assert r.json() == {"error": "cuenta bloqueada", "motivo": "bloqueado"}
+    assert mp == [] and PasarelaCheckout.objects.count() == 0 and Chart.objects.count() == 0
+
+
+def test_ars_con_otro_mail_bloqueado_abre(client, mp, stripe_prohibido):
+    from api.models import MailBloqueado
+
+    MailBloqueado.bloquear("otra@example.com", "disputa")
+
+    r = _post(client, {**DATOS, "moneda": "ars", "email": "ana@example.com"})
+
+    assert r.status_code == 200 and len(mp) == 1
+
+
+def test_usd_ignora_el_mail_bloqueado_como_hoy(client, monkeypatch, mp):
+    """En dólares el mail no se pide: el flujo de Stripe no cambia (el mail
+    bloqueado lo ve el webhook al adjudicar)."""
+    from api.models import MailBloqueado
+
+    class _Sesion:
+        id = "cs_test_1"
+        url = "https://checkout.stripe.com/c/pay/cs_test_1"
+
+    monkeypatch.setattr(stripe_client.stripe.checkout.Session, "create", staticmethod(lambda **p: _Sesion()))
+    MailBloqueado.bloquear("ana@example.com", "disputa")
+
+    r = _post(client, {**DATOS, "moneda": "usd", "email": "ana@example.com"})
+
+    assert r.status_code == 200
