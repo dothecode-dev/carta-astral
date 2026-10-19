@@ -35,6 +35,7 @@ from api.vinculo_api import (
 )
 from api.vinculo_pdf import VinculoPdfView
 from api.webhooks import RevenueCatWebhookView
+from api.webhooks_mercadopago import MercadoPagoWebhookView
 from api.webhooks_resend import ResendWebhookView
 from api.webhooks_stripe import StripeWebhookView
 
@@ -54,6 +55,7 @@ urlpatterns = [
     path("cupones/<str:codigo>/", CuponPublicoView.as_view()),
     path("webhooks/stripe/", StripeWebhookView.as_view()),
     path("webhooks/resend/", ResendWebhookView.as_view()),
+    path("webhooks/mercadopago/", MercadoPagoWebhookView.as_view()),
     path("charts/", ChartCollectionView.as_view()),
     path("charts/preview/", ChartPreviewView.as_view()),
     path("lectura-anonima/", LecturaAnonimaView.as_view()),
