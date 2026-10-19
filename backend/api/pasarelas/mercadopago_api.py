@@ -6,7 +6,7 @@ la API, el status y el método/ruta.
 """
 
 import logging
-from urllib.parse import quote
+import re
 from typing import Any
 
 import httpx
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.mercadopago.com"
 _TIMEOUT = httpx.Timeout(15.0)
+_ID_VALIDO = re.compile(r"[A-Za-z0-9_-]+")
 
 
 class MPNoConfigurado(Exception):
@@ -31,8 +32,15 @@ class MPError(Exception):
 
 
 def _seg(valor: str) -> str:
-    """Un id que viene de un webhook va como UN segmento de la ruta, nunca como ruta."""
-    return quote(str(valor), safe="")
+    """Valida un id que viene de un webhook antes de usarlo como segmento de ruta.
+
+    Sólo `[A-Za-z0-9_-]`: escapar no alcanza, `.` y `..` siguen siendo un
+    segmento que httpx normaliza hacia otra ruta. Si no cumple, no hay pedido.
+    """
+    texto = str(valor)
+    if not _ID_VALIDO.fullmatch(texto):
+        raise MPError("id inválido")
+    return texto
 
 
 def _cliente() -> httpx.Client:

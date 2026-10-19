@@ -2,7 +2,6 @@
 
 import json
 import logging
-from urllib.parse import quote
 
 import httpx
 import pytest
@@ -96,17 +95,27 @@ def test_buscar_pagos_devuelve_results(transporte):
     assert transporte[0].url.params["external_reference"] == "ref-1"
 
 
-@pytest.mark.parametrize(
-    "funcion", [mp.obtener_pago, mp.obtener_contracargo, lambda i: mp.reembolsar(i, "k")]
-)
-@pytest.mark.parametrize("malicioso", ["1/refunds", "../x", "1?a=b"])
-def test_id_malicioso_queda_en_un_solo_segmento(transporte, funcion, malicioso):
+_FUNCIONES_CON_ID = [
+    mp.obtener_pago,
+    mp.obtener_contracargo,
+    lambda i: mp.reembolsar(i, "k"),
+]
+
+
+@pytest.mark.parametrize("funcion", _FUNCIONES_CON_ID)
+@pytest.mark.parametrize("malicioso", [".", "..", "1/refunds", "../x", "1?a=b", ""])
+def test_id_invalido_levanta_sin_hacer_pedido(transporte, funcion, malicioso):
+    with pytest.raises(mp.MPError) as info:
+        funcion(malicioso)
+    assert info.value.status is None
+    assert len(transporte) == 0
+
+
+@pytest.mark.parametrize("funcion", _FUNCIONES_CON_ID)
+def test_id_numerico_normal_funciona(transporte, funcion):
     transporte.responder(lambda req: httpx.Response(200, json={}))
-    funcion(malicioso)
-    ruta = transporte[0].url.raw_path.decode().split("?")[0]
-    # El id es UN segmento, escapado: la ruta no gana ni pierde barras.
-    assert quote(malicioso, safe="") in ruta.split("/")
-    assert ruta.count("/") == (4 if ruta.endswith("/refunds") else 3)
+    funcion("184963579792")
+    assert "/184963579792" in transporte[0].url.path
 
 
 def test_json_que_no_es_objeto_levanta_mperror(transporte):
