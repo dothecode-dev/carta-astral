@@ -262,14 +262,14 @@ class PasarelaCheckoutAdmin(SoloLectura):
     encuentra. Sin el nonce: aunque está hasheado, no le sirve a soporte."""
 
     list_display = (
-        "checkout_id", "account", "codigo_producto", "moneda", "anonimo", "cuenta_nueva",
+        "checkout_id", "account", "pasarela", "codigo_producto", "moneda", "anonimo", "cuenta_nueva",
         "acreditado_at", "canjeado_at", "vencido_at", "saldo_deuda", "created_at",
     )
-    list_filter = ("anonimo", "codigo_producto")
+    list_filter = ("pasarela", "anonimo", "codigo_producto")
     search_fields = ("checkout_id", "account__email")
     readonly_fields = list_display + (
         "sujeto", "locale", "cupon", "precio_centavos", "descuento_centavos",
-        "reembolsado_centavos", "payment_intent",
+        "reembolsado_centavos", "payment_intent", "mail_comprador", "mp_preferencia_id", "mp_revisado_at",
     )
     fields = readonly_fields
 

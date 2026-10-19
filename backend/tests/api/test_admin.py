@@ -159,6 +159,25 @@ def test_una_compra_se_encuentra_por_el_numero_abreviado_de_la_web(admin_montado
     assert c.get(f"/panel-test/api/pasarelacheckout/{fila.pk}/change/").status_code == 200
 
 
+@pytest.mark.django_db
+@sin_manifiesto
+def test_la_ficha_de_una_compra_de_mp_muestra_sus_campos(admin_montado):
+    """Soporte de una compra en pesos: pasarela, el mail que pidió el
+    formulario, la preferencia y cuándo la cerró el cron."""
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="mp_" + "a" * 32, codigo_producto="informe_natal", moneda="ars",
+        pasarela=PasarelaCheckout.MERCADOPAGO, mp_preferencia_id="pref-ficha-1", mail_comprador="ficha@example.com",
+    )
+    staff = User.objects.create_superuser("staff6", "s6@x.com", "pw-de-test-12345")
+    c = Client()
+    c.force_login(staff)
+
+    cuerpo = c.get(f"/panel-test/api/pasarelacheckout/{fila.pk}/change/").content.decode()
+
+    for texto in ("pref-ficha-1", "ficha@example.com", "mp_revisado_at", "mercadopago"):
+        assert texto in cuerpo
+
+
 def test_la_ficha_de_cuenta_muestra_la_deuda():
     """`deuda` es lo que la cuenta debe tras un reembolso de algo que ya
     consumió: desde que salieron los dos contadores viejos era el único

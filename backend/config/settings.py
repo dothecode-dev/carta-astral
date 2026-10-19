@@ -553,7 +553,9 @@ VINCULO_PREVIEW_ENABLED = os.environ.get("VINCULO_PREVIEW_ENABLED", "0") == "1"
 # (RF19, RF25). Se enciende junto con VINCULO_PREVIEW_ENABLED, nunca uno solo.
 VINCULO_ENABLED = os.environ.get("VINCULO_ENABLED", "0") == "1"
 # Cobro en pesos argentinos por Mercado Pago, al lado de Stripe. Apagado
-# (default), nadie ve la opción y el webhook de MP no acredita nada.
+# (default), nadie ve los pesos ni puede abrir un checkout en pesos. El webhook
+# de MP y el cron `vencer_checkouts` NO miran el flag: un pago que ya entró se
+# acredita igual, aunque el flag se haya apagado después de abrirlo.
 COBRO_ARS_ENABLED = os.environ.get("COBRO_ARS_ENABLED", "0") == "1"
 MP_ACCESS_TOKEN = os.environ.get("MP_ACCESS_TOKEN", "")
 MP_WEBHOOK_SECRET = os.environ.get("MP_WEBHOOK_SECRET", "")
