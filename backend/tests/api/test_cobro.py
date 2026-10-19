@@ -77,9 +77,10 @@ def _acreditar(fila, pago_id="111", monto=PRECIO_ARS, moneda="ars", medio="accou
     )
 
 
-def _reembolsar(fila, refund_id="900", monto=PRECIO_ARS, moneda="ars"):
+def _reembolsar(fila, refund_id="900", monto=PRECIO_ARS, moneda="ars", pago_id="111"):
     return cobro.reembolsar(
-        fila, refund_id=refund_id, monto=monto, moneda=moneda, external_id=f"mp:refund:{refund_id}",
+        fila, pago_id=pago_id, refund_id=refund_id, monto=monto, moneda=moneda,
+        external_id=f"mp:refund:{refund_id}",
     )
 
 
@@ -329,6 +330,66 @@ def test_reembolso_en_otra_moneda_no_revoca_y_avisa(acreditada, avisos):
     assert not Movimiento.objects.filter(tipo="revocacion").exists()
     assert not Reembolso.objects.exists()
     assert len(avisos) == 1 and "usd" in avisos[0]
+
+
+@pytest.mark.django_db
+def test_reembolso_del_pago_duplicado_no_revoca_la_compra_legitima(acreditada, avisos):
+    """Ruling 4: reembolsamos el pago 222 (duplicado de una fila acreditada
+    con 111) y MP avisa `refunded` con la misma external_reference. Ese
+    reembolso no es de la compra: no puede revocar el informe pagado con 111."""
+    _reembolsar(acreditada, refund_id="901", pago_id="222")
+
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
+    assert not Movimiento.objects.filter(tipo="revocacion").exists()
+    assert not Reembolso.objects.exists()
+    acreditada.refresh_from_db()
+    assert acreditada.reembolsado_centavos == 0 and acreditada.unidades_revocadas == 0
+    assert len(avisos) == 1
+    assert "reembolso de un pago no acreditado (duplicado)" in avisos[0]
+    assert "222" in avisos[0] and "111" in avisos[0] and "mp:refund:901" in avisos[0]
+
+
+@pytest.mark.django_db
+def test_reembolso_sobre_una_fila_sin_acreditar_no_revoca(make_account, avisos):
+    """Una fila sin acreditar tiene `payment_intent` vacío: ningún pago es suyo."""
+    fila = _fila(make_account())
+
+    _reembolsar(fila, pago_id="111")
+
+    assert not Movimiento.objects.filter(tipo="revocacion").exists()
+    assert not Reembolso.objects.exists()
+    assert len(avisos) == 1 and "reembolso de un pago no acreditado (duplicado)" in avisos[0]
+
+
+@pytest.mark.django_db
+def test_reembolso_sin_pago_id_no_revoca(make_account, avisos):
+    """Un `pago_id` vacío coincidiría con el `payment_intent` vacío de una
+    fila sin acreditar: se rechaza antes de mirar la fila."""
+    fila = _fila(make_account())
+
+    _reembolsar(fila, pago_id="")
+
+    assert not Movimiento.objects.filter(tipo="revocacion").exists()
+    assert not Reembolso.objects.exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("pago_id, external_id", [("", "mp:payment:111"), ("111", "")])
+def test_acreditar_sin_ids_no_otorga_y_avisa(make_account, avisos, mails, pago_id, external_id):
+    """Sin `pago_id` no hay a qué atribuir un reembolso; sin `external_id` el
+    primero se guardaría con "" y todos los siguientes se darían por aplicados."""
+    cuenta = make_account()
+    fila = _fila(cuenta)
+
+    assert cobro.acreditar(
+        fila, pago_id=pago_id, monto_pagado=PRECIO_ARS, moneda="ars", medio="x", external_id=external_id,
+    ) is False
+
+    assert not Movimiento.objects.filter(account=cuenta, tipo="otorgamiento", origen="compra").exists()
+    fila.refresh_from_db()
+    assert fila.acreditado_at is None
+    assert len(avisos) == 1
+    assert mails == []
 
 
 # --- concurrencia (sólo Postgres) ----------------------------------------------------------

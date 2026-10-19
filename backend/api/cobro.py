@@ -13,9 +13,9 @@ entonces, un arreglo en uno de los dos lados hay que llevarlo al otro.
 
 Política de errores, que quien llama traduce a su respuesta HTTP:
 
-- `return False` (con aviso al admin): fallo DEFINITIVO —moneda o monto que no
-  cierran, compra sin cuenta— o un reintento de algo ya aplicado. Reintentar
-  no lo arregla: 200.
+- `return False` con aviso al admin: fallo DEFINITIVO —ids vacíos, moneda o
+  monto que no cierran, compra sin cuenta—. Reintentar no lo arregla: 200.
+- `return False` SIN aviso: un reintento del mismo pago, ya aplicado. 200.
 - `CompraDisputada`, `PagoDuplicado`: definitivos también, pero quien llama
   tiene que actuar (avisar; reembolsar el duplicado). Acá no se avisa, para
   que el aviso salga una sola vez y diga lo que se hizo.
@@ -75,6 +75,18 @@ def acreditar(
     prefijo de la pasarela (`mp:payment:<id>`); `pago_id` queda en
     `fila.payment_intent` para atribuir después los reembolsos.
     """
+    if not pago_id or not external_id:
+        # Sin `pago_id` ningún reembolso se podría atribuir a esta compra; sin
+        # `external_id` el ledger guardaría "" y daría por aplicado el siguiente.
+        logger.error(
+            "compra %s: pago sin id (pago_id=%r, external_id=%r): no se acredita",
+            fila.checkout_id, pago_id, external_id,
+        )
+        avisar(
+            f"Compra {fila.checkout_id}: llegó un pago sin id (pago_id={pago_id!r}, "
+            f"external_id={external_id!r}). No se acreditó.",
+        )
+        return False
     _adjudicar_si_es_anonima(fila)
     cuenta = fila.account
     if cuenta is None:
@@ -221,18 +233,29 @@ def _marcar_saldo_deuda(fila) -> None:
     fila.saldo_deuda = True
 
 
-def reembolsar(fila: PasarelaCheckout, *, refund_id: str, monto: int, moneda: str, external_id: str) -> None:
+def reembolsar(
+    fila: PasarelaCheckout, *, pago_id: str, refund_id: str, monto: int, moneda: str, external_id: str,
+) -> None:
     """Revoca lo comprado y anota como deuda lo que ya se usó.
 
     Nunca se le quita a nadie un informe entregado: `canje.revocar` baja el
     derecho hasta donde alcanza y el resto queda como deuda. `external_id`
     (`mp:refund:<id>`) es la constancia en `Reembolso.refund_id` y la clave
     del ledger: prefijado, no choca con los ids de Stripe ni con el del pago.
+
+    `pago_id` es el pago reembolsado, y tiene que ser EL que acreditó la fila
+    (`fila.payment_intent`, Ruling 4). En MP una preferencia admite más de un
+    pago: el duplicado que reembolsamos (`PagoDuplicado`) vuelve como
+    `refunded` con la misma external_reference, y sin este chequeo revocaba el
+    informe comprado con el pago legítimo.
     """
-    if not refund_id or not external_id:
+    if not refund_id or not external_id or not pago_id:
         # Sin id no hay constancia posible: el primero se guardaría con "" y
-        # todos los siguientes se darían por aplicados.
-        logger.error("reembolso sin id sobre %s: no se aplica", fila.checkout_id)
+        # todos los siguientes se darían por aplicados. Sin `pago_id`, un ""
+        # coincidiría con el `payment_intent` vacío de una fila sin acreditar.
+        logger.error(
+            "reembolso sin id sobre %s (refund=%r, pago=%r): no se aplica", fila.checkout_id, refund_id, pago_id,
+        )
         return
 
     # Los montos sólo se comparan en la moneda de la compra.
@@ -254,37 +277,58 @@ def reembolsar(fila: PasarelaCheckout, *, refund_id: str, monto: int, moneda: st
         # actualiza, y dos reembolsos (o un reembolso y una disputa) pueden
         # llegar a la vez. `of=("self",)`: `account` es nullable.
         fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila.pk)
-        if Reembolso.objects.filter(refund_id=external_id).exists():
+        if fila.payment_intent != pago_id:
+            # Incluye la fila sin acreditar (`payment_intent` vacío): ningún
+            # pago es suyo. No se revoca ni se deja `Reembolso`.
+            logger.error(
+                "reembolso %s del pago %s sobre %s, acreditada por %r: no se revoca",
+                external_id, pago_id, fila.checkout_id, fila.payment_intent,
+            )
+            aviso = (
+                f"Compra {fila.checkout_id}: reembolso de un pago no acreditado (duplicado). "
+                f"Reembolso {external_id} del pago {pago_id}; la compra la acreditó el pago "
+                f"{fila.payment_intent or '(ninguno)'}. No se revocó nada."
+            )
+        elif Reembolso.objects.filter(refund_id=external_id).exists():
             logger.info("reembolso %s ya aplicado", external_id)
             return
-        prod = catalogo.producto(fila.codigo_producto)
-        base = devoluciones.pagado(fila)
-        if not devoluciones.cubre_todo(fila, monto) and len(prod.otorga) != 1:
-            # Un combo devuelto a medias no tiene respuesta obvia: no se revoca
-            # nada, pero el monto se anota y queda la constancia.
-            Reembolso.objects.create(refund_id=external_id, fila=fila, monto=monto)
-            devoluciones.registrar(fila, 0, monto)
-            logger.error("reembolso %s parcial sobre el combo %s: no se revoca", external_id, fila.codigo_producto)
-            aviso = (
-                f"Reembolso {external_id}: parcial ({monto} {fila.moneda}) sobre el combo "
-                f"{fila.codigo_producto} {fila.checkout_id}. No se revocó nada: resolver a mano."
-            )
         else:
-            aviso = None
-            # Proporción redondeada HACIA ARRIBA y nunca más de lo que queda
-            # sin revocar (ver `devoluciones`).
-            pedidas = devoluciones.unidades_pedidas(fila, monto)
-            unidades = min(pedidas, devoluciones.quedan(fila))
-            if unidades and devoluciones.revocar_unidades(fila, unidades, external_id) is None:
-                logger.info("reembolso %s ya revocado en el ledger", external_id)
-                return
-            tomadas, cedido = disputas.ceder_a_reembolso(fila, pedidas - unidades, monto)
-            Reembolso.objects.create(refund_id=external_id, fila=fila, monto=monto, unidades=unidades + tomadas)
-            # Lo que la disputa ya había anotado de este monto no se suma dos veces.
-            devoluciones.registrar(fila, unidades, monto - cedido)
-            logger.info(
-                "reembolso %s (%s de %s): revocadas %s unidades de %s, %s tomadas de una disputa",
-                external_id, monto, base, unidades, fila.codigo_producto, tomadas,
-            )
+            aviso = _revocar(fila, external_id, monto)
+    # Después del commit, una sola vez.
     if aviso:
         avisar(aviso)
+
+
+def _revocar(fila, external_id: str, monto: int) -> str | None:
+    """La revocación de `reembolsar`, con la fila ya bloqueada. Devuelve el
+    aviso a mandar después del commit, si hay."""
+    prod = catalogo.producto(fila.codigo_producto)
+    base = devoluciones.pagado(fila)
+    if not devoluciones.cubre_todo(fila, monto) and len(prod.otorga) != 1:
+        # Un combo devuelto a medias no tiene respuesta obvia: no se revoca
+        # nada, pero el monto se anota y queda la constancia.
+        Reembolso.objects.create(refund_id=external_id, fila=fila, monto=monto)
+        devoluciones.registrar(fila, 0, monto)
+        logger.error("reembolso %s parcial sobre el combo %s: no se revoca", external_id, fila.codigo_producto)
+        aviso = (
+            f"Reembolso {external_id}: parcial ({monto} {fila.moneda}) sobre el combo "
+            f"{fila.codigo_producto} {fila.checkout_id}. No se revocó nada: resolver a mano."
+        )
+    else:
+        aviso = None
+        # Proporción redondeada HACIA ARRIBA y nunca más de lo que queda
+        # sin revocar (ver `devoluciones`).
+        pedidas = devoluciones.unidades_pedidas(fila, monto)
+        unidades = min(pedidas, devoluciones.quedan(fila))
+        if unidades and devoluciones.revocar_unidades(fila, unidades, external_id) is None:
+            logger.info("reembolso %s ya revocado en el ledger", external_id)
+            return None
+        tomadas, cedido = disputas.ceder_a_reembolso(fila, pedidas - unidades, monto)
+        Reembolso.objects.create(refund_id=external_id, fila=fila, monto=monto, unidades=unidades + tomadas)
+        # Lo que la disputa ya había anotado de este monto no se suma dos veces.
+        devoluciones.registrar(fila, unidades, monto - cedido)
+        logger.info(
+            "reembolso %s (%s de %s): revocadas %s unidades de %s, %s tomadas de una disputa",
+            external_id, monto, base, unidades, fila.codigo_producto, tomadas,
+        )
+    return aviso
