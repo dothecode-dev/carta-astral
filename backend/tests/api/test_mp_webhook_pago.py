@@ -31,6 +31,11 @@ def _secreto(settings):
     settings.MP_WEBHOOK_SECRET = SECRETO
 
 
+@pytest.fixture(autouse=True)
+def _cache_limpia(django_cache_cleared):
+    """El aviso de un reembolso no acreditado se deduplica en la caché."""
+
+
 @pytest.fixture
 def avisos(monkeypatch):
     enviados = []
@@ -376,7 +381,7 @@ def test_segundo_pago_y_su_reembolso_no_revocan_la_compra(client, pagos, avisos,
     # Uno por el duplicado y otro por su reembolso ignorado (de `cobro`).
     # Cada notificación repetida de ese reembolso vuelve a avisar: sin dedupe.
     assert len(avisos) == 2
-    assert "DUPLICADO" in avisos[0] and "no acreditado" in avisos[1]
+    assert "DUPLICADO" in avisos[0] and "no acreditó la compra" in avisos[1]
 
 
 @pytest.mark.django_db

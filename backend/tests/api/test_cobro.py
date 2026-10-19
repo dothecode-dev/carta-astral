@@ -23,6 +23,11 @@ PRECIO_ARS = 1_850_000
 CHECKOUT = "mp_test_cobro"
 
 
+@pytest.fixture(autouse=True)
+def _cache_limpia(django_cache_cleared):
+    """El aviso de un reembolso no acreditado se deduplica en la caché."""
+
+
 @pytest.fixture
 def avisos(monkeypatch):
     enviados = []
@@ -441,8 +446,21 @@ def test_reembolso_del_pago_duplicado_no_revoca_la_compra_legitima(acreditada, a
     acreditada.refresh_from_db()
     assert acreditada.reembolsado_centavos == 0 and acreditada.unidades_revocadas == 0
     assert len(avisos) == 1
-    assert "reembolso de un pago no acreditado (duplicado)" in avisos[0]
+    assert "reembolso de un pago que no acreditó la compra" in avisos[0]
+    assert "duplicado" not in avisos[0].lower()
     assert "222" in avisos[0] and "111" in avisos[0] and "mp:refund:901" in avisos[0]
+
+
+@pytest.mark.django_db
+def test_reembolso_no_acreditado_notificado_dos_veces_avisa_una(acreditada, avisos):
+    """Code review G: cada `payment.updated` del pago reembolsado (y cada
+    corrida de la conciliación) repetía el aviso."""
+    _reembolsar(acreditada, refund_id="902", pago_id="222")
+    _reembolsar(PasarelaCheckout.objects.get(pk=acreditada.pk), refund_id="902", pago_id="222")
+    _reembolsar(PasarelaCheckout.objects.get(pk=acreditada.pk), refund_id="903", pago_id="222")
+
+    assert len(avisos) == 2
+    assert "mp:refund:902" in avisos[0] and "mp:refund:903" in avisos[1]
 
 
 @pytest.mark.django_db
@@ -454,7 +472,8 @@ def test_reembolso_sobre_una_fila_sin_acreditar_no_revoca(make_account, avisos):
 
     assert not Movimiento.objects.filter(tipo="revocacion").exists()
     assert not Reembolso.objects.exists()
-    assert len(avisos) == 1 and "reembolso de un pago no acreditado (duplicado)" in avisos[0]
+    assert len(avisos) == 1 and "reembolso de un pago que no acreditó la compra" in avisos[0]
+    assert "duplicado" not in avisos[0].lower()
 
 
 @pytest.mark.django_db

@@ -26,6 +26,7 @@ Política de errores, que quien llama traduce a su respuesta HTTP:
 
 import logging
 
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
@@ -36,6 +37,11 @@ from api.compra_service import arrancar_informe
 from api.models import MailBloqueado, PasarelaCheckout, Reembolso
 
 logger = logging.getLogger(__name__)
+
+#: Cuánto se recuerda que ya se avisó el reembolso de un pago que no acreditó
+#: la compra: cada `payment.updated` de ese pago y cada corrida de la
+#: conciliación lo vuelven a ver.
+_RECORDAR_AVISO_NO_ACREDITADO = 90 * 24 * 60 * 60
 
 
 class CompraDisputada(Exception):
@@ -330,16 +336,24 @@ def reembolsar(
         fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila.pk)
         if fila.payment_intent != pago_id:
             # Incluye la fila sin acreditar (`payment_intent` vacío): ningún
-            # pago es suyo. No se revoca ni se deja `Reembolso`.
+            # pago es suyo. No se revoca ni se deja `Reembolso`. Puede ser el
+            # duplicado que reembolsamos o un pago que no se pudo acreditar
+            # (monto, moneda): acá no se sabe, así que no se lo llama de una
+            # forma ni de la otra.
             logger.error(
                 "reembolso %s del pago %s sobre %s, acreditada por %r: no se revoca",
                 external_id, pago_id, fila.checkout_id, fila.payment_intent,
             )
-            aviso = (
-                f"Compra {fila.checkout_id}: reembolso de un pago no acreditado (duplicado). "
-                f"Reembolso {external_id} del pago {pago_id}; la compra la acreditó el pago "
-                f"{fila.payment_intent or '(ninguno)'}. No se revocó nada."
-            )
+            aviso = None
+            # Sin `Reembolso` no queda constancia en la base: la caché (la de
+            # la base en producción) hace que el aviso salga una vez por
+            # reembolso. `add` es atómico: dos notificaciones a la vez avisan una.
+            if cache.add(f"cobro:aviso:reembolso_no_acreditado:{external_id}", True, _RECORDAR_AVISO_NO_ACREDITADO):
+                aviso = (
+                    f"Compra {fila.checkout_id}: reembolso de un pago que no acreditó la compra. "
+                    f"Reembolso {external_id} del pago {pago_id}; la compra la acreditó el pago "
+                    f"{fila.payment_intent or '(ninguno)'}. No se revocó nada."
+                )
         elif Reembolso.objects.filter(refund_id=external_id).exists():
             logger.info("reembolso %s ya aplicado", external_id)
             return
