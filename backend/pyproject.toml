@@ -96,3 +96,13 @@ name = "la aplicacion no depende del cms"
 type = "forbidden"
 source_modules = ["api"]
 forbidden_modules = ["cms"]
+
+# El núcleo del cobro no sabe por qué pasarela entró la plata: cada webhook
+# traduce su payload y llama a `api.cobro`. `allow_indirect_imports` porque
+# `disputas` todavía importa `stripe_client`; la fase 2 lo limpia y se quita.
+[[tool.importlinter.contracts]]
+name = "cobro no conoce pasarelas"
+type = "forbidden"
+source_modules = ["api.cobro"]
+forbidden_modules = ["stripe", "httpx", "api.stripe_client", "api.pasarelas", "api.webhooks_stripe", "api.webhooks_mercadopago"]
+allow_indirect_imports = true
