@@ -31,6 +31,12 @@ class MPError(Exception):
         self.status = status
 
 
+def id_valido(valor: str) -> bool:
+    """Si `valor` puede ir como segmento de ruta (ver `_seg`). Para que quien
+    llama distinga un id que nunca va a servir —definitivo— de un fallo de MP."""
+    return bool(_ID_VALIDO.fullmatch(str(valor)))
+
+
 def _seg(valor: str) -> str:
     """Valida un id que viene de un webhook antes de usarlo como segmento de ruta.
 
@@ -38,7 +44,7 @@ def _seg(valor: str) -> str:
     segmento que httpx normaliza hacia otra ruta. Si no cumple, no hay pedido.
     """
     texto = str(valor)
-    if not _ID_VALIDO.fullmatch(texto):
+    if not id_valido(texto):
         raise MPError("id inválido")
     return texto
 

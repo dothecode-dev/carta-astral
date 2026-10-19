@@ -258,8 +258,23 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
         )
         return
 
-    contracargo = mercadopago_api.obtener_contracargo(chargeback_id)
-    pagos = {str(p) for p in contracargo.get("payments") or []}
+    if not mercadopago_api.id_valido(chargeback_id):
+        # Un reintento trae el mismo id: definitivo, no se pregunta a MP.
+        _contracargo_a_mano(chargeback_id, payment_id, "el id del contracargo no es válido")
+        return
+    try:
+        contracargo = mercadopago_api.obtener_contracargo(chargeback_id)
+    except mercadopago_api.MPError as e:
+        if e.status is None or not 200 <= e.status < 300:
+            raise  # timeout, red o un 4xx/5xx de MP: transitorio, 500
+        # MP contestó 2xx con algo que no es un objeto: reintentar da lo mismo.
+        _contracargo_a_mano(chargeback_id, payment_id, f"la API devolvió algo inesperado ({e})")
+        return
+    problema = _forma_invalida(contracargo)
+    if problema:
+        _contracargo_a_mano(chargeback_id, payment_id, problema)
+        return
+    pagos = {str(p) for p in contracargo["payments"]}
     if payment_id not in pagos:
         logger.error("contracargo %s no incluye el pago %s (payments=%r)", chargeback_id, payment_id, sorted(pagos))
         cobro.avisar(
@@ -281,7 +296,7 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
 
     dispute_id = f"mp:chargeback:{chargeback_id}"
     aviso = disputas._retirar(
-        fila.pk, None, dispute_id, _centavos(contracargo.get("amount")), "ars", "contracargo MP",
+        fila.pk, None, dispute_id, _centavos(contracargo["amount"]), "ars", "contracargo MP",
     )
     if aviso is None:
         # D3 (spec de cobro en pesos): qué campos dicen que un contracargo se
@@ -296,3 +311,36 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
         )
     # Después del commit de `_retirar`: nunca un aviso de algo que se deshizo.
     cobro.avisar(aviso)
+
+
+def _forma_invalida(contracargo) -> str:
+    """Qué tiene de raro la respuesta de `GET /v1/chargebacks/{id}`, o "".
+
+    La forma es la documentada (V4: el sandbox no simula contracargos). Ante
+    cualquier otra no se revoca nada: un monto ausente o en cero revocaría
+    anotando 0, y un `payments` de otra forma no prueba que el pago sea éste."""
+    if not isinstance(contracargo, dict):
+        return f"la API devolvió {type(contracargo).__name__}, no un objeto"
+    pagos = contracargo.get("payments")
+    if not isinstance(pagos, list) or not all(
+        isinstance(p, (str, int)) and not isinstance(p, bool) for p in pagos
+    ):
+        return f"`payments` con una forma inesperada ({pagos!r})"
+    monto = contracargo.get("amount")
+    if isinstance(monto, bool) or not isinstance(monto, (int, float, str)):
+        return f"`amount` inválido ({monto!r})"
+    try:
+        centavos = _centavos(monto)
+    except (ValueError, OverflowError):  # texto, nan, inf
+        return f"`amount` inválido ({monto!r})"
+    if centavos <= 0:
+        return f"`amount` no positivo ({monto!r})"
+    return ""
+
+
+def _contracargo_a_mano(chargeback_id: str, payment_id: str, problema: str) -> None:
+    logger.error("contracargo de mercadopago %s (pago %s): %s", chargeback_id, payment_id, problema)
+    cobro.avisar(
+        f"Contracargo de Mercado Pago {chargeback_id} (pago {payment_id}): {problema}. "
+        "No se revocó nada: revisar a mano en MP.",
+    )

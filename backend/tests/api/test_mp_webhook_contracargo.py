@@ -29,6 +29,8 @@ PAGO = 184963579792
 CONTRACARGO = "236000123456"
 RECLAMO = 5596641589
 MAIL = "ana@mail.com"
+#: El cliente de verdad, para los tests que doblan sólo el transporte (`_pedir`).
+_OBTENER_CONTRACARGO_REAL = mercadopago_api.obtener_contracargo
 
 
 @pytest.fixture(autouse=True)
@@ -322,3 +324,105 @@ def test_contracargo_firmado_con_cuerpo_que_no_es_json_avisa_y_200(client, api_m
     assert r.status_code == 200
     assert api_mp.leidos == []
     assert len(avisos) == 1 and "contracargo" in avisos[0].lower()
+
+
+# --- respuestas de la API con forma inesperada: fallar del lado seguro, con aviso ---------
+#
+# MP no reintenta tarde tras un 500 (medido en sandbox): un 500 mudo es plata
+# sin rastro. Lo que un reintento no arregla responde 200 y avisa.
+
+
+@pytest.fixture
+def transporte(monkeypatch, settings):
+    """Deshace el doble de `obtener_contracargo`: el test dobla `_pedir`."""
+    settings.MP_ACCESS_TOKEN = "TEST-token"
+    monkeypatch.setattr(mercadopago_api, "obtener_contracargo", _OBTENER_CONTRACARGO_REAL)
+
+
+def _sin_efecto(cuenta, avisos, r) -> None:
+    assert r.status_code == 200
+    assert not Disputa.objects.exists()
+    assert _restante(cuenta) == 1
+    assert not MailBloqueado.bloqueado(MAIL)
+    assert len(avisos) == 1 and CONTRACARGO in avisos[0] and "revisar a mano" in avisos[0]
+
+
+@pytest.mark.parametrize("cambio", [
+    {"payments": [{"id": PAGO}]},
+    {"payments": PAGO},
+    {"payments": str(PAGO)},
+    {"payments": [True]},
+])
+def test_contracargo_con_payments_de_otra_forma_avisa_y_no_revoca(client, api_mp, avisos, acreditada, cambio):
+    api_mp.contracargos[CONTRACARGO] = {**_contracargo(), **cambio}
+
+    _sin_efecto(acreditada, avisos, _notificar_contracargo(client))
+
+
+def test_contracargo_sin_payments_avisa_y_no_revoca(client, api_mp, avisos, acreditada):
+    contracargo = _contracargo()
+    del contracargo["payments"]
+    api_mp.contracargos[CONTRACARGO] = contracargo
+
+    _sin_efecto(acreditada, avisos, _notificar_contracargo(client))
+
+
+@pytest.mark.parametrize("monto", ["sin", None, 0, 0.0, -100.0, "abc", True, float("nan"), float("inf"), 0.001])
+def test_contracargo_sin_monto_valido_avisa_y_no_revoca(client, api_mp, avisos, acreditada, monto):
+    contracargo = _contracargo()
+    if monto == "sin":
+        del contracargo["amount"]
+    else:
+        contracargo["amount"] = monto
+    api_mp.contracargos[CONTRACARGO] = contracargo
+
+    _sin_efecto(acreditada, avisos, _notificar_contracargo(client))
+
+
+@pytest.mark.parametrize("respuesta", [[], "texto", None, 42])
+def test_contracargo_con_respuesta_que_no_es_objeto_avisa_y_no_revoca(client, api_mp, avisos, acreditada, respuesta):
+    api_mp.contracargos[CONTRACARGO] = respuesta
+
+    _sin_efecto(acreditada, avisos, _notificar_contracargo(client))
+
+
+def test_contracargo_con_json_que_no_es_objeto_en_la_api_real_avisa_y_200(
+    client, avisos, acreditada, transporte, monkeypatch,
+):
+    """Sin doblar `obtener_contracargo`: `_pedir` levanta `MPError` con el status
+    2xx de una respuesta que MP sí dio. Eso es definitivo, no transitorio."""
+    def respondio_mal(*a, **k):
+        raise mercadopago_api.MPError("Mercado Pago devolvió JSON que no es un objeto", status=200)
+
+    monkeypatch.setattr(mercadopago_api, "_pedir", respondio_mal)
+
+    _sin_efecto(acreditada, avisos, _notificar_contracargo(client))
+
+
+@pytest.mark.parametrize("cid", ["../payments/1", "a b", "1;2", "ñ"])
+def test_contracargo_con_id_invalido_avisa_y_200(client, avisos, acreditada, transporte, monkeypatch, cid):
+    llamadas: list = []
+    monkeypatch.setattr(mercadopago_api, "_pedir", lambda *a, **k: llamadas.append(a))
+
+    r = _notificar_contracargo(client, cid=cid)
+
+    assert r.status_code == 200
+    assert llamadas == []
+    assert not Disputa.objects.exists() and _restante(acreditada) == 1
+    assert len(avisos) == 1 and "revisar a mano" in avisos[0]
+
+
+@pytest.mark.parametrize("error", [
+    mercadopago_api.MPError("Mercado Pago no contestó (ReadTimeout)"),
+    mercadopago_api.MPError("Mercado Pago respondió 503", status=503),
+    mercadopago_api.MPError("Mercado Pago respondió 404", status=404),
+    mercadopago_api.MPNoConfigurado("MP_ACCESS_TOKEN no está configurado"),
+])
+def test_contracargo_con_mp_fallando_sigue_siendo_500(client, avisos, acreditada, transporte, monkeypatch, error):
+    def falla(*a, **k):
+        raise error
+
+    monkeypatch.setattr(mercadopago_api, "_pedir", falla)
+
+    assert _notificar_contracargo(client).status_code == 500
+    assert not Disputa.objects.exists()
