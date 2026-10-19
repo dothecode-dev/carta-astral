@@ -141,6 +141,18 @@ def procesar_pago(payment_id: str) -> None:
 
     estado = pago.get("status") or ""
     moneda = (pago.get("currency_id") or "").lower()
+    try:
+        _segun_estado(fila, pago, pago_id, estado, moneda)
+    finally:
+        if estado in ("approved", "refunded", "partially_refunded"):
+            # Un reembolso parcial deja el pago `approved` (status_detail
+            # `partially_refunded`): los reembolsos se miran en los tres estados.
+            # En el `finally`: si acreditar falla, el reembolso se aplica igual
+            # (MP no reintenta tarde y se perdería) y la excepción sigue subiendo.
+            _reembolsar(fila, pago, pago_id, moneda)
+
+
+def _segun_estado(fila: PasarelaCheckout, pago: dict, pago_id: str, estado: str, moneda: str) -> None:
     if estado == "approved":
         _acreditar(fila, pago, pago_id, moneda)
     elif estado == "in_mediation":
@@ -160,11 +172,6 @@ def procesar_pago(payment_id: str) -> None:
         )
     elif estado not in ("refunded", "partially_refunded"):
         logger.info("pago de mercadopago %s (%s) en estado %s: nada que hacer", pago_id, fila.checkout_id, estado)
-
-    if estado in ("approved", "refunded", "partially_refunded"):
-        # Un reembolso parcial deja el pago `approved` (status_detail
-        # `partially_refunded`): los reembolsos se miran en los tres estados.
-        _reembolsar(fila, pago, pago_id, moneda)
 
 
 def _acreditar(fila: PasarelaCheckout, pago: dict, pago_id: str, moneda: str) -> None:

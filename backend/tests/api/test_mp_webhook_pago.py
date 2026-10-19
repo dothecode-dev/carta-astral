@@ -599,3 +599,22 @@ def test_mp_caido_al_leer_el_pago_500(client, monkeypatch, make_account, fallo):
 
     assert _notificar(client).status_code == 500
     assert _otorgados(cuenta) == 0
+
+
+@pytest.mark.django_db
+def test_reembolso_se_aplica_aunque_acreditar_falle(client, pagos, avisos, acreditada, monkeypatch):
+    """Code review B: un fallo al (re)acreditar el pago no puede saltear sus
+    reembolsos. MP no reintenta tarde: ese reembolso se perdería."""
+    pagos[str(PAGO)] = _pago(
+        status_detail="partially_refunded",
+        refunds=[{"id": 801, "amount": 25000.0, "status": "approved"}],
+    )
+
+    def explota(*_a, **_k):
+        raise RuntimeError("se cayó el arranque")
+
+    monkeypatch.setattr(cobro, "acreditar", explota)
+
+    assert _notificar(client, action="payment.updated").status_code == 500
+    assert list(Reembolso.objects.values_list("refund_id", flat=True)) == ["mp:refund:801"]
+    assert Derecho.objects.get(account=acreditada, codigo_producto="informe_natal").cantidad_restante == 0
