@@ -398,6 +398,9 @@ REST_FRAMEWORK = {
         # Público, por IP: es la puerta por la que se enumeraría el diccionario
         # de códigos de cupón. Quien tipea mal tres veces sigue entrando.
         "cupon": os.environ.get("CUPON_RATE", "30/hour"),
+        # Botón de arrepentimiento: público y manda un mail a la dirección que
+        # se escriba. El techo frena usarlo para llenarle la bandeja a alguien.
+        "arrepentimiento": os.environ.get("ARREPENTIMIENTO_RATE", "10/hour"),
         # Por cuenta. Abrir un checkout no cuesta nada acá, pero con el cupón
         # del 100 % este POST entrega un producto de US$ 29: sin techo, es un
         # bucle. Generoso: nadie compra sesenta veces en un día.

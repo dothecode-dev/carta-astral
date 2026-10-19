@@ -311,6 +311,71 @@ def enviar_codigo(email: str, codigo: str, lang: str) -> None:
     )
 
 
+_TEXTOS_ARREPENTIMIENTO = {
+    "es": {
+        "asunto": "Recibimos tu arrepentimiento: {codigo}", "eyebrow": "Botón de arrepentimiento",
+        "titulo": "Recibimos tu pedido",
+        "parrafos": (
+            "Este es el código que identifica tu pedido de revocación de la compra.",
+            "Te vamos a escribir a este mail para resolverlo. Si querés agregar algo, respondé este mail "
+            "o escribinos a info@astraguia.com con el código.",
+        ),
+        "nota": "Guardá este código: es el comprobante de tu pedido.",
+        "motivo": "Recibís este mail porque alguien usó el botón de arrepentimiento de astraguia.com "
+                  "con esta dirección.",
+    },
+    "en": {
+        "asunto": "We received your cancellation request: {codigo}", "eyebrow": "Cancellation button",
+        "titulo": "We received your request",
+        "parrafos": (
+            "This is the code that identifies your request to cancel the purchase.",
+            "We'll write to you at this email to resolve it. To add anything, reply to this email or "
+            "write to info@astraguia.com with the code.",
+        ),
+        "nota": "Keep this code: it's the receipt for your request.",
+        "motivo": "You're receiving this email because someone used the cancellation button on "
+                  "astraguia.com with this address.",
+    },
+    "pt": {
+        "asunto": "Recebemos seu arrependimento: {codigo}", "eyebrow": "Botão de arrependimento",
+        "titulo": "Recebemos seu pedido",
+        "parrafos": (
+            "Este é o código que identifica seu pedido de cancelamento da compra.",
+            "Vamos escrever para este e-mail para resolver. Se quiser acrescentar algo, responda este "
+            "e-mail ou escreva para info@astraguia.com com o código.",
+        ),
+        "nota": "Guarde este código: é o comprovante do seu pedido.",
+        "motivo": "Você recebe este e-mail porque alguém usou o botão de arrependimento de "
+                  "astraguia.com com este endereço.",
+    },
+}
+
+
+def armar_arrepentimiento(lang: str, codigo: str) -> tuple[str, str, str]:
+    """Asunto, HTML y texto del mail con el código del botón de arrepentimiento."""
+    t = _TEXTOS_ARREPENTIMIENTO.get(lang, _TEXTOS_ARREPENTIMIENTO[_LANG_DEFAULT])
+    mail = Mail(
+        preheader=t["nota"], eyebrow=t["eyebrow"], titulo=t["titulo"], parrafos=t["parrafos"],
+        codigo=codigo, nota=t["nota"], motivo=t["motivo"],
+    )
+    return t["asunto"].format(codigo=codigo), _html(mail, lang), render_texto(mail, lang)
+
+
+def enviar_arrepentimiento(email: str, codigo: str, lang: str) -> None:
+    """Como `enviar_codigo`: a una dirección suelta y levantando `EnvioFallido`
+    si no sale, para que quien llama avise al admin (el código igual se
+    mostró en pantalla). Ni el código ni la dirección van al log."""
+    logger.info("aviso al usuario", extra={"evento": "arrepentimiento", "lang": lang})
+    if not settings.RESEND_API_KEY:
+        raise EnvioFallido("sin RESEND_API_KEY configurada")
+    asunto, html, texto = armar_arrepentimiento(lang, codigo)
+    try:
+        _post_resend(email, asunto, html, texto)
+    except Exception as exc:
+        logger.exception("fallo el envio %s", "arrepentimiento")
+        raise EnvioFallido("fallo el envio a Resend") from exc
+
+
 def _enviar(account, evento, contexto, lang):
     logger.info(
         "aviso al usuario", extra={"evento": evento, "account": account.pk, "lang": lang},

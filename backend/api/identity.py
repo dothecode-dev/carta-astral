@@ -3,7 +3,8 @@ import hmac
 import secrets
 
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.validators import validate_email
 
 
 def new_token() -> tuple[str, str]:
@@ -27,6 +28,23 @@ def normalizar(email: str) -> str:
     proveedor SSO no la manda en minúsculas (gmail.com sí; un dominio
     Workspace no)."""
     return email.strip().lower()
+
+
+def mail_valido(valor) -> str | None:
+    """El mail normalizado, o `None` si no es un string con forma de mail.
+
+    El login por código no valida la forma (sólo que no esté vacío); la compra
+    en pesos y el botón de arrepentimiento sí, con el validador de Django,
+    porque ese mail recibe el informe pago o el código de la revocación.
+    """
+    if not isinstance(valor, str):
+        return None
+    mail = normalizar(valor)
+    try:
+        validate_email(mail)
+    except ValidationError:
+        return None
+    return mail
 
 
 def config_faltante() -> list[str]:

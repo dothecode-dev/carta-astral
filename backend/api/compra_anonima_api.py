@@ -6,8 +6,6 @@ Módulo propio por el mismo criterio que `cupones_api.py` y `compras_api.py`:
 
 import logging
 
-from django.core.exceptions import ValidationError
-from django.core.validators import validate_email
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -26,7 +24,7 @@ from api.checkout import (
     respuesta_de_mp,
     respuesta_de_stripe,
 )
-from api.identity import normalizar
+from api.identity import mail_valido
 from api.models import MailBloqueado
 from api.pasarelas import mercadopago_api
 
@@ -34,22 +32,6 @@ logger = logging.getLogger(__name__)
 
 _NO_DISPONIBLE = {"error": "el cobro no está disponible"}
 _NO_ENCONTRADO = {"error": "no encontrado"}
-
-
-def _mail_valido(valor) -> str | None:
-    """El mail normalizado, o `None` si no es un string con forma de mail.
-
-    El login por código no valida la forma (sólo que no esté vacío); acá sí,
-    con el validador de Django, porque este mail recibe el informe pago.
-    """
-    if not isinstance(valor, str):
-        return None
-    mail = normalizar(valor)
-    try:
-        validate_email(mail)
-    except ValidationError:
-        return None
-    return mail
 
 
 class CheckoutAnonimoView(APIView):
@@ -97,7 +79,7 @@ class CheckoutAnonimoView(APIView):
         # En pesos el mail se pide acá: MP no devuelve el de quien paga.
         email = ""
         if catalogo.pasarela_de(moneda) == "mercadopago":
-            email = _mail_valido(request.data.get("email"))
+            email = mail_valido(request.data.get("email"))
             if email is None:
                 return Response(
                     {"error": "hace falta un mail válido", "motivo": "email_invalido"},

@@ -755,6 +755,32 @@ class CuponUso(models.Model):
         return f"{self.cupon_id} → acc={self.account_id} ({self.codigo_producto})"
 
 
+class SolicitudArrepentimiento(models.Model):
+    """Un pedido del botón de arrepentimiento (Res. SCI 424/2020). Se guarda
+    para responderlo dentro del plazo; el reembolso lo hace el admin a mano
+    desde la pasarela y el webhook revoca el derecho (mini-spec del 19-10)."""
+
+    PENDIENTE = "pendiente"
+    RESUELTA = "resuelta"
+    ESTADOS = [(PENDIENTE, "pendiente"), (RESUELTA, "resuelta")]
+
+    codigo = models.CharField(max_length=12, unique=True)
+    email = models.EmailField()
+    numero_compra = models.CharField(max_length=40, blank=True, default="")
+    locale = models.CharField(max_length=5, default="es")
+    estado = models.CharField(max_length=10, choices=ESTADOS, default=PENDIENTE)
+    nota_admin = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "solicitud de arrepentimiento"
+        verbose_name_plural = "solicitudes de arrepentimiento"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.codigo
+
+
 class MailBloqueado(models.Model):
     """Un mail que no entra ni compra con cuenta (RF16): el de quien disputó
     un pago. Se guarda normalizado. Una compra sin cuenta con este mail se

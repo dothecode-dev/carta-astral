@@ -36,7 +36,7 @@ from api import canje, cupones, stripe_client
 from api.catalogo import CATALOGO, a_la_venta, precios_visibles, producto
 from api.models import (
     Account, Chart, ConteoDiario, CreditTransaction, Cupon, CuponUso, Derecho, Disputa, Interpretation,
-    MailBloqueado, Movimiento, PasarelaCheckout, Reembolso,
+    MailBloqueado, Movimiento, PasarelaCheckout, Reembolso, SolicitudArrepentimiento,
 )
 
 
@@ -594,3 +594,15 @@ class ReembolsoAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(SolicitudArrepentimiento)
+class SolicitudArrepentimientoAdmin(admin.ModelAdmin):
+    """RA6: para responder cada pedido del botón dentro del plazo. El
+    reembolso se hace en la pasarela; acá sólo se marca resuelta."""
+
+    list_display = ("codigo", "email", "numero_compra", "estado", "created_at")
+    list_filter = ("estado",)
+    search_fields = ("codigo", "email", "numero_compra")
+    readonly_fields = ("codigo", "email", "numero_compra", "locale", "created_at")
+    fields = ("codigo", "email", "numero_compra", "locale", "created_at", "estado", "nota_admin")
