@@ -14,7 +14,6 @@ import re
 import secrets
 
 from django.conf import settings
-from django.db.models import Q
 from django.utils import timezone
 
 from api import cobro, cupones, devoluciones, disputas, stripe_client
@@ -383,23 +382,24 @@ def revisar_vencidas(ahora: dt.datetime) -> dict[str, int]:
     Una preferencia de MP vencida no notifica (Stripe sí: `checkout.session.expired`),
     y medido en el sandbox MP no reintenta tarde una notificación que tuvo
     respuesta 500. Este barrido, que busca los pagos por `external_reference`,
-    es entonces también la red de seguridad de un pago cuya notificación se
-    perdió: si hay uno aprobado, lo acredita con `procesar_pago`, igual que el
-    webhook.
+    es entonces la ÚNICA red de seguridad de una notificación perdida.
 
-    Revisa las filas de MP sin acreditar pasada la vida de la preferencia más
-    el margen, y sólo las que todavía tienen algo que resolver: sin vencer, o
-    vencidas con la carta de una compra sin cuenta aún guardada. Un fallo con
-    una fila se loguea y no corta las demás (`MPNoConfigurado` sí corta la
-    corrida). Se avisa al admin en dos casos: si no se pudo confirmar el pago
-    de una fila cuya carta tocaba descartar (entonces no se descarta), y si el
-    descarte mismo falló.
+    Ruling 12: revisa TODA fila de MP —acreditada o no— todavía sin
+    `mp_revisado_at`, pasada la vida de la preferencia más el margen. Cada pago
+    aprobado pasa por `procesar_pago`, igual que en el webhook: el de una fila
+    sin acreditar la acredita, y uno de más sobre una fila ya acreditada cae en
+    `cobro.PagoDuplicado` (reembolso y aviso). Con un pago que todavía puede
+    aprobarse la fila queda abierta; si no, se cierra (`mp_revisado_at`) y no
+    se vuelve a buscar, así cada aviso definitivo sale una sola vez. Un fallo
+    transitorio deja la fila abierta para la corrida siguiente, sin aviso.
+    `MPNoConfigurado` corta la corrida.
+
+    Después, en un paso aparte, se descarta la carta de las compras sin cuenta
+    cerradas como vencidas hace más de `_CONSERVAR_CARTA` (RF8).
     """
     limite = ahora - stripe_client.VENCIMIENTO_SESION - _MARGEN_VENCIMIENTO
     candidatas = PasarelaCheckout.objects.filter(
-        pasarela=PasarelaCheckout.MERCADOPAGO, acreditado_at__isnull=True, created_at__lt=limite,
-    ).filter(
-        Q(vencido_at__isnull=True) | Q(anonimo=True, account__isnull=True, sujeto__isnull=False),
+        pasarela=PasarelaCheckout.MERCADOPAGO, mp_revisado_at__isnull=True, created_at__lt=limite,
     )
     resumen = {"acreditadas": 0, "vencidas": 0, "esperando": 0, "descartadas": 0}
     for fila in candidatas.order_by("created_at"):
@@ -410,52 +410,65 @@ def revisar_vencidas(ahora: dt.datetime) -> dict[str, int]:
             raise
         except Exception:
             logger.exception("vencer_checkouts: falló la fila %s", fila.checkout_id)
+    _descartar_cartas(ahora, resumen)
     logger.info("vencer_checkouts: %s", resumen)
     return resumen
 
 
 def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str, int]) -> None:
-    # Import local: `compra_anonima` importa este módulo.
-    from api import compra_anonima
-
     checkout_id = fila.checkout_id
+    acreditada_antes = fila.acreditado_at is not None
     try:
         pagos = mercadopago_api.buscar_pagos(checkout_id)
     except mercadopago_api.MPError:
-        # Transitorio: se reintenta en 15 minutos, no se avisa por cada corrida.
+        # Transitorio: queda abierta y se reintenta en 15 minutos, sin aviso.
         logger.exception("vencer_checkouts: no se pudo buscar los pagos de %s", checkout_id)
-        _avisar_si_se_iba_a_descartar(fila, ahora)
         return
 
-    estados = [p.get("status") for p in pagos]
-    if "approved" in estados:
-        for pago in pagos:
-            if pago.get("status") != "approved":
-                continue
-            try:
-                procesar_pago(str(pago.get("id")))
-            except mercadopago_api.MPNoConfigurado:
-                raise
-            except Exception:
-                logger.exception(
-                    "vencer_checkouts: no se pudo procesar el pago %s de %s", pago.get("id"), checkout_id,
-                )
-                _avisar_si_se_iba_a_descartar(fila, ahora)
-                return
-        fila.refresh_from_db()
-        if fila.acreditado_at is not None:
-            resumen["acreditadas"] += 1
-        return
-    if any(e in _ESPERANDO for e in estados):
+    aprobados = [p for p in pagos if p.get("status") == "approved"]
+    for pago in aprobados:
+        try:
+            procesar_pago(str(pago.get("id")))
+        except cobro.CompraAnonimaSinMail:
+            # Definitivo y ya avisado por `cobro`: se cierra para no repetirlo.
+            logger.error("vencer_checkouts: el pago %s de %s es de una compra sin mail", pago.get("id"), checkout_id)
+        except mercadopago_api.MPNoConfigurado:
+            raise
+        except Exception:
+            logger.exception(
+                "vencer_checkouts: no se pudo procesar el pago %s de %s: queda abierta", pago.get("id"), checkout_id,
+            )
+            return
+
+    fila.refresh_from_db()
+    if fila.acreditado_at is not None and not acreditada_antes:
+        resumen["acreditadas"] += 1
+    if any(p.get("status") in _ESPERANDO for p in pagos):
         resumen["esperando"] += 1
         return
 
-    if PasarelaCheckout.objects.filter(
+    if not aprobados and PasarelaCheckout.objects.filter(
         pk=fila.pk, acreditado_at__isnull=True, vencido_at__isnull=True,
     ).update(vencido_at=ahora):
+        # Sólo sin ningún pago aprobado: uno que no se pudo acreditar (monto,
+        # moneda, sin mail) ya se avisó y es plata cobrada, no una fila vencida
+        # —ni se lista como tal ni se descarta su carta—.
         resumen["vencidas"] += 1
-        fila.vencido_at = ahora
-    if _toca_descartar(fila, ahora):
+    PasarelaCheckout.objects.filter(pk=fila.pk, mp_revisado_at__isnull=True).update(mp_revisado_at=ahora)
+
+
+def _descartar_cartas(ahora: dt.datetime, resumen: dict[str, int]) -> None:
+    """RF8: la carta de una compra sin cuenta que el cron cerró como vencida se
+    guarda `_CONSERVAR_CARTA` por si el pago llega tarde, y después se borra.
+    Ya está confirmado que no hay pago: no se vuelve a preguntar a MP."""
+    # Import local: `compra_anonima` importa este módulo.
+    from api import compra_anonima
+
+    filas = PasarelaCheckout.objects.filter(
+        pasarela=PasarelaCheckout.MERCADOPAGO, anonimo=True, account__isnull=True, sujeto__isnull=False,
+        acreditado_at__isnull=True, mp_revisado_at__isnull=False, vencido_at__lt=ahora - _CONSERVAR_CARTA,
+    ).values_list("checkout_id", flat=True)
+    for checkout_id in filas:
         try:
             descartada = compra_anonima.descartar(checkout_id)
         except Exception:
@@ -464,21 +477,6 @@ def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str,
                 f"Mercado Pago {checkout_id}: no se pudo descartar la carta de una compra sin pagar "
                 "(la política de privacidad dice que se borra). Revisar a mano.",
             )
-            return
+            continue
         if descartada:
             resumen["descartadas"] += 1
-
-
-def _toca_descartar(fila: PasarelaCheckout, ahora: dt.datetime) -> bool:
-    return (
-        fila.anonimo and fila.account_id is None and fila.acreditado_at is None
-        and fila.vencido_at is not None and fila.vencido_at + _CONSERVAR_CARTA < ahora
-    )
-
-
-def _avisar_si_se_iba_a_descartar(fila: PasarelaCheckout, ahora: dt.datetime) -> None:
-    if fila.sujeto_id is not None and _toca_descartar(fila, ahora):
-        cobro.avisar(
-            f"Mercado Pago {fila.checkout_id}: no se pudo confirmar si la compra sin cuenta se pagó y "
-            "ya pasó el plazo para descartar su carta. No se descartó: revisar.",
-        )

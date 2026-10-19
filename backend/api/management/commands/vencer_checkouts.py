@@ -13,7 +13,7 @@ from api.pasarelas import mercadopago
 
 
 class Command(BaseCommand):
-    help = "Acredita, vence o descarta los checkouts de Mercado Pago sin acreditar."
+    help = "Revisa los checkouts de Mercado Pago pasada su vida: acredita, reembolsa duplicados, vence o descarta."
 
     def handle(self, *args, **options):
         self.stdout.write(str(mercadopago.revisar_vencidas(timezone.now())))

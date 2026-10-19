@@ -505,7 +505,9 @@ class PasarelaCheckout(models.Model):
     # La preferencia de Mercado Pago con la que se abrió el pago. El id del
     # pago de MP se guarda en `payment_intent`, no en otra columna.
     mp_preferencia_id = models.CharField(max_length=100, blank=True, default="")
-    # El mail con el que pagó el comprador, cuando la pasarela lo informa.
+    # El mail de quien compra sin cuenta, el que pide NUESTRO formulario antes
+    # de abrir el pago (RF8b) —no el que informe la pasarela—: con ése se
+    # adjudica la compra a una cuenta.
     mail_comprador = models.EmailField(blank=True, default="")
     checkout_id = models.CharField(max_length=100, unique=True)
     account = models.ForeignKey(
@@ -570,6 +572,11 @@ class PasarelaCheckout(models.Model):
     # pago en curso, y deja de listarse. Nunca convive con `acreditado_at`:
     # una sesión pagada no vence, y si el evento llegara igual la plata manda.
     vencido_at = models.DateTimeField(null=True, blank=True)
+    # Sólo Mercado Pago: cuándo el cron `vencer_checkouts` revisó la fila por
+    # última vez y la dio por cerrada —sin pagos esperando; acreditada,
+    # vencida o con un pago que no se pudo acreditar y ya se avisó—. Una fila
+    # revisada no se vuelve a buscar en MP (Ruling 12 del plan fase 1).
+    mp_revisado_at = models.DateTimeField(null=True, blank=True)
     # «Pagar es entrar» (spec 2026-10-07): checkout abierto sin cuenta. La
     # cuenta la pone el webhook por el mail del pago; `cuenta_nueva` dice si la
     # creó esta compra (sólo entonces se puede canjear por sesión); el nonce
