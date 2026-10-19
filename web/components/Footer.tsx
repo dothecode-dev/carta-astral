@@ -26,6 +26,19 @@ export function Footer({ locale, dict }: { locale: Locale; dict: Dict }) {
               inicio, sin registro. Está en el pie de TODAS las páginas. */}
           <Link href={`/${locale}/arrepentimiento`}>{dict.foot.arrepentimiento}</Link>
         </nav>
+        {/* Data Fiscal (F. 960/D de ARCA): el QR que lleva a la situación
+            fiscal del vendedor, con el logo y el enlace que da ARCA. El logo
+            va por https (el HTML de ARCA lo trae en http y el navegador lo
+            bloquearía); el enlace queda como lo entrega ARCA. */}
+        <a
+          className="footDataFiscal"
+          href="http://qr.afip.gob.ar/?qr=ubYBPcTLEsiYwH81mDC7Uw,,"
+          target="_F960AFIPInfo"
+          rel="noopener noreferrer"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="https://www.afip.gob.ar/images/f960/DATAWEB.jpg" alt="Data Fiscal" height={56} />
+        </a>
       </div>
     </footer>
   );

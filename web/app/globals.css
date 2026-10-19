@@ -2398,6 +2398,17 @@ body:has(.consentBar) .accionFija {
   color: var(--accent);
 }
 
+.footDataFiscal {
+  display: inline-flex;
+  flex: none;
+}
+
+.footDataFiscal img {
+  display: block;
+  height: 3.5rem;
+  width: auto;
+}
+
 .footLinks {
   display: flex;
   gap: 1.25rem;
