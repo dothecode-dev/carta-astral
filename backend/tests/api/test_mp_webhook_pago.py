@@ -217,10 +217,24 @@ def test_pago_sin_external_reference_200(client, pagos, avisos):
 
 
 @pytest.mark.django_db
-def test_prefijo_sin_fila_500(client, pagos):
-    pagos[str(PAGO)] = _pago(ref="mp_" + "f" * 32)
+def test_prefijo_sin_fila_500_y_avisa(client, pagos, avisos):
+    """Plata cobrada sin nada que entregar, y MP no reintenta tarde (medido en
+    sandbox): el 500 no alcanza, tiene que haber aviso."""
+    ref = "mp_" + "f" * 32
+    pagos[str(PAGO)] = _pago(ref=ref)
 
     assert _notificar(client).status_code == 500
+    assert len(avisos) == 1 and str(PAGO) in avisos[0] and ref in avisos[0]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("ref", ["mp_otra_integracion", "mp_" + "A" * 32, "mp_" + "a" * 31, "mp_" + "a" * 33])
+def test_prefijo_mp_con_otro_formato_es_ajeno_200(client, pagos, avisos, ref):
+    """Sólo `mp_` + 32 hex (lo que genera `abrir`) es nuestro."""
+    pagos[str(PAGO)] = _pago(ref=ref)
+
+    assert _notificar(client).status_code == 200
+    assert avisos == []
 
 
 @pytest.mark.django_db
@@ -358,6 +372,10 @@ def test_segundo_pago_y_su_reembolso_no_revocan_la_compra(client, pagos, avisos,
 
     assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 1
     assert len(pagos.reembolsos) == 1
+    # Uno por el duplicado y otro por su reembolso ignorado (de `cobro`).
+    # Cada notificación repetida de ese reembolso vuelve a avisar: sin dedupe.
+    assert len(avisos) == 2
+    assert "DUPLICADO" in avisos[0] and "no acreditado" in avisos[1]
 
 
 @pytest.mark.django_db
@@ -462,6 +480,46 @@ def test_reembolso_rechazado_no_revoca(client, pagos, avisos, acreditada):
 
     assert not Reembolso.objects.exists()
     assert Derecho.objects.get(account=acreditada, codigo_producto="informe_natal").cantidad_restante == 1
+    assert avisos == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("status", ["cancelled", "in_process", "pending"])
+def test_reembolso_en_estado_conocido_sin_efecto_no_revoca_ni_avisa(client, pagos, avisos, acreditada, status):
+    pagos[str(PAGO)] = _pago(refunds=[{"id": 702, "amount": 25000.0, "status": status}])
+
+    assert _notificar(client, action="payment.updated").status_code == 200
+
+    assert not Reembolso.objects.exists()
+    assert avisos == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("refund", [
+    {"id": 703, "amount": 25000.0, "status": "authorized"},
+    {"id": 704, "amount": 25000.0},
+])
+def test_reembolso_en_estado_desconocido_no_revoca_y_avisa(client, pagos, avisos, acreditada, refund):
+    """Lista blanca: sólo `approved` revoca. Lo que no conocemos se mira."""
+    pagos[str(PAGO)] = _pago(refunds=[refund])
+
+    assert _notificar(client, action="payment.updated").status_code == 200
+
+    assert not Reembolso.objects.exists()
+    assert Derecho.objects.get(account=acreditada, codigo_producto="informe_natal").cantidad_restante == 1
+    assert len(avisos) == 1 and str(refund["id"]) in avisos[0] and str(PAGO) in avisos[0]
+
+
+@pytest.mark.django_db
+def test_reembolso_sin_id_no_revoca_y_avisa(client, pagos, avisos, acreditada):
+    pagos[str(PAGO)] = _pago(
+        status="refunded", status_detail="refunded", refunds=[{"amount": 25000.0, "status": "approved"}],
+    )
+
+    assert _notificar(client, action="payment.updated").status_code == 200
+
+    assert not Reembolso.objects.exists()
+    assert len(avisos) == 1 and str(PAGO) in avisos[0]
 
 
 @pytest.mark.django_db

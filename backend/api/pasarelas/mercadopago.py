@@ -9,6 +9,7 @@ se propagan: los traduce la vista.
 """
 
 import logging
+import re
 import secrets
 
 from django.conf import settings
@@ -86,7 +87,12 @@ class FilaInexistente(Exception):
     se crea antes de abrir la preferencia—, así que se pide el reintento."""
 
 
-#: Estados de un reembolso de MP que no devolvieron plata (todavía o nunca).
+#: El `external_reference` que genera `abrir`: `mp_` + 32 hex. Otro formato,
+#: aunque empiece con `mp_`, es de otra integración de la misma cuenta.
+_REFERENCIA_NUESTRA = re.compile(r"mp_[0-9a-f]{32}")
+
+#: Estados conocidos de un reembolso de MP que no devolvieron plata (todavía o
+#: nunca). Sólo `approved` revoca; un estado fuera de los dos conjuntos se avisa.
 _REEMBOLSO_SIN_EFECTO = {"rejected", "cancelled", "in_process", "pending"}
 
 
@@ -106,13 +112,19 @@ def procesar_pago(payment_id: str) -> None:
     """
     pago = mercadopago_api.obtener_pago(payment_id)
     referencia = pago.get("external_reference") or ""
-    if not referencia.startswith("mp_"):
+    if not isinstance(referencia, str) or not _REFERENCIA_NUESTRA.fullmatch(referencia):
         # Review Focus 1: la cuenta de MP puede cobrar otras cosas.
         logger.info("pago de mercadopago %s ajeno (external_reference=%r): se ignora", payment_id, referencia)
         return
     fila = PasarelaCheckout.objects.filter(checkout_id=referencia).first()
     if fila is None:
         logger.error("pago de mercadopago %s con referencia %s sin fila: se pide reintento", payment_id, referencia)
+        # MP no reintenta tarde (medido en sandbox): sin aviso, plata cobrada
+        # y nada entregado sin que nadie se entere.
+        cobro.avisar(
+            f"Pago de Mercado Pago {payment_id} con referencia {referencia} SIN FILA: cobrado y sin "
+            "entregar. Revisar.",
+        )
         raise FilaInexistente(referencia)
     pago_id = str(pago.get("id") or payment_id)
     if fila.pasarela != PasarelaCheckout.MERCADOPAGO:
@@ -185,7 +197,22 @@ def _reembolsar(fila: PasarelaCheckout, pago: dict, pago_id: str, moneda: str) -
         if estado in _REEMBOLSO_SIN_EFECTO:
             logger.info("reembolso %s del pago %s en estado %s: no se revoca", refund_id, pago_id, estado)
             continue
+        if estado != "approved":
+            logger.error("reembolso %s del pago %s en estado desconocido %r: no se revoca", refund_id, pago_id, estado)
+            cobro.avisar(
+                f"Reembolso {refund_id} del pago de Mercado Pago {pago_id} ({fila.checkout_id}) en un "
+                f"estado desconocido ({estado!r}). No se revocó nada: revisar.",
+            )
+            continue
+        if not refund_id:
+            # Sin id no hay constancia ni idempotencia posible.
+            logger.error("reembolso sin id del pago %s (%s): no se revoca", pago_id, fila.checkout_id)
+            cobro.avisar(
+                f"Reembolso SIN ID del pago de Mercado Pago {pago_id} ({fila.checkout_id}). "
+                "No se revocó nada: resolver a mano.",
+            )
+            continue
         cobro.reembolsar(
             fila, pago_id=pago_id, refund_id=refund_id, monto=_centavos(reembolso.get("amount")),
-            moneda=moneda, external_id=f"mp:refund:{refund_id}" if refund_id else "",
+            moneda=moneda, external_id=f"mp:refund:{refund_id}",
         )
