@@ -494,3 +494,53 @@ def test_contracargo_sin_moneda_valida_avisa_y_no_revoca(client, api_mp, avisos,
     assert _restante(acreditada) == 1
     assert not MailBloqueado.bloqueado(MAIL)
     assert len(avisos) == 1 and "a mano" in avisos[0]
+
+
+# --- code review E (Ruling 16): mail de una compra cuya cuenta se borró --------------------
+
+
+def test_contracargo_de_una_compra_sin_cuenta_bloquea_el_mail_comprador(client, api_mp, avisos):
+    """La cuenta se borró después de comprar (RF22): el mail a bloquear es el
+    que se pidió al abrir el checkout."""
+    from django.utils import timezone
+
+    PasarelaCheckout.objects.create(
+        checkout_id=CHECKOUT, account=None, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.MERCADOPAGO, moneda="ars", precio_centavos=PRECIO_ARS,
+        mp_preferencia_id="pref_1", locale="es", anonimo=True, mail_comprador="Borrada@Mail.com",
+        payment_intent=str(PAGO), acreditado_at=timezone.now(),
+    )
+    api_mp.contracargos[CONTRACARGO] = _contracargo()
+
+    assert _notificar_contracargo(client).status_code == 200
+
+    assert MailBloqueado.bloqueado("borrada@mail.com")
+    assert Disputa.objects.get().email == "borrada@mail.com"
+
+
+@pytest.mark.parametrize("sesion,esperado", [
+    (None, ""),
+    ({"customer_details": {"email": "pago@stripe.com"}}, "pago@stripe.com"),
+])
+def test_mail_de_disputa_de_stripe_sin_cuenta_no_cambia(sesion, esperado):
+    """Ruling 16 es aditivo: una fila de Stripe tiene `mail_comprador` vacío,
+    así que sigue saliendo del pago o de ningún lado, como antes."""
+    from api import disputas
+
+    fila = PasarelaCheckout(checkout_id="cs_test_x", account=None, pasarela=PasarelaCheckout.STRIPE)
+
+    assert fila.mail_comprador == ""
+    assert disputas._mail_de_disputa(fila, sesion) == esperado
+
+
+def test_mail_de_disputa_prefiere_la_cuenta_y_despues_la_sesion(make_account):
+    from api import disputas
+
+    cuenta = make_account(email="cuenta@mail.com")
+    con_cuenta = PasarelaCheckout(checkout_id="mp_x", account=cuenta, mail_comprador="otro@mail.com")
+    sin_cuenta = PasarelaCheckout(checkout_id="mp_y", account=None, mail_comprador="otro@mail.com")
+    sesion = {"customer_details": {"email": "pago@stripe.com"}}
+
+    assert disputas._mail_de_disputa(con_cuenta, sesion) == "cuenta@mail.com"
+    assert disputas._mail_de_disputa(sin_cuenta, sesion) == "pago@stripe.com"
+    assert disputas._mail_de_disputa(sin_cuenta, None) == "otro@mail.com"

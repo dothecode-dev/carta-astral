@@ -72,10 +72,13 @@ def _fila_de_disputa(dispute: dict) -> tuple:
 
 def _mail_de_disputa(fila, sesion) -> str:
     """De quién bloquear el mail. Una compra sin cuenta disputada antes de su
-    `completed` (EC16) todavía no tiene cuenta: el mail sale del pago."""
+    `completed` (EC16) todavía no tiene cuenta: el mail sale del pago. Sin
+    pago que lo traiga (Mercado Pago, o una cuenta borrada después de
+    comprar), el que se pidió al abrir el checkout (Ruling 16). En las filas
+    de Stripe `mail_comprador` es "": para ellas no cambia nada."""
     if fila.account is not None:
         return fila.account.email or ""
-    return ((sesion or {}).get("customer_details") or {}).get("email") or ""
+    return ((sesion or {}).get("customer_details") or {}).get("email") or fila.mail_comprador or ""
 
 
 def _bloquear_fila(fila_pk):
