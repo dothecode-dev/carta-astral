@@ -33,7 +33,7 @@ from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from api import canje, cupones, stripe_client
-from api.catalogo import CATALOGO, a_la_venta, producto
+from api.catalogo import CATALOGO, a_la_venta, precios_visibles, producto
 from api.models import (
     Account, Chart, ConteoDiario, CreditTransaction, Cupon, CuponUso, Derecho, Disputa, Interpretation,
     MailBloqueado, Movimiento, PasarelaCheckout, Reembolso,
@@ -437,7 +437,7 @@ class CuponAdmin(admin.ModelAdmin):
                 (
                     (f"{codigo} · {moneda}", _monto(lista, moneda), _monto(descuento, moneda), _monto(final, moneda))
                     for codigo in obj.productos if codigo in CATALOGO
-                    for moneda, lista in producto(codigo).precios.items()
+                    for moneda, lista in precios_visibles(producto(codigo)).items()
                     for final, descuento in [cupones.precio_final(lista, obj.porcentaje)]
                 ),
             )
@@ -468,7 +468,7 @@ class CuponAdmin(admin.ModelAdmin):
             prod = CATALOGO.get(codigo)
             if prod is None or prod.es_gratis:
                 continue
-            for moneda, lista in prod.precios.items():
+            for moneda, lista in precios_visibles(prod).items():
                 final, descuento = cupones.precio_final(lista, porcentaje)
                 precios.append({"codigo": codigo, "moneda": moneda, "lista": lista, "final": final, "descuento": descuento})
         return JsonResponse({"precios": precios})

@@ -101,6 +101,15 @@ def test_ars_sin_configurar_es_503(client, settings, stripe_prohibido):
     assert Chart.objects.count() == 0
 
 
+def test_ars_con_el_flag_apagado_es_400_sin_llamar_a_mp(client, settings, mp, stripe_prohibido):
+    settings.COBRO_ARS_ENABLED = False
+
+    r = _post(client, {**DATOS, "moneda": "ars", "email": "ana@example.com"})
+
+    assert r.status_code == 400
+    assert mp == [] and PasarelaCheckout.objects.count() == 0 and Chart.objects.count() == 0
+
+
 def test_usd_sin_email_sigue_como_hoy(client, monkeypatch, mp):
     class _Sesion:
         id = "cs_test_1"

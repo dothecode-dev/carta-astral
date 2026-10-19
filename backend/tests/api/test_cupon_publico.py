@@ -108,3 +108,24 @@ def test_el_precio_final_viene_por_moneda(client, cupon_30):
         "usd": {"precio_final_centavos": 2030, "descuento_centavos": 870},
         "brl": {"precio_final_centavos": 10430, "descuento_centavos": 4470},
     }
+
+
+@pytest.fixture
+def con_pesos(monkeypatch):
+    """El informe con precio en pesos, como en el catálogo real."""
+    import dataclasses
+
+    from api import catalogo
+
+    natal = catalogo.CATALOGO["informe_natal"]
+    monkeypatch.setitem(
+        catalogo.CATALOGO, "informe_natal", dataclasses.replace(natal, precios={**natal.precios, "ars": 2_500_000}),
+    )
+
+
+@pytest.mark.parametrize("prendido", [False, True])
+def test_los_pesos_se_muestran_solo_con_el_flag(client, promo, con_pesos, settings, prendido):
+    settings.COBRO_ARS_ENABLED = prendido
+    natal = next(p for p in client.get("/api/cupones/PROMO30/").json()["productos"] if p["codigo"] == "informe_natal")
+    assert ("ars" in natal["precios"]) is prendido
+    assert ("ars" in natal["finales"]) is prendido

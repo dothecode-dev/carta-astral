@@ -64,7 +64,7 @@ def moneda_pedida(request, codigo_producto: str) -> str:
         return pedida
     if pedida not in prod.monedas():
         raise MonedaInvalida(pedida)
-    if pedida == "ars" and not settings.COBRO_ARS_ENABLED:
+    if not catalogo.moneda_habilitada(pedida):
         raise MonedaInvalida(pedida)
     return pedida
 

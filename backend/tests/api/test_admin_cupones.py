@@ -300,3 +300,27 @@ def test_un_cupon_nuevo_no_puede_abarcar_un_pack_retirado(staff, stripe_captura)
 
     assert r.status_code == 200  # el formulario vuelve con el error
     assert not Cupon.objects.filter(codigo="PROMO30").exists()
+
+
+@pytest.fixture
+def con_pesos(monkeypatch):
+    """El informe con precio en pesos, como en el catálogo real."""
+    import dataclasses
+
+    from api import catalogo
+
+    natal = catalogo.CATALOGO["informe_natal"]
+    monkeypatch.setitem(
+        catalogo.CATALOGO, "informe_natal", dataclasses.replace(natal, precios={**natal.precios, "ars": 2_500_000}),
+    )
+
+
+@pytest.mark.parametrize("prendido", [False, True])
+def test_el_preview_muestra_pesos_solo_con_el_flag(staff, con_pesos, settings, prendido):
+    settings.COBRO_ARS_ENABLED = prendido
+    r = staff.get("/panel-test/api/cupon/precios/", {"porcentaje": "30", "productos": "informe_natal"})
+    assert ("ars" in {f["moneda"] for f in r.json()["precios"]}) is prendido
+
+    c = Cupon.objects.create(codigo="FICHAARS", porcentaje=30, productos=["informe_natal"], usos_maximos=10)
+    html = staff.get(f"/panel-test/api/cupon/{c.pk}/change/").content.decode()
+    assert ("informe_natal · ars" in html) is prendido

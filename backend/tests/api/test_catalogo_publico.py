@@ -81,3 +81,23 @@ def test_cada_producto_trae_sus_precios_por_moneda(client):
     natal = next(p for p in client.get("/api/catalogo/").json()["productos"] if p["codigo"] == "informe_natal")
     assert natal["precios"] == {"usd": 2900, "brl": 14900}
     assert (natal["precio_centavos"], natal["moneda"]) == (2900, "usd")
+
+
+@pytest.fixture
+def con_pesos(monkeypatch):
+    """El informe con precio en pesos, como en el catálogo real."""
+    import dataclasses
+
+    from api import catalogo
+
+    natal = catalogo.CATALOGO["informe_natal"]
+    monkeypatch.setitem(
+        catalogo.CATALOGO, "informe_natal", dataclasses.replace(natal, precios={**natal.precios, "ars": 2_500_000}),
+    )
+
+
+@pytest.mark.parametrize("prendido", [False, True])
+def test_los_pesos_se_muestran_solo_con_el_flag(client, con_pesos, settings, prendido):
+    settings.COBRO_ARS_ENABLED = prendido
+    natal = next(p for p in client.get(URL).json()["productos"] if p["codigo"] == "informe_natal")
+    assert ("ars" in natal["precios"]) is prendido

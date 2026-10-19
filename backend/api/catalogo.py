@@ -24,6 +24,23 @@ def pasarela_de(moneda: str) -> str:
     return PASARELA_POR_MONEDA.get(moneda, "stripe")
 
 
+#: Monedas detrás de un flag: apagado, ni se cobran ni se muestran.
+FLAG_POR_MONEDA = {"ars": "COBRO_ARS_ENABLED"}
+
+
+def moneda_habilitada(moneda: str) -> bool:
+    from django.conf import settings
+
+    flag = FLAG_POR_MONEDA.get(moneda)
+    return not flag or bool(getattr(settings, flag))
+
+
+def precios_visibles(p: "Producto") -> dict[str, int]:
+    """Los precios de `p` en las monedas habilitadas: lo que se muestra en el
+    catálogo público, en el cupón y en el preview del admin."""
+    return {moneda: monto for moneda, monto in p.precios.items() if moneda_habilitada(moneda)}
+
+
 @dataclass(frozen=True)
 class Producto:
     codigo: str
