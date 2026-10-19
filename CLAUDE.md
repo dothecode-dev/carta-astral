@@ -142,6 +142,36 @@ agregar endpoint) tiene que estar suscripto a los dos eventos que
 manda y un código de acceso que rebota vuelve a no dejar rastro. Si sumás un
 evento al despacho, sumalo también en el dashboard.
 
+## Mercado Pago (pesos) se configura a mano en tres lugares
+
+Nada en el repo verifica nada de esto. Si falta, el cobro en pesos falla o pierde
+plata en silencio.
+
+- **Scheduled Task de Coolify «Vencer checkouts de MP»**: `python manage.py
+  vencer_checkouts`, `*/15 * * * *`. No es opcional: MP no reintenta tarde una
+  notificación que falló (medido en el sandbox: un 500 se reintentó sólo en el
+  momento), así que este cron —que busca los pagos de cada checkout por
+  `external_reference`— es la ÚNICA red para un pago aprobado cuya notificación
+  se perdió, para el pago duplicado sobre una compra ya acreditada y para vencer
+  las preferencias (MP no avisa cuando vencen). Si se renombra el comando, hay
+  que cambiarlo también ahí.
+- **Webhook en el panel de developers de MP** (aplicación App-Astra → Webhooks):
+  `https://<backend>/api/webhooks/mercadopago/` con los tópicos «Pagos (legacy)», «Reclamos» y
+  «Contracargos». Los reclamos y los contracargos llegan SÓLO a la URL del panel,
+  no a la `notification_url` que manda cada preferencia: sin el panel, un
+  contracargo nunca revoca nada.
+- **En el sandbox** las credenciales de prueba son de otra aplicación: los
+  webhooks y la clave secreta se configuran entrando a developers como el
+  usuario VENDEDOR de prueba (el dueño de las credenciales de prueba), no en
+  App-Astra. Con la clave de App-Astra la firma no valida.
+
+Variables (en Coolify, documentadas en `backend/.env.example`):
+`COBRO_ARS_ENABLED` (apagado por default: nadie ve pesos), `MP_ACCESS_TOKEN`,
+`MP_WEBHOOK_SECRET`, `MP_NOTIFICACION_URL` y `MP_RETORNO_URL` (https; la de
+retorno lleva `{locale}` y `{checkout_id}`). Con el flag prendido y alguna
+faltante, el check de arranque (`manage.py check --tag mercadopago`) avisa por
+Telegram.
+
 ## Si `API_URL` de la web apunta al dominio público, el throttle por IP se rompe en silencio
 
 `NUM_PROXIES=1` (`backend/config/settings.py`) le dice a DRF que hay
