@@ -534,6 +534,21 @@ def test_in_mediation_solo_avisa(client, pagos, avisos, acreditada):
 
 
 @pytest.mark.django_db
+def test_charged_back_avisa_sin_revocar_y_200(client, pagos, avisos, acreditada):
+    """La revocación la hace el tópico de contracargos (RF12); el pago en
+    `charged_back` sólo avisa, por si ese tópico no está suscripto."""
+    fila = PasarelaCheckout.objects.get(account=acreditada)
+    pagos[str(PAGO)] = _pago(status="charged_back", status_detail="reimbursed")
+
+    assert _notificar(client, action="payment.updated").status_code == 200
+
+    assert Derecho.objects.get(account=acreditada, codigo_producto="informe_natal").cantidad_restante == 1
+    assert len(avisos) == 1
+    assert str(PAGO) in avisos[0] and fila.checkout_id in avisos[0] and "contracargo" in avisos[0].lower()
+    assert "suscripto" in avisos[0]
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("status", ["rejected", "cancelled", "pending", "in_process", "authorized"])
 def test_rejected_no_hace_nada(client, pagos, avisos, mails, make_account, status):
     cuenta = make_account()

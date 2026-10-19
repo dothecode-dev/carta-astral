@@ -147,6 +147,14 @@ def procesar_pago(payment_id: str) -> None:
             f"Pago de Mercado Pago {pago_id} ({fila.checkout_id}) en MEDIACIÓN: el comprador abrió un "
             "reclamo. No se cambió nada: seguirlo en el panel de MP.",
         )
+    elif estado == "charged_back":
+        # La revocación la hace el tópico de contracargos (RF12), que llega
+        # SÓLO a la URL del panel: si no está suscripto, este aviso es la red.
+        logger.warning("pago de mercadopago %s (%s) con contracargo", pago_id, fila.checkout_id)
+        cobro.avisar(
+            f"Pago de Mercado Pago {pago_id} ({fila.checkout_id}) con CONTRACARGO: revisar a mano y "
+            "verificar que el tópico de contracargos esté suscripto en el panel de MP.",
+        )
     elif estado not in ("refunded", "partially_refunded"):
         logger.info("pago de mercadopago %s (%s) en estado %s: nada que hacer", pago_id, fila.checkout_id, estado)
 
