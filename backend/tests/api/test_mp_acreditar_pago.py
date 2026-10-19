@@ -63,8 +63,9 @@ def test_acredita_igual_que_el_webhook(pagos, make_account):
     fila = _fila(cuenta)
     pagos[PAGO] = _pago()
 
-    _correr("--pasarela", "mercadopago", PAGO)
+    salida = _correr("--pasarela", "mercadopago", PAGO)
 
+    assert "acreditado" in salida
     fila.refresh_from_db()
     assert fila.acreditado_at is not None
     assert Derecho.objects.filter(account=cuenta).exists()
@@ -84,7 +85,7 @@ def test_dos_corridas_un_movimiento(pagos, make_account):
 
 
 @pytest.mark.django_db
-def test_pasarela_stripe_deriva_a_acreditar_sesion(pagos):
+def test_pasarela_stripe_deriva_a_acreditar_sesion():
     with pytest.raises(CommandError, match="acreditar_sesion") as e:
         _correr("--pasarela", "stripe", "cs_test_123")
 
@@ -119,4 +120,66 @@ def test_pago_sin_fila_sale_con_mensaje(pagos):
     pagos[PAGO] = _pago()
 
     with pytest.raises(CommandError, match=CHECKOUT):
+        _correr("--pasarela", "mercadopago", PAGO)
+
+
+@pytest.mark.django_db
+def test_pago_pendiente_es_error_con_el_status(pagos, make_account):
+    fila = _fila(make_account())
+    pagos[PAGO] = _pago(status="pending")
+
+    with pytest.raises(CommandError, match="status=pending"):
+        _correr("--pasarela", "mercadopago", PAGO)
+
+    fila.refresh_from_db()
+    assert fila.acreditado_at is None
+
+
+@pytest.mark.django_db
+def test_referencia_ajena_es_error(pagos, make_account):
+    _fila(make_account())
+    pagos[PAGO] = _pago(external_reference="pedido-de-otro-sistema")
+
+    with pytest.raises(CommandError, match="ajena"):
+        _correr("--pasarela", "mercadopago", PAGO)
+
+
+@pytest.mark.django_db
+def test_fila_de_otra_pasarela_es_error(pagos, make_account):
+    fila = _fila(make_account())
+    fila.pasarela = PasarelaCheckout.STRIPE
+    fila.save()
+    pagos[PAGO] = _pago()
+
+    with pytest.raises(CommandError, match="stripe"):
+        _correr("--pasarela", "mercadopago", PAGO)
+
+
+@pytest.mark.django_db
+def test_pago_duplicado_es_error_y_no_dice_acreditado(pagos, make_account, monkeypatch):
+    cuenta = make_account()
+    _fila(cuenta)
+    pagos[PAGO] = _pago()
+    _correr("--pasarela", "mercadopago", PAGO)
+    otro = "999000111"
+    pagos[otro] = _pago(id=int(otro))
+    monkeypatch.setattr(mercadopago_api, "reembolsar", lambda pid, key: {"id": 1})
+
+    with pytest.raises(CommandError, match="duplicado"):
+        _correr("--pasarela", "mercadopago", otro)
+
+    assert Movimiento.objects.filter(account=cuenta, tipo="otorgamiento").count() == 1
+
+
+@pytest.mark.django_db
+def test_compra_anonima_sin_mail_explica_que_falta(pagos, make_account, monkeypatch):
+    _fila(make_account())
+    pagos[PAGO] = _pago()
+
+    def _sin_mail(*a, **k):
+        raise cobro.CompraAnonimaSinMail("sin mail")
+
+    monkeypatch.setattr(cobro, "acreditar", _sin_mail)
+
+    with pytest.raises(CommandError, match="sin mail del comprador"):
         _correr("--pasarela", "mercadopago", PAGO)
