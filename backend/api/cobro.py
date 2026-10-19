@@ -147,6 +147,17 @@ def acreditar(
     informe_en_curso = False
     try:
         informe_en_curso = arrancar_informe(cuenta, fila)
+    except Exception:
+        if aplicado:
+            # Sólo la llamada que acreditó (los reintentos no repiten el
+            # aviso): MP no reintenta tarde y el cron de MP no vuelve sobre una
+            # fila acreditada y cerrada, así que el aviso es la red.
+            logger.exception("compra %s acreditada por %s y el informe no arrancó", fila.checkout_id, external_id)
+            avisar(
+                f"Pago {pago_id} ({fila.checkout_id}): acreditado, pero el informe NO arrancó. "
+                "Revisar el log y arrancarlo a mano.",
+            )
+        raise
     finally:
         # Un solo mail por compra, sólo en la llamada que la acreditó, y
         # después del arranque porque es lo que dice cuál mandar.

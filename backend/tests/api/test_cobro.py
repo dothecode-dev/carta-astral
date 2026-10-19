@@ -254,6 +254,27 @@ def test_si_el_informe_no_arranca_la_excepcion_sube_y_el_mail_sale_igual(
 
 
 @pytest.mark.django_db
+def test_si_el_informe_no_arranca_tras_acreditar_avisa_una_vez(make_account, make_chart, mails, avisos, monkeypatch):
+    """MP no reintenta tarde y el cron no vuelve a mirar una fila acreditada
+    y cerrada: el aviso es la red. Sólo en la llamada que acreditó."""
+    cuenta = make_account()
+    fila = _fila(cuenta, make_chart(account=cuenta))
+
+    def explota(*_a, **_k):
+        raise RuntimeError("se cayó la base")
+
+    monkeypatch.setattr(cobro, "arrancar_informe", explota)
+
+    with pytest.raises(RuntimeError):
+        _acreditar(fila)
+    with pytest.raises(RuntimeError):
+        _acreditar(PasarelaCheckout.objects.get(pk=fila.pk))
+
+    assert len(avisos) == 1
+    assert "111" in avisos[0] and fila.checkout_id in avisos[0] and "informe" in avisos[0]
+
+
+@pytest.mark.django_db
 def test_otro_pago_sobre_una_fila_acreditada_levanta_pago_duplicado(make_account, avisos, mails, eventos):
     """Ruling 1 (RF11b): dos pagos aprobados sobre la misma preferencia de MP
     existen (medido en sandbox). El segundo no otorga: el caller lo reembolsa."""
