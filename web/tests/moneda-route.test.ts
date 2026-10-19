@@ -27,7 +27,7 @@ describe("POST /api/moneda", () => {
     expect(cookie.toLowerCase()).toMatch(/samesite=lax/);
   });
 
-  it.each(["ars", "", "BRL;"])("una moneda que no conocemos (%j) es 400 y no pone cookie", async (moneda) => {
+  it.each(["eur", "", "BRL;"])("una moneda que no conocemos (%j) es 400 y no pone cookie", async (moneda) => {
     const res = await pedir({ moneda, volver: "/pt/precios" });
 
     expect(res.status).toBe(400);

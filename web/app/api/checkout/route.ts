@@ -51,6 +51,11 @@ export async function POST(request: Request) {
       if (motivo) return NextResponse.json({ error: "el cupón no sirve", motivo }, { status: 400 });
       return NextResponse.json({ error: "producto inválido" }, { status: 400 });
     }
+    if (status === 403 && motivoDe(error) === "bloqueado") {
+      // Un mail con una disputa o un reembolso forzado: el backend no abre el
+      // pago. Es una decisión, no una falla nuestra, y la pantalla lo dice.
+      return NextResponse.json({ error: "no se puede abrir el pago", motivo: "bloqueado" }, { status: 403 });
+    }
     if (status === 503) {
       return NextResponse.json({ error: "el cobro no está disponible" }, { status: 503 });
     }

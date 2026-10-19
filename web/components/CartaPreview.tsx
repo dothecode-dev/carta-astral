@@ -27,6 +27,7 @@ export function CartaPreview({
   onComprar,
   comprando,
   errorCompra,
+  pideMail = false,
 }: {
   carta: CartaDibujable;
   dict: Dict;
@@ -36,13 +37,19 @@ export function CartaPreview({
    *  catálogo no respondió: el botón sigue, sin precio en el texto (comprar
    *  no depende de él; Stripe lo muestra antes de cobrar). */
   precio: string | null;
-  onComprar: () => void | Promise<void>;
+  /** Con `pideMail`, recibe el mail que escribió la persona. */
+  onComprar: (mail?: string) => void | Promise<void>;
   comprando: boolean;
   errorCompra: string | null;
+  /** En pesos: el primer clic abre el campo del mail en vez del pago, y el
+   *  pago sale del botón de ese campo (Mercado Pago no devuelve el mail). */
+  pideMail?: boolean;
 }) {
   const t = dict.newChart;
   // Cuál se apretó: el error va junto a ese, no a una pantalla de distancia.
   const [origen, setOrigen] = useState<"arriba" | "cierre">("cierre");
+  const [mailAbierto, setMailAbierto] = useState(false);
+  const [mail, setMail] = useState("");
   const error = (donde: "arriba" | "cierre") =>
     errorCompra && origen === donde ? (
       <p className="compraError" role="alert">
@@ -52,23 +59,60 @@ export function CartaPreview({
 
   // Los dos botones hacen lo mismo y comparten estado: el de arriba para quien
   // ya decidió, el grande del cierre para quien leyó todo (18-10-2026).
-  const boton = (grande: boolean) => (
-    <button
-      type="button"
-      className={grande ? "btn btnPrimary btnGrande" : "btn btnPrimary"}
-      disabled={comprando}
-      onClick={() => {
-        setOrigen(grande ? "cierre" : "arriba");
-        void onComprar();
-      }}
-    >
-      {comprando
-        ? dict.precios.abriendo
-        : precio
-          ? t.comprarCta.replace("{precio}", precio)
-          : t.comprarCtaSinPrecio}
-    </button>
-  );
+  const boton = (grande: boolean) => {
+    const donde = grande ? "cierre" : "arriba";
+    // En pesos, el campo del mail ocupa el lugar del botón que se apretó.
+    if (pideMail && mailAbierto && origen === donde) {
+      return (
+        <form
+          className="form previewMail"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void onComprar(mail);
+          }}
+        >
+          <div className="field">
+            <label className="fieldLabel" htmlFor={`preview-mail-${donde}`}>
+              {t.mailLabel}
+            </label>
+            <input
+              id={`preview-mail-${donde}`}
+              className="input"
+              type="email"
+              autoComplete="email"
+              required
+              autoFocus
+              value={mail}
+              onChange={(e) => setMail(e.target.value)}
+            />
+            <p className="fieldNote">{t.mailNota}</p>
+          </div>
+          <button type="submit" className={grande ? "btn btnPrimary btnGrande" : "btn btnPrimary"} disabled={comprando}>
+            {comprando ? dict.precios.abriendo : t.mailPagar}
+          </button>
+        </form>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className={grande ? "btn btnPrimary btnGrande" : "btn btnPrimary"}
+        disabled={comprando}
+        onClick={() => {
+          setOrigen(donde);
+          if (pideMail) setMailAbierto(true);
+          else void onComprar();
+        }}
+      >
+        {comprando
+          ? dict.precios.abriendo
+          : precio
+            ? t.comprarCta.replace("{precio}", precio)
+            : t.comprarCtaSinPrecio}
+      </button>
+    );
+  };
 
   return (
     <section className="previewCarta">

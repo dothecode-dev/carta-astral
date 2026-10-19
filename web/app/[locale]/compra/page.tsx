@@ -18,6 +18,15 @@ import { getSessionToken } from "@/lib/session";
 // renderizado dinámico, y además no hay nada que prerenderizar — lo único que
 // muestra depende de una compra concreta.
 
+/** Los estados de un pago de MP que todavía pueden terminar acreditando. */
+const ESPERABLES_MP = new Set(["approved", "pending", "in_process", "authorized"]);
+
+/** ¿Volvió de Mercado Pago sin un pago que esperar? Sin el parámetro (una URL
+ *  guardada, otra versión) se espera como siempre: no se adivina. */
+function sinPagoDeMP(estado: string | string[] | undefined): boolean {
+  return typeof estado === "string" && !ESPERABLES_MP.has(estado);
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -47,6 +56,32 @@ export default async function CompraPage({
   // copie el ejemplo de Stripe, una compra.
   const sp = await searchParams;
   const checkoutId = sp.checkout_id ?? sp.session_id;
+
+  // Mercado Pago vuelve acá también cuando NO hubo pago («Volver a la
+  // tienda», un rechazo): medido el 19-10-2026, trae `collection_status=null`.
+  // Esperar una confirmación que no va a llegar —y decir «Listo, gracias»—
+  // era mentirle a quien no pagó. Sólo un aprobado o un pendiente espera.
+  if (typeof checkoutId === "string" && checkoutId.startsWith("mp_") && sinPagoDeMP(sp.collection_status)) {
+    const dict = getDict(locale);
+    const signedIn = (await getSessionToken()) !== null;
+    return (
+      <>
+        <Nav locale={locale} dict={dict} path="/compra" signedIn={signedIn} />
+        <main className="docFrame">
+          <section className="waiting">
+            <div className="waitingCopy">
+              <h1 className="display waitingTitle">{dict.compra.noPagoTitle}</h1>
+              <p className="waitingBody">{dict.compra.noPagoBody}</p>
+              <Link className="btn btnPrimary" href={`/${locale}/${signedIn ? "cuenta" : "nueva"}`}>
+                {signedIn ? dict.compra.irACuenta : dict.compra.noPagoNueva}
+              </Link>
+            </div>
+          </section>
+        </main>
+        <Footer locale={locale} dict={dict} />
+      </>
+    );
+  }
 
   // Primero la cookie del nonce de ESTE checkout (RF14): si está, este
   // navegador es el que abrió un pago sin cuenta, y el canje decide —con o sin

@@ -297,6 +297,101 @@ describe("comprar sin cuenta desde la vista previa", () => {
   });
 });
 
+// En pesos el backend exige el mail (Mercado Pago no devuelve el de quien
+// paga): la vista previa lo pide ANTES de abrir el pago, nunca después.
+describe("comprar sin cuenta en pesos", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  const assign = vi.fn();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    track.mockClear();
+    assign.mockClear();
+    sessionStorage.clear();
+    localStorage.clear();
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("location", { ...window.location, assign });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const BOTON = /Leer el informe completo · \$ 25\.000/;
+
+  async function apretar() {
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: BOTON })[0]!);
+    });
+  }
+
+  async function pagarCon(mail: string) {
+    fireEvent.change(screen.getByLabelText(t.mailLabel), { target: { value: mail } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: t.mailPagar }));
+    });
+  }
+
+  it("apretar comprar pide el mail y todavía no abre nada", async () => {
+    render(<NewChartForm moneda="ars" locale="es" dict={dict} precio="$ 25.000" />);
+    await completarYEnviar(fetchMock, CALCULADA);
+    const antes = fetchMock.mock.calls.length;
+
+    await apretar();
+
+    expect(screen.getByLabelText(t.mailLabel)).toBeTruthy();
+    expect(fetchMock.mock.calls.length).toBe(antes);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("con el mail abre el checkout en pesos con ese mail y redirige", async () => {
+    render(<NewChartForm moneda="ars" locale="es" dict={dict} precio="$ 25.000" />);
+    await completarYEnviar(fetchMock, CALCULADA);
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ url: "https://mp.test/c" }) });
+
+    await apretar();
+    await pagarCon("  Ana@Ejemplo.com ");
+
+    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    expect(url).toBe("/api/checkout/anonimo");
+    expect(JSON.parse(init.body)).toMatchObject({ moneda: "ars", email: "Ana@Ejemplo.com", date: "1976-05-31" });
+    expect(assign).toHaveBeenCalledWith("https://mp.test/c");
+  });
+
+  it("un mail sin forma de mail no sale del navegador", async () => {
+    render(<NewChartForm moneda="ars" locale="es" dict={dict} precio="$ 25.000" />);
+    await completarYEnviar(fetchMock, CALCULADA);
+    const antes = fetchMock.mock.calls.length;
+
+    await apretar();
+    await pagarCon("ana-sin-arroba");
+
+    expect(fetchMock.mock.calls.length).toBe(antes);
+    expect(screen.getByRole("alert").textContent).toBe(dict.precios.cuponMotivo.email_invalido);
+  });
+
+  it("un mail bloqueado muestra su texto y no redirige", async () => {
+    render(<NewChartForm moneda="ars" locale="es" dict={dict} precio="$ 25.000" />);
+    await completarYEnviar(fetchMock, CALCULADA);
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ motivo: "bloqueado" }) });
+
+    await apretar();
+    await pagarCon("x@y.com");
+
+    expect(screen.getByRole("alert").textContent).toBe(dict.precios.cuponMotivo.bloqueado);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("en dólares no pide mail: Stripe lo pide en su página", async () => {
+    render(<NewChartForm moneda="usd" locale="es" dict={dict} precio="US$ 29" />);
+    await completarYEnviar(fetchMock, CALCULADA);
+
+    expect(screen.queryByLabelText(t.mailLabel)).toBeNull();
+  });
+});
+
 describe("con sesión (RF12b)", () => {
   afterEach(() => vi.unstubAllGlobals());
 

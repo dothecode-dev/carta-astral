@@ -11,7 +11,7 @@ export const legalEs: LegalContent = {
     blocks: [
       {
         kind: "p",
-        text: "ASTRA es un servicio de **dothecode, LLC**. Esta política explica qué datos tratamos y por qué.",
+        text: "ASTRA es un servicio de **dothecode, LLC**. Las compras en pesos argentinos las vende **Gustavo Benito Silva** (CUIT 20-22809400-6), responsable de esa venta. Esta política explica qué datos tratamos y por qué.",
       },
       { kind: "h2", text: "Qué datos recopilamos" },
       {
@@ -20,8 +20,9 @@ export const legalEs: LegalContent = {
           "**Cuenta:** al entrar con Google recibimos tu identificador de Google y tu email; con el código por mail, tu email. No vemos ni guardamos tu contraseña.",
           "**Avisos por mail:** te escribimos a tu email para mandarte el código de acceso y para avisarte de tu compra y de que tu informe está listo. Ese último mail puede incluir el nombre de la carta, tu Sol, tu Luna y tu Ascendente, y el arranque del informe.",
           "**Datos de nacimiento:** los que cargás para calcular una carta — nombre (opcional), fecha, hora y lugar de nacimiento.",
-          "**Compras:** el cobro lo procesa **Stripe**, que actúa como vendedor registrado. No vemos ni guardamos los datos de tu tarjeta: de Stripe recibimos la confirmación del pago y el identificador de la compra, para darte acceso a lo que compraste.",
-          "**Comprar sin cuenta:** si abrís el pago del informe sin haber entrado, guardamos los datos de esa carta para poder entregarte el informe cuando se confirme el pago. Si el pago no se completa, la carta se borra cuando vence (a la hora de abrirlo). El email lo cargás en **Stripe**, que nos lo pasa al confirmar el pago: lo usamos para crear tu cuenta, o para acreditar la compra en la que ya tenías con ese email, y para mandarte el código de acceso.",
+          "**Compras:** el cobro lo procesa **Stripe**, que actúa como vendedor registrado. No vemos ni guardamos los datos de tu tarjeta: de Stripe recibimos la confirmación del pago y el identificador de la compra, para darte acceso a lo que compraste. Si pagás en pesos argentinos, el cobro lo procesa **Mercado Pago**: tampoco vemos tu tarjeta, y de Mercado Pago recibimos la confirmación y el identificador del pago. Por cada compra en pesos se emite una factura electrónica ante **ARCA** (la agencia de recaudación argentina); es a consumidor final y no lleva tu nombre ni tu documento.",
+          "**Comprar sin cuenta:** si abrís el pago del informe sin haber entrado, guardamos los datos de esa carta para poder entregarte el informe cuando se confirme el pago. Si el pago no se completa, la carta se borra cuando vence (a la hora de abrirlo). El email lo cargás en **Stripe**, que nos lo pasa al confirmar el pago: lo usamos para crear tu cuenta, o para acreditar la compra en la que ya tenías con ese email, y para mandarte el código de acceso. Si pagás en pesos, el email lo cargás en nuestro formulario antes de ir a Mercado Pago, y lo usamos para lo mismo.",
+          "**Botón de arrepentimiento:** si lo usás, guardamos el email, el número de compra si lo escribiste, la fecha y el código del pedido, para responderlo y dejar constancia de la revocación.",
           "**Carta sin cuenta:** para mostrarte tu carta sin cuenta usamos tus datos de nacimiento en el momento y no los guardamos en nuestros servidores. Si después comprás el informe, ver «Comprar sin cuenta» más arriba.",
         ],
       },
@@ -80,8 +81,10 @@ export const legalEs: LegalContent = {
         items: [
           "La carta natal se calcula sin costo y sin cuenta. El informe completo de una carta se compra aparte.",
           "Lo que compras es el derecho a leer un informe: **no vence**, no es transferible y no tiene valor monetario fuera de ASTRA. Leer ese mismo informe en otro idioma no consume otro.",
-          "El cobro lo procesa **Stripe**, que actúa como vendedor registrado (*merchant of record*): emite el comprobante, cobra el impuesto que corresponda a tu país y atiende los reclamos de la transacción.",
-          "**Reembolsos:** Stripe puede reembolsar una compra dentro de los 60 días y aplica los plazos de arrepentimiento que exija tu país. Si te reembolsan una compra, se descuenta de los informes que tengas disponibles; si ya los usaste, queda como saldo pendiente que se cancela contra tu próxima compra. **Nunca retiramos un informe ya escrito.**",
+          "En dólares y en reales, el cobro lo procesa **Stripe**, que actúa como vendedor registrado (*merchant of record*): emite el comprobante, cobra el impuesto que corresponda a tu país y atiende los reclamos de la transacción.",
+          "En pesos argentinos vende **Gustavo Benito Silva**, CUIT 20-22809400-6, monotributista: el cobro lo procesa **Mercado Pago**, el precio es final y la compra se factura con factura C.",
+          "**Botón de arrepentimiento:** podés revocar la compra dentro de los 10 días corridos desde que la hiciste con el enlace «Botón de arrepentimiento» del pie de página, sin entrar a tu cuenta. En el momento te damos un código que identifica el pedido, y te escribimos para resolverlo.",
+          "**Reembolsos:** en dólares y en reales, Stripe puede reembolsar una compra dentro de los 60 días y aplica los plazos de arrepentimiento que exija tu país; en pesos, el reembolso se hace por Mercado Pago. Si te reembolsan una compra, se descuenta de los informes que tengas disponibles; si ya los usaste, queda como saldo pendiente que se cancela contra tu próxima compra. **Nunca retiramos un informe ya escrito.**",
           "Si borrás tu cuenta, los informes que te queden disponibles se pierden.",
         ],
       },

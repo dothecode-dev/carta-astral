@@ -110,6 +110,27 @@ describe("POST /api/checkout/anonimo", () => {
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
+  it("en pesos: el checkout de Mercado Pago también deja la cookie del nonce", async () => {
+    const id = "mp_" + "ab".repeat(16);
+    fetchMock.mockResolvedValue(json({ url: "https://www.mercadopago.com.ar/checkout/x", checkout_id: id, nonce: "N" }));
+
+    const res = await POST(req({ date: "1990-05-10", moneda: "ars", email: "a@b.com" }));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toContain(`astra_compra_${id}=N`);
+    // El mail viaja al backend: en pesos lo pide él, MP no lo devuelve.
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({ email: "a@b.com", moneda: "ars" });
+  });
+
+  it("un mail bloqueado llega como 403 con su motivo, no como una falla nuestra", async () => {
+    fetchMock.mockResolvedValue(json({ error: "cuenta bloqueada", motivo: "bloqueado" }, 403));
+
+    const res = await POST(req({ date: "1990-05-10", moneda: "ars", email: "x@y.com" }));
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "no se puede abrir el pago", motivo: "bloqueado" });
+  });
+
   it("429 y 503 llegan como tales", async () => {
     fetchMock.mockResolvedValueOnce(json({}, 429)).mockResolvedValueOnce(json({}, 503));
 

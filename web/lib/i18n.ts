@@ -271,8 +271,11 @@ export type Dict = {
     terms: { label: string; value: string; free?: boolean }[];
     /** Lleva `{moneda}`: el nombre de la moneda en que se muestra el precio. */
     note: string;
+    /** La nota cuando el precio está en pesos (RF30): ya está en la moneda de
+     *  quien paga y lo cobra Mercado Pago, no Stripe. */
+    notePesos: string;
     /** Nombre de cada moneda para la nota (RF27). */
-    monedas: { usd: string; brl: string };
+    monedas: { usd: string; brl: string; ars: string };
     /** A la página de precios. La sección no tenía ni un enlace: la tabla
      *  terminaba en una nota y ahí se cortaba el camino a comprar. */
     cta: string;
@@ -287,7 +290,23 @@ export type Dict = {
     note: string;
     cta: string;
   };
-  foot: { brand: string; privacy: string; terms: string; contact: string };
+  foot: { brand: string; privacy: string; terms: string; contact: string; arrepentimiento: string };
+  /** El botón de arrepentimiento (Res. SCI 424/2020). */
+  arrepentimiento: {
+    titulo: string;
+    lede: string;
+    mailLabel: string;
+    mailNota: string;
+    numeroLabel: string;
+    numeroNota: string;
+    enviar: string;
+    mailInvalido: string;
+    demasiados: string;
+    fallo: string;
+    listoTitulo: string;
+    listoCodigo: string;
+    listoCuerpo: string;
+  };
   consent: { text: string; accept: string; reject: string; more: string; footLink: string };
   precios: {
     title: string;
@@ -313,6 +332,8 @@ export type Dict = {
     /** Si el catálogo no se pudo cargar. */
     sinCatalogo: string;
     nota: string;
+    /** La nota en pesos (RF30): el pago lo procesa Mercado Pago. */
+    notaPesos: string;
     /** Debajo de «Comprar», sólo con sesión y sin ninguna carta: comprar un
      *  informe sin carta es válido, pero hay que decir qué sigue. */
     sinCartaNota: string;
@@ -645,6 +666,10 @@ export type Dict = {
     demoraBody: string;
     /** Cuando se llega sin `checkout_id`: a mano, o con un link guardado. */
     sinDatoTitle: string;
+    /** Volvió de Mercado Pago sin pagar (o con el pago rechazado). */
+    noPagoTitle: string;
+    noPagoBody: string;
+    noPagoNueva: string;
     sinDatoBody: string;
     irACuenta: string;
     /** La vuelta del pago sin cuenta (`CanjeCompra`), cuando la cuenta ya
@@ -734,6 +759,11 @@ export type Dict = {
     comprarCta: string;
     /** El mismo botón cuando el catálogo no respondió y no hay precio. */
     comprarCtaSinPrecio: string;
+    /** En pesos el mail se pide antes de pagar: Mercado Pago no nos devuelve el
+     *  de quien paga, y es adonde llegan el informe y el acceso. */
+    mailLabel: string;
+    mailNota: string;
+    mailPagar: string;
     /** Frase legal armada con dos enlaces: antes + términos + y + privacidad + después. */
     legalAntes: string;
     legalTerminos: string;
@@ -855,7 +885,8 @@ const es: Dict = {
       { label: "Vencimiento", value: "No vencen" },
     ],
     note: "Precios en {moneda}, con el impuesto de tu país ya incluido. El total en tu moneda lo ves al pagar, directo en la web.",
-    monedas: { usd: "dólares", brl: "reales" },
+    notePesos: "Precios finales en pesos argentinos. El pago lo procesa Mercado Pago.",
+    monedas: { usd: "dólares", brl: "reales", ars: "pesos argentinos" },
     cta: "Ver todos los precios",
   },
   faq: {
@@ -960,6 +991,9 @@ const es: Dict = {
     demoraTitle: "Tu pago se hizo",
     demoraBody: "La confirmación está tardando más de lo normal. No hace falta que pagues de nuevo: en cuanto llegue, lo vas a encontrar en tu cuenta. Si en unos minutos no aparece, escribinos a info@astraguia.com.",
     sinDatoTitle: "Gracias por tu compra",
+    noPagoTitle: "El pago no se completó",
+    noPagoBody: "No se te cobró nada. Si querés el informe, podés intentarlo de nuevo.",
+    noPagoNueva: "Volver a calcular mi carta",
     sinDatoBody: "Lo que compraste te espera en tu cuenta.",
     irACuenta: "Ir a mi cuenta",
     canjeCodigoTitle: "Te mandamos un código a {email}",
@@ -1028,6 +1062,9 @@ const es: Dict = {
     indiceTitulo: "Lo que trae tu informe",
     comprarCta: "Leer el informe completo · {precio}",
     comprarCtaSinPrecio: "Leer el informe completo",
+    mailLabel: "Tu mail",
+    mailNota: "Ahí te llegan el informe y el acceso a tu cuenta.",
+    mailPagar: "Ir a pagar con Mercado Pago",
     legalAntes: "Al continuar aceptás los ",
     legalTerminos: "términos",
     legalY: " y la ",
@@ -1061,7 +1098,22 @@ const es: Dict = {
     seoGratisBody:
       "La carta y el adelanto de lo que dirá tu informe son gratis y no piden cuenta. El informe completo es lo único que se paga.",
   },
-  foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto" },
+  foot: { brand: "ASTRA · Cartas astrales", privacy: "Privacidad", terms: "Términos", contact: "Contacto", arrepentimiento: "Botón de arrepentimiento" },
+  arrepentimiento: {
+    titulo: "Botón de arrepentimiento",
+    lede: "Si compraste en ASTRA y querés revocar la compra, dejanos el mail con el que pagaste. Tenés 10 días corridos desde la compra. No hace falta entrar a tu cuenta.",
+    mailLabel: "Mail de la compra",
+    mailNota: "A este mail te mandamos el código del pedido y te escribimos para resolverlo.",
+    numeroLabel: "Número de compra (opcional)",
+    numeroNota: "Si lo tenés a mano. Si no, buscamos la compra por el mail.",
+    enviar: "Enviar el pedido",
+    mailInvalido: "Revisá el mail: tiene que ser una dirección válida.",
+    demasiados: "Hubo demasiados pedidos desde tu conexión. Probá en un rato o escribinos a info@astraguia.com.",
+    fallo: "No pudimos registrar el pedido. Probá de nuevo o escribinos a info@astraguia.com.",
+    listoTitulo: "Recibimos tu pedido",
+    listoCodigo: "Este es el código que identifica tu pedido. Guardalo:",
+    listoCuerpo: "También te lo mandamos por mail. Te vamos a escribir para resolverlo.",
+  },
   consent: {
     text: "Nos ayuda saber cuánta gente entra y qué páginas mira. Sin publicidad, sin vender datos y sin tu nombre ni tus datos de nacimiento.",
     accept: "Aceptar",
@@ -1094,6 +1146,7 @@ const es: Dict = {
     gratisDetalle: "Sin cuenta y sin tarjeta. Tu rueda, tus tablas y un adelanto de lo que dice el informe sobre tu carta.",
     verEjemplo: "Ver un ejemplo",
     nota: "Los informes que compres quedan en tu cuenta hasta que los uses. El pago lo procesa Stripe; el impuesto de tu país ya está incluido en el precio.",
+    notaPesos: "Los informes que compres quedan en tu cuenta hasta que los uses. En pesos el pago lo procesa Mercado Pago y el precio es final.",
     sinCartaNota: "Después de pagar, calculás tu carta y el informe se escribe sobre ella.",
     cuponLabel: "Cupón",
     cuponAplicar: "Aplicar",
@@ -1107,6 +1160,9 @@ const es: Dict = {
       no_aplica: "Ese cupón no aplica a este producto.",
       ya_usado: "Ya usaste ese cupón.",
       cuenta_no_habilitada: "Esta cuenta no puede usar cupones. Escribinos si creés que es un error.",
+      cupon_no_disponible_en_pesos: "Por ahora los cupones no se pueden usar pagando en pesos. Para usarlo, elegí dólares arriba de los precios.",
+      bloqueado: "No podemos abrir un pago para este mail. Si creés que es un error, escribinos a info@astraguia.com.",
+      email_invalido: "Revisá el mail: a esa dirección te mandamos el informe.",
     },
   },
   auth: {
@@ -1270,7 +1326,8 @@ const en: Dict = {
       { label: "Expiry", value: "They don't expire" },
     ],
     note: "Prices in {moneda}, with your country's tax already included. You see the total in your currency when you pay, directly on the web.",
-    monedas: { usd: "US dollars", brl: "Brazilian reais" },
+    notePesos: "Final prices in Argentine pesos. Payment is handled by Mercado Pago.",
+    monedas: { usd: "US dollars", brl: "Brazilian reais", ars: "Argentine pesos" },
     cta: "See all pricing",
   },
   faq: {
@@ -1375,6 +1432,9 @@ const en: Dict = {
     demoraTitle: "Your payment went through",
     demoraBody: "The confirmation is taking longer than usual. There's no need to pay again: as soon as it arrives, you'll find it in your account. If it doesn't show up in a few minutes, write to us at info@astraguia.com.",
     sinDatoTitle: "Thank you for your purchase",
+    noPagoTitle: "The payment wasn't completed",
+    noPagoBody: "You weren't charged anything. If you want the report, you can try again.",
+    noPagoNueva: "Calculate my chart again",
     sinDatoBody: "What you bought is waiting in your account.",
     irACuenta: "Go to my account",
     canjeCodigoTitle: "We sent a code to {email}",
@@ -1443,6 +1503,9 @@ const en: Dict = {
     indiceTitulo: "What your report covers",
     comprarCta: "Read the full report · {precio}",
     comprarCtaSinPrecio: "Read the full report",
+    mailLabel: "Your email",
+    mailNota: "That's where your report and access to your account arrive.",
+    mailPagar: "Pay with Mercado Pago",
     legalAntes: "By continuing you accept the ",
     legalTerminos: "terms",
     legalY: " and the ",
@@ -1476,7 +1539,22 @@ const en: Dict = {
     seoGratisBody:
       "The chart and a preview of your report are free and need no account. Only the full report is paid.",
   },
-  foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact" },
+  foot: { brand: "ASTRA · Astrological charts", privacy: "Privacy", terms: "Terms", contact: "Contact", arrepentimiento: "Cancellation button" },
+  arrepentimiento: {
+    titulo: "Cancellation button",
+    lede: "If you bought something on ASTRA and want to cancel the purchase, leave us the email you paid with. You have 10 calendar days from the purchase. You don't need to sign in.",
+    mailLabel: "Purchase email",
+    mailNota: "We'll send the request code to this email and write to you to resolve it.",
+    numeroLabel: "Purchase number (optional)",
+    numeroNota: "If you have it at hand. If not, we'll find the purchase by email.",
+    enviar: "Send the request",
+    mailInvalido: "Check the email: it has to be a valid address.",
+    demasiados: "Too many requests from your connection. Try again later or write to info@astraguia.com.",
+    fallo: "We couldn't register the request. Try again or write to info@astraguia.com.",
+    listoTitulo: "We received your request",
+    listoCodigo: "This is the code that identifies your request. Keep it:",
+    listoCuerpo: "We also sent it to you by email. We'll write to you to resolve it.",
+  },
   consent: {
     text: "It helps us to know how many people arrive and which pages they read. No ads, no data selling, and never your name or your birth details.",
     accept: "Accept",
@@ -1509,6 +1587,7 @@ const en: Dict = {
     gratisDetalle: "No account, no card. Your wheel, your tables and a preview of what the report says about your chart.",
     verEjemplo: "See an example",
     nota: "The reports you buy stay in your account until you use them. Payment is handled by Stripe; your country's tax is already included in the price.",
+    notaPesos: "The reports you buy stay in your account until you use them. In pesos, payment is handled by Mercado Pago and the price is final.",
     sinCartaNota: "After paying, you calculate your chart and the report is written on it.",
     cuponLabel: "Coupon",
     cuponAplicar: "Apply",
@@ -1522,6 +1601,9 @@ const en: Dict = {
       no_aplica: "That coupon doesn't apply to this product.",
       ya_usado: "You already used that coupon.",
       cuenta_no_habilitada: "This account can't use coupons. Write to us if you think that's a mistake.",
+      cupon_no_disponible_en_pesos: "Coupons can't be used when paying in pesos yet. To use it, choose US dollars above the prices.",
+      bloqueado: "We can't open a payment for this email. If you think that's a mistake, write to us at info@astraguia.com.",
+      email_invalido: "Check the email: that's where we send your report.",
     },
   },
   auth: {
@@ -1685,7 +1767,8 @@ const pt: Dict = {
       { label: "Validade", value: "Não expiram" },
     ],
     note: "Preços em {moneda}, com o imposto do seu país já incluído. O total na sua moeda aparece na hora de pagar, direto pela web.",
-    monedas: { usd: "dólares", brl: "reais" },
+    notePesos: "Preços finais em pesos argentinos. O pagamento é processado pelo Mercado Pago.",
+    monedas: { usd: "dólares", brl: "reais", ars: "pesos argentinos" },
     cta: "Ver todos os preços",
   },
   faq: {
@@ -1790,6 +1873,9 @@ const pt: Dict = {
     demoraTitle: "Seu pagamento foi feito",
     demoraBody: "A confirmação está demorando mais que o normal. Não precisa pagar de novo: assim que chegar, você vai encontrar na sua conta. Se em alguns minutos não aparecer, escreva para info@astraguia.com.",
     sinDatoTitle: "Obrigado pela sua compra",
+    noPagoTitle: "O pagamento não foi concluído",
+    noPagoBody: "Nada foi cobrado. Se quiser o relatório, pode tentar de novo.",
+    noPagoNueva: "Calcular meu mapa de novo",
     sinDatoBody: "O que você comprou espera na sua conta.",
     irACuenta: "Ir para minha conta",
     canjeCodigoTitle: "Enviamos um código para {email}",
@@ -1858,6 +1944,9 @@ const pt: Dict = {
     indiceTitulo: "O que tem no seu relatório",
     comprarCta: "Ler o relatório completo · {precio}",
     comprarCtaSinPrecio: "Ler o relatório completo",
+    mailLabel: "Seu e-mail",
+    mailNota: "É para lá que chegam o relatório e o acesso à sua conta.",
+    mailPagar: "Pagar com Mercado Pago",
     legalAntes: "Ao continuar, você aceita os ",
     legalTerminos: "termos",
     legalY: " e a ",
@@ -1891,7 +1980,22 @@ const pt: Dict = {
     seoGratisBody:
       "O mapa e um adiantamento do seu relatório são grátis e não pedem conta. Só o relatório completo é pago.",
   },
-  foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato" },
+  foot: { brand: "ASTRA · Mapas astrais", privacy: "Privacidade", terms: "Termos", contact: "Contato", arrepentimiento: "Botão de arrependimento" },
+  arrepentimiento: {
+    titulo: "Botão de arrependimento",
+    lede: "Se você comprou na ASTRA e quer cancelar a compra, deixe o e-mail com que pagou. Você tem 10 dias corridos a partir da compra. Não precisa entrar na sua conta.",
+    mailLabel: "E-mail da compra",
+    mailNota: "Enviamos o código do pedido para este e-mail e escrevemos para resolver.",
+    numeroLabel: "Número da compra (opcional)",
+    numeroNota: "Se tiver à mão. Se não, buscamos a compra pelo e-mail.",
+    enviar: "Enviar o pedido",
+    mailInvalido: "Confira o e-mail: precisa ser um endereço válido.",
+    demasiados: "Muitos pedidos da sua conexão. Tente mais tarde ou escreva para info@astraguia.com.",
+    fallo: "Não conseguimos registrar o pedido. Tente de novo ou escreva para info@astraguia.com.",
+    listoTitulo: "Recebemos seu pedido",
+    listoCodigo: "Este é o código que identifica seu pedido. Guarde-o:",
+    listoCuerpo: "Também enviamos por e-mail. Vamos escrever para resolver.",
+  },
   consent: {
     text: "Ajuda-nos saber quantas pessoas chegam e quais páginas leem. Sem publicidade, sem vender dados e sem o seu nome nem os seus dados de nascimento.",
     accept: "Aceitar",
@@ -1924,6 +2028,7 @@ const pt: Dict = {
     gratisDetalle: "Sem conta e sem cartão. Sua roda, suas tabelas e um adiantamento do que o relatório diz sobre seu mapa.",
     verEjemplo: "Ver um exemplo",
     nota: "Os relatórios que você comprar ficam na sua conta até serem usados. O pagamento é processado pela Stripe; o imposto do seu país já está incluído no preço.",
+    notaPesos: "Os relatórios que você comprar ficam na sua conta até serem usados. Em pesos, o pagamento é processado pelo Mercado Pago e o preço é final.",
     sinCartaNota: "Depois de pagar, você calcula seu mapa e o relatório é escrito sobre ele.",
     cuponLabel: "Cupom",
     cuponAplicar: "Aplicar",
@@ -1937,6 +2042,9 @@ const pt: Dict = {
       no_aplica: "Esse cupom não vale para este produto.",
       ya_usado: "Você já usou esse cupom.",
       cuenta_no_habilitada: "Esta conta não pode usar cupons. Escreva para nós se achar que é um erro.",
+      cupon_no_disponible_en_pesos: "Por enquanto os cupons não podem ser usados pagando em pesos. Para usá-lo, escolha dólares acima dos preços.",
+      bloqueado: "Não podemos abrir um pagamento para este e-mail. Se achar que é um erro, escreva para info@astraguia.com.",
+      email_invalido: "Confira o e-mail: é para esse endereço que enviamos o relatório.",
     },
   },
   auth: {

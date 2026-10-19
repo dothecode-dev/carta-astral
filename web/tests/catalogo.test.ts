@@ -26,6 +26,15 @@ describe("catálogo", () => {
     expect(formatearPrecio(12500, "usd", "es-AR")).toMatch(/125/);
   });
 
+  it.each(["es-AR", "en-US", "pt-BR"])("los pesos salen en formato es-AR en cualquier idioma (%s)", (locale) => {
+    // RF30. En en-US «$25,000» se confunde con dólares; el comprador en pesos
+    // es argentino y lee «$ 25.000».
+    const precio = formatearPrecio(2500000, "ars", locale);
+    expect(precio).toMatch(/25\.000/);
+    expect(precio).toMatch(/\$/);
+    expect(precio).not.toMatch(/US|ARS/);
+  });
+
   it("si el backend no responde devuelve null en vez de romper la página", async () => {
     // Precios en blanco con un aviso es mejor que precios inventados: la
     // página anuncia lo que Stripe cobra, no lo que la web recuerda.

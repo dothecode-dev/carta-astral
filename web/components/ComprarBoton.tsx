@@ -90,7 +90,8 @@ export function ComprarBoton({
         setBusy(false);
         // Un cupón que se agotó entre pintar la página y apretar no es «no
         // pudimos abrir el pago»: es otra cosa, y tiene sus palabras.
-        const motivo = res.status === 400 ? await motivoDe(res) : null;
+        // El 403 es un mail bloqueado (una disputa): también tiene su texto.
+        const motivo = res.status === 400 || res.status === 403 ? await motivoDe(res) : null;
         setError((motivo && dict.precios.cuponMotivo[motivo]) || dict.precios.fallo);
         return;
       }

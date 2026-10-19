@@ -282,3 +282,72 @@ describe("/precios en la moneda del visitante", () => {
     expect(opciones).toEqual(["usd", "brl"]);
   });
 });
+
+// RF29/RF30: con el cobro en pesos prendido el catálogo trae `ars`, el
+// selector la ofrece y la página dice que se paga con Mercado Pago. Apagado, el
+// backend no la manda y todo queda como arriba (el test del selector sin pesos).
+const CATALOGO_ARS = {
+  productos: [
+    {
+      codigo: "informe_natal", precio_centavos: 500, moneda: "usd", precios: { usd: 500, brl: 2490, ars: 2500000 },
+      otorga: [{ codigo: "informe_natal", cantidad: 1 }],
+    },
+    {
+      codigo: "pack_5_natal", precio_centavos: 12500, moneda: "usd", precios: { usd: 12500 },
+      otorga: [{ codigo: "informe_natal", cantidad: 5 }],
+    },
+  ],
+};
+
+function stubBackendArs() {
+  const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+    void _init;
+    const u = String(url);
+    if (u.includes("/api/moneda/")) return json({ moneda: "ars", pais: "AR" });
+    if (u.includes("/api/checkout")) return json({ url: "https://mercadopago" });
+    return json(CATALOGO_ARS);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+describe("/precios en pesos", () => {
+  it("el selector ofrece pesos cuando el catálogo los trae", async () => {
+    stubBackendArs();
+    const { container } = await pagina({});
+
+    const form = container.querySelector('form[action="/api/moneda"]') as HTMLFormElement;
+    const opciones = [...form.querySelectorAll('button[name="moneda"]')].map((b) => (b as HTMLButtonElement).value);
+    expect(opciones).toEqual(["usd", "brl", "ars"]);
+  });
+
+  it("muestra el precio en pesos con formato argentino y el pack sin pesos, en dólares", async () => {
+    stubBackendArs();
+    await pagina({});
+
+    const montos = screen.getAllByText(/\$/, { selector: ".precioMonto" }).map((n) => sinEspacios(n.textContent));
+    expect(montos[0]).toMatch(/\$ 25\.000/);
+    expect(montos[1]).toMatch(/US\$/);
+  });
+
+  it("dice que el pago lo procesa Mercado Pago, no Stripe", async () => {
+    stubBackendArs();
+    const { container } = await pagina({});
+
+    const nota = container.querySelector(".preciosNota")!.textContent!;
+    expect(nota).toMatch(/Mercado Pago/);
+    expect(nota).not.toMatch(/Stripe/);
+  });
+
+  it("el botón compra en pesos", async () => {
+    sesion = true;
+    vi.stubGlobal("location", { assign: vi.fn(), href: "" });
+    const fetchMock = stubBackendArs();
+    await pagina({});
+
+    await userEvent.click(screen.getAllByRole("button", { name: dict.precios.comprar })[0]);
+
+    const pedido = fetchMock.mock.calls.find(([u]) => String(u) === "/api/checkout")!;
+    expect(JSON.parse(pedido[1]!.body as string)).toMatchObject({ producto: "informe_natal", moneda: "ars" });
+  });
+});

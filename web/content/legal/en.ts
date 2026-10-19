@@ -10,7 +10,7 @@ export const legalEn: LegalContent = {
     blocks: [
       {
         kind: "p",
-        text: "ASTRA is a service by **dothecode, LLC**. This policy explains what data we process and why.",
+        text: "ASTRA is a service by **dothecode, LLC**. Purchases in Argentine pesos are sold by **Gustavo Benito Silva** (CUIT 20-22809400-6), who is responsible for that sale. This policy explains what data we process and why.",
       },
       { kind: "h2", text: "What we collect" },
       {
@@ -19,8 +19,9 @@ export const legalEn: LegalContent = {
           "**Account:** when you sign in with Google we receive your Google identifier and your email; with the email code, your email. We never see or store your password.",
           "**Email notices:** we write to your email to send you the access code and to let you know about your purchase and that your report is ready. That last email may include the chart's name, your Sun, Moon and Ascendant signs, and the opening of the report.",
           "**Birth data:** what you enter to compute a chart — name (optional), date, time and place of birth.",
-          "**Purchases:** payments are processed by **Stripe**, acting as merchant of record. We never see or store your card details: from Stripe we receive the payment confirmation and the purchase identifier, so we can give you access to what you bought.",
-          "**Buying without an account:** if you open the payment for the report without signing in, we store that chart's data so we can deliver the report once the payment is confirmed. If the payment isn't completed, the chart is deleted when the checkout expires (one hour after opening it). You enter your email in **Stripe**, which passes it to us when the payment is confirmed: we use it to create your account, or to credit the purchase to the account you already had with that email, and to send you the access code.",
+          "**Purchases:** payments are processed by **Stripe**, acting as merchant of record. We never see or store your card details: from Stripe we receive the payment confirmation and the purchase identifier, so we can give you access to what you bought. If you pay in Argentine pesos, the payment is processed by **Mercado Pago**: we don't see your card there either, and from Mercado Pago we receive the payment confirmation and identifier. Each purchase in pesos gets an electronic invoice issued with **ARCA** (Argentina's tax agency); it is issued to a final consumer and carries neither your name nor your ID.",
+          "**Buying without an account:** if you open the payment for the report without signing in, we store that chart's data so we can deliver the report once the payment is confirmed. If the payment isn't completed, the chart is deleted when the checkout expires (one hour after opening it). You enter your email in **Stripe**, which passes it to us when the payment is confirmed: we use it to create your account, or to credit the purchase to the account you already had with that email, and to send you the access code. If you pay in pesos, you enter your email in our form before going to Mercado Pago, and we use it for the same purposes.",
+          "**Cancellation button:** if you use it, we store the email, the purchase number if you entered it, the date and the request code, to answer it and keep a record of the cancellation.",
           "**Chart without an account:** to show you your chart without an account we use your birth details at that moment and don't store them on our servers. If you then buy the report, see «Buying without an account» above.",
         ],
       },
@@ -79,8 +80,10 @@ export const legalEn: LegalContent = {
         items: [
           "Your birth chart is calculated at no cost and without an account. The full report for a chart is a separate purchase.",
           "What you buy is the right to read a report: it **never expires**, is not transferable and has no monetary value outside ASTRA. Reading that same report in another language doesn't consume another one.",
-          "Payment is processed by **Stripe**, acting as *merchant of record*: it issues the receipt, collects any tax due in your country and handles transaction enquiries.",
-          "**Refunds:** Stripe may refund a purchase within 60 days and applies the cooling-off periods your country requires. If a purchase is refunded, it is deducted from the reports you have available; if you already used them, it stays as an outstanding balance settled against your next purchase. **We never take back a report that has already been written.**",
+          "In US dollars and Brazilian reais, payment is processed by **Stripe**, acting as *merchant of record*: it issues the receipt, collects any tax due in your country and handles transaction enquiries.",
+          "In Argentine pesos the seller is **Gustavo Benito Silva**, CUIT 20-22809400-6, a registered sole trader (monotributista): payment is processed by **Mercado Pago**, the price is final and the purchase is invoiced with a type C invoice.",
+          "**Cancellation button:** you can cancel a purchase within 10 calendar days of making it with the «Cancellation button» link in the footer, without signing in. We give you a code that identifies the request right away, and we write to you to resolve it.",
+          "**Refunds:** in US dollars and reais, Stripe may refund a purchase within 60 days and applies the cooling-off periods your country requires; in pesos, refunds are made through Mercado Pago. If a purchase is refunded, it is deducted from the reports you have available; if you already used them, it stays as an outstanding balance settled against your next purchase. **We never take back a report that has already been written.**",
           "If you delete your account, any remaining reports are lost.",
         ],
       },

@@ -24,8 +24,14 @@ const CHECKOUT_ID = /^cs_[A-Za-z0-9_]{1,200}$/;
  *  no responde nada, así que una cookie más larga sólo ocuparía lugar. */
 const MAX_AGE_SECONDS = 24 * 60 * 60;
 
+/** El de Mercado Pago lo inventamos nosotros: `mp_<token_hex(16)>`
+ *  (`backend/api/pasarelas/mercadopago.py`). */
+const CHECKOUT_MP = /^mp_[0-9a-f]{32}$/;
+
+/** ¿Es el id de un checkout que se paga en una pasarela (Stripe o Mercado
+ *  Pago)? Son los únicos que pueden tener la cookie del nonce. */
 export function checkoutIdValido(checkoutId: unknown): checkoutId is string {
-  return typeof checkoutId === "string" && CHECKOUT_ID.test(checkoutId);
+  return typeof checkoutId === "string" && (CHECKOUT_ID.test(checkoutId) || CHECKOUT_MP.test(checkoutId));
 }
 
 /** El checkout de un cupón al 100 %: no pasa por Stripe y el backend le pone
@@ -40,7 +46,7 @@ export function checkoutConsultable(checkoutId: unknown): checkoutId is string {
 }
 
 /** El nombre de la cookie del nonce de ese checkout, o `null` si el id no
- *  tiene forma de checkout de Stripe. */
+ *  tiene forma de checkout de Stripe ni de Mercado Pago. */
 export function nombre(checkoutId: unknown): string | null {
   return checkoutIdValido(checkoutId) ? `${PREFIJO}${checkoutId}` : null;
 }

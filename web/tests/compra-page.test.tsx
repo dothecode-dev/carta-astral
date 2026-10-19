@@ -99,4 +99,48 @@ describe("/compra", () => {
 
     await expect(CompraPage(props({ checkout_id: "x" }))).rejects.toThrow("redirect: /es/entrar");
   });
+
+  // Medido el 19-10-2026 contra el sandbox: quien vuelve de Mercado Pago sin
+  // pagar («Volver a la tienda») trae `collection_status=null&status=null`.
+  // Antes la página le decía «Listo, gracias. Estamos confirmando tu pago».
+  describe("vuelta de Mercado Pago sin pago", () => {
+    const MP = "mp_" + "ab".repeat(16);
+    const VOLVIO = { checkout_id: MP, collection_status: "null", status: "null", payment_id: "null" };
+
+    it.each(["null", "rejected", "cancelled"])("con collection_status=%s dice que no se cobró, sin esperar", async (estado) => {
+      store.set(`astra_compra_${MP}`, { value: "n" });
+
+      render(await CompraPage(props({ ...VOLVIO, collection_status: estado })));
+
+      expect(screen.getByRole("heading", { name: "El pago no se completó" })).toBeInTheDocument();
+      expect(screen.queryByTestId("canje")).toBeNull();
+      expect(screen.queryByTestId("espera")).toBeNull();
+    });
+
+    it("sin sesión ofrece volver a la carta; con sesión, ir a la cuenta", async () => {
+      const { unmount } = render(await CompraPage(props(VOLVIO)));
+      expect(screen.getByRole("link", { name: /carta/i })).toHaveAttribute("href", "/es/nueva");
+      unmount();
+
+      store.set(SESSION_COOKIE, { value: "t" });
+      render(await CompraPage(props(VOLVIO)));
+      expect(screen.getByRole("link", { name: "Ir a mi cuenta" })).toHaveAttribute("href", "/es/cuenta");
+    });
+
+    it.each(["approved", "pending", "in_process"])("con collection_status=%s espera como siempre", async (estado) => {
+      store.set(`astra_compra_${MP}`, { value: "n" });
+
+      render(await CompraPage(props({ ...VOLVIO, collection_status: estado })));
+
+      expect(screen.getByTestId("canje")).toHaveTextContent(MP);
+    });
+
+    it("un checkout de Stripe no mira collection_status", async () => {
+      store.set(NONCE, { value: "n" });
+
+      render(await CompraPage(props({ checkout_id: CHECKOUT, collection_status: "null" })));
+
+      expect(screen.getByTestId("canje")).toBeInTheDocument();
+    });
+  });
 });

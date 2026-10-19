@@ -64,6 +64,15 @@ describe("/api/checkout con cupón", () => {
     expect(await res.json()).toEqual({ error: "el cupón no sirve", motivo: "agotado" });
   });
 
+  it("una cuenta con el mail bloqueado llega como 403 con su motivo", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ error: "cuenta bloqueada", motivo: "bloqueado" }, 403)));
+
+    const res = await checkoutPost(post({ producto: "informe_natal", moneda: "ars" }));
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "no se puede abrir el pago", motivo: "bloqueado" });
+  });
+
   it("un 400 sin motivo sigue siendo «producto inválido»", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ error: "falta el producto" }, 400)));
 

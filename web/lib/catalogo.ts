@@ -65,7 +65,10 @@ export function unidades(producto: ProductoCatalogo): number {
 
 /** "US$ 29" y no "$29.00": el precio es redondo y el símbolo dice la moneda. */
 export function formatearPrecio(centavos: number, moneda: string, locale: string): string {
-  return new Intl.NumberFormat(locale, {
+  // Los pesos, en formato argentino en cualquier idioma (RF30): en en-US
+  // «$25,000» se lee como dólares, y quien paga en pesos lee «$ 25.000».
+  const enPesos = moneda.toLowerCase() === "ars";
+  return new Intl.NumberFormat(enPesos ? "es-AR" : locale, {
     style: "currency",
     currency: moneda.toUpperCase(),
     // «US$» y no «$» para el dólar —en es-AR «$» es el peso—, pero «R$» y no

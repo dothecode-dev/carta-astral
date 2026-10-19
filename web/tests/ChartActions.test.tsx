@@ -817,6 +817,18 @@ describe("volver a la carta después de cerrar la pestaña", () => {
     expect(fetchMock.mock.calls[0][0]).toContain("/interpretation");
   });
 
+  it("un mail bloqueado lo dice con sus palabras, no con el fallo genérico", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { assign, href: "" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(403, { motivo: "bloqueado" })));
+
+    renderActions({ paidCredits: 0 });
+    await clickBoton(enlaceCompra());
+
+    expect(screen.getByText(dict.precios.cuponMotivo.bloqueado)).toBeInTheDocument();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it("si el pago no se puede abrir, lo dice y no navega a ningún lado", async () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { assign, href: "" });

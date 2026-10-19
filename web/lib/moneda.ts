@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { esMoneda, type Moneda } from "./monedas";
 import { callApi } from "./session";
 
-export { MONEDAS, esMoneda, monedaPara, type Moneda } from "./monedas";
+export { MONEDAS, esMoneda, monedaPara, monedasOfrecidas, type Moneda } from "./monedas";
 
 // En qué moneda ve los precios —y paga— quien navega (RF23 de la spec de
 // cobro en reales). Lo que se muestra y lo que se manda al checkout salen de

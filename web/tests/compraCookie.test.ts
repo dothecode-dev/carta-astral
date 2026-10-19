@@ -16,6 +16,21 @@ describe("nombre de la cookie del nonce", () => {
     expect(nombre("cs_test_a1B2")).toBe("astra_compra_cs_test_a1B2");
   });
 
+  it("acepta el id de un checkout de Mercado Pago", () => {
+    // Sin esto, la compra sin cuenta en pesos no abría el pago: la ruta no
+    // podía nombrar la cookie del nonce y cortaba antes de redirigir.
+    const id = "mp_" + "0123456789abcdef".repeat(2);
+    expect(nombre(id)).toBe(`astra_compra_${id}`);
+  });
+
+  it.each([
+    ["corto", "mp_abc"],
+    ["con mayúsculas", "mp_" + "A".repeat(32)],
+    ["largo", "mp_" + "a".repeat(33)],
+  ])("rechaza un id de Mercado Pago %s", (_motivo, id) => {
+    expect(nombre(id)).toBeNull();
+  });
+
   it("dos checkouts, dos cookies distintas", () => {
     expect(nombre("cs_test_uno")).not.toBe(nombre("cs_test_dos"));
   });

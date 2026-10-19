@@ -10,7 +10,7 @@ import { fetchCatalogo, formatearPrecio, precioEn, unidades } from "@/lib/catalo
 import { fetchCupon, normalizarCupon } from "@/lib/cupon";
 import { DEFAULT_LOCALE, INTL_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
-import { MONEDAS, monedaDelVisitante, monedaPara } from "@/lib/moneda";
+import { MONEDAS, monedaDelVisitante, monedaPara, monedasOfrecidas } from "@/lib/moneda";
 import { callApi, haySesion } from "@/lib/session";
 import type { ChartSummary } from "@/components/AccountCharts";
 
@@ -22,7 +22,9 @@ import type { ChartSummary } from "@/components/AccountCharts";
 // Lo que dice cada botón del selector. Acá y no en los diccionarios: es el
 // símbolo de la moneda, igual en los tres idiomas (y `check` prohíbe el
 // literal en los textos).
-const SIMBOLO: Record<(typeof MONEDAS)[number], string> = { usd: "US$", brl: "R$" };
+// Los pesos con «AR$» y no «$»: el selector se ve en los tres idiomas, y en
+// inglés «$» es el dólar.
+const SIMBOLO: Record<(typeof MONEDAS)[number], string> = { usd: "US$", brl: "R$", ars: "AR$" };
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -165,7 +167,7 @@ export default async function PreciosPage({
           <form className="switch monedaSelector" action="/api/moneda" method="post" aria-label={dict.precios.monedaLabel}>
             <input type="hidden" name="volver" value={`/${locale}/precios`} />
             {codigoCupon && <input type="hidden" name="cupon" value={codigoCupon} />}
-            {MONEDAS.map((m) => (
+            {monedasOfrecidas(productos).map((m) => (
               <button
                 key={m}
                 type="submit"
@@ -279,7 +281,7 @@ export default async function PreciosPage({
             directos con 3-4,5rem, así que el enlace suelto quedaba a media
             pantalla de la nota que acompaña. */}
         <div className="preciosPie">
-          <p className="preciosNota">{dict.precios.nota}</p>
+          <p className="preciosNota">{moneda === "ars" ? dict.precios.notaPesos : dict.precios.nota}</p>
           {/* En su propia línea, no colgando del final: nadie compra 6.000
               palabras a ciegas, y esto es una invitación a mirar el producto,
               no una aclaración más sobre impuestos. */}

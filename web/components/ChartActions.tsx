@@ -461,7 +461,18 @@ export function ChartActions({
       }
       if (!res.ok) {
         setBusy(false);
-        setError(dict.chart.compraFallo);
+        // Un mail bloqueado (403) no es «no pudimos abrir el pago»: reintentar
+        // no lo arregla, y tiene sus palabras.
+        let motivo: string | null = null;
+        if (res.status === 400 || res.status === 403) {
+          try {
+            const cuerpo = (await res.json()) as { motivo?: unknown };
+            motivo = typeof cuerpo.motivo === "string" ? cuerpo.motivo : null;
+          } catch {
+            motivo = null;
+          }
+        }
+        setError((motivo && dict.precios.cuponMotivo[motivo]) || dict.chart.compraFallo);
         return;
       }
       const { url } = (await res.json()) as { url: string };

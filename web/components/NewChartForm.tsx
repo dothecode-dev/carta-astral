@@ -40,6 +40,9 @@ function destinoDe(locale: Locale, id: string | undefined): string {
   return `/${locale}/carta/${id}`;
 }
 
+/** Lo mínimo para no mandar un mail sin forma de mail: algo@algo.algo. */
+const MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 async function motivoDe(res: Response): Promise<string | null> {
   try {
     const cuerpo = (await res.json()) as { motivo?: unknown };
@@ -146,8 +149,15 @@ export function NewChartForm({
   /** Paga el informe sin crear cuenta antes (pagar es entrar): la carta de la
    *  vista previa viaja al backend, que abre Stripe. El nonce de la vuelta
    *  queda en una cookie httpOnly puesta por `/api/checkout/anonimo`. */
-  async function comprarSinCuenta() {
+  async function comprarSinCuenta(mail?: string) {
     if (comprando || !datos.current) return;
+    // En pesos el mail viaja al backend (lo pide él: MP no lo devuelve). Una
+    // forma rota no sale del navegador; la validación de verdad es la suya.
+    const email = mail?.trim();
+    if (moneda === "ars" && !(email && MAIL.test(email))) {
+      setErrorCompra(dict.precios.cuponMotivo.email_invalido);
+      return;
+    }
     setComprando(true);
     setErrorCompra(null);
     // Antes de salir del sitio, como en `ComprarBoton`. `anonimo` separa esta
@@ -158,11 +168,11 @@ export function NewChartForm({
       const res = await fetch("/api/checkout/anonimo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...datos.current, locale, moneda }),
+        body: JSON.stringify({ ...datos.current, locale, moneda, ...(moneda === "ars" ? { email } : {}) }),
       });
       if (!res.ok) {
         setComprando(false);
-        const motivo = res.status === 400 ? await motivoDe(res) : null;
+        const motivo = res.status === 400 || res.status === 403 ? await motivoDe(res) : null;
         setErrorCompra(
           motivo === "requiere_cuenta"
             ? t.comprarRequiereCuenta
@@ -191,6 +201,7 @@ export function NewChartForm({
         }}
         precio={precio}
         onComprar={comprarSinCuenta}
+        pideMail={moneda === "ars"}
         comprando={comprando}
         errorCompra={errorCompra}
       />

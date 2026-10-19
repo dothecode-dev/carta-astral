@@ -11,7 +11,7 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers({ "x-forwarded-for": "200.1.2.3" }),
 }));
 
-import { MONEDAS, monedaDelVisitante, monedaPara } from "@/lib/moneda";
+import { MONEDAS, monedaDelVisitante, monedaPara, monedasOfrecidas } from "@/lib/moneda";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -46,7 +46,7 @@ describe("monedaDelVisitante", () => {
   });
 
   it("una cookie con cualquier otra cosa se ignora", async () => {
-    cookieMoneda = "ars";
+    cookieMoneda = "eur";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ moneda: "usd", pais: "AR" })));
 
     expect(await monedaDelVisitante()).toBe("usd");
@@ -55,7 +55,7 @@ describe("monedaDelVisitante", () => {
   it.each([
     ["el backend no responde", () => Promise.reject(new Error("timeout"))],
     ["el backend da error", () => Promise.resolve(json({}, 500))],
-    ["el backend responde una moneda que no conocemos", () => Promise.resolve(json({ moneda: "ars" }))],
+    ["el backend responde una moneda que no conocemos", () => Promise.resolve(json({ moneda: "eur" }))],
   ])("si %s, usd", async (_caso, respuesta) => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(respuesta));
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -85,7 +85,21 @@ describe("monedaPara", () => {
     expect(monedaPara(VINCULO, "brl")).toBe("usd");
   });
 
-  it("conoce usd y brl", () => {
-    expect([...MONEDAS]).toEqual(["usd", "brl"]);
+  it("conoce usd, brl y ars", () => {
+    expect([...MONEDAS]).toEqual(["usd", "brl", "ars"]);
+  });
+});
+
+describe("monedasOfrecidas: lo que muestra el selector", () => {
+  it("usd siempre, y las otras sólo si algún producto tiene precio en ellas", () => {
+    expect(monedasOfrecidas([{ precios: { usd: 500, brl: 2490 } }, { precios: { usd: 900 } }])).toEqual(["usd", "brl"]);
+  });
+
+  it("pesos aparece cuando el catálogo los trae (RF29: el backend los esconde con el flag apagado)", () => {
+    expect(monedasOfrecidas([{ precios: { usd: 500, brl: 2490, ars: 2500000 } }])).toEqual(["usd", "brl", "ars"]);
+  });
+
+  it("sin catálogo, sólo usd: no se ofrece una moneda sin precio", () => {
+    expect(monedasOfrecidas(null)).toEqual(["usd"]);
   });
 });

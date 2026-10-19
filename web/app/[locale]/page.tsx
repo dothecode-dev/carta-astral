@@ -203,7 +203,9 @@ export default async function Home({
             </table>
 
             <p className="caption" style={{ marginTop: "1.25rem" }}>
-              {dict.pricing.note.replace("{moneda}", dict.pricing.monedas[monedaInforme])}
+              {monedaInforme === "ars"
+                ? dict.pricing.notePesos
+                : dict.pricing.note.replace("{moneda}", dict.pricing.monedas[monedaInforme])}
             </p>
 
             {/* La sección terminaba en la nota, sin un solo enlace: la tabla

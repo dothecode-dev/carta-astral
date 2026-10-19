@@ -208,6 +208,28 @@ describe("ComprarBoton con cupón", () => {
     });
   });
 
+  it("un mail bloqueado (403) lo dice con sus palabras", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false, status: 403, json: async () => ({ error: "no se puede abrir el pago", motivo: "bloqueado" }),
+    }));
+
+    render(<ComprarBoton moneda="ars" codigo="informe_natal" locale="es" dict={dict} signedIn />);
+    await userEvent.click(screen.getByRole("button"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(dict.precios.cuponMotivo.bloqueado);
+  });
+
+  it("un cupón pagando en pesos dice que todavía no se puede", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false, status: 400, json: async () => ({ motivo: "cupon_no_disponible_en_pesos" }),
+    }));
+
+    render(<ComprarBoton moneda="ars" codigo="informe_natal" locale="es" dict={dict} signedIn cupon="PROMO30" />);
+    await userEvent.click(screen.getByRole("button"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(dict.precios.cuponMotivo.cupon_no_disponible_en_pesos);
+  });
+
   it("si el cupón se agotó lo dice con sus palabras, no con «no pudimos abrir el pago»", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false, status: 400, json: async () => ({ error: "el cupón no sirve", motivo: "agotado" }),
