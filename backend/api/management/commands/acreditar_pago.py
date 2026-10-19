@@ -31,6 +31,10 @@ class Command(BaseCommand):
             raise CommandError(f"id de pago inválido: {payment_id!r}")
         try:
             mercadopago.procesar_pago(payment_id)
+        except mercadopago_api.MPNoConfigurado as e:
+            raise CommandError(
+                "MP_ACCESS_TOKEN no está configurado en este entorno: no se pudo leer el pago ni acreditar nada",
+            ) from e
         except mercadopago_api.MPError as e:
             raise CommandError(f"Mercado Pago no devolvió el pago {payment_id}: {e}") from e
         except mercadopago.FilaInexistente as e:
@@ -44,13 +48,31 @@ class Command(BaseCommand):
             ) from e
         self._informar_resultado(payment_id)
 
+    def _informar_desde_la_base(self, payment_id: str, error: Exception) -> None:
+        fila = PasarelaCheckout.objects.filter(
+            pasarela=PasarelaCheckout.MERCADOPAGO, payment_intent=payment_id, acreditado_at__isnull=False,
+        ).first()
+        if fila is not None:
+            self.stdout.write(self.style.SUCCESS(
+                f"pago {payment_id} acreditado ({fila.checkout_id}, acreditado_at={fila.acreditado_at.isoformat()}); "
+                f"no se pudo releer el pago para confirmar su estado ({error}), el resultado sale de la base",
+            ))
+            return
+        raise CommandError(
+            f"el pago {payment_id} se procesó pero no quedó acreditado en ninguna compra, y no se pudo releer "
+            f"de MP para saber su estado ({error}): revisar los avisos y el log",
+        )
+
     def _informar_resultado(self, payment_id: str) -> None:
         """`procesar_pago` vuelve sin levantar tanto si acreditó como si no tenía
         nada que hacer: lo que pasó de verdad se lee de la fila, no se supone."""
         try:
             pago = mercadopago_api.obtener_pago(payment_id)
-        except mercadopago_api.MPError as e:
-            raise CommandError(f"no pude releer el pago {payment_id} para confirmar el resultado: {e}") from e
+        except (mercadopago_api.MPError, mercadopago_api.MPNoConfigurado) as e:
+            # `procesar_pago` ya corrió bien: la relectura sólo confirmaba. Lo
+            # que quedó se lee de la base, no se convierte en un error falso.
+            self._informar_desde_la_base(payment_id, e)
+            return
         referencia = pago.get("external_reference") or ""
         estado = pago.get("status") or "?"
         fila = PasarelaCheckout.objects.filter(checkout_id=referencia).first() if referencia else None

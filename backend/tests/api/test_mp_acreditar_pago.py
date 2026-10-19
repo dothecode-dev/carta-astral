@@ -187,3 +187,49 @@ def test_compra_anonima_sin_mail_explica_que_falta(pagos, make_account, monkeypa
 
     with pytest.raises(CommandError, match="sin mail del comprador"):
         _correr("--pasarela", "mercadopago", PAGO)
+
+
+# --- code review H ------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_sin_token_sale_con_un_mensaje_claro(settings):
+    settings.MP_ACCESS_TOKEN = ""
+
+    with pytest.raises(CommandError, match="MP_ACCESS_TOKEN"):
+        _correr("--pasarela", "mercadopago", PAGO)
+
+
+def _segunda_lectura_falla(monkeypatch, pago):
+    leidas = []
+
+    def obtener(pid):
+        leidas.append(pid)
+        if len(leidas) > 1:
+            raise MPError("Mercado Pago no contestó (ReadTimeout)")
+        return pago
+
+    monkeypatch.setattr(mercadopago_api, "obtener_pago", obtener)
+
+
+@pytest.mark.django_db
+def test_si_la_relectura_falla_tras_acreditar_informa_desde_la_base(monkeypatch, make_account):
+    """Acreditó: la relectura que sólo confirma no puede convertir eso en un
+    error que haga creer que no se acreditó."""
+    fila = _fila(make_account())
+    _segunda_lectura_falla(monkeypatch, _pago())
+
+    salida = _correr("--pasarela", "mercadopago", PAGO)
+
+    fila.refresh_from_db()
+    assert fila.acreditado_at is not None
+    assert "acreditado" in salida and CHECKOUT in salida
+
+
+@pytest.mark.django_db
+def test_si_la_relectura_falla_sin_acreditar_dice_que_no_se_pudo_confirmar(monkeypatch, make_account):
+    _fila(make_account())
+    _segunda_lectura_falla(monkeypatch, _pago(status="pending"))
+
+    with pytest.raises(CommandError, match="no quedó acreditado"):
+        _correr("--pasarela", "mercadopago", PAGO)
