@@ -275,6 +275,81 @@ def test_si_el_informe_no_arranca_tras_acreditar_avisa_una_vez(make_account, mak
 
 
 @pytest.mark.django_db
+def test_el_mismo_pago_tras_rendirse_el_informe_no_lo_rearranca(
+    make_account, make_chart, mails, avisos, eventos, sin_hilo,
+):
+    """Code review A: el informe arrancó, se rindió (INTENTOS_MAXIMOS: se borra
+    y el derecho se devuelve) y después llega otra notificación del MISMO pago
+    (`payment.updated` por un reembolso parcial, un cambio de estado,
+    `acreditar_pago`). No se crea otro informe, no se consume el derecho
+    devuelto, no sale mail ni evento ni aviso."""
+    from api.canje import devolver
+
+    cuenta = make_account()
+    fila = _fila(cuenta, make_chart(account=cuenta))
+    assert _acreditar(fila) is True
+    fila.refresh_from_db()
+    assert fila.informe_arrancado_at is not None
+
+    # Lo que hace `completar_generacion` al rendirse.
+    interpretacion = Interpretation.objects.get(sujeto=fila.sujeto)
+    devolver(
+        cuenta, "informe_natal", external_id=f"informe:{interpretacion.pk}:devolucion",
+        sujeto=fila.sujeto, note="test: rendido",
+    )
+    interpretacion.delete()
+    restante = Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante
+    mails.clear(), eventos.clear(), sin_hilo.clear()
+
+    assert _acreditar(PasarelaCheckout.objects.get(pk=fila.pk)) is False
+
+    assert not Interpretation.objects.filter(sujeto=fila.sujeto).exists()
+    assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == restante
+    assert mails == [] and eventos == [] and sin_hilo == [] and avisos == []
+
+
+@pytest.mark.django_db
+def test_el_mismo_pago_ya_arrancado_no_vuelve_a_adjudicar(make_chart, avisos, mails, sin_hilo, monkeypatch):
+    """Una compra sin cuenta ya acreditada y arrancada: la repetición no vuelve
+    a pasar por la adjudicación (ni por su aviso de mail bloqueado)."""
+    carta = make_chart(account=None)
+    fila = _fila(None, carta, anonimo=True, mail_comprador="quien@example.com")
+    assert _acreditar(fila) is True
+    llamadas = []
+    monkeypatch.setattr(cobro, "_adjudicar_si_es_anonima", llamadas.append)
+
+    assert _acreditar(PasarelaCheckout.objects.get(pk=fila.pk)) is False
+
+    assert llamadas == []
+
+
+@pytest.mark.django_db
+def test_arranque_legitimo_sin_informe_tambien_marca(make_account, mails):
+    """Sin carta `arrancar_informe` devuelve False sin fallar: eso también es
+    «arrancado» —no hay nada que reintentar—."""
+    cuenta = make_account()
+    fila = _fila(cuenta)
+    assert _acreditar(fila) is True
+    fila.refresh_from_db()
+    assert fila.informe_arrancado_at is not None
+
+
+@pytest.mark.django_db
+def test_arranque_fallido_no_marca(make_account, make_chart, mails, avisos, monkeypatch):
+    cuenta = make_account()
+    fila = _fila(cuenta, make_chart(account=cuenta))
+
+    def explota(*_a, **_k):
+        raise RuntimeError("se cayó la base")
+
+    monkeypatch.setattr(cobro, "arrancar_informe", explota)
+    with pytest.raises(RuntimeError):
+        _acreditar(fila)
+    fila.refresh_from_db()
+    assert fila.acreditado_at is not None and fila.informe_arrancado_at is None
+
+
+@pytest.mark.django_db
 def test_otro_pago_sobre_una_fila_acreditada_levanta_pago_duplicado(make_account, avisos, mails, eventos):
     """Ruling 1 (RF11b): dos pagos aprobados sobre la misma preferencia de MP
     existen (medido en sandbox). El segundo no otorga: el caller lo reembolsa."""

@@ -577,6 +577,13 @@ class PasarelaCheckout(models.Model):
     # vencida o con un pago que no se pudo acreditar y ya se avisó—. Una fila
     # revisada no se vuelve a buscar en MP (Ruling 12 del plan fase 1).
     mp_revisado_at = models.DateTimeField(null=True, blank=True)
+    # Sólo el camino de `cobro` (hoy Mercado Pago): cuándo `arrancar_informe`
+    # volvió sin excepción tras acreditar —con informe o sin nada que
+    # arrancar—. Una notificación posterior del MISMO pago no vuelve a
+    # arrancarlo: el informe pudo rendirse (se borra y el derecho se devuelve)
+    # y re-arrancarlo lo cobraría de nuevo. Mientras esté vacía, la repetición
+    # reintenta el arranque (code review A, plan fase 1).
+    informe_arrancado_at = models.DateTimeField(null=True, blank=True)
     # «Pagar es entrar» (spec 2026-10-07): checkout abierto sin cuenta. La
     # cuenta la pone el webhook por el mail del pago; `cuenta_nueva` dice si la
     # creó esta compra (sólo entonces se puede canjear por sesión); el nonce

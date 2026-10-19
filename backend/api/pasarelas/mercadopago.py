@@ -446,10 +446,12 @@ def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str,
         return
 
     aprobados = [p for p in pagos if p.get("status") == "approved"]
-    # El pago que acreditó la fila ya lo procesó quien la acreditó: volver a
-    # pasarlo por `cobro.acreditar` re-adjudicaría y re-arrancaría un informe
-    # que el sistema pudo haber dado por perdido (con el derecho devuelto).
-    # En una fila acreditada sólo se buscan OTROS pagos: los duplicados.
+    # En una fila acreditada sólo se buscan OTROS pagos: los duplicados. Con
+    # el informe ya arrancado, reprocesar el que la acreditó no haría nada
+    # (`cobro.acreditar` lo corta por `informe_arrancado_at`); sin arrancar,
+    # reintentaría un arranque que ya falló dos veces y, si sigue fallando,
+    # dejaría la fila abierta para siempre. Ese caso ya se avisó y se
+    # resuelve a mano con `acreditar_pago`.
     por_procesar = [
         p for p in aprobados if not (acreditada_antes and str(p.get("id")) == fila.payment_intent)
     ]

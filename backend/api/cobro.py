@@ -16,6 +16,8 @@ Política de errores, que quien llama traduce a su respuesta HTTP:
 - `return False` con aviso al admin: fallo DEFINITIVO —ids vacíos, moneda o
   monto que no cierran, compra sin cuenta—. Reintentar no lo arregla: 200.
 - `return False` SIN aviso: un reintento del mismo pago, ya aplicado. 200.
+  Si además su informe ya arrancó (`informe_arrancado_at`), la repetición no
+  toca nada más: ni adjudica, ni arranca, ni manda mail ni mide.
 - `CompraDisputada`, `PagoDuplicado`: definitivos también, pero quien llama
   tiene que actuar (avisar; reembolsar el duplicado). Acá no se avisa, para
   que el aviso salga una sola vez y diga lo que se hizo.
@@ -89,6 +91,9 @@ def acreditar(
             f"external_id={external_id!r}). No se acreditó.",
         )
         return False
+    if _ya_arrancado(fila, pago_id):
+        logger.info("compra %s: el pago %s ya se acreditó y su informe ya arrancó", fila.checkout_id, pago_id)
+        return False
     _adjudicar_si_es_anonima(fila)
     cuenta = fila.account
     if cuenta is None:
@@ -118,13 +123,17 @@ def acreditar(
 
     codigo = fila.codigo_producto
     try:
-        aplicado = _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id)
+        aplicado, arrancado = _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id)
     except MontoInvalido:
         # Ya lo logueó `aplicar_compra` con los dos montos.
         avisar(
             f"Pago {external_id} ({fila.checkout_id}): el monto no coincide (pagado {monto_pagado} "
             f"{fila.moneda}, lista {fila.precio_de_lista()}, descuento {fila.descuento_centavos}). No se acreditó.",
         )
+        return False
+    if arrancado:
+        # Una repetición concurrente con la que arrancó el informe: la vio
+        # recién bajo el lock.
         return False
 
     lang = fila.locale
@@ -141,18 +150,27 @@ def acreditar(
             },
         )
 
-    # Sin `try`: si el informe no arranca, la excepción sube y quien llama pide
-    # el reintento (ver `webhooks_stripe._entregar`). La plata ya quedó
-    # acreditada —el átomo cerró— y el arranque es idempotente.
+    # Si el informe no arranca, la excepción sube y quien llama pide el
+    # reintento (ver `webhooks_stripe._entregar`). La plata ya quedó
+    # acreditada —el átomo cerró— y, mientras `informe_arrancado_at` siga
+    # vacío, una repetición del mismo pago reintenta el arranque (idempotente:
+    # `get_or_create`). Ése es el único reintento que hace MP (inmediato,
+    # medido en sandbox). Si tampoco arranca, la red es el aviso de abajo y
+    # `manage.py acreditar_pago <id>`, que repite este camino; el cron de MP
+    # no reprocesa el pago que acreditó la fila. Un informe que sí arrancó y
+    # quedó a medias lo termina `reanudar_informes`.
     informe_en_curso = False
     try:
         informe_en_curso = arrancar_informe(cuenta, fila)
+        # Con informe o sin nada que arrancar: no hay que reintentarlo nunca.
+        PasarelaCheckout.objects.filter(pk=fila.pk, informe_arrancado_at__isnull=True).update(
+            informe_arrancado_at=timezone.now(),
+        )
     except Exception:
         if aplicado:
             # Sólo la llamada que acreditó (los reintentos no repiten el
-            # aviso): MP no reintenta tarde y el cron de MP vuelve sobre una
-            # fila acreditada sólo para buscar OTROS pagos (duplicados), nunca
-            # reprocesa el que la acreditó, así que el aviso es la red.
+            # aviso): MP no reintenta tarde y el cron de MP no reprocesa el
+            # pago que acreditó la fila, así que el aviso es la red.
             logger.exception("compra %s acreditada por %s y el informe no arrancó", fila.checkout_id, external_id)
             avisar(
                 f"Pago {pago_id} ({fila.checkout_id}): acreditado, pero el informe NO arrancó. "
@@ -167,6 +185,18 @@ def acreditar(
             evento = "informe_en_curso" if informe_en_curso else "compra_acreditada"
             notificaciones.notificar(cuenta, evento, {"producto": codigo, "medio": medio}, lang=lang)
     return aplicado
+
+
+def _ya_arrancado(fila: PasarelaCheckout, pago_id: str) -> bool:
+    """La fila ya la acreditó ESTE pago y su informe ya arrancó (o no había
+    nada que arrancar). Leído de la base, no de `fila`, que puede ser de antes.
+
+    Sin lock a propósito: la marca sólo se pone, nunca se saca, así que si se
+    ve puesta es definitiva. Si no se ve, sigue el camino normal, que vuelve a
+    mirarla bajo el lock en `_otorgar_y_marcar`."""
+    return PasarelaCheckout.objects.filter(
+        pk=fila.pk, acreditado_at__isnull=False, payment_intent=pago_id, informe_arrancado_at__isnull=False,
+    ).exists()
 
 
 def _adjudicar_si_es_anonima(fila: PasarelaCheckout) -> None:
@@ -195,8 +225,10 @@ def _adjudicar_si_es_anonima(fila: PasarelaCheckout) -> None:
         )
 
 
-def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) -> bool:
+def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) -> tuple[bool, bool]:
     """Otorga y marca la fila acreditada en UN átomo, con la fila bloqueada.
+    Devuelve (si esta llamada otorgó, si ESTE pago ya la acreditó y su
+    informe ya arrancó: entonces no se hace nada más).
 
     Con la fila bloqueada se miran dos cosas que pueden haber cambiado desde
     que quien llama la leyó:
@@ -213,8 +245,13 @@ def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) 
     with transaction.atomic():
         bloqueada = (
             PasarelaCheckout.objects.select_for_update()
-            .only("disputa_id", "acreditado_at", "payment_intent").get(pk=fila.pk)
+            .only("disputa_id", "acreditado_at", "payment_intent", "informe_arrancado_at").get(pk=fila.pk)
         )
+        if (
+            bloqueada.acreditado_at is not None and bloqueada.payment_intent == pago_id
+            and bloqueada.informe_arrancado_at is not None
+        ):
+            return False, True
         if bloqueada.acreditado_at is not None and bloqueada.payment_intent and bloqueada.payment_intent != pago_id:
             logger.error(
                 "compra %s ya acreditada por el pago %s: el pago %s es un duplicado, no se otorga",
@@ -237,7 +274,7 @@ def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) 
         fila.payment_intent = pago_id
         fila.acreditado_at = bloqueada.acreditado_at or timezone.now()
         fila.save(update_fields=["payment_intent", "acreditado_at"])
-    return aplicado
+    return aplicado, False
 
 
 def _marcar_saldo_deuda(fila) -> None:

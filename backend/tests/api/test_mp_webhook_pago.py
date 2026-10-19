@@ -618,3 +618,33 @@ def test_reembolso_se_aplica_aunque_acreditar_falle(client, pagos, avisos, acred
     assert _notificar(client, action="payment.updated").status_code == 500
     assert list(Reembolso.objects.values_list("refund_id", flat=True)) == ["mp:refund:801"]
     assert Derecho.objects.get(account=acreditada, codigo_producto="informe_natal").cantidad_restante == 0
+
+
+@pytest.mark.django_db
+def test_payment_updated_tras_rendirse_el_informe_no_lo_rearranca(
+    client, pagos, avisos, mails, make_account, make_chart, monkeypatch,
+):
+    """Code review A, por el webhook: el informe se rindió (borrado, derecho
+    devuelto) y después llega un `payment.updated` del mismo pago, p. ej. por
+    un reembolso parcial rechazado. Ni informe nuevo, ni derecho, ni mail."""
+    from api import interpretation_service
+    from api.canje import devolver
+    from api.models import Interpretation
+    from api.sujetos import sujeto_natal
+
+    monkeypatch.setattr(interpretation_service, "arrancar_en_hilo", lambda *_a: None)
+    cuenta = make_account()
+    fila = _fila(cuenta, sujeto=sujeto_natal(make_chart(account=cuenta)))
+    pagos[str(PAGO)] = _pago()
+    assert _notificar(client).status_code == 200
+    interpretacion = Interpretation.objects.get(sujeto=fila.sujeto)
+    devolver(cuenta, "informe_natal", external_id=f"informe:{interpretacion.pk}:devolucion", sujeto=fila.sujeto)
+    interpretacion.delete()
+    mails.clear()
+
+    pagos[str(PAGO)] = _pago(refunds=[{"id": 901, "amount": 100.0, "status": "rejected"}])
+    assert _notificar(client, action="payment.updated").status_code == 200
+
+    assert not Interpretation.objects.filter(sujeto=fila.sujeto).exists()
+    assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 1
+    assert mails == [] and avisos == []
