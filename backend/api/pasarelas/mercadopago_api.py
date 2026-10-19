@@ -6,6 +6,7 @@ la API, el status y el método/ruta.
 """
 
 import logging
+from urllib.parse import quote
 from typing import Any
 
 import httpx
@@ -27,6 +28,11 @@ class MPError(Exception):
     def __init__(self, mensaje: str, status: int | None = None):
         super().__init__(mensaje)
         self.status = status
+
+
+def _seg(valor: str) -> str:
+    """Un id que viene de un webhook va como UN segmento de la ruta, nunca como ruta."""
+    return quote(str(valor), safe="")
 
 
 def _cliente() -> httpx.Client:
@@ -58,11 +64,14 @@ def _pedir(
         logger.warning("mercadopago rechazó: %s %s -> %s", metodo, ruta, r.status_code)
         raise MPError(f"Mercado Pago respondió {r.status_code}", status=r.status_code)
     try:
-        return r.json()
+        datos = r.json()
     except ValueError:
         raise MPError(
             "Mercado Pago devolvió una respuesta que no es JSON", status=r.status_code
         ) from None
+    if not isinstance(datos, dict):
+        raise MPError("Mercado Pago devolvió JSON que no es un objeto", status=r.status_code)
+    return datos
 
 
 def crear_preferencia(cuerpo: dict) -> dict:
@@ -70,7 +79,7 @@ def crear_preferencia(cuerpo: dict) -> dict:
 
 
 def obtener_pago(payment_id: str) -> dict:
-    return _pedir("GET", f"/v1/payments/{payment_id}")
+    return _pedir("GET", f"/v1/payments/{_seg(payment_id)}")
 
 
 def buscar_pagos(external_reference: str) -> list[dict]:
@@ -81,11 +90,11 @@ def buscar_pagos(external_reference: str) -> list[dict]:
 def reembolsar(payment_id: str, idempotency_key: str) -> dict:
     return _pedir(
         "POST",
-        f"/v1/payments/{payment_id}/refunds",
+        f"/v1/payments/{_seg(payment_id)}/refunds",
         json={},
         headers={"X-Idempotency-Key": idempotency_key},
     )
 
 
 def obtener_contracargo(chargeback_id: str) -> dict:
-    return _pedir("GET", f"/v1/chargebacks/{chargeback_id}")
+    return _pedir("GET", f"/v1/chargebacks/{_seg(chargeback_id)}")

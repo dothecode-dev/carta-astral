@@ -2,6 +2,7 @@
 
 import json
 import logging
+from urllib.parse import quote
 
 import httpx
 import pytest
@@ -93,3 +94,30 @@ def test_buscar_pagos_devuelve_results(transporte):
     assert mp.buscar_pagos("ref-1") == [{"id": 1}]
     assert transporte[0].url.path == "/v1/payments/search"
     assert transporte[0].url.params["external_reference"] == "ref-1"
+
+
+@pytest.mark.parametrize(
+    "funcion", [mp.obtener_pago, mp.obtener_contracargo, lambda i: mp.reembolsar(i, "k")]
+)
+@pytest.mark.parametrize("malicioso", ["1/refunds", "../x", "1?a=b"])
+def test_id_malicioso_queda_en_un_solo_segmento(transporte, funcion, malicioso):
+    transporte.responder(lambda req: httpx.Response(200, json={}))
+    funcion(malicioso)
+    ruta = transporte[0].url.raw_path.decode().split("?")[0]
+    # El id es UN segmento, escapado: la ruta no gana ni pierde barras.
+    assert quote(malicioso, safe="") in ruta.split("/")
+    assert ruta.count("/") == (4 if ruta.endswith("/refunds") else 3)
+
+
+def test_json_que_no_es_objeto_levanta_mperror(transporte):
+    transporte.responder(lambda req: httpx.Response(200, json=[1, 2]))
+    with pytest.raises(mp.MPError) as info:
+        mp.buscar_pagos("ref")
+    assert info.value.status == 200
+
+
+def test_2xx_que_no_es_json_levanta_mperror(transporte):
+    transporte.responder(lambda req: httpx.Response(200, content=b"<html>"))
+    with pytest.raises(mp.MPError) as info:
+        mp.obtener_pago("1")
+    assert info.value.status == 200
