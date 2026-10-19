@@ -8,11 +8,13 @@ la preferencia. Los errores del cliente HTTP (`MPError`, `MPNoConfigurado`)
 se propagan: los traduce la vista.
 """
 
+import datetime as dt
 import logging
 import re
 import secrets
 
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from api import cobro, cupones, devoluciones, disputas, stripe_client
@@ -361,3 +363,101 @@ def _contracargo_a_mano(chargeback_id: str, payment_id: str, problema: str) -> N
         f"Contracargo de Mercado Pago {chargeback_id} (pago {payment_id}): {problema}. "
         "No se revocó nada: revisar a mano en MP.",
     )
+
+
+#: Margen sobre la vida de la preferencia antes de darla por vencida: da tiempo
+#: a que llegue la notificación de un pago hecho sobre el filo.
+_MARGEN_VENCIMIENTO = dt.timedelta(minutes=30)
+
+#: Cuánto se guarda la carta de una compra sin cuenta vencida (RF8) por si el
+#: pago llega tarde.
+_CONSERVAR_CARTA = dt.timedelta(hours=24)
+
+_ESPERANDO = ("pending", "in_process")
+
+
+def revisar_vencidas(ahora: dt.datetime) -> dict[str, int]:
+    """Cron de RF13: cierra lo que MP nunca nos avisó.
+
+    Una preferencia de MP vencida no notifica (Stripe sí: `checkout.session.expired`),
+    y medido en el sandbox MP no reintenta tarde una notificación que tuvo
+    respuesta 500. Este barrido, que busca los pagos por `external_reference`,
+    es entonces también la red de seguridad de un pago cuya notificación se
+    perdió: si hay uno aprobado, lo acredita con `procesar_pago`, igual que el
+    webhook.
+
+    Revisa las filas de MP sin acreditar pasada la vida de la preferencia más
+    el margen, y sólo las que todavía tienen algo que resolver: sin vencer, o
+    vencidas con la carta de una compra sin cuenta aún guardada. Un fallo con
+    una fila se loguea y no corta las demás; si además tocaba descartar su
+    carta, no se descarta (no se sabe si pagó) y se avisa.
+    """
+    limite = ahora - stripe_client.VENCIMIENTO_SESION - _MARGEN_VENCIMIENTO
+    candidatas = PasarelaCheckout.objects.filter(
+        pasarela=PasarelaCheckout.MERCADOPAGO, acreditado_at__isnull=True, created_at__lt=limite,
+    ).filter(
+        Q(vencido_at__isnull=True) | Q(anonimo=True, account__isnull=True, sujeto__isnull=False),
+    )
+    resumen = {"acreditadas": 0, "vencidas": 0, "esperando": 0, "descartadas": 0}
+    for fila in candidatas.order_by("created_at"):
+        _revisar_fila(fila, ahora, resumen)
+    logger.info("vencer_checkouts: %s", resumen)
+    return resumen
+
+
+def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str, int]) -> None:
+    # Import local: `compra_anonima` importa este módulo.
+    from api import compra_anonima
+
+    checkout_id = fila.checkout_id
+    try:
+        pagos = mercadopago_api.buscar_pagos(checkout_id)
+    except mercadopago_api.MPError:
+        # Transitorio: se reintenta en 15 minutos, no se avisa por cada corrida.
+        logger.exception("vencer_checkouts: no se pudo buscar los pagos de %s", checkout_id)
+        _avisar_si_se_iba_a_descartar(fila, ahora)
+        return
+
+    estados = [p.get("status") for p in pagos]
+    if "approved" in estados:
+        for pago in pagos:
+            if pago.get("status") != "approved":
+                continue
+            try:
+                procesar_pago(str(pago.get("id")))
+            except Exception:
+                logger.exception(
+                    "vencer_checkouts: no se pudo procesar el pago %s de %s", pago.get("id"), checkout_id,
+                )
+                _avisar_si_se_iba_a_descartar(fila, ahora)
+                return
+        fila.refresh_from_db()
+        if fila.acreditado_at is not None:
+            resumen["acreditadas"] += 1
+        return
+    if any(e in _ESPERANDO for e in estados):
+        resumen["esperando"] += 1
+        return
+
+    if PasarelaCheckout.objects.filter(
+        pk=fila.pk, acreditado_at__isnull=True, vencido_at__isnull=True,
+    ).update(vencido_at=ahora):
+        resumen["vencidas"] += 1
+        fila.vencido_at = ahora
+    if _toca_descartar(fila, ahora) and compra_anonima.descartar(checkout_id):
+        resumen["descartadas"] += 1
+
+
+def _toca_descartar(fila: PasarelaCheckout, ahora: dt.datetime) -> bool:
+    return (
+        fila.anonimo and fila.account_id is None and fila.acreditado_at is None
+        and fila.vencido_at is not None and fila.vencido_at + _CONSERVAR_CARTA < ahora
+    )
+
+
+def _avisar_si_se_iba_a_descartar(fila: PasarelaCheckout, ahora: dt.datetime) -> None:
+    if fila.sujeto_id is not None and _toca_descartar(fila, ahora):
+        cobro.avisar(
+            f"Mercado Pago {fila.checkout_id}: no se pudo confirmar si la compra sin cuenta se pagó y "
+            "ya pasó el plazo para descartar su carta. No se descartó: revisar.",
+        )
