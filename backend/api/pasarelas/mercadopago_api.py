@@ -5,6 +5,7 @@ texto de una excepción. De un fallo de red sólo se loguea el tipo; de uno de
 la API, el status y el método/ruta.
 """
 
+import datetime as dt
 import logging
 import re
 from typing import Any
@@ -99,6 +100,45 @@ def obtener_pago(payment_id: str) -> dict:
 def buscar_pagos(external_reference: str) -> list[dict]:
     datos = _pedir("GET", "/v1/payments/search", params={"external_reference": external_reference})
     return datos.get("results", [])
+
+
+#: Pagos por página de `buscar_pagos_actualizados`, y tope de páginas: con el
+#: volumen de ASTRA una ventana de horas no llega ni a una.
+_POR_PAGINA = 100
+_MAX_PAGINAS = 50
+
+
+def _fecha(momento: dt.datetime) -> str:
+    """El formato que acepta MP (`yyyy-MM-dd'T'HH:mm:ss.SSSZ`), en UTC."""
+    utc = momento.astimezone(dt.UTC)
+    return utc.strftime("%Y-%m-%dT%H:%M:%S.") + f"{utc.microsecond // 1000:03d}Z"
+
+
+def buscar_pagos_actualizados(desde: dt.datetime, hasta: dt.datetime) -> list[dict]:
+    """Todos los pagos de la cuenta modificados entre `desde` y `hasta`.
+
+    Verificado contra el sandbox el 19-10-2026: `range=date_last_updated` con
+    `begin_date`/`end_date` filtra por la última modificación (un pago creado
+    antes y reembolsado dentro de la ventana aparece; por `date_created` no),
+    y `paging` trae `total`, `offset` y `limit`.
+    """
+    pagos: list[dict] = []
+    for pagina in range(_MAX_PAGINAS):
+        datos = _pedir("GET", "/v1/payments/search", params={
+            "sort": "date_last_updated", "criteria": "asc", "range": "date_last_updated",
+            "begin_date": _fecha(desde), "end_date": _fecha(hasta),
+            "limit": _POR_PAGINA, "offset": pagina * _POR_PAGINA,
+        })
+        resultados = datos.get("results")
+        if not isinstance(resultados, list):
+            raise MPError("Mercado Pago devolvió `results` que no es una lista")
+        pagos.extend(resultados)
+        paging = datos.get("paging") if isinstance(datos.get("paging"), dict) else {}
+        total = paging.get("total")
+        if not resultados or not isinstance(total, int) or len(pagos) >= total:
+            return pagos
+    logger.warning("mercadopago: más de %s páginas de pagos actualizados; se corta", _MAX_PAGINAS)
+    return pagos
 
 
 def reembolsar(payment_id: str, idempotency_key: str) -> dict:

@@ -51,6 +51,7 @@ def mp(monkeypatch):
         return r
 
     monkeypatch.setattr(mercadopago_api, "buscar_pagos", buscar)
+    monkeypatch.setattr(mercadopago_api, "buscar_pagos_actualizados", lambda desde, hasta: [])
     monkeypatch.setattr(mercadopago_api, "obtener_pago", lambda pid: m.pagos[pid])
     return m
 
@@ -460,3 +461,134 @@ def test_fila_acreditada_con_carta_no_reprocesa_el_pago_que_la_acredito(mp, make
     assert procesados == [] and acreditados == []
     assert not Interpretation.objects.filter(sujeto=fila.sujeto).exists()
     assert fila.mp_revisado_at == AHORA and avisos == []
+
+
+# --- code review C (Ruling 15): conciliación de pagos actualizados -----------------------
+
+
+@pytest.fixture
+def actualizados(monkeypatch):
+    """`actualizados.pagos` es lo que devuelve la búsqueda por
+    `date_last_updated`; `actualizados.ventanas` registra (desde, hasta)."""
+    from django.core.cache import cache
+
+    cache.clear()
+
+    class _A:
+        pagos: list = []
+        ventanas: list = []
+        fallo: Exception | None = None
+
+    a = _A()
+    a.pagos, a.ventanas = [], []
+
+    def buscar(desde, hasta):
+        a.ventanas.append((desde, hasta))
+        if a.fallo is not None:
+            raise a.fallo
+        return a.pagos
+
+    monkeypatch.setattr(mercadopago_api, "buscar_pagos_actualizados", buscar)
+    return a
+
+
+def _actualizado(pago_id, ref, status="refunded", cuando="2026-10-20T08:50:00.000-04:00"):
+    return {"id": pago_id, "status": status, "external_reference": ref, "date_last_updated": cuando}
+
+
+def test_conciliar_aplica_un_reembolso_cuya_notificacion_se_perdio(mp, make_account, avisos, actualizados):
+    from api.models import Reembolso
+
+    cuenta = make_account()
+    fila = _fila(account=cuenta)
+    mp.pagos[str(PAGO)] = _pago(fila)
+    mercadopago.procesar_pago(str(PAGO))
+    PasarelaCheckout.objects.filter(pk=fila.pk).update(mp_revisado_at=AHORA)
+    mp.pagos[str(PAGO)] = {
+        **_pago(fila, status="refunded"),
+        "refunds": [{"id": 4001, "amount": 25000.0, "status": "approved"}],
+    }
+    actualizados.pagos = [_actualizado(PAGO, fila.checkout_id)]
+
+    r = mercadopago.conciliar_actualizados(AHORA)
+
+    assert actualizados.ventanas == [(AHORA - dt.timedelta(hours=2), AHORA)]
+    assert list(Reembolso.objects.values_list("refund_id", flat=True)) == ["mp:refund:4001"]
+    assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 0
+    assert r == {"conciliados": 1, "fallidos": 0}
+    assert avisos == []
+
+
+def test_conciliar_ignora_pagos_ajenos(mp, monkeypatch, actualizados):
+    procesados = []
+    monkeypatch.setattr(mercadopago, "procesar_pago", procesados.append)
+    actualizados.pagos = [
+        _actualizado(1, "otra-integracion"), _actualizado(2, "mp_corto"), _actualizado(3, None),
+        _actualizado(4, "mp_" + "b" * 32),
+    ]
+
+    mercadopago.conciliar_actualizados(AHORA)
+
+    assert procesados == ["4"]
+
+
+def test_conciliar_un_pago_que_falla_no_corta_los_demas_ni_avisa(mp, monkeypatch, avisos, actualizados):
+    procesados = []
+
+    def procesar(pid):
+        procesados.append(pid)
+        if pid == "1":
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(mercadopago, "procesar_pago", procesar)
+    actualizados.pagos = [_actualizado(1, "mp_" + "a" * 32), _actualizado(2, "mp_" + "b" * 32)]
+
+    r = mercadopago.conciliar_actualizados(AHORA)
+
+    assert procesados == ["1", "2"]
+    assert r == {"conciliados": 1, "fallidos": 1}
+    assert avisos == []
+
+
+def test_conciliar_procesa_cada_version_de_un_pago_una_vez(mp, monkeypatch, actualizados):
+    """La ventana se solapa (2 h, cada 15 min): sin esto un pago en mediación
+    avisaría ocho veces. El que falló sí se reintenta en la corrida siguiente,
+    y una versión nueva del mismo pago (otro `date_last_updated`) también."""
+    procesados = []
+    falla = {"2"}
+
+    def procesar(pid):
+        procesados.append(pid)
+        if pid in falla:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(mercadopago, "procesar_pago", procesar)
+    actualizados.pagos = [_actualizado(1, "mp_" + "a" * 32), _actualizado(2, "mp_" + "b" * 32)]
+    mercadopago.conciliar_actualizados(AHORA)
+    falla.clear()
+    mercadopago.conciliar_actualizados(AHORA + dt.timedelta(minutes=15))
+    actualizados.pagos = [_actualizado(1, "mp_" + "a" * 32, cuando="2026-10-20T09:10:00.000-04:00")]
+    mercadopago.conciliar_actualizados(AHORA + dt.timedelta(minutes=30))
+
+    assert procesados == ["1", "2", "2", "1"]
+
+
+def test_conciliar_con_mp_caido_no_levanta_ni_avisa(mp, avisos, actualizados):
+    actualizados.fallo = MPError("x", status=503)
+
+    assert mercadopago.conciliar_actualizados(AHORA) == {"conciliados": 0, "fallidos": 0}
+    assert avisos == []
+
+
+def test_conciliar_sin_token_levanta(mp, actualizados):
+    actualizados.fallo = mercadopago_api.MPNoConfigurado("falta")
+
+    with pytest.raises(mercadopago_api.MPNoConfigurado):
+        mercadopago.conciliar_actualizados(AHORA)
+
+
+def test_el_comando_tambien_concilia(mp, make_account, capsys, actualizados):
+    call_command("vencer_checkouts")
+
+    assert len(actualizados.ventanas) == 1
+    assert "'conciliados': 0" in capsys.readouterr().out

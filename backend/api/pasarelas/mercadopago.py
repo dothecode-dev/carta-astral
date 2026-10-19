@@ -14,6 +14,7 @@ import re
 import secrets
 
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
 from api import cobro, cupones, devoluciones, disputas, stripe_client
@@ -484,6 +485,66 @@ def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str,
         # —ni se lista como tal ni se descarta su carta—.
         resumen["vencidas"] += 1
     PasarelaCheckout.objects.filter(pk=fila.pk, mp_revisado_at__isnull=True).update(mp_revisado_at=ahora)
+
+
+#: Ventana de la conciliación: el cron corre cada 15 minutos, así que cada
+#: pago actualizado se ve en varias corridas (solapada a propósito: una corrida
+#: caída no deja huecos).
+_VENTANA_CONCILIACION = dt.timedelta(hours=2)
+
+#: Cuánto se recuerda que una versión de un pago ya se concilió: más que la
+#: ventana, para que ninguna corrida la vuelva a procesar.
+_RECORDAR_CONCILIADO = 24 * 60 * 60
+
+
+def conciliar_actualizados(ahora: dt.datetime) -> dict[str, int]:
+    """Ruling 15: pasa por `procesar_pago` los pagos nuestros que MP modificó
+    en la ventana reciente, por si se perdió su notificación.
+
+    `revisar_vencidas` mira cada fila una sola vez, al vencer la preferencia;
+    un reembolso, un reembolso parcial o un cambio de estado posteriores sólo
+    llegan por el webhook, y MP no reintenta tarde (medido en sandbox). Esto
+    los recupera. `procesar_pago` es idempotente: un pago ya acreditado con su
+    informe arrancado no toca nada (`cobro.acreditar`), y un reembolso ya
+    aplicado tiene su constancia.
+
+    Cada versión de un pago (id + `date_last_updated`) se procesa una sola
+    vez: la ventana se solapa y sin esto lo que sólo avisa (mediación,
+    contracargo) avisaría en cada corrida. Una que falla se reintenta en la
+    corrida siguiente, sólo con log: el aviso de una red que se repite cada 15
+    minutos sería ruido. `MPNoConfigurado` corta la corrida.
+    """
+    resumen = {"conciliados": 0, "fallidos": 0}
+    try:
+        pagos = mercadopago_api.buscar_pagos_actualizados(ahora - _VENTANA_CONCILIACION, ahora)
+    except mercadopago_api.MPError:
+        logger.exception("vencer_checkouts: no se pudo buscar los pagos actualizados")
+        return resumen
+    for pago in pagos:
+        referencia = pago.get("external_reference")
+        pago_id = str(pago.get("id") or "")
+        if not pago_id or not isinstance(referencia, str) or not _REFERENCIA_NUESTRA.fullmatch(referencia):
+            continue
+        clave = f"mp:conciliado:{pago_id}:{pago.get('date_last_updated') or ''}"
+        if cache.get(clave):
+            continue
+        try:
+            procesar_pago(pago_id)
+        except mercadopago_api.MPNoConfigurado:
+            raise
+        except (FilaInexistente, cobro.CompraAnonimaSinMail):
+            # Definitivos y ya avisados: no se repiten cada 15 minutos.
+            logger.error("vencer_checkouts: el pago %s (%s) no se pudo conciliar", pago_id, referencia)
+            resumen["fallidos"] += 1
+        except Exception:
+            logger.exception("vencer_checkouts: falló la conciliación del pago %s (%s)", pago_id, referencia)
+            resumen["fallidos"] += 1
+            continue
+        else:
+            resumen["conciliados"] += 1
+        cache.set(clave, True, _RECORDAR_CONCILIADO)
+    logger.info("vencer_checkouts: conciliación %s", resumen)
+    return resumen
 
 
 def _descartar_cartas(ahora: dt.datetime, resumen: dict[str, int]) -> None:

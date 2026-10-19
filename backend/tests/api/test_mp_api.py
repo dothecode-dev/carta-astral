@@ -1,5 +1,6 @@
 """Cliente HTTP de Mercado Pago: contra `httpx.MockTransport`, sin red."""
 
+import datetime as dt
 import json
 import logging
 
@@ -130,3 +131,58 @@ def test_2xx_que_no_es_json_levanta_mperror(transporte):
     with pytest.raises(mp.MPError) as info:
         mp.obtener_pago("1")
     assert info.value.status == 200
+
+
+# --- buscar_pagos_actualizados (code review C, Ruling 15) ----------------------------------
+
+
+DESDE = dt.datetime(2026, 10, 19, 10, 0, 0, 123456, tzinfo=dt.UTC)
+HASTA = dt.datetime(2026, 10, 19, 12, 0, tzinfo=dt.timezone(dt.timedelta(hours=-3)))
+
+
+def test_buscar_actualizados_manda_el_rango_medido_en_sandbox(transporte):
+    """Parámetros verificados contra el sandbox el 19-10-2026: el rango por
+    `date_last_updated` filtra de verdad y las fechas van en UTC con milisegundos."""
+    transporte.responder(lambda req: httpx.Response(
+        200, json={"paging": {"total": 1, "offset": 0, "limit": 100}, "results": [{"id": 1}]},
+    ))
+
+    assert mp.buscar_pagos_actualizados(DESDE, HASTA) == [{"id": 1}]
+
+    req = transporte[0]
+    assert req.method == "GET" and req.url.path == "/v1/payments/search"
+    assert dict(req.url.params) == {
+        "sort": "date_last_updated", "criteria": "asc", "range": "date_last_updated",
+        "begin_date": "2026-10-19T10:00:00.123Z", "end_date": "2026-10-19T15:00:00.000Z",
+        "limit": "100", "offset": "0",
+    }
+
+
+def test_buscar_actualizados_pagina_hasta_el_total(transporte):
+    def pagina(req):
+        offset = int(req.url.params["offset"])
+        resultados = [{"id": i} for i in range(offset, min(offset + 100, 250))]
+        return httpx.Response(200, json={"paging": {"total": 250, "offset": offset, "limit": 100}, "results": resultados})
+
+    transporte.responder(pagina)
+
+    pagos = mp.buscar_pagos_actualizados(DESDE, HASTA)
+
+    assert [p["id"] for p in pagos] == list(range(250))
+    assert [r.url.params["offset"] for r in transporte] == ["0", "100", "200"]
+
+
+def test_buscar_actualizados_corta_con_una_pagina_vacia(transporte):
+    """Un `total` que miente no deja el loop girando."""
+    transporte.responder(lambda req: httpx.Response(
+        200, json={"paging": {"total": 999, "offset": 0, "limit": 100}, "results": []},
+    ))
+
+    assert mp.buscar_pagos_actualizados(DESDE, HASTA) == []
+    assert len(transporte) == 1
+
+
+def test_buscar_actualizados_results_raro_levanta_mperror(transporte):
+    transporte.responder(lambda req: httpx.Response(200, json={"paging": {}, "results": "x"}))
+    with pytest.raises(mp.MPError):
+        mp.buscar_pagos_actualizados(DESDE, HASTA)
