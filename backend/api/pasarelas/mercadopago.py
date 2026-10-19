@@ -50,6 +50,9 @@ def abrir(
     metadata = {"checkout_id": checkout_id}
     if cuenta is not None:
         metadata["account_id"] = str(cuenta.pk)
+    if sujeto is not None:
+        # RF8, como en Stripe: el uuid, no el id interno.
+        metadata["sujeto_id"] = str(sujeto.uuid)
     cuerpo: dict = {
         "items": [{
             "id": codigo, "title": titulo(codigo, locale), "quantity": 1,

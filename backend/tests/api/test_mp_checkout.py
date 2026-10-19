@@ -95,6 +95,18 @@ def test_ars_abre_preferencia_con_cada_campo_de_rf8(account_client, mp, stripe_p
     assert "payer" not in c
 
 
+def test_ars_con_carta_manda_el_sujeto_en_la_metadata(account_client, mp, stripe_prohibido, make_chart):
+    carta = make_chart(account=account_client.account)
+
+    r = account_client.post(URL, {"producto": "informe_natal", "moneda": "ars", "chart_id": str(carta.uuid)})
+
+    assert r.status_code == 200, r.content
+    fila = PasarelaCheckout.objects.get()
+    assert fila.sujeto_id is not None
+    # Como en Stripe: el uuid del sujeto, no el id interno.
+    assert mp[0]["metadata"]["sujeto_id"] == str(fila.sujeto.uuid)
+
+
 def test_el_titulo_cae_al_codigo_si_no_hay_nombre():
     assert mercadopago.titulo("informe_vinculo", "es") == "informe_vinculo"
     assert mercadopago.titulo("informe_natal", "en") == "ASTRA natal chart report"
