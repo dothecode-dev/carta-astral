@@ -150,8 +150,9 @@ def acreditar(
     except Exception:
         if aplicado:
             # Sólo la llamada que acreditó (los reintentos no repiten el
-            # aviso): MP no reintenta tarde y el cron de MP no vuelve sobre una
-            # fila acreditada y cerrada, así que el aviso es la red.
+            # aviso): MP no reintenta tarde y el cron de MP vuelve sobre una
+            # fila acreditada sólo para buscar OTROS pagos (duplicados), nunca
+            # reprocesa el que la acreditó, así que el aviso es la red.
             logger.exception("compra %s acreditada por %s y el informe no arrancó", fila.checkout_id, external_id)
             avisar(
                 f"Pago {pago_id} ({fila.checkout_id}): acreditado, pero el informe NO arrancó. "

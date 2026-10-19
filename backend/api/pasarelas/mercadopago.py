@@ -439,7 +439,14 @@ def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str,
         return
 
     aprobados = [p for p in pagos if p.get("status") == "approved"]
-    for pago in aprobados:
+    # El pago que acreditó la fila ya lo procesó quien la acreditó: volver a
+    # pasarlo por `cobro.acreditar` re-adjudicaría y re-arrancaría un informe
+    # que el sistema pudo haber dado por perdido (con el derecho devuelto).
+    # En una fila acreditada sólo se buscan OTROS pagos: los duplicados.
+    por_procesar = [
+        p for p in aprobados if not (acreditada_antes and str(p.get("id")) == fila.payment_intent)
+    ]
+    for pago in por_procesar:
         try:
             procesar_pago(str(pago.get("id")))
         except cobro.CompraAnonimaSinMail:

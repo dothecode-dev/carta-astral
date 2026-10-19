@@ -436,3 +436,27 @@ def test_anonima_cerrada_se_descarta_a_las_24h_sin_volver_a_buscar(mp, make_char
     assert r == {"acreditadas": 0, "vencidas": 0, "esperando": 0, "descartadas": 1}
     assert not Chart.objects.filter(pk=carta_id).exists()
     assert mp.buscados == [fila.checkout_id]
+
+
+def test_fila_acreditada_con_carta_no_reprocesa_el_pago_que_la_acredito(mp, make_account, make_chart, monkeypatch, avisos):
+    """Quien acreditó la fila ya procesó ese pago: el cron sólo busca OTROS.
+    Reprocesarlo volvería a correr `arrancar_informe` sobre un informe que el
+    sistema pudo haber dado por perdido (y devuelto el derecho)."""
+    cuenta = make_account()
+    fila = _fila(
+        account=cuenta, sujeto=sujeto_natal(make_chart(account=cuenta)),
+        acreditado_at=VIEJA, payment_intent=str(PAGO),
+    )
+    mp.pagos[str(PAGO)] = _pago(fila)
+    mp.busquedas[fila.checkout_id] = [_pago(fila)]
+    procesados = []
+    monkeypatch.setattr(mercadopago, "procesar_pago", procesados.append)
+    acreditados = []
+    monkeypatch.setattr(cobro, "acreditar", lambda *a, **k: acreditados.append(a))
+
+    mercadopago.revisar_vencidas(AHORA)
+
+    fila.refresh_from_db()
+    assert procesados == [] and acreditados == []
+    assert not Interpretation.objects.filter(sujeto=fila.sujeto).exists()
+    assert fila.mp_revisado_at == AHORA and avisos == []
