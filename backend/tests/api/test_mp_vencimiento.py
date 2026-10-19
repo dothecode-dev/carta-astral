@@ -5,8 +5,8 @@ import datetime as dt
 import pytest
 from django.core.management import call_command
 
-from api import cobro
-from api.models import Chart, Interpretation, PasarelaCheckout
+from api import cobro, compra_anonima
+from api.models import Chart, Derecho, Interpretation, PasarelaCheckout
 from api.pasarelas import mercadopago, mercadopago_api
 from api.pasarelas.mercadopago_api import MPError
 from api.sujetos import sujeto_natal
@@ -104,7 +104,7 @@ def test_con_pago_aprobado_acredita(mp, make_account):
     assert r == {"acreditadas": 1, "vencidas": 0, "esperando": 0, "descartadas": 0}
 
 
-@pytest.mark.parametrize("status", ["pending", "in_process"])
+@pytest.mark.parametrize("status", ["pending", "in_process", "authorized", "in_mediation"])
 def test_con_pago_pendiente_no_vence(mp, make_account, status):
     fila = _fila(account=make_account())
     mp.busquedas[fila.checkout_id] = [_pago(fila, status=status)]
@@ -222,3 +222,53 @@ def test_el_comando_imprime_el_resumen(mp, make_account, capsys):
     call_command("vencer_checkouts")
 
     assert "'vencidas': 1" in capsys.readouterr().out
+
+
+def test_pendiente_en_una_corrida_y_aprobado_en_la_siguiente_acredita(mp, make_account):
+    fila = _fila(account=make_account())
+    mp.busquedas[fila.checkout_id] = [_pago(fila, status="pending")]
+    assert mercadopago.revisar_vencidas(AHORA)["esperando"] == 1
+
+    mp.pagos[str(PAGO)] = _pago(fila)
+    mp.busquedas[fila.checkout_id] = [_pago(fila)]
+    r = mercadopago.revisar_vencidas(AHORA + dt.timedelta(minutes=15))
+
+    fila.refresh_from_db()
+    assert r["acreditadas"] == 1 and fila.acreditado_at is not None
+    assert Derecho.objects.filter(account=fila.account).exists()
+
+
+def test_fila_con_cuenta_ya_vencida_no_se_busca_de_nuevo(mp, make_account):
+    _fila(account=make_account(), vencido_at=AHORA - dt.timedelta(hours=5))
+
+    mercadopago.revisar_vencidas(AHORA)
+
+    assert mp.buscados == []
+
+
+def test_una_fila_que_falla_al_descartar_no_corta_las_demas(mp, make_chart, make_account, monkeypatch):
+    mala = _anonima(make_chart, "a", vencido_at=AHORA - dt.timedelta(hours=30))
+    buena = _fila("b", account=make_account())
+
+    def roto(_checkout_id):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(compra_anonima, "descartar", roto)
+
+    r = mercadopago.revisar_vencidas(AHORA)
+
+    buena.refresh_from_db()
+    assert buena.vencido_at == AHORA and r["vencidas"] == 1
+    assert mala.checkout_id in mp.buscados
+
+
+def test_sin_token_aborta_la_corrida(monkeypatch, make_account):
+    _fila(account=make_account())
+
+    def sin_token(_ref):
+        raise mercadopago_api.MPNoConfigurado("falta")
+
+    monkeypatch.setattr(mercadopago_api, "buscar_pagos", sin_token)
+
+    with pytest.raises(mercadopago_api.MPNoConfigurado):
+        mercadopago.revisar_vencidas(AHORA)

@@ -373,7 +373,8 @@ _MARGEN_VENCIMIENTO = dt.timedelta(minutes=30)
 #: pago llega tarde.
 _CONSERVAR_CARTA = dt.timedelta(hours=24)
 
-_ESPERANDO = ("pending", "in_process")
+#: Pagos que todavía pueden terminar aprobados: la fila ni se vence ni se descarta.
+_ESPERANDO = ("pending", "in_process", "authorized", "in_mediation")
 
 
 def revisar_vencidas(ahora: dt.datetime) -> dict[str, int]:
@@ -400,7 +401,13 @@ def revisar_vencidas(ahora: dt.datetime) -> dict[str, int]:
     )
     resumen = {"acreditadas": 0, "vencidas": 0, "esperando": 0, "descartadas": 0}
     for fila in candidatas.order_by("created_at"):
-        _revisar_fila(fila, ahora, resumen)
+        try:
+            _revisar_fila(fila, ahora, resumen)
+        except mercadopago_api.MPNoConfigurado:
+            logger.error("vencer_checkouts: MP_ACCESS_TOKEN no está configurado: se corta la corrida")
+            raise
+        except Exception:
+            logger.exception("vencer_checkouts: falló la fila %s", fila.checkout_id)
     logger.info("vencer_checkouts: %s", resumen)
     return resumen
 
