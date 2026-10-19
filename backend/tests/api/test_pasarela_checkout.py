@@ -54,3 +54,35 @@ def test_la_fila_nace_en_usd_y_su_precio_de_lista_sigue_su_moneda(make_account):
 
     fila.precio_centavos = 777
     assert fila.precio_de_lista() == 777
+
+
+def test_filas_existentes_quedan_en_stripe(make_account):
+    """Todo código que crea la fila sin decir pasarela (y toda fila anterior a
+    Mercado Pago) es de Stripe: el default es lo que no rompe el cobro actual."""
+    fila = PasarelaCheckout.objects.create(
+        checkout_id="cs_test_5", account=make_account(), codigo_producto="informe_natal",
+    )
+
+    assert fila.pasarela == "stripe"
+    assert PasarelaCheckout.STRIPE == "stripe"
+    assert PasarelaCheckout.MERCADOPAGO == "mercadopago"
+    assert fila.mp_preferencia_id == ""
+    assert fila.mail_comprador == ""
+
+
+def test_pasarela_invalida_no_se_guarda(make_account):
+    """La validación de modelo la rechaza, y el CheckConstraint también cuando
+    alguien guarda directo sin pasar por `full_clean`."""
+    from django.core.exceptions import ValidationError
+    from django.db import IntegrityError, transaction
+
+    cuenta = make_account()
+    fila = PasarelaCheckout(
+        checkout_id="cs_test_6", account=cuenta, codigo_producto="informe_natal",
+        pasarela="polar",
+    )
+    with pytest.raises(ValidationError):
+        fila.full_clean()
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        fila.save()

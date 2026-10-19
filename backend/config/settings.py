@@ -552,6 +552,14 @@ VINCULO_PREVIEW_ENABLED = os.environ.get("VINCULO_PREVIEW_ENABLED", "0") == "1"
 # La compra del vínculo: catálogo, checkout, cupones y todos sus endpoints
 # (RF19, RF25). Se enciende junto con VINCULO_PREVIEW_ENABLED, nunca uno solo.
 VINCULO_ENABLED = os.environ.get("VINCULO_ENABLED", "0") == "1"
+# Cobro en pesos argentinos por Mercado Pago, al lado de Stripe. Apagado
+# (default), nadie ve la opción y el webhook de MP no acredita nada.
+COBRO_ARS_ENABLED = os.environ.get("COBRO_ARS_ENABLED", "0") == "1"
+MP_ACCESS_TOKEN = os.environ.get("MP_ACCESS_TOKEN", "")
+MP_WEBHOOK_SECRET = os.environ.get("MP_WEBHOOK_SECRET", "")
+# A dónde vuelve el comprador; lleva `{locale}` y `{checkout_id}`.
+MP_RETORNO_URL = os.environ.get("MP_RETORNO_URL", "")
+MP_NOTIFICACION_URL = os.environ.get("MP_NOTIFICACION_URL", "")
 # La lectura breve gratis por IA: la lectura anónima y el regalo de bienvenida
 # de una cuenta nueva. Apagada (default), las dos puertas se cierran y la
 # primera impresión es el teaser fijo; un derecho `lectura_breve` ya otorgado

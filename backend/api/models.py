@@ -495,6 +495,18 @@ class PasarelaCheckout(models.Model):
     antes de que llegue el webhook, el pago se acredita igual.
     """
 
+    STRIPE = "stripe"
+    MERCADOPAGO = "mercadopago"
+    PASARELAS = [(STRIPE, "stripe"), (MERCADOPAGO, "mercadopago")]
+
+    # Por qué pasarela se cobró. El default es Stripe: toda fila anterior a
+    # Mercado Pago, y todo código que crea la fila sin decirlo, es de Stripe.
+    pasarela = models.CharField(max_length=12, choices=PASARELAS, default=STRIPE)
+    # La preferencia de Mercado Pago con la que se abrió el pago. El id del
+    # pago de MP se guarda en `payment_intent`, no en otra columna.
+    mp_preferencia_id = models.CharField(max_length=100, blank=True, default="")
+    # El mail con el que pagó el comprador, cuando la pasarela lo informa.
+    mail_comprador = models.EmailField(blank=True, default="")
     checkout_id = models.CharField(max_length=100, unique=True)
     account = models.ForeignKey(
         "Account", on_delete=models.SET_NULL, null=True, related_name="checkouts",
@@ -581,7 +593,12 @@ class PasarelaCheckout(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(pasarela__in=["stripe", "mercadopago"]),
+                name="pasarelacheckout_pasarela_valida",
+            ),
+        ]
 
     def precio_de_lista(self) -> int:
         """El precio con el que se abrió, en `self.moneda`. Las filas sin él
