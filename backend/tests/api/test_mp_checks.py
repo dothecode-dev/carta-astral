@@ -1,3 +1,4 @@
+import pytest
 from django.core.checks import run_checks
 
 
@@ -6,7 +7,7 @@ def _configurar(settings):
     settings.MP_ACCESS_TOKEN = "APP_USR-secreto-token"
     settings.MP_WEBHOOK_SECRET = "secreto-webhook"
     settings.MP_NOTIFICACION_URL = "https://api.example.com/webhooks/mp/"
-    settings.MP_RETORNO_URL = "https://example.com/cuenta"
+    settings.MP_RETORNO_URL = "https://example.com/{locale}/compra?checkout_id={checkout_id}"
 
 
 def test_flag_apagado_sin_avisos(settings, monkeypatch):
@@ -80,3 +81,21 @@ def test_todo_configurado_sin_avisos(settings):
     _configurar(settings)
 
     assert run_checks(tags=["mercadopago"]) == []
+
+
+
+@pytest.mark.parametrize("url,falta", [
+    ("https://example.com/{locale}/compra", "{checkout_id}"),
+    ("https://example.com/es/compra?checkout_id={checkout_id}", "{locale}"),
+    ("https://example.com/cuenta", "{checkout_id}"),
+])
+def test_url_de_retorno_sin_marcadores_avisa(settings, url, falta):
+    """Code review I: sin `{checkout_id}` la web no sabe qué compra esperar al
+    volver de MP; sin `{locale}` vuelve en otro idioma."""
+    _configurar(settings)
+    settings.MP_RETORNO_URL = url
+
+    errores = run_checks(tags=["mercadopago"])
+
+    assert errores and all("MP_RETORNO_URL" in e.msg for e in errores)
+    assert any(falta in e.msg for e in errores)

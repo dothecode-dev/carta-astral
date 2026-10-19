@@ -49,7 +49,8 @@ def productos_en_stripe(app_configs, **kwargs):
 @register(Tags.compatibility, "mercadopago")
 def mercadopago_configurado(app_configs, **kwargs):
     """RF15: con el cobro en pesos prendido, Mercado Pago necesita su token, el
-    secreto del webhook y las dos URL (https). Con el flag apagado, nada. Sólo
+    secreto del webhook y las dos URL (https; la de retorno con `{checkout_id}` y
+    `{locale}`). Con el flag apagado, nada. Sólo
     se nombra la variable, nunca su valor. Mismo aviso por Telegram que Stripe."""
     if not settings.COBRO_ARS_ENABLED:
         return []
@@ -66,6 +67,15 @@ def mercadopago_configurado(app_configs, **kwargs):
             encontrados.append(Warning(
                 f"{nombre} no es https://",
                 hint="Mercado Pago exige https para notificar y volver", id="api.W004",
+            ))
+    retorno = settings.MP_RETORNO_URL or ""
+    for marcador in ("{checkout_id}", "{locale}"):
+        if retorno and marcador not in retorno:
+            encontrados.append(Warning(
+                f"MP_RETORNO_URL no tiene {marcador}",
+                hint="sin {checkout_id} la web no sabe qué compra esperar al volver de MP; sin {locale} "
+                     "vuelve en otro idioma",
+                id="api.W005",
             ))
     if os.environ.get("AVISAR_CHECKS") == "1":
         for aviso in encontrados:
