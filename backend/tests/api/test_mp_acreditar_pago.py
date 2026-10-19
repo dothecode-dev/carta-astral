@@ -165,10 +165,14 @@ def test_pago_duplicado_es_error_y_no_dice_acreditado(pagos, make_account, monke
     pagos[otro] = _pago(id=int(otro))
     monkeypatch.setattr(mercadopago_api, "reembolsar", lambda pid, key: {"id": 1})
 
-    with pytest.raises(CommandError, match="duplicado"):
+    with pytest.raises(CommandError, match="duplicado") as e:
         _correr("--pasarela", "mercadopago", otro)
 
     assert Movimiento.objects.filter(account=cuenta, tipo="otorgamiento").count() == 1
+    # Si el reembolso se pidió o falló lo dice el aviso de Telegram; el comando
+    # no lo sabe y no puede afirmarlo.
+    assert "se pidió su reembolso" not in str(e.value)
+    assert "reembolso a verificar en MP" in str(e.value)
 
 
 @pytest.mark.django_db

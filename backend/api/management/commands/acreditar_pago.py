@@ -72,7 +72,7 @@ class Command(BaseCommand):
         if estado == "approved" and fila.acreditado_at:
             raise CommandError(
                 f"duplicado: el pago {payment_id} no acreditó la compra {fila.checkout_id} "
-                f"(ya la acreditó el pago {fila.payment_intent or '?'}; se pidió su reembolso)",
+                f"(ya la acreditó el pago {fila.payment_intent or '?'}; reembolso a verificar en MP y en el aviso de Telegram)",
             )
         if estado != "approved":
             raise CommandError(f"el pago {payment_id} está en status={estado}: no se acreditó nada")
