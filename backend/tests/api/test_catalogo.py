@@ -19,7 +19,7 @@ def test_catalogo_tiene_exactamente_los_productos_de_esta_iteracion():
     "codigo,precios,otorga,capacidades",
     [
         ("lectura_breve", {"usd": 0}, (("lectura_breve", 1),), ("leer_breve",)),
-        ("informe_natal", {"usd": 500, "brl": 2490}, (("informe_natal", 1),), ("leer_informe",)),
+        ("informe_natal", {"usd": 500, "brl": 2490, "ars": 2500000}, (("informe_natal", 1),), ("leer_informe",)),
         ("pack_3_natal", {"usd": 7900}, (("informe_natal", 3),), ("leer_informe",)),
         ("pack_5_natal", {"usd": 12500}, (("informe_natal", 5),), ("leer_informe",)),
     ],
@@ -34,9 +34,10 @@ def test_precio_en_devuelve_el_monto_de_esa_moneda_y_falla_sin_ella():
     natal = producto("informe_natal")
     assert natal.precio_en("usd") == 500
     assert natal.precio_en("brl") == 2490
-    assert natal.monedas() == ("usd", "brl")
+    assert natal.precio_en("ars") == 2500000
+    assert natal.monedas() == ("usd", "brl", "ars")
     with pytest.raises(KeyError):
-        natal.precio_en("ars")
+        natal.precio_en("eur")
 
 
 def test_usd_es_obligatoria():

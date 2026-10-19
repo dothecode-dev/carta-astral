@@ -28,6 +28,7 @@ from api import (
 )
 from api.auth import AccountTokenAuthentication
 from api.models import Chart, MailBloqueado, PasarelaCheckout, Sujeto
+from api.pasarelas import mercadopago, mercadopago_api
 from api.permissions import HasAccount
 from api.sujetos import sujeto_natal
 
@@ -63,6 +64,8 @@ def moneda_pedida(request, codigo_producto: str) -> str:
         return pedida
     if pedida not in prod.monedas():
         raise MonedaInvalida(pedida)
+    if pedida == "ars" and not settings.COBRO_ARS_ENABLED:
+        raise MonedaInvalida(pedida)
     return pedida
 
 
@@ -89,6 +92,12 @@ def respuesta_de_stripe(exc, codigo) -> Response:
         )
     logger.exception("stripe no pudo abrir el checkout de %r", codigo)
     return Response({"error": "no pudimos abrir el pago"}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+def respuesta_de_mp(exc, codigo) -> Response:
+    """Qué le decimos a quien compra cuando Mercado Pago no abre la preferencia."""
+    logger.error("mercado pago no pudo abrir el checkout de %r: %s", codigo, type(exc).__name__)
+    return Response({"error": "el cobro no está disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 class CheckoutView(APIView):
@@ -163,8 +172,16 @@ class CheckoutView(APIView):
             logger.info("checkout de %r en moneda rechazada: %s", codigo, exc)
             return Response(_MONEDA_INVALIDA, status=status.HTTP_400_BAD_REQUEST)
 
+        en_pesos = catalogo.pasarela_de(moneda) == "mercadopago"
         cupon = None
         codigo_cupon = request.data.get("cupon")
+        if codigo_cupon and en_pesos:
+            # Fase 1: sin cupones en pesos. Antes de validar, así el regalo del
+            # 100 % tampoco es alcanzable acá.
+            return Response(
+                {"error": "el cupón no sirve", "motivo": "cupon_no_disponible_en_pesos"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if codigo_cupon:
             try:
                 cupon = cupones.validar(codigo_cupon, codigo, account=request.user)
@@ -176,6 +193,19 @@ class CheckoutView(APIView):
                 )
             if cupon.porcentaje >= 100:
                 return self._canjear_gratis(request, cupon, codigo, sujeto, idioma)
+
+        if en_pesos:
+            try:
+                fila = mercadopago.abrir(
+                    request.user, codigo, sujeto=sujeto, locale=idioma, moneda=moneda,
+                    mail=request.user.email or "",
+                )
+            except (KeyError, ValueError) as exc:
+                logger.warning("checkout rechazado para %r: %s", codigo, exc)
+                return Response({"error": "producto inválido"}, status=status.HTTP_400_BAD_REQUEST)
+            except (mercadopago_api.MPNoConfigurado, mercadopago_api.MPError) as exc:
+                return respuesta_de_mp(exc, codigo)
+            return Response({"url": fila.url})
 
         try:
             checkout_id, url = stripe_client.crear_checkout(

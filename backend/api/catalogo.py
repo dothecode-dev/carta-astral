@@ -16,6 +16,13 @@ ACCESO = "acceso"
 #: Moneda base. Todo producto la tiene; las demás son opcionales (RF1).
 MONEDA_BASE = "usd"
 
+#: Por qué pasarela se cobra cada moneda. Lo que no está acá va por Stripe.
+PASARELA_POR_MONEDA = {"ars": "mercadopago"}
+
+
+def pasarela_de(moneda: str) -> str:
+    return PASARELA_POR_MONEDA.get(moneda, "stripe")
+
 
 @dataclass(frozen=True)
 class Producto:
@@ -74,11 +81,13 @@ class Producto:
 
 _PRODUCTOS = (
     Producto("lectura_breve", {"usd": 0}, CONSUMIBLE, ("leer_breve",), (("lectura_breve", 1),)),
+    # $ 25.000 en pesos decidido el 19-10-2026 (Mercado Pago, fase 1). USD y
+    # BRL no cambian hasta que salga MP.
     # R$ 24,90 decidido el 13-10-2026 (spec cobro-brl-pix, R3): un poco bajo la
     # paridad y deja margen al IOF (3,5 %), que absorbemos. Fijo: el riesgo
     # cambiario es nuestro y lo vigila el informe diario.
     Producto(
-        "informe_natal", {"usd": 500, "brl": 2490}, CONSUMIBLE, ("leer_informe",),
+        "informe_natal", {"usd": 500, "brl": 2490, "ars": 2500000}, CONSUMIBLE, ("leer_informe",),
         (("informe_natal", 1),),
     ),
     # Retirados el 04-10-2026, cuando el informe pasó de US$ 29 a US$ 5: a ese
