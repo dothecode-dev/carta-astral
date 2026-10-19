@@ -3046,6 +3046,11 @@ body:has(.consentBar) .accionFija {
   /* Empuja el botón al pie de la tarjeta: con textos de distinto largo, los
      tres botones quedan alineados. */
   flex: 1;
+  /* Con un solo producto la tarjeta ocupa todo el ancho y el tope de lectura
+     de los párrafos (:where(.docFrame) p) cortaba el texto antes del borde,
+     dejando «PDF.» solo en el segundo renglón. */
+  max-width: none;
+  text-wrap: pretty;
 }
 
 /* Lo gratis va como banda, no como cuarta tarjeta: metido en la grilla dejaba
