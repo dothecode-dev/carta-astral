@@ -15,7 +15,7 @@ import secrets
 from django.conf import settings
 from django.utils import timezone
 
-from api import cobro, cupones, stripe_client
+from api import cobro, cupones, disputas, stripe_client
 from api.conteo import contar
 from api.models import PasarelaCheckout
 from api.pasarelas import mercadopago_api
@@ -216,3 +216,83 @@ def _reembolsar(fila: PasarelaCheckout, pago: dict, pago_id: str, moneda: str) -
             fila, pago_id=pago_id, refund_id=refund_id, monto=_centavos(reembolso.get("amount")),
             moneda=moneda, external_id=f"mp:refund:{refund_id}",
         )
+
+
+# --- reclamos y contracargos (RF12) ------------------------------------------------------
+
+
+class ContracargoSinCompra(Exception):
+    """Un contracargo sobre un pago que no acreditó ninguna fila de MP. Se pide
+    el reintento (la fila puede no estar commiteada), pero el aviso es la red:
+    MP no reintentó tarde tras un 500 en el sandbox."""
+
+
+def procesar_reclamo(claim_id: str) -> None:
+    """Un reclamo (`topic_claims_integration_wh`) no toca nada: se avisa para
+    seguirlo en el panel. Si se convierte en mediación o contracargo, llega por
+    el pago (`in_mediation`) o por el tópico de contracargos."""
+    if not claim_id:
+        logger.error("reclamo de mercadopago sin id en el cuerpo")
+        cobro.avisar("Reclamo de Mercado Pago SIN ID en la notificación: revisarlo en el panel de MP.")
+        return
+    logger.warning("reclamo de mercadopago %s", claim_id)
+    cobro.avisar(f"Reclamo de Mercado Pago {claim_id}: no se cambió nada. Seguirlo en el panel de MP.")
+
+
+def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
+    """Un contracargo se trata como una disputa de Stripe que retira fondos:
+    revoca lo que queda, bloquea el mail y avisa (`disputas._retirar`).
+
+    El cuerpo de la notificación no está firmado (la firma cubre el uuid de la
+    query): el contracargo se lee de la API y el pago tiene que figurar en él.
+
+    Lo definitivo vuelve sin levantar (200). Levantan, para reintentar:
+    `MPError` al leer el contracargo y `ContracargoSinCompra`.
+    """
+    if not chargeback_id or not payment_id:
+        # Un reintento no agrega el campo que falta.
+        logger.error("contracargo de mercadopago sin ids (chargeback=%r, pago=%r)", chargeback_id, payment_id)
+        cobro.avisar(
+            f"Contracargo de Mercado Pago con la notificación incompleta (contracargo={chargeback_id or '?'}, "
+            f"pago={payment_id or '?'}). No se hizo nada: revisarlo en el panel de MP.",
+        )
+        return
+
+    contracargo = mercadopago_api.obtener_contracargo(chargeback_id)
+    pagos = {str(p) for p in contracargo.get("payments") or []}
+    if payment_id not in pagos:
+        logger.error("contracargo %s no incluye el pago %s (payments=%r)", chargeback_id, payment_id, sorted(pagos))
+        cobro.avisar(
+            f"Contracargo de Mercado Pago {chargeback_id}: la notificación dice el pago {payment_id} y la "
+            f"API no lo incluye ({', '.join(sorted(pagos)) or 'ninguno'}). No se hizo nada: revisar a mano.",
+        )
+        return
+
+    fila = PasarelaCheckout.objects.filter(
+        pasarela=PasarelaCheckout.MERCADOPAGO, payment_intent=payment_id,
+    ).first()
+    if fila is None:
+        logger.error("contracargo %s sobre el pago %s sin compra: se pide reintento", chargeback_id, payment_id)
+        cobro.avisar(
+            f"Contracargo de Mercado Pago {chargeback_id} sobre el pago {payment_id} SIN COMPRA conocida. "
+            "No se revocó nada: revisar.",
+        )
+        raise ContracargoSinCompra(chargeback_id)
+
+    dispute_id = f"mp:chargeback:{chargeback_id}"
+    aviso = disputas._retirar(
+        fila.pk, None, dispute_id, _centavos(contracargo.get("amount")), "ars", "contracargo MP",
+    )
+    if aviso is None:
+        # D3 (spec de cobro en pesos): qué campos dicen que un contracargo se
+        # resolvió a favor no se pudo medir en el sandbox, así que la
+        # resolución no se automatiza. Toda notificación posterior de un
+        # contracargo ya registrado —reenvío, cambio de etapa o resolución—
+        # sólo avisa.
+        logger.warning("contracargo %s ya registrado sobre %s: se avisa", chargeback_id, fila.checkout_id)
+        aviso = (
+            f"Contracargo de Mercado Pago {chargeback_id} ({fila.checkout_id}) ya registrado: llegó otra "
+            f"notificación (etapa {contracargo.get('stage') or '?'}). No se cambió nada: revisar a mano en MP."
+        )
+    # Después del commit de `_retirar`: nunca un aviso de algo que se deshizo.
+    cobro.avisar(aviso)
