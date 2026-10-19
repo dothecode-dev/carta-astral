@@ -246,7 +246,7 @@ def test_fila_con_cuenta_ya_vencida_no_se_busca_de_nuevo(mp, make_account):
     assert mp.buscados == []
 
 
-def test_una_fila_que_falla_al_descartar_no_corta_las_demas(mp, make_chart, make_account, monkeypatch):
+def test_una_fila_que_falla_al_descartar_no_corta_las_demas(mp, make_chart, make_account, monkeypatch, avisos):
     mala = _anonima(make_chart, "a", vencido_at=AHORA - dt.timedelta(hours=30))
     buena = _fila("b", account=make_account())
 
@@ -260,6 +260,7 @@ def test_una_fila_que_falla_al_descartar_no_corta_las_demas(mp, make_chart, make
     buena.refresh_from_db()
     assert buena.vencido_at == AHORA and r["vencidas"] == 1
     assert mala.checkout_id in mp.buscados
+    assert len(avisos) == 1 and mala.checkout_id in avisos[0]
 
 
 def test_sin_token_aborta_la_corrida(monkeypatch, make_account):
@@ -269,6 +270,19 @@ def test_sin_token_aborta_la_corrida(monkeypatch, make_account):
         raise mercadopago_api.MPNoConfigurado("falta")
 
     monkeypatch.setattr(mercadopago_api, "buscar_pagos", sin_token)
+
+    with pytest.raises(mercadopago_api.MPNoConfigurado):
+        mercadopago.revisar_vencidas(AHORA)
+
+
+def test_sin_token_al_procesar_un_pago_aprobado_aborta(mp, make_account, monkeypatch):
+    fila = _fila(account=make_account())
+    mp.busquedas[fila.checkout_id] = [_pago(fila)]
+
+    def sin_token(_pid):
+        raise mercadopago_api.MPNoConfigurado("falta")
+
+    monkeypatch.setattr(mercadopago, "procesar_pago", sin_token)
 
     with pytest.raises(mercadopago_api.MPNoConfigurado):
         mercadopago.revisar_vencidas(AHORA)

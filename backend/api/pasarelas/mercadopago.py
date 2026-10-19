@@ -390,8 +390,10 @@ def revisar_vencidas(ahora: dt.datetime) -> dict[str, int]:
     Revisa las filas de MP sin acreditar pasada la vida de la preferencia más
     el margen, y sólo las que todavía tienen algo que resolver: sin vencer, o
     vencidas con la carta de una compra sin cuenta aún guardada. Un fallo con
-    una fila se loguea y no corta las demás; si además tocaba descartar su
-    carta, no se descarta (no se sabe si pagó) y se avisa.
+    una fila se loguea y no corta las demás (`MPNoConfigurado` sí corta la
+    corrida). Se avisa al admin en dos casos: si no se pudo confirmar el pago
+    de una fila cuya carta tocaba descartar (entonces no se descarta), y si el
+    descarte mismo falló.
     """
     limite = ahora - stripe_client.VENCIMIENTO_SESION - _MARGEN_VENCIMIENTO
     candidatas = PasarelaCheckout.objects.filter(
@@ -432,6 +434,8 @@ def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str,
                 continue
             try:
                 procesar_pago(str(pago.get("id")))
+            except mercadopago_api.MPNoConfigurado:
+                raise
             except Exception:
                 logger.exception(
                     "vencer_checkouts: no se pudo procesar el pago %s de %s", pago.get("id"), checkout_id,
@@ -451,8 +455,18 @@ def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str,
     ).update(vencido_at=ahora):
         resumen["vencidas"] += 1
         fila.vencido_at = ahora
-    if _toca_descartar(fila, ahora) and compra_anonima.descartar(checkout_id):
-        resumen["descartadas"] += 1
+    if _toca_descartar(fila, ahora):
+        try:
+            descartada = compra_anonima.descartar(checkout_id)
+        except Exception:
+            logger.exception("vencer_checkouts: no se pudo descartar la carta de %s", checkout_id)
+            cobro.avisar(
+                f"Mercado Pago {checkout_id}: no se pudo descartar la carta de una compra sin pagar "
+                "(la política de privacidad dice que se borra). Revisar a mano.",
+            )
+            return
+        if descartada:
+            resumen["descartadas"] += 1
 
 
 def _toca_descartar(fila: PasarelaCheckout, ahora: dt.datetime) -> bool:
