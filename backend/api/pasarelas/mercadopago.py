@@ -15,7 +15,7 @@ import secrets
 from django.conf import settings
 from django.utils import timezone
 
-from api import cobro, cupones, disputas, stripe_client
+from api import cobro, cupones, devoluciones, disputas, stripe_client
 from api.conteo import contar
 from api.models import PasarelaCheckout
 from api.pasarelas import mercadopago_api
@@ -264,12 +264,22 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
         return
     try:
         contracargo = mercadopago_api.obtener_contracargo(chargeback_id)
-    except mercadopago_api.MPError as e:
-        if e.status is None or not 200 <= e.status < 300:
-            raise  # timeout, red o un 4xx/5xx de MP: transitorio, 500
-        # MP contestó 2xx con algo que no es un objeto: reintentar da lo mismo.
-        _contracargo_a_mano(chargeback_id, payment_id, f"la API devolvió algo inesperado ({e})")
-        return
+    except (mercadopago_api.MPError, mercadopago_api.MPNoConfigurado) as e:
+        status = getattr(e, "status", None)
+        if status is not None and (200 <= status < 300 or (400 <= status < 500 and status not in (408, 429))):
+            # Definitivo: MP contestó 2xx con algo que no es un objeto, o un 4xx
+            # que reintentar no cambia (p. ej. 404: el contracargo no es de
+            # nuestra cuenta, cuerpo falsificado o reenviado).
+            _contracargo_a_mano(chargeback_id, payment_id, f"la API respondió {status} ({e})")
+            return
+        # Transitorio (red, timeout, 5xx, 408, 429, sin token): 500 para que MP
+        # reintente. MP no reintenta tarde (medido en sandbox): se avisa igual.
+        logger.error("contracargo de mercadopago %s: MP falló (%s), se pide reintento", chargeback_id, type(e).__name__)
+        cobro.avisar(
+            f"Contracargo de Mercado Pago {chargeback_id} (pago {payment_id}): no se pudo leer de MP "
+            f"({type(e).__name__}, status {status or '-'}). Se pidió reintento; si no llega, revisar a mano.",
+        )
+        raise
     problema = _forma_invalida(contracargo)
     if problema:
         _contracargo_a_mano(chargeback_id, payment_id, problema)
@@ -294,10 +304,17 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
         )
         raise ContracargoSinCompra(chargeback_id)
 
+    monto = _centavos(contracargo["amount"])
+    pagado = devoluciones.pagado(fila)
+    if monto > pagado:
+        # Un contracargo por más de lo que se cobró no es creíble.
+        _contracargo_a_mano(
+            chargeback_id, payment_id, f"el monto ({monto} centavos) supera lo pagado ({pagado}) en {fila.checkout_id}",
+        )
+        return
+
     dispute_id = f"mp:chargeback:{chargeback_id}"
-    aviso = disputas._retirar(
-        fila.pk, None, dispute_id, _centavos(contracargo["amount"]), "ars", "contracargo MP",
-    )
+    aviso = disputas._retirar(fila.pk, None, dispute_id, monto, "ars", "contracargo MP")
     if aviso is None:
         # D3 (spec de cobro en pesos): qué campos dicen que un contracargo se
         # resolvió a favor no se pudo medir en el sandbox, así que la

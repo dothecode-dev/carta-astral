@@ -415,10 +415,14 @@ def test_contracargo_con_id_invalido_avisa_y_200(client, avisos, acreditada, tra
 @pytest.mark.parametrize("error", [
     mercadopago_api.MPError("Mercado Pago no contestó (ReadTimeout)"),
     mercadopago_api.MPError("Mercado Pago respondió 503", status=503),
-    mercadopago_api.MPError("Mercado Pago respondió 404", status=404),
+    mercadopago_api.MPError("Mercado Pago respondió 500", status=500),
+    mercadopago_api.MPError("Mercado Pago respondió 408", status=408),
+    mercadopago_api.MPError("Mercado Pago respondió 429", status=429),
     mercadopago_api.MPNoConfigurado("MP_ACCESS_TOKEN no está configurado"),
 ])
-def test_contracargo_con_mp_fallando_sigue_siendo_500(client, avisos, acreditada, transporte, monkeypatch, error):
+def test_contracargo_con_mp_fallando_500_y_avisa(client, avisos, acreditada, transporte, monkeypatch, error):
+    """Transitorio: 500 para que MP reintente. Pero MP no reintenta tarde
+    (medido en sandbox), así que además se avisa: Sentry no es el canal."""
     def falla(*a, **k):
         raise error
 
@@ -426,3 +430,32 @@ def test_contracargo_con_mp_fallando_sigue_siendo_500(client, avisos, acreditada
 
     assert _notificar_contracargo(client).status_code == 500
     assert not Disputa.objects.exists()
+    assert len(avisos) == 1 and CONTRACARGO in avisos[0] and type(error).__name__ in avisos[0]
+
+
+@pytest.mark.parametrize("codigo", [400, 401, 403, 404, 422])
+def test_contracargo_con_4xx_definitivo_avisa_y_200(client, avisos, acreditada, transporte, monkeypatch, codigo):
+    """Un 4xx (salvo 408/429) no se arregla reintentando: p. ej. 404 para un
+    contracargo que no es de nuestra cuenta (cuerpo falsificado o reenviado)."""
+    def falla(*a, **k):
+        raise mercadopago_api.MPError(f"Mercado Pago respondió {codigo}", status=codigo)
+
+    monkeypatch.setattr(mercadopago_api, "_pedir", falla)
+
+    _sin_efecto(acreditada, avisos, _notificar_contracargo(client))
+    assert str(codigo) in avisos[0]
+
+
+@pytest.mark.parametrize("monto", [1e300, 25000.01])
+def test_contracargo_por_mas_de_lo_pagado_avisa_y_no_revoca(client, api_mp, avisos, acreditada, monto):
+    """Lo pagado es 25.000,00 ARS: un contracargo mayor no es creíble."""
+    api_mp.contracargos[CONTRACARGO] = _contracargo(monto=monto)
+
+    _sin_efecto(acreditada, avisos, _notificar_contracargo(client))
+
+
+def test_contracargo_por_exactamente_lo_pagado_revoca(client, api_mp, avisos, acreditada):
+    api_mp.contracargos[CONTRACARGO] = _contracargo(monto=25000.0)
+
+    assert _notificar_contracargo(client).status_code == 200
+    assert Disputa.objects.get().monto_anotado == PRECIO_ARS
