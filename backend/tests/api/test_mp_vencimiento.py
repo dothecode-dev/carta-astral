@@ -24,6 +24,14 @@ def _sin_efectos(monkeypatch):
     monkeypatch.setattr(cobro.notificaciones, "notificar", lambda *a, **k: None)
 
 
+@pytest.fixture(autouse=True)
+def ventas(monkeypatch):
+    """El aviso de venta en pesos va por su canal (ver test_mp_webhook_pago)."""
+    enviadas = []
+    monkeypatch.setattr(cobro, "avisar_venta", enviadas.append)
+    return enviadas
+
+
 @pytest.fixture
 def avisos(monkeypatch):
     enviados = []

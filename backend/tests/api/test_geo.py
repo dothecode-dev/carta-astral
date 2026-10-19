@@ -114,3 +114,11 @@ def test_una_base_invalida_no_tumba_nada_y_avisa_una_sola_vez(client, settings, 
     assert r.json() == {"moneda": "usd", "pais": None}
     assert len([x for x in caplog.records if "inválida" in x.getMessage()]) == 1
 
+
+
+@pytest.mark.parametrize(("prendido", "esperada"), [(True, "ars"), (False, "usd")])
+def test_argentina_ve_pesos_solo_con_el_cobro_en_pesos_prendido(settings, prendido, esperada):
+    # RF29. Apagado, «ars» no se muestra ni se cobra: mandarlo igual sería un
+    # precio que la web no tiene y un checkout que el backend rechaza.
+    settings.COBRO_ARS_ENABLED = prendido
+    assert geo.moneda_para("AR") == esperada

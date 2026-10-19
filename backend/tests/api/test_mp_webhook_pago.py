@@ -43,6 +43,15 @@ def avisos(monkeypatch):
     return enviados
 
 
+@pytest.fixture(autouse=True)
+def ventas(monkeypatch):
+    """El aviso de cada venta en pesos (para la factura C a mano) va por su
+    canal: `avisos == []` sigue queriendo decir «nada raro»."""
+    enviadas = []
+    monkeypatch.setattr(cobro, "avisar_venta", enviadas.append)
+    return enviadas
+
+
 @pytest.fixture
 def mails(monkeypatch):
     enviados = []
@@ -274,6 +283,37 @@ def test_aprobado_acredita(client, pagos, avisos, mails, make_account):
     assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 1
     assert mails == [(cuenta.pk, "compra_acreditada")]
     assert avisos == []
+
+
+@pytest.mark.django_db
+def test_venta_acreditada_avisa_para_facturar_una_sola_vez(client, pagos, avisos, ventas, make_account):
+    """Puente hasta la factura C automática (decisión del 19-10): cada venta en
+    pesos acreditada avisa con lo que hace falta para facturarla a mano, y los
+    reintentos de MP no la avisan dos veces."""
+    cuenta = make_account(email="ana.perez@example.com")
+    _fila(cuenta)
+    pagos[str(PAGO)] = _pago()
+
+    for action in ("payment.created", "payment.updated"):
+        assert _notificar(client, action=action).status_code == 200
+
+    assert len(ventas) == 1
+    texto = ventas[0]
+    assert "factura" in texto.lower()
+    assert "$ 25.000" in texto
+    assert str(PAGO) in texto and CHECKOUT in texto
+    assert "a***@example.com" in texto and "ana.perez" not in texto
+    assert avisos == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("status", ["rejected", "pending", "in_process"])
+def test_un_pago_que_no_se_acredita_no_avisa_venta(client, pagos, ventas, make_account, status):
+    _fila(make_account())
+    pagos[str(PAGO)] = _pago(status=status)
+
+    assert _notificar(client).status_code == 200
+    assert ventas == []
 
 
 @pytest.mark.django_db

@@ -75,6 +75,14 @@ def avisar(texto: str) -> None:
     avisar_admin(texto)
 
 
+def avisar_venta(texto: str) -> None:
+    """Una venta que hay que facturar a mano (puente hasta la factura C
+    automática contra ARCA, decisión del 19-10-2026). Mismo canal que
+    `avisar`, separado para que «hubo un aviso» siga queriendo decir «algo
+    raro pasó». La lista confiable es el admin de compras: esto es el empujón."""
+    avisar_admin(texto)
+
+
 def acreditar(
     fila: PasarelaCheckout, *, pago_id: str, monto_pagado: int, moneda: str, medio: str, external_id: str,
 ) -> bool:

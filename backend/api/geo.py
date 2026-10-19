@@ -14,12 +14,14 @@ import threading
 
 from django.conf import settings
 
+from api import catalogo
 from config.axes_ip import ip_del_cliente
 
 logger = logging.getLogger(__name__)
 
-#: Qué moneda ve cada país. Todo lo que no está acá es `usd`.
-MONEDA_POR_PAIS = {"BR": "brl"}
+#: Qué moneda ve cada país. Todo lo que no está acá es `usd`, y también lo es
+#: una moneda que su flag tiene apagada (`catalogo.moneda_habilitada`).
+MONEDA_POR_PAIS = {"BR": "brl", "AR": "ars"}
 
 _lock = threading.Lock()
 _cargado: tuple[str, float] | None = None  # (ruta, mtime) de la base en memoria
@@ -97,7 +99,8 @@ def pais_de(ip: str | None) -> str | None:
 
 
 def moneda_para(pais: str | None) -> str:
-    return MONEDA_POR_PAIS.get(pais or "", "usd")
+    moneda = MONEDA_POR_PAIS.get(pais or "", "usd")
+    return moneda if catalogo.moneda_habilitada(moneda) else "usd"
 
 
 def moneda_de(request) -> str:

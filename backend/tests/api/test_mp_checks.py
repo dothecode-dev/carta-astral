@@ -8,6 +8,8 @@ def _configurar(settings):
     settings.MP_WEBHOOK_SECRET = "secreto-webhook"
     settings.MP_NOTIFICACION_URL = "https://api.example.com/webhooks/mp/"
     settings.MP_RETORNO_URL = "https://example.com/{locale}/compra?checkout_id={checkout_id}"
+    settings.TELEGRAM_BOT_TOKEN = "123:token"
+    settings.TELEGRAM_CHAT_ID = "42"
 
 
 def test_flag_apagado_sin_avisos(settings, monkeypatch):
@@ -99,3 +101,16 @@ def test_url_de_retorno_sin_marcadores_avisa(settings, url, falta):
 
     assert errores and all("MP_RETORNO_URL" in e.msg for e in errores)
     assert any(falta in e.msg for e in errores)
+
+
+@pytest.mark.parametrize("nombre", ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"])
+def test_cobro_en_pesos_sin_telegram_avisa(settings, nombre):
+    """Las ventas a facturar a mano, los contracargos y los pagos duplicados de
+    MP sólo se avisan por Telegram: sin él quedan en un log que nadie mira."""
+    _configurar(settings)
+    setattr(settings, nombre, "")
+
+    errores = run_checks(tags=["mercadopago"])
+
+    assert len(errores) == 1 and nombre in errores[0].msg
+    assert "123:token" not in errores[0].msg + (errores[0].hint or "")

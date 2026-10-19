@@ -68,6 +68,15 @@ def mercadopago_configurado(app_configs, **kwargs):
                 f"{nombre} no es https://",
                 hint="Mercado Pago exige https para notificar y volver", id="api.W004",
             ))
+    # Las ventas a facturar a mano, los contracargos y los pagos duplicados sólo
+    # se avisan por Telegram (`avisos.avisar_admin`): sin él quedan en un log.
+    for nombre in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+        if not getattr(settings, nombre, ""):
+            encontrados.append(Warning(
+                f"COBRO_ARS_ENABLED está prendido y falta {nombre}",
+                hint="sin Telegram los avisos del cobro en pesos (ventas a facturar, contracargos) no llegan",
+                id="api.W006",
+            ))
     retorno = settings.MP_RETORNO_URL or ""
     for marcador in ("{checkout_id}", "{locale}"):
         if retorno and marcador not in retorno:
