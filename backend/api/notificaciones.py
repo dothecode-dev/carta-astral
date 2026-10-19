@@ -286,15 +286,21 @@ def enviar_codigo(email: str, codigo: str, lang: str) -> None:
     `EnvioFallido`. Decidir qué hacer con eso (revertir el envío contabilizado,
     devolver 503) es tarea de quien llama, no de esta función. Nunca el
     código ni la dirección van al log ni al mensaje de la excepción."""
-    logger.info("aviso al usuario", extra={"evento": "codigo_acceso", "lang": lang})
+    asunto, html, texto = _armar_codigo(lang, codigo)
+    _enviar_suelto(email, asunto, html, texto, "codigo_acceso", lang)
+
+
+def _enviar_suelto(email: str, asunto: str, html: str, texto: str, evento: str, lang: str) -> None:
+    """Un mail a una dirección suelta que levanta `EnvioFallido` si no sale:
+    el código de acceso y el del botón de arrepentimiento. Ni la dirección ni
+    el contenido van al log."""
+    logger.info("aviso al usuario", extra={"evento": evento, "lang": lang})
     if not settings.RESEND_API_KEY:
         raise EnvioFallido("sin RESEND_API_KEY configurada")
-
-    asunto, html, texto = _armar_codigo(lang, codigo)
     try:
         respuesta = _post_resend(email, asunto, html, texto)
     except Exception as exc:
-        logger.exception("fallo el envio %s", "codigo_acceso")
+        logger.exception("fallo el envio %s", evento)
         raise EnvioFallido("fallo el envio a Resend") from exc
 
     # El mail YA SALIÓ (2xx): lo que sigue es sólo cosmético para el log, y
@@ -305,10 +311,7 @@ def enviar_codigo(email: str, codigo: str, lang: str) -> None:
         resend_id = respuesta.json().get("id")
     except Exception:
         resend_id = None
-    logger.info(
-        "aviso enviado",
-        extra={"evento": "codigo_acceso", "resend_id": resend_id},
-    )
+    logger.info("aviso enviado", extra={"evento": evento, "resend_id": resend_id})
 
 
 _TEXTOS_ARREPENTIMIENTO = {
@@ -365,15 +368,8 @@ def enviar_arrepentimiento(email: str, codigo: str, lang: str) -> None:
     """Como `enviar_codigo`: a una dirección suelta y levantando `EnvioFallido`
     si no sale, para que quien llama avise al admin (el código igual se
     mostró en pantalla). Ni el código ni la dirección van al log."""
-    logger.info("aviso al usuario", extra={"evento": "arrepentimiento", "lang": lang})
-    if not settings.RESEND_API_KEY:
-        raise EnvioFallido("sin RESEND_API_KEY configurada")
     asunto, html, texto = armar_arrepentimiento(lang, codigo)
-    try:
-        _post_resend(email, asunto, html, texto)
-    except Exception as exc:
-        logger.exception("fallo el envio %s", "arrepentimiento")
-        raise EnvioFallido("fallo el envio a Resend") from exc
+    _enviar_suelto(email, asunto, html, texto, "arrepentimiento", lang)
 
 
 def _enviar(account, evento, contexto, lang):

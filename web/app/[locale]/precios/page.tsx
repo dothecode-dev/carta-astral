@@ -106,6 +106,11 @@ export default async function PreciosPage({
         .then((r) => r.results.length > 0)
         .catch(() => true)
     : true;
+  // La moneda que de verdad se ve: la pedida (cookie o IP) si el catálogo la
+  // ofrece, si no dólares. Con pesos pedidos y el cobro en pesos apagado se
+  // cobra en dólares con Stripe, y el selector y la nota lo tienen que decir.
+  const ofrecidas = monedasOfrecidas(productos);
+  const monedaVista = ofrecidas.includes(moneda) ? moneda : "usd";
   const cuponValido = cupon?.valido ? cupon : null;
   const estadoCupon = cupon === null ? null : cupon.valido ? "valido" : cupon.motivo;
   // El precio final por producto, sólo para los que el cupón abarca, en la
@@ -167,13 +172,13 @@ export default async function PreciosPage({
           <form className="switch monedaSelector" action="/api/moneda" method="post" aria-label={dict.precios.monedaLabel}>
             <input type="hidden" name="volver" value={`/${locale}/precios`} />
             {codigoCupon && <input type="hidden" name="cupon" value={codigoCupon} />}
-            {monedasOfrecidas(productos).map((m) => (
+            {ofrecidas.map((m) => (
               <button
                 key={m}
                 type="submit"
                 name="moneda"
                 value={m}
-                aria-pressed={m === moneda}
+                aria-pressed={m === monedaVista}
               >
                 {SIMBOLO[m]}
               </button>
@@ -281,7 +286,7 @@ export default async function PreciosPage({
             directos con 3-4,5rem, así que el enlace suelto quedaba a media
             pantalla de la nota que acompaña. */}
         <div className="preciosPie">
-          <p className="preciosNota">{moneda === "ars" ? dict.precios.notaPesos : dict.precios.nota}</p>
+          <p className="preciosNota">{monedaVista === "ars" ? dict.precios.notaPesos : dict.precios.nota}</p>
           {/* En su propia línea, no colgando del final: nadie compra 6.000
               palabras a ciegas, y esto es una invitación a mirar el producto,
               no una aclaración más sobre impuestos. */}

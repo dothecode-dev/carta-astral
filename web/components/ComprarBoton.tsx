@@ -4,17 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Dict, Locale } from "@/lib/i18n";
+import { motivoDeRespuesta } from "@/lib/motivoRespuesta";
 import { track } from "@/lib/telemetry";
 import type { Moneda } from "@/lib/monedas";
-
-async function motivoDe(res: Response): Promise<string | null> {
-  try {
-    const cuerpo = (await res.json()) as { motivo?: unknown };
-    return typeof cuerpo.motivo === "string" ? cuerpo.motivo : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Comprar un producto suelto, sin carta atada.
@@ -91,7 +83,7 @@ export function ComprarBoton({
         // Un cupón que se agotó entre pintar la página y apretar no es «no
         // pudimos abrir el pago»: es otra cosa, y tiene sus palabras.
         // El 403 es un mail bloqueado (una disputa): también tiene su texto.
-        const motivo = res.status === 400 || res.status === 403 ? await motivoDe(res) : null;
+        const motivo = res.status === 400 || res.status === 403 ? await motivoDeRespuesta(res) : null;
         setError((motivo && dict.precios.cuponMotivo[motivo]) || dict.precios.fallo);
         return;
       }

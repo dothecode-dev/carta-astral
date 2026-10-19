@@ -28,6 +28,15 @@ def _cache_limpia(django_cache_cleared):
     """El aviso de un reembolso no acreditado se deduplica en la caché."""
 
 
+@pytest.fixture(autouse=True)
+def ventas(monkeypatch):
+    """El aviso de venta en pesos va por su canal: `avisos == []` sigue
+    queriendo decir «nada raro»."""
+    enviadas = []
+    monkeypatch.setattr(cobro, "avisar_venta", enviadas.append)
+    return enviadas
+
+
 @pytest.fixture
 def avisos(monkeypatch):
     enviados = []

@@ -12,6 +12,7 @@ import { cantidad, puede, type Derecho } from "@/lib/derechos";
 import type { Dict, Locale } from "@/lib/i18n";
 import { track, type EventoProps } from "@/lib/telemetry";
 import type { Moneda } from "@/lib/monedas";
+import { motivoDeRespuesta } from "@/lib/motivoRespuesta";
 
 // Los dos botones de la carta, y la espera mientras se escribe el producto
 // elegido.
@@ -463,15 +464,7 @@ export function ChartActions({
         setBusy(false);
         // Un mail bloqueado (403) no es «no pudimos abrir el pago»: reintentar
         // no lo arregla, y tiene sus palabras.
-        let motivo: string | null = null;
-        if (res.status === 400 || res.status === 403) {
-          try {
-            const cuerpo = (await res.json()) as { motivo?: unknown };
-            motivo = typeof cuerpo.motivo === "string" ? cuerpo.motivo : null;
-          } catch {
-            motivo = null;
-          }
-        }
+        const motivo = res.status === 400 || res.status === 403 ? await motivoDeRespuesta(res) : null;
         setError((motivo && dict.precios.cuponMotivo[motivo]) || dict.chart.compraFallo);
         return;
       }

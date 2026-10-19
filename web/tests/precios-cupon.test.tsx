@@ -351,3 +351,22 @@ describe("/precios en pesos", () => {
     expect(JSON.parse(pedido[1]!.body as string)).toMatchObject({ producto: "informe_natal", moneda: "ars" });
   });
 });
+
+describe("/precios cuando el visitante pidió pesos y el cobro en pesos está apagado", () => {
+  // Code review del 19-10: con la cookie en «ars» y el flag apagado el
+  // catálogo no trae pesos y se cobra en dólares con Stripe; la nota y el
+  // selector tienen que decir eso, no lo que pidió la cookie.
+  function stubPidePesosSinPesos() {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      String(url).includes("/api/moneda/") ? json({ moneda: "ars", pais: "AR" }) : json(CATALOGO_BRL)));
+  }
+
+  it("la nota habla de Stripe y el selector marca dólares", async () => {
+    stubPidePesosSinPesos();
+    const { container } = await pagina({});
+
+    expect(container.querySelector(".preciosNota")!.textContent).toMatch(/Stripe/);
+    const marcado = container.querySelector('button[name="moneda"][aria-pressed="true"]') as HTMLButtonElement;
+    expect(marcado.value).toBe("usd");
+  });
+});

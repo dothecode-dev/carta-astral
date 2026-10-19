@@ -307,6 +307,24 @@ def test_venta_acreditada_avisa_para_facturar_una_sola_vez(client, pagos, avisos
 
 
 @pytest.mark.django_db
+def test_la_venta_se_avisa_aunque_el_informe_no_arranque(client, pagos, avisos, ventas, make_account, monkeypatch):
+    """Code review del 19-10: el arranque del informe falla DESPUÉS de acreditar
+    y la excepción sube; el reintento de MP ya no acredita. El aviso de venta
+    tiene que salir en la llamada que acreditó, no después del arranque."""
+    def explota(cuenta, fila):
+        raise RuntimeError("se cayó el arranque")
+
+    monkeypatch.setattr(cobro, "arrancar_informe", explota)
+    _fila(make_account())
+    pagos[str(PAGO)] = _pago()
+
+    _notificar(client)
+    _notificar(client)  # el reintento inmediato de MP
+
+    assert len(ventas) == 1 and str(PAGO) in ventas[0]
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("status", ["rejected", "pending", "in_process"])
 def test_un_pago_que_no_se_acredita_no_avisa_venta(client, pagos, ventas, make_account, status):
     _fila(make_account())

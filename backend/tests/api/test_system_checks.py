@@ -16,6 +16,9 @@ def test_no_quedan_avisos_sin_accionar(settings):
     from api.catalogo import a_la_venta
 
     settings.STRIPE_PRODUCTOS = {p.codigo: f"prod_{p.codigo}" for p in a_la_venta()}
+    # Lo mismo con Telegram (`api.W006`): producción lo tiene desde el 19-10.
+    settings.TELEGRAM_BOT_TOKEN = "123:token"
+    settings.TELEGRAM_CHAT_ID = "42"
     sin_silenciar = [aviso for aviso in run_checks() if not aviso.is_silenced()]
 
     assert sin_silenciar == []

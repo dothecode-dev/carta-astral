@@ -157,3 +157,14 @@ def test_el_mail_lleva_el_codigo_en_su_idioma(lang):
     asunto, html, texto = notificaciones.armar_arrepentimiento(lang, "ARR-ABCD2345")
 
     assert "ARR-ABCD2345" in asunto and "ARR-ABCD2345" in html and "ARR-ABCD2345" in texto
+
+
+def test_el_admin_no_borra_ni_inventa_solicitudes(rf):
+    """Son la constancia de la revocación: como los reembolsos, no se borran
+    ni se cargan a mano; sólo se marcan resueltas."""
+    from django.contrib import admin
+
+    modelo_admin = admin.site._registry[SolicitudArrepentimiento]
+    request = rf.get("/")
+    assert modelo_admin.has_delete_permission(request) is False
+    assert modelo_admin.has_add_permission(request) is False

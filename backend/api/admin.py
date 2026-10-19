@@ -606,3 +606,10 @@ class SolicitudArrepentimientoAdmin(admin.ModelAdmin):
     search_fields = ("codigo", "email", "numero_compra")
     readonly_fields = ("codigo", "email", "numero_compra", "locale", "created_at")
     fields = ("codigo", "email", "numero_compra", "locale", "created_at", "estado", "nota_admin")
+
+    # Son la constancia de la revocación: no se borran ni se inventan.
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

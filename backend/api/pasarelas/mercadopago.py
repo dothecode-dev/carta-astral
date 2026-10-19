@@ -12,20 +12,17 @@ import datetime as dt
 import logging
 import re
 import secrets
-from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from api import cobro, compra_anonima, cupones, devoluciones, disputas, stripe_client
+from api import cobro, cupones, devoluciones, disputas, stripe_client
 from api.conteo import contar
 from api.models import PasarelaCheckout
 from api.pasarelas import mercadopago_api
 
 logger = logging.getLogger(__name__)
-
-_ARGENTINA = ZoneInfo("America/Argentina/Buenos_Aires")
 
 #: Nombre que ve quien paga en la pantalla de MP. Fijo y por idioma; lo que no
 #: está acá cae al código del producto.
@@ -182,10 +179,9 @@ def _segun_estado(fila: PasarelaCheckout, pago: dict, pago_id: str, estado: str,
 
 
 def _acreditar(fila: PasarelaCheckout, pago: dict, pago_id: str, moneda: str) -> None:
-    monto = _centavos(pago.get("transaction_amount"))
     try:
-        aplicado = cobro.acreditar(
-            fila, pago_id=pago_id, monto_pagado=monto, moneda=moneda,
+        cobro.acreditar(
+            fila, pago_id=pago_id, monto_pagado=_centavos(pago.get("transaction_amount")), moneda=moneda,
             medio=pago.get("payment_type_id") or "", external_id=f"mp:payment:{pago_id}",
         )
     except cobro.PagoDuplicado as e:
@@ -194,35 +190,11 @@ def _acreditar(fila: PasarelaCheckout, pago: dict, pago_id: str, moneda: str) ->
         # Por lo mismo, qué pago la acreditó se toma de lo leído bajo el lock,
         # no de `fila`, que puede ser de antes.
         _reembolsar_duplicado(fila, pago_id, e.acreditado_por)
-        return
     except cobro.CompraDisputada as e:
         cobro.avisar(
             f"Pago de Mercado Pago {pago_id} ({fila.checkout_id}) aprobado sobre una compra con la "
             f"disputa {e}. No se entregó nada.",
         )
-        return
-    if aplicado:
-        _avisar_venta(fila, pago_id, monto)
-
-
-def _pesos(centavos: int) -> str:
-    """`$ 25.000,00`, como lo escribe el comprobante argentino."""
-    return "$ " + f"{centavos / 100:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-
-
-def _avisar_venta(fila: PasarelaCheckout, pago_id: str, monto: int) -> None:
-    """Lo necesario para hacer la factura C a mano en «Comprobantes en línea»
-    hasta que exista la automática (fases 4-5 de la spec). Sólo después de
-    que ESTA llamada acreditó: un reintento de MP no vuelve a avisar."""
-    fila.refresh_from_db()
-    cuando = timezone.localtime(fila.acreditado_at or timezone.now(), _ARGENTINA)
-    mail = (fila.account.email if fila.account else "") or fila.mail_comprador or ""
-    cobro.avisar_venta(
-        f"Venta en pesos para facturar (factura C, consumidor final): {_pesos(monto)} · "
-        f"{cuando:%d/%m/%Y %H:%M} · {fila.codigo_producto} · "
-        f"{compra_anonima.enmascarar(mail) if mail else 'sin mail'} · "
-        f"pago MP {pago_id} · {fila.checkout_id}",
-    )
 
 
 def _reembolsar_duplicado(fila: PasarelaCheckout, pago_id: str, acreditado_por: str) -> None:

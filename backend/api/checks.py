@@ -68,15 +68,6 @@ def mercadopago_configurado(app_configs, **kwargs):
                 f"{nombre} no es https://",
                 hint="Mercado Pago exige https para notificar y volver", id="api.W004",
             ))
-    # Las ventas a facturar a mano, los contracargos y los pagos duplicados sólo
-    # se avisan por Telegram (`avisos.avisar_admin`): sin él quedan en un log.
-    for nombre in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
-        if not getattr(settings, nombre, ""):
-            encontrados.append(Warning(
-                f"COBRO_ARS_ENABLED está prendido y falta {nombre}",
-                hint="sin Telegram los avisos del cobro en pesos (ventas a facturar, contracargos) no llegan",
-                id="api.W006",
-            ))
     retorno = settings.MP_RETORNO_URL or ""
     for marcador in ("{checkout_id}", "{locale}"):
         if retorno and marcador not in retorno:
@@ -90,3 +81,21 @@ def mercadopago_configurado(app_configs, **kwargs):
         for aviso in encontrados:
             avisos.avisar_admin(f"Arranque del backend: {aviso.msg}")
     return encontrados
+
+
+@register(Tags.compatibility, "avisos")
+def telegram_configurado(app_configs, **kwargs):
+    """Los avisos al admin (`avisos.avisar_admin`) salen sólo por Telegram: las
+    ventas en pesos a facturar, los contracargos, las disputas y el botón de
+    arrepentimiento, que es público siempre. Sin las dos variables quedan en un
+    log que nadie mira, así que se avisa con o sin el cobro en pesos. No se
+    manda por Telegram, obvio: queda en la salida del arranque."""
+    return [
+        Warning(
+            f"falta {nombre}: los avisos al admin no llegan",
+            hint="ventas a facturar, contracargos, disputas y pedidos de arrepentimiento quedan sólo en el log",
+            id="api.W006",
+        )
+        for nombre in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")
+        if not getattr(settings, nombre, "")
+    ]

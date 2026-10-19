@@ -25,6 +25,7 @@ Política de errores, que quien llama traduce a su respuesta HTTP:
 """
 
 import logging
+from zoneinfo import ZoneInfo
 
 from django.core.cache import cache
 from django.db import transaction
@@ -73,6 +74,28 @@ class CompraAnonimaSinMail(Exception):
 def avisar(texto: str) -> None:
     """El único punto por el que el cobro avisa al admin (hoy, Telegram)."""
     avisar_admin(texto)
+
+
+#: Monedas que se facturan a mano (factura C ante ARCA) hasta tener la
+#: emisión automática: cada venta acreditada avisa con lo necesario.
+FACTURA_A_MANO = {"ars"}
+_ARGENTINA = ZoneInfo("America/Argentina/Buenos_Aires")
+
+
+def _pesos(centavos: int) -> str:
+    """`$ 25.000,00`, como lo escribe el comprobante argentino."""
+    return "$ " + f"{centavos / 100:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def _avisar_venta_a_facturar(fila: PasarelaCheckout, cuenta, pago_id: str, monto: int) -> None:
+    cuando = timezone.localtime(timezone.now(), _ARGENTINA)
+    mail = (cuenta.email if cuenta else "") or fila.mail_comprador or ""
+    avisar_venta(
+        f"Venta en pesos para facturar (factura C, consumidor final): {_pesos(monto)} · "
+        f"{cuando:%d/%m/%Y %H:%M} · {fila.codigo_producto} · "
+        f"{compra_anonima.enmascarar(mail) if mail else 'sin mail'} · "
+        f"pago {pago_id} · {fila.checkout_id}",
+    )
 
 
 def avisar_venta(texto: str) -> None:
@@ -163,6 +186,11 @@ def acreditar(
                 "moneda": fila.moneda, "pasarela": fila.pasarela,
             },
         )
+        # Acá y no después del arranque del informe: si el arranque falla la
+        # excepción sube, y el reintento de la pasarela ya no acredita (code
+        # review del 19-10). Mismo `if aplicado` que lo hace idempotente.
+        if fila.moneda in FACTURA_A_MANO:
+            _avisar_venta_a_facturar(fila, cuenta, pago_id, monto_pagado)
 
     # Si el informe no arranca, la excepción sube y quien llama pide el
     # reintento (ver `webhooks_stripe._entregar`). La plata ya quedó

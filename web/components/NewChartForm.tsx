@@ -10,6 +10,7 @@ import { PlaceField } from "@/components/PlaceField";
 import type { CartaDibujable } from "@/lib/chart";
 import { armarDatosCarta, errorDeFecha, TRATOS, type DatosCarta, type Trato } from "@/lib/datosCarta";
 import type { Dict, Locale } from "@/lib/i18n";
+import { motivoDeRespuesta } from "@/lib/motivoRespuesta";
 import { limpiarRestosDeLectura } from "@/lib/lecturaLocal";
 import { leerProcedencia } from "@/lib/procedencia";
 import type { Moneda } from "@/lib/monedas";
@@ -42,15 +43,6 @@ function destinoDe(locale: Locale, id: string | undefined): string {
 
 /** Lo mínimo para no mandar un mail sin forma de mail: algo@algo.algo. */
 const MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-async function motivoDe(res: Response): Promise<string | null> {
-  try {
-    const cuerpo = (await res.json()) as { motivo?: unknown };
-    return typeof cuerpo.motivo === "string" ? cuerpo.motivo : null;
-  } catch {
-    return null;
-  }
-}
 
 export function NewChartForm({
   locale,
@@ -172,7 +164,7 @@ export function NewChartForm({
       });
       if (!res.ok) {
         setComprando(false);
-        const motivo = res.status === 400 || res.status === 403 ? await motivoDe(res) : null;
+        const motivo = res.status === 400 || res.status === 403 ? await motivoDeRespuesta(res) : null;
         setErrorCompra(
           motivo === "requiere_cuenta"
             ? t.comprarRequiereCuenta
