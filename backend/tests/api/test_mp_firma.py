@@ -75,3 +75,30 @@ def test_ts_viejo_valida():
     tres_dias = int(time.time()) - 3 * 86400
     h = firmar("123456", REQ, ts=tres_dias)
     assert verificar(h, REQ, "123456", SECRETO) is True
+
+
+def test_secreto_vacio_rechaza():
+    h = firmar("123456", REQ, secreto="")
+    assert verificar(h, REQ, "123456", "") is False
+
+
+@pytest.mark.parametrize("data_id,req", [("\ud800", REQ), ("123456", "\ud800")])
+def test_surrogate_suelto_es_false_sin_excepcion(data_id, req):
+    h = firmar("123456", REQ)
+    assert verificar(h, req, data_id, SECRETO) is False
+
+
+@pytest.mark.parametrize("n", [63, 65])
+def test_v1_de_largo_incorrecto_es_false(n):
+    assert verificar(f"ts=1,v1={'a' * n}", REQ, "123456", SECRETO) is False
+
+
+def test_v1_en_mayuscula_se_acepta():
+    h = firmar("123456", REQ)
+    ts, v1 = h.split(",")
+    assert verificar(f"{ts},{v1.upper().replace('V1', 'v1')}", REQ, "123456", SECRETO)
+
+
+def test_espacios_alrededor_de_las_partes_se_aceptan():
+    ts, v1 = firmar("123456", REQ).split(",")
+    assert verificar(f"{ts}, {v1}", REQ, "123456", SECRETO) is True

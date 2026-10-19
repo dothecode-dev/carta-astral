@@ -29,7 +29,7 @@ def _partes(x_signature: str) -> dict[str, str] | None:
 
 
 def verificar(x_signature: str, x_request_id: str, data_id: str, secreto: str) -> bool:
-    if not isinstance(x_signature, str) or not x_signature:
+    if not secreto or not isinstance(x_signature, str) or not x_signature:
         return False
     partes = _partes(x_signature)
     if partes is None:
@@ -43,5 +43,10 @@ def verificar(x_signature: str, x_request_id: str, data_id: str, secreto: str) -
     if x_request_id:
         manifest += f"request-id:{x_request_id};"
     manifest += f"ts:{ts};"
-    esperado = hmac.new(secreto.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+    try:
+        esperado = hmac.new(
+            secreto.encode(), manifest.encode(), hashlib.sha256
+        ).hexdigest()
+    except UnicodeEncodeError:  # surrogate suelto en data.id o x-request-id
+        return False
     return hmac.compare_digest(esperado, v1.lower())
