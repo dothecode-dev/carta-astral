@@ -17,6 +17,7 @@ const REQUIRED = {
   "es.ts": [
     ["Mercado Pago", "declarar el procesador de pagos en pesos"],
     ["ARCA", "la factura de cada compra en pesos se emite ante ARCA"],
+    ["Data Fiscal", "el logo de ARCA del pie carga desde sus servidores: ARCA recibe la IP del visitante"],
     ["20-22809400-6", "RF31: en pesos vende la persona física, identificada con su CUIT"],
     ["Botón de arrepentimiento", "Res. SCI 424/2020: el botón y qué se guarda al usarlo"],
     ["dothecode", "identificar al responsable del tratamiento de datos"],
@@ -40,6 +41,7 @@ const REQUIRED = {
   "en.ts": [
     ["Mercado Pago", "declarar el procesador de pagos en pesos"],
     ["ARCA", "la factura de cada compra en pesos se emite ante ARCA"],
+    ["Data Fiscal", "el logo de ARCA del pie carga desde sus servidores: ARCA recibe la IP del visitante"],
     ["20-22809400-6", "RF31: en pesos vende la persona física, identificada con su CUIT"],
     ["Cancellation button", "Res. SCI 424/2020: el botón y qué se guarda al usarlo"],
     ["dothecode", "identificar al responsable del tratamiento de datos"],
@@ -63,6 +65,7 @@ const REQUIRED = {
   "pt.ts": [
     ["Mercado Pago", "declarar el procesador de pagos en pesos"],
     ["ARCA", "la factura de cada compra en pesos se emite ante ARCA"],
+    ["Data Fiscal", "el logo de ARCA del pie carga desde sus servidores: ARCA recibe la IP del visitante"],
     ["20-22809400-6", "RF31: en pesos vende la persona física, identificada con su CUIT"],
     ["Botão de arrependimento", "Res. SCI 424/2020: el botón y qué se guarda al usarlo"],
     ["dothecode", "identificar al responsable del tratamiento de datos"],
