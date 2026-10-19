@@ -12,6 +12,7 @@ import json
 import uuid
 
 import pytest
+from django.utils import timezone
 
 from api import cobro
 from api.models import Derecho, Movimiento, PasarelaCheckout, Reembolso
@@ -398,6 +399,27 @@ def test_reembolso_del_duplicado_que_falla_avisa_para_hacerlo_a_mano_y_200(
     assert r.status_code == 200
     assert _otorgados(cuenta) == 1
     assert len(avisos) == 1 and str(otro) in avisos[0] and "a mano" in avisos[0]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("falla", [False, True])
+def test_el_aviso_del_duplicado_nombra_el_pago_que_acredito_leido_bajo_el_lock(
+    pagos, avisos, make_account, falla,
+):
+    """La fila que llega a `_acreditar` se leyó antes del lock: en una carrera
+    todavía no sabe qué pago la acreditó. El aviso usa lo leído bajo el lock."""
+    from api.pasarelas import mercadopago
+
+    cuenta = make_account()
+    vieja = _fila(cuenta)
+    PasarelaCheckout.objects.filter(pk=vieja.pk).update(payment_intent=str(PAGO), acreditado_at=timezone.now())
+    otro = 184963579999
+    if falla:
+        pagos.fallo_reembolso = MPError("no", status=400)
+
+    mercadopago._acreditar(vieja, _pago(pago_id=otro), str(otro), "ars")
+
+    assert len(avisos) == 1 and str(otro) in avisos[0] and str(PAGO) in avisos[0]
 
 
 @pytest.mark.django_db

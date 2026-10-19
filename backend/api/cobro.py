@@ -46,9 +46,11 @@ class PagoDuplicado(Exception):
     Pasa de verdad en Mercado Pago (medido en sandbox): una preferencia admite
     más de un pago. No se otorga nada; quien llama lo reembolsa."""
 
-    def __init__(self, pago_id: str):
+    def __init__(self, pago_id: str, acreditado_por: str = ""):
         super().__init__(pago_id)
         self.pago_id = pago_id
+        #: El pago que acreditó la fila, leído bajo el lock.
+        self.acreditado_por = acreditado_por
 
 
 class CompraAnonimaSinMail(Exception):
@@ -206,7 +208,7 @@ def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) 
                 "compra %s ya acreditada por el pago %s: el pago %s es un duplicado, no se otorga",
                 fila.checkout_id, bloqueada.payment_intent, pago_id,
             )
-            raise PagoDuplicado(pago_id)
+            raise PagoDuplicado(pago_id, acreditado_por=bloqueada.payment_intent)
         if bloqueada.disputa_id:
             logger.error("compra %s con disputa %s: no se entrega", fila.checkout_id, bloqueada.disputa_id)
             raise CompraDisputada(bloqueada.disputa_id)

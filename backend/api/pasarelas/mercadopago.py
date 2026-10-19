@@ -170,10 +170,12 @@ def _acreditar(fila: PasarelaCheckout, pago: dict, pago_id: str, moneda: str) ->
             fila, pago_id=pago_id, monto_pagado=_centavos(pago.get("transaction_amount")), moneda=moneda,
             medio=pago.get("payment_type_id") or "", external_id=f"mp:payment:{pago_id}",
         )
-    except cobro.PagoDuplicado:
+    except cobro.PagoDuplicado as e:
         # RF11b. El chequeo vive en `cobro`, bajo el lock de la fila: hacerlo
         # acá, antes, dejaba que dos pagos concurrentes acreditaran los dos.
-        _reembolsar_duplicado(fila, pago_id)
+        # Por lo mismo, qué pago la acreditó se toma de lo leído bajo el lock,
+        # no de `fila`, que puede ser de antes.
+        _reembolsar_duplicado(fila, pago_id, e.acreditado_por)
     except cobro.CompraDisputada as e:
         cobro.avisar(
             f"Pago de Mercado Pago {pago_id} ({fila.checkout_id}) aprobado sobre una compra con la "
@@ -181,7 +183,7 @@ def _acreditar(fila: PasarelaCheckout, pago: dict, pago_id: str, moneda: str) ->
         )
 
 
-def _reembolsar_duplicado(fila: PasarelaCheckout, pago_id: str) -> None:
+def _reembolsar_duplicado(fila: PasarelaCheckout, pago_id: str, acreditado_por: str) -> None:
     try:
         mercadopago_api.reembolsar(pago_id, f"mp:duplicado:{pago_id}")
     except (mercadopago_api.MPError, mercadopago_api.MPNoConfigurado) as e:
@@ -189,13 +191,13 @@ def _reembolsar_duplicado(fila: PasarelaCheckout, pago_id: str) -> None:
         logger.error("no se pudo reembolsar el pago duplicado %s (%s): %s", pago_id, fila.checkout_id, e)
         cobro.avisar(
             f"Pago de Mercado Pago {pago_id} DUPLICADO sobre {fila.checkout_id} (ya la acreditó el pago "
-            f"{fila.payment_intent or '?'}): NO se pudo reembolsar ({e}). Reembolsarlo a mano en MP.",
+            f"{acreditado_por or '?'}): NO se pudo reembolsar ({e}). Reembolsarlo a mano en MP.",
         )
         return
     logger.warning("pago duplicado %s sobre %s reembolsado", pago_id, fila.checkout_id)
     cobro.avisar(
-        f"Pago de Mercado Pago {pago_id} DUPLICADO sobre {fila.checkout_id}: no se acreditó y se "
-        "pidió su reembolso.",
+        f"Pago de Mercado Pago {pago_id} DUPLICADO sobre {fila.checkout_id} (ya la acreditó el pago "
+        f"{acreditado_por or '?'}): no se acreditó y se pidió su reembolso.",
     )
 
 
