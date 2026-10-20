@@ -9,7 +9,7 @@ import pytest
 
 from api import stripe_client
 from api.models import Cupon, PasarelaCheckout
-from api.pasarelas import mercadopago, mercadopago_api
+from api.pasarelas import mercadopago, mercadopago_api, mercadopago_pagos
 
 # El precio en pesos es el real del catálogo ($ 25.000), no el de prueba del conftest.
 pytestmark = [pytest.mark.django_db, pytest.mark.catalogo_real]
@@ -133,7 +133,7 @@ def test_ars_crea_fila_mercadopago_con_precio_congelado(account_client, mp, stri
 
 def test_ars_cuenta_checkout_abierto(account_client, mp, monkeypatch):
     contados = []
-    monkeypatch.setattr(mercadopago, "contar", contados.append)
+    monkeypatch.setattr(mercadopago_pagos, "contar", contados.append)
 
     account_client.post(URL, {"producto": "informe_natal", "moneda": "ars"})
 

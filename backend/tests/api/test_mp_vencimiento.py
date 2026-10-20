@@ -7,7 +7,7 @@ from django.core.management import call_command
 
 from api import cobro, compra_anonima
 from api.models import Chart, Derecho, Interpretation, PasarelaCheckout
-from api.pasarelas import mercadopago, mercadopago_api
+from api.pasarelas import mercadopago, mercadopago_api, mercadopago_cron
 from api.pasarelas.mercadopago_api import MPError
 from api.sujetos import sujeto_natal
 
@@ -306,7 +306,7 @@ def test_sin_token_al_procesar_un_pago_aprobado_aborta(mp, make_account, monkeyp
     def sin_token(_pid):
         raise mercadopago_api.MPNoConfigurado("falta")
 
-    monkeypatch.setattr(mercadopago, "procesar_pago", sin_token)
+    monkeypatch.setattr(mercadopago_cron, "procesar_pago", sin_token)
 
     with pytest.raises(mercadopago_api.MPNoConfigurado):
         mercadopago.revisar_vencidas(AHORA)
@@ -409,7 +409,7 @@ def test_fallo_inesperado_al_procesar_deja_la_fila_abierta(mp, make_account, mon
     def roto(_pid):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(mercadopago, "procesar_pago", roto)
+    monkeypatch.setattr(mercadopago_cron, "procesar_pago", roto)
 
     mercadopago.revisar_vencidas(AHORA)
 
@@ -459,7 +459,7 @@ def test_fila_acreditada_con_carta_no_reprocesa_el_pago_que_la_acredito(mp, make
     mp.pagos[str(PAGO)] = _pago(fila)
     mp.busquedas[fila.checkout_id] = [_pago(fila)]
     procesados = []
-    monkeypatch.setattr(mercadopago, "procesar_pago", procesados.append)
+    monkeypatch.setattr(mercadopago_cron, "procesar_pago", procesados.append)
     acreditados = []
     monkeypatch.setattr(cobro, "acreditar", lambda *a, **k: acreditados.append(a))
 
@@ -529,7 +529,7 @@ def test_conciliar_aplica_un_reembolso_cuya_notificacion_se_perdio(mp, make_acco
 
 def test_conciliar_ignora_pagos_ajenos(mp, monkeypatch, actualizados):
     procesados = []
-    monkeypatch.setattr(mercadopago, "procesar_pago", procesados.append)
+    monkeypatch.setattr(mercadopago_cron, "procesar_pago", procesados.append)
     actualizados.pagos = [
         _actualizado(1, "otra-integracion"), _actualizado(2, "mp_corto"), _actualizado(3, None),
         _actualizado(4, "mp_" + "b" * 32),
@@ -548,7 +548,7 @@ def test_conciliar_un_pago_que_falla_no_corta_los_demas_ni_avisa(mp, monkeypatch
         if pid == "1":
             raise RuntimeError("boom")
 
-    monkeypatch.setattr(mercadopago, "procesar_pago", procesar)
+    monkeypatch.setattr(mercadopago_cron, "procesar_pago", procesar)
     actualizados.pagos = [_actualizado(1, "mp_" + "a" * 32), _actualizado(2, "mp_" + "b" * 32)]
 
     r = mercadopago.conciliar_actualizados(AHORA)
@@ -570,7 +570,7 @@ def test_conciliar_procesa_cada_version_de_un_pago_una_vez(mp, monkeypatch, actu
         if pid in falla:
             raise RuntimeError("boom")
 
-    monkeypatch.setattr(mercadopago, "procesar_pago", procesar)
+    monkeypatch.setattr(mercadopago_cron, "procesar_pago", procesar)
     actualizados.pagos = [_actualizado(1, "mp_" + "a" * 32), _actualizado(2, "mp_" + "b" * 32)]
     mercadopago.conciliar_actualizados(AHORA)
     falla.clear()

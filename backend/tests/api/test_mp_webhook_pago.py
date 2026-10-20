@@ -471,7 +471,7 @@ def test_el_aviso_del_duplicado_nombra_el_pago_que_acredito_leido_bajo_el_lock(
 ):
     """La fila que llega a `_acreditar` se leyó antes del lock: en una carrera
     todavía no sabe qué pago la acreditó. El aviso usa lo leído bajo el lock."""
-    from api.pasarelas import mercadopago
+    from api.pasarelas import mercadopago_pagos
 
     cuenta = make_account()
     vieja = _fila(cuenta)
@@ -480,7 +480,7 @@ def test_el_aviso_del_duplicado_nombra_el_pago_que_acredito_leido_bajo_el_lock(
     if falla:
         pagos.fallo_reembolso = MPError("no", status=400)
 
-    mercadopago._acreditar(vieja, _pago(pago_id=otro), str(otro), "ars")
+    mercadopago_pagos._acreditar(vieja, _pago(pago_id=otro), str(otro), "ars")
 
     assert len(avisos) == 1 and str(otro) in avisos[0] and str(PAGO) in avisos[0]
 
