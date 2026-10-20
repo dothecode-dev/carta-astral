@@ -35,11 +35,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db import transaction
 
-from api import catalogo, cobro, compra_anonima, devoluciones, disputas
-from api.avisos import avisar_admin
-from api.models import PasarelaCheckout, Reembolso
+from api import cobro, compra_anonima, disputas
+from api.models import PasarelaCheckout
 from api.stripe_client import (
     FirmaInvalida, codigo_de_product, obtener_sesion, verificar_firma,
 )
@@ -384,15 +382,13 @@ class ReembolsoSinCompra(Exception):
 
 
 def _reembolsar(refund: dict) -> None:
-    """Revoca lo comprado y anota como deuda lo que ya se usó.
-
-    Nunca se le quita a nadie un informe entregado: `canje.revocar` baja el
-    derecho hasta donde alcanza y el resto queda como deuda, que se cancela
-    contra la próxima compra.
+    """Adaptador: resuelve la fila por `payment_intent` y delega en
+    `cobro.reembolsar`, que es el mismo camino que usa Mercado Pago.
 
     El `external_id` lleva el prefijo `stripe:refund:` y no `stripe:session:`:
     con la misma clave que el pago, el reembolso se descartaría como duplicado
-    de la compra que lo precedió.
+    de la compra que lo precedió. Es a la vez la constancia (`Reembolso`) y la
+    clave del ledger; la 0065 prefijó los ids crudos que se guardaron antes.
     """
     refund_id = refund.get("id") or ""
     if not refund_id:
@@ -408,7 +404,7 @@ def _reembolsar(refund: dict) -> None:
         logger.error("reembolso %s sin payment_intent: no se revoca", refund_id)
         return
 
-    fila = PasarelaCheckout.objects.filter(pago_id=payment_intent).first()
+    fila = PasarelaCheckout.objects.filter(pasarela=PasarelaCheckout.STRIPE, pago_id=payment_intent).first()
     if fila is None:
         # ESTE sí se arregla reintentando: el reembolso puede llegar antes de
         # que la entrega del pago haya guardado el `payment_intent`. Es el
@@ -417,74 +413,10 @@ def _reembolsar(refund: dict) -> None:
             f"reembolso {refund_id}: ninguna compra con payment_intent {payment_intent}",
         )
 
-    # Los montos sólo se comparan en la moneda de la compra: un reembolso de
-    # 2900 `brl` sobre una compra en `usd` no son 2900 de nada.
-    moneda_refund = (refund.get("currency") or "").lower()
-    if moneda_refund != fila.moneda:
-        logger.error(
-            "reembolso %s en %s sobre una compra en %s: no se revoca", refund_id, moneda_refund, fila.moneda,
-        )
-        avisar_admin(
-            f"Stripe refund {refund_id}: vino en {moneda_refund} y la compra {fila.checkout_id} está en "
-            f"{fila.moneda}. No se revocó nada.",
-        )
-        return
-
-    # `fila.account` puede ser None si la cuenta se borró después de comprar
-    # (RF22): `revocar` lo contempla y registra el movimiento igual, para que
-    # la contabilidad cierre aunque no haya a quién cobrarle la deuda.
-    #
     # El contador de reembolsos suma también con los que emite Stripe por su
     # cuenta —Managed Payments los emite sin nuestra aprobación—: decidido el
-    # 03-09-2026, porque el payload no dice quién inició el reembolso y
-    # `flagged` no bloquea nada, sólo marca la cuenta para mirarla.
-    monto = refund.get("amount") or 0
-    with transaction.atomic():
-        # Bloqueada: la cuenta de unidades lee `unidades_revocadas` y la
-        # actualiza, y dos reembolsos (o un reembolso y una disputa) pueden
-        # llegar a la vez. `of=("self",)`: `account` es nullable.
-        fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila.pk)
-        # La constancia es `Reembolso` (la 0059 la completó para los
-        # reembolsos aplicados antes de que existiera).
-        if Reembolso.objects.filter(refund_id=refund_id).exists():
-            logger.info("reembolso %s ya aplicado", refund_id)
-            return
-        prod = catalogo.producto(fila.codigo_producto)
-        # Sobre LO PAGADO, no sobre la lista: un pack de 5 al 50 % (paga 6250)
-        # reembolsado entero caía en la rama parcial y revocaba 3. Con un
-        # regalo del 100 % lo pagado es 0: cualquier reembolso es total.
-        base = devoluciones.pagado(fila)
-        if not devoluciones.cubre_todo(fila, monto) and len(prod.otorga) != 1:
-            # Un combo devuelto a medias no tiene una respuesta obvia —¿qué
-            # mitad de "carta + horóscopo" se revoca?— y hoy no existe ninguno
-            # en el catálogo. No se revoca nada, pero el monto se anota y queda
-            # la constancia: una disputa posterior no lo cuenta como no devuelto.
-            Reembolso.objects.create(refund_id=refund_id, fila=fila, monto=monto)
-            devoluciones.registrar(fila, 0, monto)
-            logger.error("reembolso %s parcial sobre el combo %s: no se revoca", refund_id, fila.codigo_producto)
-            aviso = (
-                f"Stripe refund {refund_id}: parcial ({monto} {fila.moneda}) sobre el combo "
-                f"{fila.codigo_producto} {fila.checkout_id}. No se revocó nada: resolver a mano."
-            )
-        else:
-            aviso = None
-            # Proporción redondeada HACIA ARRIBA (decidido el 03-09-2026) y
-            # nunca más de lo que queda sin revocar: la suma de varios
-            # parciales redondeados no puede pasarse de lo que el pack dio. Lo
-            # que no queda puede tenerlo una disputa abierta (ver
-            # `tomar_de_disputa`).
-            pedidas = devoluciones.unidades_pedidas(fila, monto)
-            unidades = min(pedidas, devoluciones.quedan(fila))
-            if unidades and devoluciones.revocar_unidades(fila, unidades, f"stripe:refund:{refund_id}") is None:
-                logger.info("reembolso %s ya revocado en el ledger", refund_id)
-                return
-            tomadas, cedido = disputas.ceder_a_reembolso(fila, pedidas - unidades, monto)
-            Reembolso.objects.create(refund_id=refund_id, fila=fila, monto=monto, unidades=unidades + tomadas)
-            # Lo que la disputa ya había anotado de este monto no se suma dos veces.
-            devoluciones.registrar(fila, unidades, monto - cedido)
-            logger.info(
-                "reembolso %s (%s de %s): revocadas %s unidades de %s, %s tomadas de una disputa",
-                refund_id, monto, base, unidades, fila.codigo_producto, tomadas,
-            )
-    if aviso:
-        avisar_admin(aviso)
+    # 03-09-2026, porque el payload no dice quién inició el reembolso.
+    cobro.reembolsar(
+        fila, pago_id=payment_intent, refund_id=refund_id, monto=refund.get("amount") or 0,
+        moneda=refund.get("currency") or "", external_id=f"stripe:refund:{refund_id}",
+    )

@@ -25,7 +25,6 @@ def _configurado(settings):
 @pytest.fixture
 def avisos_enviados(monkeypatch):
     enviados = []
-    monkeypatch.setattr(webhooks_stripe, "avisar_admin", enviados.append)
     monkeypatch.setattr(disputas, "avisar_admin", enviados.append)
     monkeypatch.setattr(cobro, "avisar", enviados.append)
     return enviados

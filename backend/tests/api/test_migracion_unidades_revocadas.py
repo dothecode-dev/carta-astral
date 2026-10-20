@@ -61,7 +61,7 @@ def test_un_reembolso_viejo_reentregado_no_se_aplica_de_nuevo(client, settings, 
         pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_v", account=cuenta, codigo_producto="informe_natal", precio_centavos=500,
         pago_id="pi_v", acreditado_at=timezone.now(), reembolsado_centavos=500, unidades_revocadas=1,
     )
-    Reembolso.objects.create(refund_id="re_viejo", monto=0)
+    Reembolso.objects.create(refund_id="stripe:refund:re_viejo", monto=0)
     obj = {"id": "re_viejo", "amount": 500, "currency": "usd", "payment_intent": "pi_v"}
     cuerpo = json.dumps({"id": "evt", "type": "refund.created", "data": {"object": obj}}).encode()
     client.post("/api/webhooks/stripe/", data=cuerpo, content_type="application/json", HTTP_STRIPE_SIGNATURE=firmar(cuerpo))

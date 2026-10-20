@@ -256,17 +256,18 @@ def test_el_reembolso_se_mide_contra_lo_que_se_pago_no_contra_el_precio_de_hoy(
 
 def test_un_reembolso_en_otra_moneda_no_toca_nada(client, comprado, monkeypatch):
     """Un refund de 2900 `brl` sobre una compra `usd` no son 2900 de nada."""
-    from api import webhooks_stripe
+    from api import cobro
 
     avisos_ = []
-    monkeypatch.setattr(webhooks_stripe, "avisar_admin", avisos_.append)
+    monkeypatch.setattr(cobro, "avisar", avisos_.append)
 
     r = _entregar(client, _refund(amount=2900, currency="brl"))
 
     assert r.status_code == 200
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
     assert not Movimiento.objects.filter(tipo="revocacion").exists()
-    assert avisos_
+    assert len(avisos_) == 1
+    assert avisos_[0].startswith(f"Reembolso stripe:refund:{REFUND}: vino en brl")
 
 
 def test_un_reembolso_parcial_en_reales_revoca_por_proporcion(client, make_account):
@@ -285,3 +286,36 @@ def test_un_reembolso_parcial_en_reales_revoca_por_proporcion(client, make_accou
 
     assert r.status_code == 200
     assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 2
+
+
+def test_reembolso_viejo_reenviado_es_noop(client, comprado):
+    """Un reembolso aplicado antes de la 0065 (ya migrado a `stripe:refund:`) y
+    reenviado por Stripe no revoca de nuevo ni crea otro `Reembolso`."""
+    from api.canje import revocar
+    from api.models import Reembolso
+
+    revocar(comprado.account, "informe_natal", 1, external_id=f"stripe:refund:{REFUND}")
+    Reembolso.objects.create(refund_id=f"stripe:refund:{REFUND}", fila=comprado, monto=2900, unidades=1)
+
+    r = _entregar(client)
+
+    assert r.status_code == 200
+    assert Reembolso.objects.count() == 1
+    assert Movimiento.objects.filter(tipo="revocacion").count() == 1
+
+
+def test_el_reembolso_queda_con_el_id_prefijado(client, comprado):
+    from api.models import Reembolso
+
+    _entregar(client)
+
+    assert list(Reembolso.objects.values_list("refund_id", flat=True)) == [f"stripe:refund:{REFUND}"]
+
+
+def test_sin_fila_pide_reintento(client):
+    """Un reembolso de un pago que ninguna fila de Stripe conoce: 5xx, porque el
+    reintento sí lo arregla (el pago puede estar acreditándose)."""
+    r = _entregar(client, _refund(payment_intent="pi_desconocido"))
+
+    assert r.status_code >= 500
+    assert not Movimiento.objects.exists()
