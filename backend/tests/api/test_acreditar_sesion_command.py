@@ -8,7 +8,7 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from api import webhooks_stripe
+from api import cobro, webhooks_stripe
 from api.models import Cupon, CuponUso, Derecho, Movimiento, PasarelaCheckout
 
 pytestmark = pytest.mark.django_db
@@ -25,7 +25,7 @@ def _configurado(settings, monkeypatch):
         "payment_intent": "pi_manual", "metadata": {},
         "line_items": {"data": [{"price": {"product": "prod_natal"}, "quantity": 1}]},
     })
-    monkeypatch.setattr(webhooks_stripe, "arrancar_informe", lambda cuenta, fila: None)
+    monkeypatch.setattr(cobro, "arrancar_informe", lambda cuenta, fila: None)
 
 
 @pytest.fixture
@@ -105,3 +105,26 @@ def test_una_fila_disputada_se_acredita_con_los_dos_flags(compra):
     call_command("acreditar_sesion", SESSION, "--si-estoy-seguro", "--aunque-disputada")
 
     assert _restante(compra.account) == 1
+
+
+def test_una_compra_sin_cuenta_que_el_webhook_rechazo_se_acredita_a_mano(
+    anonima, entregar_anonima, sin_hilo, settings,
+):
+    """Fase 2: la cuenta de una compra sin cuenta la pone `cobro`, DESPUÉS de
+    las validaciones de Stripe. Si una falla, la fila queda sin cuenta pero con
+    el mail del pago, y el procedimiento manual tiene que poder resolverla
+    (antes, el webhook adjudicaba antes de validar)."""
+    from tests.api.conftest import SESSION_ANONIMA, con_mail
+
+    settings.STRIPE_PRODUCTOS = {"pack_5_natal": "prod_natal"}  # el Product no cierra contra la fila
+    assert entregar_anonima(con_mail("manual@mail.com")).status_code == 200
+    anonima.refresh_from_db()
+    assert anonima.account is None and anonima.mail_comprador == "manual@mail.com"
+    PasarelaCheckout.objects.filter(pk=anonima.pk).update(descuento_centavos=0, cupon=None)
+
+    call_command("acreditar_sesion", SESSION_ANONIMA, "--si-estoy-seguro")
+
+    anonima.refresh_from_db()
+    assert anonima.account is not None and anonima.account.email == "manual@mail.com"
+    assert anonima.acreditado_at is not None
+    assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION_ANONIMA}").count() == 1

@@ -12,7 +12,7 @@ import logging
 import pytest
 from django.db import IntegrityError
 
-from api import analitica, webhooks_stripe
+from api import analitica, cobro, webhooks_stripe
 from api.models import Cupon, CuponUso, Derecho, Movimiento, PasarelaCheckout
 from tests.api.stripe_firma import SECRETO, firmar
 
@@ -26,7 +26,7 @@ SESSION = "cs_test_cupon"
 def _configurado(settings, monkeypatch):
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
     settings.STRIPE_PRODUCTOS = {"informe_natal": "prod_natal", "pack_5_natal": "prod_pack"}
-    monkeypatch.setattr(webhooks_stripe, "arrancar_informe", lambda cuenta, fila: None)
+    monkeypatch.setattr(cobro, "arrancar_informe", lambda cuenta, fila: None)
 
 
 @pytest.fixture
@@ -166,7 +166,7 @@ def test_un_fallo_al_registrar_el_uso_no_revierte_la_compra(client, monkeypatch,
     def explota(**kw):
         raise IntegrityError("simulado")
 
-    monkeypatch.setattr(webhooks_stripe.CuponUso.objects, "get_or_create", explota)
+    monkeypatch.setattr(cobro.CuponUso.objects, "get_or_create", explota)
 
     with caplog.at_level(logging.ERROR):
         r = _entregar(client, monkeypatch, _sesion())

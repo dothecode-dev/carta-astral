@@ -8,7 +8,7 @@ import logging
 
 import pytest
 
-from api import webhooks_stripe
+from api import cobro, webhooks_stripe
 from api.canje import aplicar_compra
 from api import compra_service, interpretation_service
 from api.canje import SinDerecho
@@ -62,7 +62,7 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
     monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda _id: sesion)
     avisos = []
     monkeypatch.setattr(
-        webhooks_stripe.notificaciones, "notificar",
+        cobro.notificaciones, "notificar",
         lambda cuenta, evento, contexto, lang: avisos.append(evento),
     )
     cuerpo = json.dumps({

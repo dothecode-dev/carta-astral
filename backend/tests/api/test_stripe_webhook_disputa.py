@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from api import devoluciones, disputas, stripe_client, webhooks_stripe
+from api import cobro, devoluciones, disputas, stripe_client, webhooks_stripe
 from api.models import Derecho, MailBloqueado, Movimiento, PasarelaCheckout
 from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
@@ -27,6 +27,7 @@ def avisos_enviados(monkeypatch):
     enviados = []
     monkeypatch.setattr(webhooks_stripe, "avisar_admin", enviados.append)
     monkeypatch.setattr(disputas, "avisar_admin", enviados.append)
+    monkeypatch.setattr(cobro, "avisar", enviados.append)
     return enviados
 
 

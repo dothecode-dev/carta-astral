@@ -15,7 +15,7 @@ regalar el producto.
 """
 from django.core.management.base import BaseCommand, CommandError
 
-from api import webhooks_stripe
+from api import compra_anonima, webhooks_stripe
 from api.models import PasarelaCheckout
 
 
@@ -30,13 +30,17 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         session_id = opts["session_id"]
         fila = PasarelaCheckout.objects.filter(checkout_id=session_id).select_related("cupon", "account").first()
-        if fila is None or fila.account is None:
+        # Una compra sin cuenta todavía no tiene cuenta si el webhook la
+        # rechazó: `cobro` la adjudica por `mail_comprador` al acreditar.
+        sin_cuenta_adjudicable = fila is not None and fila.anonimo and bool(fila.mail_comprador)
+        if fila is None or (fila.account is None and not sin_cuenta_adjudicable):
             raise CommandError(f"no hay ningún checkout nuestro con cuenta para {session_id}")
 
         sesion = webhooks_stripe.obtener_sesion(session_id)
         total = sesion.get("total_details") or {}
         promos = [d.get("promotion_code") for d in (sesion.get("discounts") or [])]
-        self.stdout.write(f"cuenta {fila.account_id} · {fila.codigo_producto} · payment_status={sesion.get('payment_status')}")
+        quien = fila.account_id or f"(sin cuenta: se adjudica a {compra_anonima.enmascarar(fila.mail_comprador)})"
+        self.stdout.write(f"cuenta {quien} · {fila.codigo_producto} · payment_status={sesion.get('payment_status')}")
         self.stdout.write(
             f"  fila:   cupón={fila.cupon.codigo if fila.cupon else '—'} "
             f"promo={fila.cupon.stripe_promotion_code_id if fila.cupon else '—'} "

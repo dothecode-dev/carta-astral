@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from api import webhooks_stripe
+from api import cobro, webhooks_stripe
 from api.canje import MontoInvalido
 from api.models import Derecho, Movimiento, PasarelaCheckout
 from api.sujetos import sujeto_natal
@@ -110,7 +110,7 @@ def test_la_compra_se_mide_una_vez_por_mas_que_stripe_reintente(client, monkeypa
     medir nada —lleva a decidir sobre ads con números inflados—."""
     medidos = []
     monkeypatch.setattr(
-        webhooks_stripe.analitica, "evento",
+        cobro.analitica, "evento",
         lambda cuenta, nombre, props: medidos.append((nombre, props)),
     )
 
@@ -128,7 +128,7 @@ def test_una_compra_que_no_se_acredita_no_se_mide(client, monkeypatch, compra):
     """Sin plata no hay venta que contar."""
     medidos = []
     monkeypatch.setattr(
-        webhooks_stripe.analitica, "evento",
+        cobro.analitica, "evento",
         lambda cuenta, nombre, props: medidos.append(nombre),
     )
 
@@ -149,7 +149,7 @@ def test_medir_no_puede_romper_el_cobro(client, monkeypatch, compra, settings):
     def explota(*a, **kw):
         raise RuntimeError("posthog caído")
 
-    monkeypatch.setattr(webhooks_stripe.analitica, "_capturar", explota)
+    monkeypatch.setattr(cobro.analitica, "_capturar", explota)
 
     r = _entregar(client, monkeypatch)
 
@@ -234,15 +234,6 @@ def test_una_sesion_sin_fila_y_sin_metadata_no_otorga(client, monkeypatch):
     assert not Movimiento.objects.exists()
 
 
-def test_una_sesion_sin_fila_se_resuelve_por_metadata(client, monkeypatch, make_account):
-    cuenta = make_account()
-
-    r = _entregar(client, monkeypatch, _sesion(metadata={"account_id": str(cuenta.pk)}))
-
-    assert r.status_code == 200
-    assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
-
-
 # --- Lo que se reintenta ----------------------------------------------------
 
 def test_si_la_consulta_a_stripe_falla_pedimos_reintento(client, monkeypatch, compra):
@@ -256,7 +247,7 @@ def test_un_error_inesperado_al_acreditar_pide_reintento(client, monkeypatch, co
     def explota(*_a, **_k):
         raise RuntimeError("la base se cayó")
 
-    monkeypatch.setattr(webhooks_stripe, "aplicar_compra", explota)
+    monkeypatch.setattr(cobro, "aplicar_compra", explota)
 
     r = _entregar(client, monkeypatch)
 
@@ -268,7 +259,7 @@ def test_un_monto_invalido_no_se_reintenta(client, monkeypatch, compra):
     def rechaza(*_a, **_k):
         raise MontoInvalido("informe_natal")
 
-    monkeypatch.setattr(webhooks_stripe, "aplicar_compra", rechaza)
+    monkeypatch.setattr(cobro, "aplicar_compra", rechaza)
 
     r = _entregar(client, monkeypatch)
 
@@ -304,7 +295,7 @@ def test_el_reintento_deja_la_marca_aunque_la_compra_ya_estuviera_aplicada(
 def _espiar_avisos(monkeypatch, con_contexto=False):
     avisos = []
     monkeypatch.setattr(
-        webhooks_stripe.notificaciones, "notificar",
+        cobro.notificaciones, "notificar",
         lambda cuenta, evento, contexto, lang: avisos.append((evento, contexto) if con_contexto else evento),
     )
     return avisos
@@ -359,7 +350,7 @@ def test_si_el_informe_no_arranca_sale_el_aviso_generico_una_sola_vez(client, mo
             raise RuntimeError("la base se cayó")
         return True
 
-    monkeypatch.setattr(webhooks_stripe, "arrancar_informe", rompe)
+    monkeypatch.setattr(cobro, "arrancar_informe", rompe)
 
     assert _entregar(client, monkeypatch).status_code >= 500
     assert _entregar(client, monkeypatch).status_code == 200
@@ -390,3 +381,109 @@ def test_una_sesion_abierta_antes_de_bajar_el_precio_se_acredita_a_su_precio(
 
     assert _entregar(client, monkeypatch).status_code == 200
     assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
+
+
+# --- Fase 2: Stripe acredita por `cobro` (R1, R3) ---------------------------
+
+def _espiar_avisos_admin(monkeypatch):
+    avisos = []
+    monkeypatch.setattr(cobro, "avisar", avisos.append)
+    return avisos
+
+
+def test_sin_fila_no_acredita_y_avisa(client, monkeypatch, make_account):
+    """R3: el camino sin fila (cuenta por metadata, moneda usd, precio de
+    catálogo) ya no existe. Una sesión pagada sin fila se avisa y se
+    acredita a mano."""
+    cuenta = make_account()
+    avisos = _espiar_avisos_admin(monkeypatch)
+
+    r = _entregar(client, monkeypatch, _sesion(metadata={"account_id": str(cuenta.pk)}))
+
+    assert r.status_code == 200
+    assert not Movimiento.objects.exists()
+    assert not Derecho.objects.filter(account=cuenta).exists()
+    assert avisos == [f"Stripe {SESSION}: pagada SIN fila de checkout. No se acreditó: acreditar a mano."]
+
+
+def test_marca_informe_arrancado(client, monkeypatch, compra, sin_hilo):
+    _entregar(client, monkeypatch)
+
+    compra.refresh_from_db()
+    assert compra.informe_arrancado_at is not None
+
+
+def test_si_el_informe_no_arranca_avisa_y_pide_reintento(client, monkeypatch, compra):
+    avisos = _espiar_avisos_admin(monkeypatch)
+
+    def rompe(cuenta, fila):
+        raise RuntimeError("la base se cayó")
+
+    monkeypatch.setattr(cobro, "arrancar_informe", rompe)
+
+    r = _entregar(client, monkeypatch)
+
+    assert r.status_code >= 500
+    assert len(avisos) == 1 and "NO arrancó" in avisos[0]
+    assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
+
+
+def test_repeticion_sobre_fila_vieja_no_otorga_ni_manda_mail(client, monkeypatch, compra, sin_hilo):
+    """Review Focus 1: una fila de Stripe acreditada antes de la fase 2, con
+    `informe_arrancado_at` puesto por la migración 0064. Una reentrega no
+    otorga, no arranca otra vez el informe y no manda mail."""
+    from django.utils import timezone
+
+    from api.canje import aplicar_compra
+
+    aplicar_compra(compra.account, "informe_natal", 2900, external_id=f"stripe:session:{SESSION}",
+                   precio_centavos=2900)
+    ahora = timezone.now()
+    PasarelaCheckout.objects.filter(pk=compra.pk).update(
+        pago_id="pi_1", acreditado_at=ahora, informe_arrancado_at=ahora,
+    )
+    otorgados = []
+    real = cobro.aplicar_compra
+    monkeypatch.setattr(cobro, "aplicar_compra", lambda *a, **k: otorgados.append(1) or real(*a, **k))
+    avisos = _espiar_avisos(monkeypatch)
+
+    r = _entregar(client, monkeypatch)
+
+    assert r.status_code == 200
+    assert otorgados == []
+    assert avisos == []
+    assert sin_hilo == []
+    assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
+
+
+def test_aviso_de_venta_no_sale_en_usd(client, monkeypatch, compra, sin_hilo):
+    """`FACTURA_A_MANO` es sólo `ars`: una venta en dólares por Stripe no se
+    factura a mano y no avisa."""
+    ventas = []
+    monkeypatch.setattr(cobro, "avisar_venta", ventas.append)
+
+    r = _entregar(client, monkeypatch)
+
+    assert r.status_code == 200
+    assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").count() == 1
+    assert ventas == []
+
+
+def test_un_pago_duplicado_no_otorga_y_avisa(client, monkeypatch, compra):
+    """En Stripe no debería pasar (una sesión, un PaymentIntent), pero si la
+    fila ya la acreditó otro pago, éste no otorga y se avisa."""
+    from django.utils import timezone
+
+    PasarelaCheckout.objects.filter(pk=compra.pk).update(pago_id="pi_otro", acreditado_at=timezone.now())
+    avisos = _espiar_avisos_admin(monkeypatch)
+
+    r = _entregar(client, monkeypatch)
+
+    assert r.status_code == 200
+    assert not Movimiento.objects.exists()
+    assert len(avisos) == 1 and "pi_1" in avisos[0] and "pi_otro" in avisos[0]
+
+
+def test_una_sola_clase_compra_disputada():
+    assert not hasattr(webhooks_stripe, "CompraDisputada")
+    assert not hasattr(webhooks_stripe, "_entregar")

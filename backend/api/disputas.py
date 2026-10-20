@@ -171,7 +171,7 @@ def _retirar(fila_pk, sesion, dispute_id, monto, moneda, motivo) -> str | None:
         elif fila.acreditado_at is None:
             # EC16: sin entregar no hay nada que revocar; la marca alcanza
             # para que el `completed` que llegue después no entregue.
-            # `acreditado_at` se lee con la fila bloqueada: `_entregar` lo pone
+            # `acreditado_at` se lee con la fila bloqueada: `cobro.acreditar` lo pone
             # en su propio átomo sobre la misma fila, nunca está a medias.
             hecho = "todavía sin entregar: no se entrega. Mail bloqueado"
         else:

@@ -1,9 +1,8 @@
 """`api/cobro.py`: acreditar y reembolsar sin saber de pasarelas. Superficie de PLATA.
 
 Las filas se arman a mano, como las deja el checkout de Mercado Pago: sin HTTP
-y sin webhook. Lo que se prueba es el núcleo que el webhook (Task 7) va a
-llamar: las mismas garantías que `webhooks_stripe._entregar` +
-`_otorgar_y_marcar` y `_reembolsar`.
+y sin webhook. Lo que se prueba es el núcleo que llaman los webhooks de
+Mercado Pago y, desde la fase 2, de Stripe.
 
 Los de concurrencia sólo corren contra Postgres: en SQLite `SELECT ... FOR
 UPDATE` se ignora y un verde no prueba nada.

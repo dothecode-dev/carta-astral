@@ -7,7 +7,7 @@ import json
 import pytest
 from django.utils import timezone
 
-from api import avisos, webhooks_stripe
+from api import avisos, cobro, webhooks_stripe
 from api.models import Derecho, PasarelaCheckout
 from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
@@ -28,7 +28,7 @@ def _configurado(settings):
 def avisos_enviados(monkeypatch):
     enviados = []
     monkeypatch.setattr(avisos, "avisar_admin", lambda texto: enviados.append(texto))
-    monkeypatch.setattr(webhooks_stripe, "avisar_admin", lambda texto: enviados.append(texto))
+    monkeypatch.setattr(cobro, "avisar", lambda texto: enviados.append(texto))
     return enviados
 
 
@@ -121,14 +121,15 @@ def test_el_codigo_sale_de_la_fila_y_el_product_lo_confirma(client, monkeypatch,
     assert any("prod_otro" in a for a in avisos_enviados)
 
 
-def test_sin_fila_solo_se_acredita_en_usd(client, monkeypatch, make_account, avisos_enviados):
-    """Sin fila no hay moneda congelada contra la que comparar (RF10)."""
+def test_sin_fila_no_se_acredita_en_ninguna_moneda(client, monkeypatch, make_account, avisos_enviados):
+    """Sin fila no hay moneda congelada contra la que comparar (RF10). Desde
+    la fase 2 (R3) tampoco en usd: sin fila no se acredita y se avisa."""
     cuenta = make_account()
 
     _entregar(client, monkeypatch, _sesion(metadata={"account_id": str(cuenta.pk)}))
 
     assert _restante(cuenta) == 0
-    assert avisos_enviados
+    assert any("SIN fila" in a for a in avisos_enviados)
 
 
 def test_un_pago_que_llega_sobre_una_fila_vencida_se_acredita_y_avisa(client, monkeypatch, compra_brl, sin_hilo, avisos_enviados):

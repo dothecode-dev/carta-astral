@@ -298,9 +298,9 @@ def test_si_falla_despues_de_adjudicar_el_reintento_acredita_en_la_misma_cuenta(
     """`adjudicar` commitea en su propia transacción: un fallo al acreditar deja
     la fila con cuenta y sin Movimiento. El reintento de Stripe tiene que
     acreditar ahí, sin crear otra cuenta ni perder `cuenta_nueva`."""
-    from api import webhooks_stripe
+    from api import cobro
 
-    real = webhooks_stripe.aplicar_compra
+    real = cobro.aplicar_compra
     llamadas = []
 
     def falla_la_primera(*args, **kwargs):
@@ -309,7 +309,7 @@ def test_si_falla_despues_de_adjudicar_el_reintento_acredita_en_la_misma_cuenta(
             raise RuntimeError("la base se cayó")
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(webhooks_stripe, "aplicar_compra", falla_la_primera)
+    monkeypatch.setattr(cobro, "aplicar_compra", falla_la_primera)
 
     assert entregar_anonima(con_mail("reintento@mail.com")).status_code == 500
     anonima.refresh_from_db()

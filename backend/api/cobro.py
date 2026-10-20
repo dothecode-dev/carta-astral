@@ -5,11 +5,10 @@ pagó, en qué moneda, con qué id— y acá se decide qué derechos se otorgan 
 revocan. Lo que no puede saber de la pasarela lo fija el contrato de
 import-linter «cobro no conoce pasarelas».
 
-**La duplicación con `webhooks_stripe` es deliberada y temporal** (plan fase 1,
-R11): `acreditar` reproduce `_entregar` + `_otorgar_y_marcar` y `reembolsar`
-reproduce `_reembolsar`, con las mismas garantías y en el mismo orden. En la
-fase 2 Stripe pasa a llamar a este módulo y la copia desaparece; hasta
-entonces, un arreglo en uno de los dos lados hay que llevarlo al otro.
+Stripe y Mercado Pago acreditan los dos por `acreditar` (fase 2, R1).
+**`reembolsar` todavía está duplicado** con `webhooks_stripe._reembolsar`
+(plan fase 1, R11) hasta que Stripe pase a llamarlo: un arreglo en uno de
+los dos lados hay que llevarlo al otro.
 
 Política de errores, que quien llama traduce a su respuesta HTTP:
 
@@ -201,7 +200,7 @@ def acreditar(
             _avisar_venta_a_facturar(fila, cuenta, pago_id, monto_pagado)
 
     # Si el informe no arranca, la excepción sube y quien llama pide el
-    # reintento (ver `webhooks_stripe._entregar`). La plata ya quedó
+    # reintento (Stripe: 5xx y reintenta tres días). La plata ya quedó
     # acreditada —el átomo cerró— y, mientras `informe_arrancado_at` siga
     # vacío, una repetición del mismo pago reintenta el arranque (idempotente:
     # `get_or_create`). Ése es el único reintento que hace MP (inmediato,
