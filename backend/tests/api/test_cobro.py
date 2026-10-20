@@ -13,7 +13,7 @@ import pytest
 
 from api import cobro, compra_service, interpretation_service
 from api.models import (
-    Account, Derecho, Interpretation, MailBloqueado, Movimiento, PasarelaCheckout, ProviderIdentity, Reembolso,
+    Account, Cupon, CuponUso, Derecho, Interpretation, MailBloqueado, Movimiento, PasarelaCheckout, ProviderIdentity, Reembolso,
 )
 from api.sujetos import sujeto_natal
 from tests.api.concurrencia import en_hilos, requiere_postgres
@@ -84,10 +84,10 @@ def _fila(cuenta, carta=None, **campos) -> PasarelaCheckout:
     return PasarelaCheckout.objects.create(**datos)
 
 
-def _acreditar(fila, pago_id="111", monto=PRECIO_ARS, moneda="ars", medio="account_money"):
+def _acreditar(fila, pago_id="111", monto=PRECIO_ARS, moneda="ars", medio="account_money", **extra):
     return cobro.acreditar(
         fila, pago_id=pago_id, monto_pagado=monto, moneda=moneda, medio=medio,
-        external_id=f"mp:payment:{pago_id}",
+        external_id=f"mp:payment:{pago_id}", **extra,
     )
 
 
@@ -224,6 +224,73 @@ def test_acreditar_con_disputa_en_la_fila_levanta(make_account, avisos, mails):
     fila.refresh_from_db()
     assert fila.acreditado_at is None
     assert mails == []
+
+
+def _cupon():
+    return Cupon.objects.create(codigo="PROMO30", porcentaje=30, productos=["informe_natal"], usos_maximos=10)
+
+
+@pytest.mark.django_db
+def test_acreditar_con_cupon_registra_un_uso(make_account, avisos, mails, eventos):
+    cuenta = make_account()
+    fila = _fila(cuenta, cupon=_cupon(), descuento_centavos=500)
+
+    assert _acreditar(fila, monto=PRECIO_ARS - 500) is True
+
+    uso = CuponUso.objects.get()
+    assert uso.external_id == "mp:payment:111"
+    assert uso.descuento_centavos == 500
+    assert uso.monto_pagado_centavos == PRECIO_ARS - 500
+    assert uso.moneda == fila.moneda
+    assert uso.cupon.codigo == "PROMO30"
+    assert uso.account == cuenta
+    assert uso.checkout == fila
+    assert uso.codigo_producto == "informe_natal"
+    assert eventos[0][2]["cupon"] == "PROMO30"
+
+
+@pytest.mark.django_db
+def test_repeticion_no_registra_dos_usos(make_account, avisos, mails, eventos):
+    cuenta = make_account()
+    fila = _fila(cuenta, cupon=_cupon(), descuento_centavos=500)
+
+    _acreditar(fila, monto=PRECIO_ARS - 500)
+    _acreditar(fila, monto=PRECIO_ARS - 500)
+
+    assert CuponUso.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_cupon_agotado_acredita_a_lista_sin_uso(make_account, avisos, mails, eventos):
+    cuenta = make_account()
+    fila = _fila(cuenta, cupon=_cupon(), descuento_centavos=0)
+
+    assert _acreditar(fila) is True
+
+    assert CuponUso.objects.count() == 0
+    assert eventos[0][2]["cupon"] is None
+
+
+@pytest.mark.django_db
+def test_a_mano_entrega_con_disputa(make_account, avisos, mails):
+    cuenta = make_account()
+    fila = _fila(cuenta, disputa_id="cb_1")
+
+    assert _acreditar(fila, a_mano=True) is True
+
+    assert Movimiento.objects.filter(external_id="mp:payment:111", tipo="otorgamiento").count() == 1
+    fila.refresh_from_db()
+    assert fila.acreditado_at is not None
+
+
+@pytest.mark.django_db
+def test_sin_a_mano_con_disputa_levanta_CompraDisputada(make_account, avisos, mails):
+    fila = _fila(make_account(), disputa_id="cb_1")
+
+    with pytest.raises(cobro.CompraDisputada):
+        _acreditar(fila, a_mano=False)
+
+    assert not Movimiento.objects.filter(external_id="mp:payment:111").exists()
 
 
 @pytest.mark.django_db

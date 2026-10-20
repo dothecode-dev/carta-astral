@@ -28,14 +28,14 @@ import logging
 from zoneinfo import ZoneInfo
 
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from api import analitica, catalogo, compra_anonima, devoluciones, disputas, notificaciones
 from api.avisos import avisar_admin
 from api.canje import MontoInvalido, aplicar_compra
 from api.compra_service import arrancar_informe
-from api.models import MailBloqueado, PasarelaCheckout, Reembolso
+from api.models import CuponUso, MailBloqueado, PasarelaCheckout, Reembolso
 
 logger = logging.getLogger(__name__)
 
@@ -108,13 +108,15 @@ def avisar_venta(texto: str) -> None:
 
 def acreditar(
     fila: PasarelaCheckout, *, pago_id: str, monto_pagado: int, moneda: str, medio: str, external_id: str,
+    a_mano: bool = False,
 ) -> bool:
     """Traduce un pago aprobado en derechos. Devuelve si esta llamada lo aplicó.
 
     `monto_pagado` es lo que se cobró (lista menos descuento), en centavos de
     `moneda`; `external_id` es la clave de idempotencia del ledger, con el
     prefijo de la pasarela (`mp:payment:<id>`); `pago_id` queda en
-    `fila.pago_id` para atribuir después los reembolsos.
+    `fila.pago_id` para atribuir después los reembolsos. `a_mano` entrega
+    aunque la fila tenga una disputa: quien lo corre a mano ya miró.
     """
     if not pago_id or not external_id:
         # Sin `pago_id` ningún reembolso se podría atribuir a esta compra; sin
@@ -160,7 +162,9 @@ def acreditar(
 
     codigo = fila.codigo_producto
     try:
-        aplicado, arrancado = _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id)
+        aplicado, arrancado = _otorgar_y_marcar(
+            fila, cuenta, codigo, pago_id, monto_pagado, external_id, a_mano,
+        )
     except MontoInvalido:
         # Ya lo logueó `aplicar_compra` con los dos montos.
         avisar(
@@ -182,7 +186,7 @@ def acreditar(
             cuenta, "compra_completada",
             {
                 "producto": codigo, "monto_centavos": monto_pagado, "locale": lang,
-                "cupon": fila.cupon.codigo if fila.cupon_id else None,
+                "cupon": fila.cupon.codigo if fila.cupon_id and fila.descuento_centavos else None,
                 "moneda": fila.moneda, "pasarela": fila.pasarela,
             },
         )
@@ -191,6 +195,8 @@ def acreditar(
         # review del 19-10). Mismo `if aplicado` que lo hace idempotente.
         if fila.moneda in FACTURA_A_MANO:
             _avisar_venta_a_facturar(fila, cuenta, pago_id, monto_pagado)
+        if fila.cupon_id and fila.descuento_centavos > 0:
+            _registrar_uso(fila, cuenta, codigo, monto_pagado, external_id)
 
     # Si el informe no arranca, la excepción sube y quien llama pide el
     # reintento (ver `webhooks_stripe._entregar`). La plata ya quedó
@@ -267,7 +273,7 @@ def _adjudicar_si_es_anonima(fila: PasarelaCheckout) -> None:
         )
 
 
-def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) -> tuple[bool, bool]:
+def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id, a_mano=False) -> tuple[bool, bool]:
     """Otorga y marca la fila acreditada en UN átomo, con la fila bloqueada.
     Devuelve (si esta llamada otorgó, si ESTE pago ya la acreditó y su
     informe ya arrancó: entonces no se hace nada más).
@@ -300,7 +306,7 @@ def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) 
                 fila.checkout_id, bloqueada.pago_id, pago_id,
             )
             raise PagoDuplicado(pago_id, acreditado_por=bloqueada.pago_id)
-        if bloqueada.disputa_id:
+        if bloqueada.disputa_id and not a_mano:
             logger.error("compra %s con disputa %s: no se entrega", fila.checkout_id, bloqueada.disputa_id)
             raise CompraDisputada(bloqueada.disputa_id)
         aplicado = aplicar_compra(
@@ -317,6 +323,26 @@ def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) 
         fila.acreditado_at = bloqueada.acreditado_at or timezone.now()
         fila.save(update_fields=["pago_id", "acreditado_at"])
     return aplicado, False
+
+
+def _registrar_uso(fila, cuenta, codigo, pagado, external_id) -> None:
+    """La constancia del cupón, FUERA del átomo de la compra y sin poder
+    revertirla: un fallo acá se loguea y la persona se queda con lo que pagó.
+    Idempotente por `external_id`."""
+    try:
+        CuponUso.objects.get_or_create(
+            external_id=external_id,
+            defaults=dict(
+                cupon=fila.cupon, account=cuenta, codigo_producto=codigo, checkout=fila,
+                descuento_centavos=fila.descuento_centavos, monto_pagado_centavos=pagado,
+                moneda=fila.moneda,
+            ),
+        )
+    except IntegrityError:
+        logger.exception(
+            "no se pudo registrar el uso del cupón %s en %s; la compra queda acreditada igual",
+            fila.cupon.codigo, external_id,
+        )
 
 
 def _marcar_saldo_deuda(fila) -> None:
