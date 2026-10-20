@@ -19,7 +19,7 @@ def test_catalogo_tiene_exactamente_los_productos_de_esta_iteracion():
     "codigo,precios,otorga,capacidades",
     [
         ("lectura_breve", {"usd": 0}, (("lectura_breve", 1),), ("leer_breve",)),
-        ("informe_natal", {"usd": 500, "brl": 2490, "ars": 2500000}, (("informe_natal", 1),), ("leer_informe",)),
+        ("informe_natal", {"usd": 1990, "brl": 9990, "ars": 2500000}, (("informe_natal", 1),), ("leer_informe",)),
         ("pack_3_natal", {"usd": 7900}, (("informe_natal", 3),), ("leer_informe",)),
         ("pack_5_natal", {"usd": 12500}, (("informe_natal", 5),), ("leer_informe",)),
     ],
@@ -32,8 +32,8 @@ def test_precios_y_otorgamientos_exactos(codigo, precios, otorga, capacidades):
 
 def test_precio_en_devuelve_el_monto_de_esa_moneda_y_falla_sin_ella():
     natal = producto("informe_natal")
-    assert natal.precio_en("usd") == 500
-    assert natal.precio_en("brl") == 2490
+    assert natal.precio_en("usd") == 1990
+    assert natal.precio_en("brl") == 9990
     assert natal.precio_en("ars") == 2500000
     assert natal.monedas() == ("usd", "brl", "ars")
     with pytest.raises(KeyError):
@@ -47,7 +47,8 @@ def test_usd_es_obligatoria():
 
 def test_el_real_no_se_aleja_del_dolar_sin_que_alguien_lo_vea():
     """Precio BRL fijo (RNF4): si la relación brl/usd se mueve más de ±25 %
-    respecto de la fijada el 13-10-2026 (2490/500 = 4,98), este test lo dice."""
+    respecto de la regla del 13-10-2026 (2490/500 = 4,98; desde el 20-10-2026,
+    9990/1990 = 5,02), este test lo dice."""
     natal = producto("informe_natal")
     assert 3.7 <= natal.precio_en("brl") / natal.precio_en("usd") <= 6.2
 

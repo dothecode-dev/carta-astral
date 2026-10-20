@@ -16,13 +16,13 @@ def test_mide_cuanto_vale_el_informe_en_reales_al_cambio_de_hoy(monkeypatch):
 
     datos = informe_actividad.cambio_brl()
 
-    assert datos["informe_brl_en_usd"] == 4.98
+    assert datos["informe_brl_en_usd"] == 19.98
     assert datos["alerta"] is False
 
 
 @pytest.mark.catalogo_real
 def test_avisa_si_se_aleja_mas_del_15_por_ciento(monkeypatch):
-    monkeypatch.setattr(informe_actividad.httpx, "get", _rates(6.5))  # 24,90 / 6,5 = 3,83 → −23 %
+    monkeypatch.setattr(informe_actividad.httpx, "get", _rates(6.5))  # 99,90 / 6,5 = 15,37 → −23 %
 
     assert informe_actividad.cambio_brl()["alerta"] is True
 

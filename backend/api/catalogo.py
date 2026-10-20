@@ -98,13 +98,14 @@ class Producto:
 
 _PRODUCTOS = (
     Producto("lectura_breve", {"usd": 0}, CONSUMIBLE, ("leer_breve",), (("lectura_breve", 1),)),
-    # $ 25.000 en pesos decidido el 19-10-2026 (Mercado Pago, fase 1). USD y
-    # BRL no cambian hasta que salga MP.
-    # R$ 24,90 decidido el 13-10-2026 (spec cobro-brl-pix, R3): un poco bajo la
-    # paridad y deja margen al IOF (3,5 %), que absorbemos. Fijo: el riesgo
-    # cambiario es nuestro y lo vigila el informe diario.
+    # $ 25.000 en pesos decidido el 19-10-2026 (Mercado Pago, fase 1).
+    # US$ 19,90 y R$ 99,90 decididos el 20-10-2026 (antes US$ 5 y R$ 24,90).
+    # El real sigue la regla del 13-10-2026 (spec cobro-brl-pix, R3): un poco
+    # bajo la paridad (≈ 5 reales por dólar) y deja margen al IOF (3,5 %), que
+    # absorbemos. Fijo: el riesgo cambiario es nuestro y lo vigila el informe
+    # diario.
     Producto(
-        "informe_natal", {"usd": 500, "brl": 2490, "ars": 2500000}, CONSUMIBLE, ("leer_informe",),
+        "informe_natal", {"usd": 1990, "brl": 9990, "ars": 2500000}, CONSUMIBLE, ("leer_informe",),
         (("informe_natal", 1),),
     ),
     # Retirados el 04-10-2026, cuando el informe pasó de US$ 29 a US$ 5: a ese
