@@ -13,7 +13,8 @@ import pytest
 
 from api import cobro, compra_service, interpretation_service
 from api.models import (
-    Account, Cupon, CuponUso, Derecho, Interpretation, MailBloqueado, Movimiento, PasarelaCheckout, ProviderIdentity, Reembolso,
+    Account, Cupon, CuponUso, Derecho, Interpretation, MailBloqueado, Movimiento, PasarelaCheckout,
+    ProviderIdentity, Reembolso,
 )
 from api.sujetos import sujeto_natal
 from tests.api.concurrencia import en_hilos, requiere_postgres
@@ -257,6 +258,41 @@ def test_repeticion_no_registra_dos_usos(make_account, avisos, mails, eventos):
     _acreditar(fila, monto=PRECIO_ARS - 500)
     _acreditar(fila, monto=PRECIO_ARS - 500)
 
+    assert CuponUso.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_reintento_recupera_el_uso_que_fallo(make_account, avisos, mails, eventos, monkeypatch):
+    from django.db import IntegrityError
+
+    cuenta = make_account()
+    fila = _fila(cuenta, cupon=_cupon(), descuento_centavos=500)
+    real = CuponUso.objects.get_or_create
+    llamadas = []
+
+    def falla_la_primera(*a, **k):
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            raise IntegrityError("simulado")
+        return real(*a, **k)
+
+    monkeypatch.setattr(CuponUso.objects, "get_or_create", falla_la_primera)
+    arranques = []
+
+    def arranca_la_segunda(c, f):
+        arranques.append(1)
+        if len(arranques) == 1:
+            raise RuntimeError("no arranca")
+        return False
+
+    monkeypatch.setattr(cobro, "arrancar_informe", arranca_la_segunda)
+
+    with pytest.raises(RuntimeError):
+        _acreditar(fila, monto=PRECIO_ARS - 500)
+    assert CuponUso.objects.count() == 0
+    assert PasarelaCheckout.objects.get(pk=fila.pk).informe_arrancado_at is None
+
+    _acreditar(fila, monto=PRECIO_ARS - 500)
     assert CuponUso.objects.count() == 1
 
 

@@ -172,6 +172,10 @@ def acreditar(
             f"{fila.moneda}, lista {fila.precio_de_lista()}, descuento {fila.descuento_centavos}). No se acreditó.",
         )
         return False
+    # En cada pasada que otorgó (no sólo la que aplicó): get_or_create lo hace
+    # idempotente y un reintento recupera un registro que falló una vez.
+    if fila.cupon_id and fila.descuento_centavos > 0:
+        _registrar_uso(fila, cuenta, codigo, monto_pagado, external_id)
     if arrancado:
         # Una repetición concurrente con la que arrancó el informe: la vio
         # recién bajo el lock.
@@ -195,8 +199,6 @@ def acreditar(
         # review del 19-10). Mismo `if aplicado` que lo hace idempotente.
         if fila.moneda in FACTURA_A_MANO:
             _avisar_venta_a_facturar(fila, cuenta, pago_id, monto_pagado)
-        if fila.cupon_id and fila.descuento_centavos > 0:
-            _registrar_uso(fila, cuenta, codigo, monto_pagado, external_id)
 
     # Si el informe no arranca, la excepción sube y quien llama pide el
     # reintento (ver `webhooks_stripe._entregar`). La plata ya quedó
