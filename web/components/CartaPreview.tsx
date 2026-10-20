@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChartBody } from "@/components/ChartBody";
 import { DatosCarta } from "@/components/DatosCarta";
@@ -18,6 +18,25 @@ import type { Dict, Locale } from "@/lib/i18n";
 // El código de esa lectura sigue en el repo (`useLecturaAnonima`), sin usarse
 // desde esta pantalla.
 
+type PasoTeaser = "datos_abiertos" | "cierre_visto" | "clic_arriba" | "clic_cierre" | "mail_enviado" | "volver";
+
+/** Un paso del teaser al contador del servidor (backend/api/conteo_api.py):
+ *  sin cookies ni nada de quién fue. Nunca frena lo que cuenta: si falla, se
+ *  pierde ese número y nada más. `keepalive` deja salir el pedido aunque la
+ *  página se vaya al pago. */
+function contarPaso(evento: PasoTeaser, moneda?: string) {
+  try {
+    void fetch("/api/conteo/teaser", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(moneda ? { evento, moneda } : { evento }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // Sin `fetch` (un navegador muy viejo): no se cuenta.
+  }
+}
+
 export function CartaPreview({
   carta,
   dict,
@@ -28,6 +47,7 @@ export function CartaPreview({
   comprando,
   errorCompra,
   pideMail = false,
+  moneda,
 }: {
   carta: CartaDibujable;
   dict: Dict;
@@ -44,12 +64,32 @@ export function CartaPreview({
   /** En pesos: el primer clic abre el campo del mail en vez del pago, y el
    *  pago sale del botón de ese campo (Mercado Pago no devuelve el mail). */
   pideMail?: boolean;
+  /** En qué moneda se mostró el precio: el conteo de los clics la separa. */
+  moneda?: string;
 }) {
   const t = dict.newChart;
   // Cuál se apretó: el error va junto a ese, no a una pantalla de distancia.
   const [origen, setOrigen] = useState<"arriba" | "cierre">("cierre");
   const [mailAbierto, setMailAbierto] = useState(false);
   const [mail, setMail] = useState("");
+  // Una vez por carta: volver a pasar o volver a abrir no es otra persona.
+  const contado = useRef<Set<PasoTeaser>>(new Set());
+  const contarUnaVez = (paso: PasoTeaser) => {
+    if (contado.current.has(paso)) return;
+    contado.current.add(paso);
+    contarPaso(paso);
+  };
+  const cierre = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nodo = cierre.current;
+    // Sin soporte no se cuenta: contar igual inventaría lecturas.
+    if (!nodo || typeof IntersectionObserver === "undefined") return;
+    const observador = new IntersectionObserver((entradas) => {
+      if (entradas.some((e) => e.isIntersecting)) contarUnaVez("cierre_visto");
+    });
+    observador.observe(nodo);
+    return () => observador.disconnect();
+  }, []);
   const error = (donde: "arriba" | "cierre") =>
     errorCompra && origen === donde ? (
       <p className="compraError" role="alert">
@@ -69,6 +109,7 @@ export function CartaPreview({
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
+            contarPaso("mail_enviado", moneda);
             void onComprar(mail);
           }}
         >
@@ -100,6 +141,7 @@ export function CartaPreview({
         className={grande ? "btn btnPrimary btnGrande" : "btn btnPrimary"}
         disabled={comprando}
         onClick={() => {
+          contarPaso(grande ? "clic_cierre" : "clic_arriba", moneda);
           setOrigen(donde);
           if (pideMail) setMailAbierto(true);
           else void onComprar();
@@ -131,7 +173,7 @@ export function CartaPreview({
       <ChartBody chart={carta} dict={dict} locale={locale} soloRueda />
 
       {/* Los datos son de la rueda: van con ella, plegados. */}
-      <DatosCarta chart={carta} dict={dict} locale={locale} />
+      <DatosCarta chart={carta} dict={dict} locale={locale} onAbrir={() => contarUnaVez("datos_abiertos")} />
 
       {/* Sin teaser (un backend viejo) se muestra todo lo demás. */}
       {carta.teaser && <TeaserBloques teaser={carta.teaser} locale={locale} dict={dict} />}
@@ -140,7 +182,7 @@ export function CartaPreview({
           bloqueados, y pegado el botón grande. Pagar es entrar: se compra sin
           pasar por /entrar. Sin precio (el catálogo no respondió) el botón
           sigue: sacarlo dejaba la pantalla sin salida. */}
-      <section className="previewCierre">
+      <section className="previewCierre" ref={cierre}>
         {carta.teaser && (
           <>
             <h2 className="display previewCierreTitulo">{t.indiceTitulo}</h2>
@@ -172,7 +214,14 @@ export function CartaPreview({
 
       <footer className="previewPie">
         <p className="fieldNote">{t.previewPrivacidad}</p>
-        <button type="button" className="btn btnGhost" onClick={onVolver}>
+        <button
+          type="button"
+          className="btn btnGhost"
+          onClick={() => {
+            contarPaso("volver");
+            onVolver();
+          }}
+        >
           {t.navNew}
         </button>
       </footer>

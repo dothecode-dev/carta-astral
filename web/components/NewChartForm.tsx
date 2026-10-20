@@ -194,6 +194,7 @@ export function NewChartForm({
         precio={precio}
         onComprar={comprarSinCuenta}
         pideMail={moneda === "ars"}
+        moneda={moneda}
         comprando={comprando}
         errorCompra={errorCompra}
       />

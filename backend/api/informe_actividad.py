@@ -493,6 +493,17 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
                 f"pagos abiertos: {c.get('checkout_abierto', 0)} · "
                 f"compras pagas: {c.get('compra_pagada', 0)}")
 
+    # Lo que pasa entre la carta y el pago, sin cuenta (api/conteo_api.py).
+    def _teaser(c: dict) -> str:
+        return (f"abrió los datos: {c.get('teaser_datos_abiertos', 0)} · "
+                f"llegó al final: {c.get('teaser_cierre_visto', 0)} · "
+                f"clic en comprar: {c.get('teaser_clic_arriba', 0)} arriba + "
+                f"{c.get('teaser_clic_cierre', 0)} al final "
+                f"(ARS {c.get('teaser_clic_ars', 0)}, USD {c.get('teaser_clic_usd', 0)}, "
+                f"BRL {c.get('teaser_clic_brl', 0)}) · "
+                f"dejó el mail (pesos): {c.get('teaser_mail_enviado', 0)} · "
+                f"volvió a los datos: {c.get('teaser_volver', 0)}")
+
     partes = [
         "<div style='font-family:system-ui,sans-serif;max-width:640px;line-height:1.5'>",
         f"<p style='white-space:pre-wrap'>{e(cuerpo)}</p>",
@@ -501,6 +512,10 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
             f"<b>{_conteo(total)}</b>",
             f"hoy hasta ahora (parcial): {_conteo(servidor.get('hoy') or {})}",
             *[f"{e(dia)}: {_conteo(c)}" for dia, c in (servidor.get("por_dia") or {}).items()],
+        ]) if servidor else "",
+        tabla(f"Carta sin cuenta → pago (servidor, últimos {servidor.get('dias', 7)} días)", [
+            f"<b>{_teaser(total)}</b>",
+            f"hoy hasta ahora (parcial): {_teaser(servidor.get('hoy') or {})}",
         ]) if servidor else "",
         tabla("En el sitio (últimas 24 h)", [
             f"{e(ev['evento'])}: {ev['personas']} personas ({ev['veces']} veces)"

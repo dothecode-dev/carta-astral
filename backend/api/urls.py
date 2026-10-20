@@ -3,6 +3,7 @@ from django.urls import path
 from api.catalogo_api import CatalogoView
 from api.geo_api import MonedaView
 from api.arrepentimiento_api import ArrepentimientoView
+from api.conteo_api import ConteoTeaserView
 from api.checkout import CheckoutEstadoView, CheckoutView
 from api.compra_anonima_api import CheckoutAnonimoView, CheckoutCanjeView
 from api.compras_api import ComprasView
@@ -43,6 +44,7 @@ from api.webhooks_stripe import StripeWebhookView
 urlpatterns = [
     path("account/", AccountView.as_view()),
     path("arrepentimiento/", ArrepentimientoView.as_view()),
+    path("conteo/teaser/", ConteoTeaserView.as_view()),
     path("checkout/", CheckoutView.as_view()),
     path("checkout/anonimo/", CheckoutAnonimoView.as_view()),
     path("checkout/anonimo/canjear/", CheckoutCanjeView.as_view()),

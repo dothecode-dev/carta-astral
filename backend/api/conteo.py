@@ -21,6 +21,12 @@ from api.models import ConteoDiario, ConteoProcedencia, PasarelaCheckout
 logger = logging.getLogger(__name__)
 
 EVENTOS = tuple(clave for clave, _ in ConteoDiario.EVENTOS)
+EVENTOS_TEASER = tuple(e for e in EVENTOS if e.startswith("teaser_"))
+
+# Lo que el navegador puede pedir que se cuente, y nada más: no puede inventar
+# contadores ni sumarle a los que cuenta el servidor solo (`carta_calculada`).
+PASOS_TEASER = ("datos_abiertos", "cierre_visto", "clic_arriba", "clic_cierre", "mail_enviado", "volver")
+MONEDAS_CLIC = ("usd", "brl", "ars")
 
 
 def contar(evento: str) -> None:
@@ -33,6 +39,20 @@ def contar(evento: str) -> None:
             _incrementar(ConteoDiario, fecha=timezone.now().date(), evento=evento)
     except DatabaseError:
         logger.exception("conteo: no se pudo contar %s", evento)
+
+
+def contar_teaser(paso: object, moneda: object = None) -> bool:
+    """Un paso del teaser sin cuenta. Un clic en comprar cuenta además en qué
+    moneda se mostró el precio. Devuelve False, sin contar nada, si `paso` o
+    `moneda` no son de las listas cerradas."""
+    if not isinstance(paso, str) or paso not in PASOS_TEASER:
+        return False
+    if moneda is not None and (not isinstance(moneda, str) or moneda not in MONEDAS_CLIC):
+        return False
+    contar(f"teaser_{paso}")
+    if moneda and paso.startswith("clic_"):
+        contar(f"teaser_clic_{moneda}")
+    return True
 
 
 def _incrementar(modelo, **clave) -> None:

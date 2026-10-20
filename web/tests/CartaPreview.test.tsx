@@ -296,3 +296,111 @@ describe("la medida de los párrafos no pisa la de cada componente", () => {
     expect(css).not.toMatch(/\n\.docFrame p\s*\{/);
   });
 });
+
+// Lo que hace quien calculó su carta sin cuenta, contado en el servidor sin
+// cookies (20-10-2026): con ~200 cartas y 0 pagos no se sabía dónde se cortaban.
+describe("conteo de los pasos del teaser", () => {
+  function contados(fetchMock: ReturnType<typeof vi.fn>) {
+    return fetchMock.mock.calls
+      .filter(([url]) => url === "/api/conteo/teaser")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+  }
+
+  function conFetch() {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("el clic en el botón de arriba cuenta la posición y la moneda", () => {
+    const fetchMock = conFetch();
+    pintar("es", { moneda: "usd" });
+    const [arriba] = screen.getAllByRole("button", { name: /US\$ 29/ });
+
+    fireEvent.click(arriba);
+
+    expect(contados(fetchMock)).toEqual([{ evento: "clic_arriba", moneda: "usd" }]);
+  });
+
+  it("el clic en el botón grande del final cuenta clic_cierre", () => {
+    const fetchMock = conFetch();
+    pintar("es", { moneda: "brl" });
+    const botones = screen.getAllByRole("button", { name: /US\$ 29/ });
+
+    fireEvent.click(botones[botones.length - 1]);
+
+    expect(contados(fetchMock)).toEqual([{ evento: "clic_cierre", moneda: "brl" }]);
+  });
+
+  it("en pesos, mandar el mail cuenta mail_enviado además del clic", () => {
+    const fetchMock = conFetch();
+    pintar("es", { moneda: "ars", pideMail: true });
+    const t = getDict("es").newChart;
+    fireEvent.click(screen.getAllByRole("button", { name: /US\$ 29/ })[0]);
+
+    fireEvent.change(screen.getByLabelText(t.mailLabel), { target: { value: "ana@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: t.mailPagar }));
+
+    expect(contados(fetchMock)).toEqual([
+      { evento: "clic_arriba", moneda: "ars" },
+      { evento: "mail_enviado", moneda: "ars" },
+    ]);
+  });
+
+  it("volver a los datos cuenta volver", () => {
+    const fetchMock = conFetch();
+    pintar("es", { moneda: "usd" });
+
+    fireEvent.click(screen.getByRole("button", { name: getDict("es").newChart.navNew }));
+
+    expect(contados(fetchMock)).toEqual([{ evento: "volver" }]);
+  });
+
+  it("abrir los datos de la carta cuenta una sola vez", () => {
+    const fetchMock = conFetch();
+    const { container } = render(<CartaPreview {...propsBase("es", { moneda: "usd" })} />);
+    const datos = container.querySelector("details.datosCarta") as HTMLDetailsElement;
+
+    for (let i = 0; i < 3; i++) {
+      datos.open = !datos.open;
+      fireEvent(datos, new Event("toggle"));
+    }
+
+    expect(contados(fetchMock)).toEqual([{ evento: "datos_abiertos" }]);
+  });
+
+  it("llegar al final cuenta una sola vez, aunque se vuelva a pasar", () => {
+    const fetchMock = conFetch();
+    let avisar: (entradas: { isIntersecting: boolean }[]) => void = () => {};
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(cb: typeof avisar) {
+          avisar = cb;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    pintar("es", { moneda: "usd" });
+
+    avisar([{ isIntersecting: false }]);
+    avisar([{ isIntersecting: true }]);
+    avisar([{ isIntersecting: true }]);
+
+    expect(contados(fetchMock)).toEqual([{ evento: "cierre_visto" }]);
+  });
+
+  it("si contar falla, la compra sigue igual", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("sin red")));
+    const props = pintar("es", { moneda: "usd" });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /US\$ 29/ })[0]);
+
+    expect(props.onComprar).toHaveBeenCalledOnce();
+  });
+});

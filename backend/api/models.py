@@ -926,7 +926,21 @@ class ConteoDiario(models.Model):
     Lo escribe `api.conteo.contar`; lo lee el informe diario.
     """
 
-    EVENTOS = (("carta_calculada", "carta_calculada"), ("checkout_abierto", "checkout_abierto"))
+    EVENTOS = (
+        ("carta_calculada", "carta_calculada"),
+        ("checkout_abierto", "checkout_abierto"),
+        # Lo que hace quien calculó su carta sin cuenta, antes de pagar
+        # (api/conteo_api.py, 20-10-2026). Los manda el navegador.
+        ("teaser_datos_abiertos", "teaser_datos_abiertos"),
+        ("teaser_cierre_visto", "teaser_cierre_visto"),
+        ("teaser_clic_arriba", "teaser_clic_arriba"),
+        ("teaser_clic_cierre", "teaser_clic_cierre"),
+        ("teaser_clic_usd", "teaser_clic_usd"),
+        ("teaser_clic_brl", "teaser_clic_brl"),
+        ("teaser_clic_ars", "teaser_clic_ars"),
+        ("teaser_mail_enviado", "teaser_mail_enviado"),
+        ("teaser_volver", "teaser_volver"),
+    )
 
     fecha = models.DateField()
     evento = models.CharField(max_length=30, choices=EVENTOS)

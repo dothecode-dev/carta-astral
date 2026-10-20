@@ -14,15 +14,23 @@ export function DatosCarta({
   dict,
   locale,
   children,
+  onAbrir,
 }: {
   chart: CartaDibujable;
   dict: Dict;
   locale: Locale;
   /** Ajustes de la carta que viven junto a sus datos (p. ej. el trato). */
   children?: ReactNode;
+  /** Cada vez que se abre (no al cerrarlo). */
+  onAbrir?: () => void;
 }) {
   return (
-    <details className="foldout datosCarta">
+    <details
+      className="foldout datosCarta"
+      onToggle={(e) => {
+        if (e.currentTarget.open) onAbrir?.();
+      }}
+    >
       <summary className="foldoutHead">{dict.chart.verDatos}</summary>
       <div className="datosCartaCuerpo">
         {children}

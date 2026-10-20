@@ -401,8 +401,11 @@ REST_FRAMEWORK = {
         # Botón de arrepentimiento: público y manda un mail a la dirección que
         # se escriba. El techo frena usarlo para llenarle la bandeja a alguien.
         "arrepentimiento": os.environ.get("ARREPENTIMIENTO_RATE", "10/hour"),
+        # Los pasos del teaser sin cuenta (api/conteo_api.py): público, por IP.
+        # Cada carta manda unos pocos; el techo sólo frena inflar los números.
+        "conteo": os.environ.get("CONTEO_RATE", "300/hour"),
         # Por cuenta. Abrir un checkout no cuesta nada acá, pero con el cupón
-        # del 100 % este POST entrega un producto de US$ 29: sin techo, es un
+        # del 100 % este POST entrega un producto de pago: sin techo, es un
         # bucle. Generoso: nadie compra sesenta veces en un día.
         "checkout": os.environ.get("CHECKOUT_RATE", "60/day"),
         # Público, por IP, y cada pedido crea una carta y una sesión de Stripe

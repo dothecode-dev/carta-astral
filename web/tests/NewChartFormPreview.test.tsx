@@ -52,6 +52,16 @@ const geocode = (results: unknown[]) => ({ ok: true, json: async () => ({ result
 
 /** Llena el formulario y envía. `respuesta` es lo que contesta el preview:
  *  se encola DESPUÉS de la del geocodificador, que es la que va primera. */
+/** El teaser cuenta sus pasos con un `fetch` aparte (`/api/conteo/teaser`):
+ *  se responde acá, sin pasar por `fetchMock`, para que no se coma las
+ *  respuestas encoladas del checkout ni cuente como una llamada más. */
+function sinConteo(fetchMock: ReturnType<typeof vi.fn>) {
+  return (url: unknown, init?: unknown) =>
+    url === "/api/conteo/teaser"
+      ? Promise.resolve(new Response(null, { status: 204 }))
+      : (fetchMock as unknown as (u: unknown, i?: unknown) => Promise<unknown>)(url, init);
+}
+
 async function completarYEnviar(fetchMock: ReturnType<typeof vi.fn>, respuesta: unknown) {
   fireEvent.change(screen.getByLabelText(t.date), { target: { value: "1976-05-31" } });
   fetchMock.mockResolvedValueOnce(geocode([ROSARIO]));
@@ -93,7 +103,7 @@ describe("sin cuenta", () => {
     sessionStorage.clear();
     localStorage.clear();
     fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", sinConteo(fetchMock));
   });
 
   afterEach(() => {
@@ -199,7 +209,7 @@ describe("comprar sin cuenta desde la vista previa", () => {
     sessionStorage.clear();
     localStorage.clear();
     fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", sinConteo(fetchMock));
     vi.stubGlobal("location", { ...window.location, assign });
   });
 
@@ -310,7 +320,7 @@ describe("comprar sin cuenta en pesos", () => {
     sessionStorage.clear();
     localStorage.clear();
     fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", sinConteo(fetchMock));
     vi.stubGlobal("location", { ...window.location, assign });
   });
 
@@ -398,7 +408,7 @@ describe("con sesión (RF12b)", () => {
   it("no hay vista previa ni botón de pago: se crea la carta directo", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", sinConteo(fetchMock));
     try {
       render(<NewChartForm moneda="usd" locale="es" dict={dict} signedIn precio="US$ 29" />);
       await completarYEnviar(fetchMock, { ok: true, status: 201, json: async () => ({ id: "abc" }) });
@@ -422,7 +432,7 @@ describe("con sesión, al montar", () => {
     sessionStorage.clear();
     localStorage.clear();
     fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", sinConteo(fetchMock));
   });
 
   afterEach(() => {

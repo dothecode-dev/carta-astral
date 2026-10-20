@@ -402,3 +402,19 @@ def test_el_analista_sabe_que_el_servidor_es_el_total_y_posthog_una_muestra():
     assert "servidor" in informe._SISTEMA and "muestra" in informe._SISTEMA
     # El servidor cuenta veces, no personas: no se comparan uno a uno.
     assert "veces, no personas" in informe._SISTEMA
+
+
+def test_el_mail_muestra_el_embudo_del_teaser_sin_cuenta():
+    """Entre «calculó la carta» y «abrió un pago» (20-10-2026): sin esto el
+    mail decía 200 cartas y 0 pagos, y no se sabía dónde se cortaban."""
+    total = {"carta_calculada": 40, "checkout_abierto": 1, "compra_pagada": 0, "teaser_cierre_visto": 12,
+             "teaser_clic_arriba": 5, "teaser_clic_cierre": 3, "teaser_clic_ars": 7, "teaser_clic_usd": 1,
+             "teaser_mail_enviado": 2, "teaser_datos_abiertos": 9, "teaser_volver": 4}
+    datos = {"servidor": {"dias": 7, "total": total, "hoy": {}, "por_dia": {}}}
+
+    cuerpo = informe._html("lectura", datos, [])
+
+    assert "Carta sin cuenta → pago" in cuerpo
+    assert "llegó al final: 12" in cuerpo and "clic en comprar: 5 arriba + 3 al final" in cuerpo
+    assert "ARS 7, USD 1, BRL 0" in cuerpo and "dejó el mail (pesos): 2" in cuerpo
+    assert cuerpo.index("Total real") < cuerpo.index("Carta sin cuenta")

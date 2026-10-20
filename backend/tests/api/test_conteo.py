@@ -82,10 +82,12 @@ def test_el_resumen_suma_siete_dias_completos_y_hoy_aparte():
 
     r = conteo.resumen(dias=7)
 
-    assert r["total"] == {"carta_calculada": 5, "checkout_abierto": 1, "compra_pagada": 1}
-    assert r["hoy"] == {"carta_calculada": 7, "checkout_abierto": 0, "compra_pagada": 0}
+    # Los pasos del teaser van en cero: este test no los cuenta.
+    ceros = dict.fromkeys(conteo.EVENTOS_TEASER, 0)
+    assert r["total"] == {"carta_calculada": 5, "checkout_abierto": 1, "compra_pagada": 1, **ceros}
+    assert r["hoy"] == {"carta_calculada": 7, "checkout_abierto": 0, "compra_pagada": 0, **ceros}
     assert str(_hoy()) not in r["por_dia"] and str(hace_8) not in r["por_dia"]
-    assert r["por_dia"][str(ayer)] == {"carta_calculada": 3, "checkout_abierto": 1, "compra_pagada": 1}
+    assert r["por_dia"][str(ayer)] == {"carta_calculada": 3, "checkout_abierto": 1, "compra_pagada": 1, **ceros}
 
 
 def test_crear_una_carta_con_cuenta_tambien_cuenta(account_client):
