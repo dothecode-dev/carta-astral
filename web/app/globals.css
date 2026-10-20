@@ -1266,7 +1266,7 @@ body:has(.consentBar) .accionFija {
 
 /* Enlace a los Términos bajo el botón del informe. Es una aclaración al pie,
    no una llamada a la acción: hereda el gris chico de .fieldNote y sólo suma
-   el subrayado que lo delata como enlace. Si compitiera con el botón de US$ 29
+   el subrayado que lo delata como enlace. Si compitiera con el botón de compra
    estaría resolviendo el problema contrario al que existe para resolver. */
 .comoSeEscribe {
   display: inline-block;

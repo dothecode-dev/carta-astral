@@ -505,7 +505,7 @@ def generar_informe(interpretacion, client, token: str) -> bool:
       devolver ahí sería regalar el informe completo. Sólo agotados los
       intentos SIN llegar a `completa=True` se devuelve el crédito y se
       borra la `Interpretation` entera (secciones incluidas): con el
-      informe pago (US$ 29) ya no alcanza con "algo se generó" para no
+      informe pago ya no alcanza con "algo se generó" para no
       devolver — o se entrega completo, o se devuelve, y las secciones
       sueltas de un intento fallido nunca se muestran.
     - Si de todas formas se devuelve el crédito, hacerlo con

@@ -63,7 +63,7 @@ export function unidades(producto: ProductoCatalogo): number {
   return producto.otorga.reduce((total, o) => total + o.cantidad, 0);
 }
 
-/** "US$ 29" y no "$29.00": el precio es redondo y el símbolo dice la moneda. */
+/** "US$ 5" y no "$5.00": el precio es redondo y el símbolo dice la moneda. */
 export function formatearPrecio(centavos: number, moneda: string, locale: string): string {
   // Los pesos, en formato argentino en cualquier idioma (RF30): en en-US
   // «$25,000» se lee como dólares, y quien paga en pesos lee «$ 25.000».

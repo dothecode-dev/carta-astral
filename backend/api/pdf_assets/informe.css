@@ -58,7 +58,7 @@ tr { page-break-inside: avoid; }
   opacity: 0.92; orphans: 3; widows: 3; }
 .disclaimer { margin-top: 20px; font-size: 10px; line-height: 1.6; color: var(--stardust); }
 /* Un título que queda solo al pie de una página se lee como un error de
-   maquetación, y este PDF se vende a US$29. WeasyPrint respeta break-after. */
+   maquetación, y este PDF es de pago. WeasyPrint respeta break-after. */
 .seccion h2 { font-weight: 400; font-size: 17px; letter-spacing: 0.5px;
   margin: 18px 0 6px; break-after: avoid; }
 .seccion { break-inside: auto; }

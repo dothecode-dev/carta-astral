@@ -19,7 +19,7 @@ import { motivoDeRespuesta } from "@/lib/motivoRespuesta";
 //
 // Hay dos productos por carta (RF1, RF2): una lectura breve gratis (tier
 // "corto", la paga un derecho de `lectura_breve`) y un informe completo de
-// ocho secciones a US$ 29 (tier "largo", lo paga un derecho de
+// ocho secciones, de pago (tier "largo", lo paga un derecho de
 // `informe_natal`). Conviven: leer la breve no consume ni bloquea el
 // completo, y al revés.
 //
@@ -55,7 +55,7 @@ type MotivoRechazo = EventoProps["interpretacion_rechazada"]["motivo"];
  * caso que hay que cubrir. Guardar el TIER acá, no sólo un booleano, es lo
  * que evita el bug caro (RF24): sin esto, una recarga a mitad de la lectura
  * breve gratis no tendría forma de saber que lo que hay que retomar es la
- * breve, y adivinar "largo" cobraría el informe de US$ 29 que nadie pidió.
+ * breve, y adivinar "largo" cobraría el informe de pago que nadie pidió.
  *
  * Se escribe al hacer el click que arranca la generación (`interpret`), no
  * al reintentar: para cuando el efecto de recuperación la necesita, ya tiene

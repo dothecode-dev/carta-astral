@@ -412,7 +412,7 @@ def acreditar_a_mano(fila, sesion: dict, *, aunque_disputada: bool = False) -> b
 
 
 def _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto) -> None:
-    """Un precio en `exclusive` cobra el impuesto ENCIMA de los US$ 29.
+    """Un precio en `exclusive` cobra el impuesto ENCIMA del precio de lista.
 
     No frena la compra —el comprador pagó de más, no de menos, y rechazarla
     sería cerrar la caja por una mala configuración nuestra—, pero tiene que

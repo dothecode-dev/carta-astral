@@ -145,7 +145,7 @@ class CheckoutView(APIView):
         """El cupón del 100 % no pasa por Stripe: se resuelve acá, en la
         misma request, y la página de retorno lo encuentra ya acreditado.
 
-        Es un POST que entrega un producto de US$ 29, así que lleva los
+        Es un POST que entrega un producto de pago, así que lleva los
         frenos que un pago no necesita: una cuenta con deuda recibiría nada
         —`otorgar` cancela deuda antes de dar saldo— y una marcada por
         reembolsos repetidos es justo la que no debería recibir regalos.

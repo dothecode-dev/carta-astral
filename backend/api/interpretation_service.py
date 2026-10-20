@@ -67,7 +67,7 @@ LOCK_TTL = 600
 # RF21: cuántas veces `completar_generacion` reintenta un informe incompleto
 # antes de rendirse. El dueño del producto lo decidió así: si no se puede
 # entregar el informe de ocho secciones que se cobró entero, se devuelve el
-# crédito y no se muestran las secciones sueltas — un informe de US$ 29 no
+# crédito y no se muestran las secciones sueltas — un informe pago no
 # es como la lectura gratis que originó la regla vieja ("devolvé sólo si no
 # quedó nada"), donde un informe trunco no le costaba nada al usuario.
 INTENTOS_MAXIMOS = 3
@@ -137,7 +137,7 @@ def _lock_key(objetivo, tier: str) -> str:
     # corto y el largo de la misma carta son dos `Interpretation` distintas
     # (RF9, cada una con su propio set de secciones) que un usuario puede
     # pedir por separado y esperar que avancen en paralelo — hacer esperar
-    # al que pagó US$ 29 mientras corre la lectura gratis (o viceversa)
+    # al que pagó el informe mientras corre la lectura gratis (o viceversa)
     # sería peor que la carrera que el lock existe para evitar, que es dos
     # procesos escribiendo LAS MISMAS secciones. Con un lock compartido entre
     # tiers, `completar_generacion` del segundo tier pedido encontraba el
@@ -524,7 +524,7 @@ def completar_generacion(interpretacion: Interpretation, account) -> None:
     más abajo).
 
     Task 10 / RF21: la guarda de devolución YA NO es "no quedó ninguna
-    sección" — con el informe pago (US$ 29), un intento que dejó tres
+    sección" — con el informe pago, un intento que dejó tres
     secciones escritas y después falla no puede tratarse como "sin
     trabajo perdido" solo porque hay texto en la base; ese texto no se
     muestra (`completa=False` sigue dando 404) y el usuario pagó el

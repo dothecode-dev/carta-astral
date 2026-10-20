@@ -25,7 +25,7 @@ export const POLL_MS = 2000;
  * El webhook normal tarda segundos. Este tope es para cuando algo salió mal, y
  * lo que sigue no es un error rojo sino la verdad —el pago se hizo, la
  * confirmación no llegó— con dónde seguir. Girar para siempre después de que
- * alguien puso US$ 29 es la peor salida posible.
+ * alguien pagó es la peor salida posible.
  */
 export const POLL_TRIES = 22;
 
