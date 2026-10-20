@@ -83,7 +83,7 @@ def test_dos_compras_distintas_con_el_mismo_mail_nuevo_crean_una_cuenta_y_una_so
     ids = ["cs_test_par_0", "cs_test_par_1"]
     for checkout_id in ids:
         PasarelaCheckout.objects.create(
-            checkout_id=checkout_id, account=None, codigo_producto="informe_natal",
+            pasarela=PasarelaCheckout.STRIPE, checkout_id=checkout_id, account=None, codigo_producto="informe_natal",
             sujeto=sujeto_natal(make_chart(account=None)), anonimo=True, nonce_hash="y" * 64,
             precio_centavos=2900,
         )
@@ -153,7 +153,7 @@ def test_el_canje_y_una_segunda_compra_a_la_vez_no_dejan_sesion_ni_se_traban(mak
         atacante, victima = f"cs_test_atac_{vuelta}", f"cs_test_vict_{vuelta}"
         for checkout_id in (atacante, victima):
             PasarelaCheckout.objects.create(
-                checkout_id=checkout_id, account=None, codigo_producto="informe_natal",
+                pasarela=PasarelaCheckout.STRIPE, checkout_id=checkout_id, account=None, codigo_producto="informe_natal",
                 sujeto=sujeto_natal(make_chart(account=None)), anonimo=True, nonce_hash=hash_token(f"n-{checkout_id}"),
                 precio_centavos=2900,
             )

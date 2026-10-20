@@ -14,7 +14,7 @@ migracion = importlib.import_module("api.migrations.0057_unidades_revocadas_exis
 
 def _fila(checkout_id, codigo, precio, reembolsado, descuento=0):
     return PasarelaCheckout.objects.create(
-        checkout_id=checkout_id, codigo_producto=codigo, precio_centavos=precio,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=checkout_id, codigo_producto=codigo, precio_centavos=precio,
         descuento_centavos=descuento, reembolsado_centavos=reembolsado,
     )
 
@@ -58,8 +58,8 @@ def test_un_reembolso_viejo_reentregado_no_se_aplica_de_nuevo(client, settings, 
     settings.STRIPE_WEBHOOK_SECRET = SECRETO
     cuenta = make_account()
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_v", account=cuenta, codigo_producto="informe_natal", precio_centavos=500,
-        payment_intent="pi_v", acreditado_at=timezone.now(), reembolsado_centavos=500, unidades_revocadas=1,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_v", account=cuenta, codigo_producto="informe_natal", precio_centavos=500,
+        pago_id="pi_v", acreditado_at=timezone.now(), reembolsado_centavos=500, unidades_revocadas=1,
     )
     Reembolso.objects.create(refund_id="re_viejo", monto=0)
     obj = {"id": "re_viejo", "amount": 500, "currency": "usd", "payment_intent": "pi_v"}

@@ -225,7 +225,7 @@ class CheckoutView(APIView):
         # Stripe cobró, aunque el catálogo cambie mientras la sesión sigue viva.
         precio, descuento = cupones.precio_y_descuento(codigo, cupon, moneda)
         PasarelaCheckout.objects.create(
-            checkout_id=checkout_id, account=request.user, codigo_producto=codigo,
+            checkout_id=checkout_id, account=request.user, pasarela=PasarelaCheckout.STRIPE, codigo_producto=codigo,
             sujeto=sujeto, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
             precio_centavos=precio, moneda=moneda,
         )

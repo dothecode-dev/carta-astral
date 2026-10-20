@@ -50,7 +50,7 @@ class Command(BaseCommand):
 
     def _informar_desde_la_base(self, payment_id: str, error: Exception) -> None:
         fila = PasarelaCheckout.objects.filter(
-            pasarela=PasarelaCheckout.MERCADOPAGO, payment_intent=payment_id, acreditado_at__isnull=False,
+            pasarela=PasarelaCheckout.MERCADOPAGO, pago_id=payment_id, acreditado_at__isnull=False,
         ).first()
         if fila is not None:
             self.stdout.write(self.style.SUCCESS(
@@ -86,7 +86,7 @@ class Command(BaseCommand):
                 f"el pago {payment_id} apunta a {fila.checkout_id}, que es una compra de {fila.pasarela}: "
                 "no se acreditó nada",
             )
-        if fila.acreditado_at and fila.payment_intent == payment_id:
+        if fila.acreditado_at and fila.pago_id == payment_id:
             self.stdout.write(self.style.SUCCESS(
                 f"pago {payment_id} acreditado ({fila.checkout_id}, acreditado_at={fila.acreditado_at.isoformat()})",
             ))
@@ -94,7 +94,7 @@ class Command(BaseCommand):
         if estado == "approved" and fila.acreditado_at:
             raise CommandError(
                 f"duplicado: el pago {payment_id} no acreditó la compra {fila.checkout_id} "
-                f"(ya la acreditó el pago {fila.payment_intent or '?'}; reembolso a verificar en MP y en el aviso de Telegram)",
+                f"(ya la acreditó el pago {fila.pago_id or '?'}; reembolso a verificar en MP y en el aviso de Telegram)",
             )
         if estado != "approved":
             raise CommandError(f"el pago {payment_id} está en status={estado}: no se acreditó nada")

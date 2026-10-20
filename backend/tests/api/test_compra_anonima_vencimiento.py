@@ -65,7 +65,7 @@ def test_acreditada_no_se_borra_aunque_llegue_expired(entregar_anonima, anonima)
 def test_una_fila_con_cuenta_no_anonima_no_se_descarta(make_account, make_chart):
     cuenta = make_account()
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_con_cuenta", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_con_cuenta", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     assert compra_anonima.descartar("cs_con_cuenta") is False
@@ -115,7 +115,7 @@ def test_pago_asincronico_fallido_con_cuenta_no_borra_nada(entregar_anonima, mak
     cuenta = make_account()
     carta = make_chart(account=cuenta)
     fila = PasarelaCheckout.objects.create(
-        checkout_id=SID, account=cuenta, codigo_producto="informe_natal", sujeto=sujeto_natal(carta),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SID, account=cuenta, codigo_producto="informe_natal", sujeto=sujeto_natal(carta),
     )
 
     assert entregar_anonima(sesion_anonima(payment_status="unpaid"), tipo=FAILED).status_code == 200

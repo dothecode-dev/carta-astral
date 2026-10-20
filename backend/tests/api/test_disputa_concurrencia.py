@@ -29,8 +29,8 @@ ESPERA = 3  # segundos que el retiro de B le da a la reposición de A para colar
 
 def _compra(cuenta, checkout_id, pi):
     PasarelaCheckout.objects.create(
-        checkout_id=checkout_id, account=cuenta, codigo_producto="informe_natal", moneda="usd",
-        precio_centavos=500, payment_intent=pi, acreditado_at=timezone.now(),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=checkout_id, account=cuenta, codigo_producto="informe_natal", moneda="usd",
+        precio_centavos=500, pago_id=pi, acreditado_at=timezone.now(),
     )
     aplicar_compra(cuenta, "informe_natal", 500, external_id=f"stripe:session:{checkout_id}", precio_centavos=500)
 
@@ -50,7 +50,7 @@ def test_reponer_una_y_retirar_otra_del_mismo_mail_a_la_vez_deja_el_mail_bloquea
     # misma cuenta la carrera no existe: el ledger lockea la cuenta en los dos
     # caminos y eso ya los serializa.
     PasarelaCheckout.objects.create(
-        checkout_id="cs_b", account=None, codigo_producto="informe_natal", moneda="usd",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_b", account=None, codigo_producto="informe_natal", moneda="usd",
         precio_centavos=500, anonimo=True, nonce_hash="x" * 64,
     )
     monkeypatch.setattr(
@@ -98,7 +98,7 @@ def test_si_la_reposicion_borra_el_bloqueo_antes_del_lock_el_retiro_lo_vuelve_a_
     cuenta = make_account(email=email)
     _compra(cuenta, "cs_a", "pi_a")
     PasarelaCheckout.objects.create(
-        checkout_id="cs_b", account=None, codigo_producto="informe_natal", moneda="usd",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_b", account=None, codigo_producto="informe_natal", moneda="usd",
         precio_centavos=500, anonimo=True, nonce_hash="x" * 64,
     )
     monkeypatch.setattr(

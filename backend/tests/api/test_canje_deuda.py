@@ -50,7 +50,7 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
     cuenta.deuda = 1
     cuenta.save(update_fields=["deuda"])
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     sesion = {
@@ -88,7 +88,7 @@ def test_el_webhook_de_una_cuenta_con_deuda_responde_200_y_acredita(
 
 def _fila(cuenta, make_chart):
     return PasarelaCheckout.objects.create(
-        checkout_id="cs_x", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_x", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
 

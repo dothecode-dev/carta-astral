@@ -269,7 +269,7 @@ class PasarelaCheckoutAdmin(SoloLectura):
     search_fields = ("checkout_id", "account__email")
     readonly_fields = list_display + (
         "sujeto", "locale", "cupon", "precio_centavos", "descuento_centavos",
-        "reembolsado_centavos", "payment_intent", "mail_comprador", "mp_preferencia_id", "mp_revisado_at",
+        "reembolsado_centavos", "pago_id", "mail_comprador", "mp_preferencia_id", "mp_revisado_at",
         "informe_arrancado_at",
     )
     fields = readonly_fields

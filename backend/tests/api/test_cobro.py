@@ -109,7 +109,7 @@ def test_acreditar_otorga_y_marca_la_fila(make_account, avisos, mails, eventos):
     assert _acreditar(fila) is True
 
     fila.refresh_from_db()
-    assert fila.payment_intent == "111"
+    assert fila.pago_id == "111"
     assert fila.acreditado_at is not None
     assert Movimiento.objects.filter(external_id="mp:payment:111", tipo="otorgamiento").count() == 1
     assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 1
@@ -136,7 +136,7 @@ def test_acreditar_dos_veces_un_movimiento_un_mail(make_account, avisos, mails, 
     assert len(mails) == 1
     assert len(eventos) == 1
     fila.refresh_from_db()
-    assert fila.payment_intent == "111" and fila.acreditado_at is not None
+    assert fila.pago_id == "111" and fila.acreditado_at is not None
 
 
 @pytest.mark.django_db
@@ -164,7 +164,7 @@ def test_acreditar_monto_distinto_no_acredita_y_avisa(make_account, avisos, mail
 
     assert not Movimiento.objects.filter(external_id="mp:payment:111").exists()
     fila.refresh_from_db()
-    assert fila.acreditado_at is None and fila.payment_intent == ""
+    assert fila.acreditado_at is None and fila.pago_id == ""
     assert len(avisos) == 1 and str(PRECIO_ARS - 100) in avisos[0]
     assert mails == []
 
@@ -378,7 +378,7 @@ def test_otro_pago_sobre_una_fila_acreditada_levanta_pago_duplicado(make_account
     assert Movimiento.objects.filter(account=cuenta, tipo="otorgamiento", origen="compra").count() == 1
     assert not Movimiento.objects.filter(external_id="mp:payment:222").exists()
     fila.refresh_from_db()
-    assert fila.payment_intent == "111"
+    assert fila.pago_id == "111"
     assert len(mails) == 1 and len(eventos) == 1
 
 
@@ -474,7 +474,7 @@ def test_reembolso_no_acreditado_notificado_dos_veces_avisa_una(acreditada, avis
 
 @pytest.mark.django_db
 def test_reembolso_sobre_una_fila_sin_acreditar_no_revoca(make_account, avisos):
-    """Una fila sin acreditar tiene `payment_intent` vacío: ningún pago es suyo."""
+    """Una fila sin acreditar tiene `pago_id` vacío: ningún pago es suyo."""
     fila = _fila(make_account())
 
     _reembolsar(fila, pago_id="111")
@@ -487,7 +487,7 @@ def test_reembolso_sobre_una_fila_sin_acreditar_no_revoca(make_account, avisos):
 
 @pytest.mark.django_db
 def test_reembolso_sin_pago_id_no_revoca(make_account, avisos):
-    """Un `pago_id` vacío coincidiría con el `payment_intent` vacío de una
+    """Un `pago_id` vacío coincidiría con el `pago_id` vacío de una
     fila sin acreditar: se rechaza antes de mirar la fila."""
     fila = _fila(make_account())
 
@@ -539,8 +539,8 @@ def test_dos_pagos_distintos_a_la_vez_otorgan_uno_solo(make_account, monkeypatch
     assert len(errores) == 1 and isinstance(errores[0], cobro.PagoDuplicado), errores
     assert Movimiento.objects.filter(account=cuenta, tipo="otorgamiento", origen="compra").count() == 1
     fila.refresh_from_db()
-    assert fila.payment_intent in {"500", "501"}
-    assert fila.payment_intent != errores[0].pago_id
+    assert fila.pago_id in {"500", "501"}
+    assert fila.pago_id != errores[0].pago_id
 
 
 @requiere_postgres

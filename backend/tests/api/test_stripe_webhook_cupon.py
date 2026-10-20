@@ -65,7 +65,7 @@ def promo():
 
 @pytest.fixture
 def compra(make_account, promo):
-    return PasarelaCheckout.objects.create(checkout_id=SESSION, account=make_account(),
+    return PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=make_account(),
                                            codigo_producto="informe_natal", cupon=promo, descuento_centavos=870)
 
 
@@ -130,7 +130,7 @@ def test_un_promotion_code_que_no_es_el_nuestro_no_acredita(client, monkeypatch,
 def test_una_compra_sin_cupon_que_llega_con_descuento_no_acredita(client, monkeypatch, make_account):
     """La puerta de A1: un descuento que nuestra base no conoce."""
     cuenta = make_account()
-    PasarelaCheckout.objects.create(checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal")
+    PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal")
 
     r = _entregar(client, monkeypatch, _sesion())
 

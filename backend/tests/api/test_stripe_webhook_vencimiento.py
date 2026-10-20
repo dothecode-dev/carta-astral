@@ -45,7 +45,7 @@ def _vencer(client, session_id=SESSION):
 @pytest.fixture
 def abierta(make_account):
     return PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=make_account(), codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=make_account(), codigo_producto="informe_natal",
         url="https://checkout.stripe.com/c/pay/" + SESSION,
     )
 

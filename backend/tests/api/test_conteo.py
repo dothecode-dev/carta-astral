@@ -72,13 +72,13 @@ def test_el_resumen_suma_siete_dias_completos_y_hoy_aparte():
     ConteoDiario.objects.create(fecha=hace_8, evento="carta_calculada", cantidad=100)
     ConteoDiario.objects.create(fecha=ayer, evento="checkout_abierto", cantidad=1)
     ayer_dt = timezone.now() - datetime.timedelta(days=1)
-    PasarelaCheckout.objects.create(checkout_id="cs_1", codigo_producto="informe_natal", acreditado_at=ayer_dt)
+    PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", codigo_producto="informe_natal", acreditado_at=ayer_dt)
     # Un canje con cupón del 100 % no es una compra paga, ni una reembolsada.
-    PasarelaCheckout.objects.create(checkout_id="cupon_x", codigo_producto="informe_natal", acreditado_at=ayer_dt)
+    PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id="cupon_x", codigo_producto="informe_natal", acreditado_at=ayer_dt)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_3", codigo_producto="informe_natal", acreditado_at=ayer_dt, reembolsado_centavos=500,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_3", codigo_producto="informe_natal", acreditado_at=ayer_dt, reembolsado_centavos=500,
     )
-    PasarelaCheckout.objects.create(checkout_id="cs_2", codigo_producto="informe_natal")
+    PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_2", codigo_producto="informe_natal")
 
     r = conteo.resumen(dias=7)
 
@@ -126,7 +126,7 @@ def test_la_serie_va_del_dia_mas_viejo_a_hoy_con_ceros_donde_no_hubo_nada():
     ayer = _hoy() - datetime.timedelta(days=1)
     ConteoDiario.objects.create(fecha=_hoy(), evento="carta_calculada", cantidad=4)
     ConteoDiario.objects.create(fecha=ayer, evento="checkout_abierto", cantidad=2)
-    PasarelaCheckout.objects.create(checkout_id="cs_1", codigo_producto="informe_natal", acreditado_at=timezone.now())
+    PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", codigo_producto="informe_natal", acreditado_at=timezone.now())
 
     s = conteo.serie(dias=3)
 

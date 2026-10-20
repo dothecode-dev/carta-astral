@@ -91,7 +91,7 @@ def _con_deuda(cuenta):
 def test_webhook_con_deuda_marca_la_fila(entregar, account_client, make_chart, sin_hilo):
     cuenta = _con_deuda(account_client.account)
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
 
@@ -107,7 +107,7 @@ def test_webhook_con_deuda_marca_la_fila(entregar, account_client, make_chart, s
 def test_el_estado_devuelve_saldo_pendiente(entregar, account_client, make_chart, sin_hilo):
     cuenta = _con_deuda(account_client.account)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     entregar("cs_deuda")
@@ -121,7 +121,7 @@ def test_el_estado_devuelve_saldo_pendiente(entregar, account_client, make_chart
 def test_sin_deuda_ni_la_fila_ni_el_estado_lo_dicen(entregar, account_client, make_chart, sin_hilo):
     cuenta = account_client.account
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_ok", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_ok", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     entregar("cs_ok")
@@ -139,7 +139,7 @@ def test_un_reintento_no_borra_la_marca(entregar, account_client, make_chart, si
     marca quedó en el mismo átomo que el otorgamiento y sigue puesta."""
     cuenta = _con_deuda(account_client.account)
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     entregar("cs_deuda")
@@ -156,7 +156,7 @@ def test_los_dos_logs_son_error_y_sin_mail(
     monkeypatch.setattr(logging.getLogger("api"), "propagate", True)
     cuenta = _con_deuda(account_client.account)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_deuda", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     with caplog.at_level(logging.WARNING):
@@ -185,7 +185,7 @@ def test_con_deuda_y_saldo_de_un_pack_el_informe_se_escribe_y_no_se_avisa_deuda(
         account=cuenta, codigo_producto="informe_natal", defaults={"cantidad_restante": 2},
     )
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_pack", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_pack", account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
 

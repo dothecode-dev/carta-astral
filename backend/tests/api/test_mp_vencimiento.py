@@ -189,7 +189,7 @@ def test_filas_de_stripe_no_se_tocan(mp, make_account, make_chart):
     abierta = _fila("a", account=make_account(), pasarela=PasarelaCheckout.STRIPE, moneda="usd")
     pagada = _fila(
         "b", account=make_account(), pasarela=PasarelaCheckout.STRIPE, moneda="usd",
-        acreditado_at=VIEJA, payment_intent="pi_1",
+        acreditado_at=VIEJA, pago_id="pi_1",
     )
     anonima = _anonima(
         make_chart, "c", pasarela=PasarelaCheckout.STRIPE, moneda="usd", vencido_at=AHORA - dt.timedelta(hours=30),
@@ -323,7 +323,7 @@ def reembolsos(monkeypatch):
 
 
 def test_fila_acreditada_con_un_duplicado_perdido_lo_reembolsa_avisa_y_cierra(mp, make_account, avisos, reembolsos):
-    fila = _fila(account=make_account(), acreditado_at=VIEJA, payment_intent=str(PAGO))
+    fila = _fila(account=make_account(), acreditado_at=VIEJA, pago_id=str(PAGO))
     duplicado = _pago(fila, pago_id=888)
     mp.pagos[str(PAGO)] = _pago(fila)
     mp.pagos["888"] = duplicado
@@ -335,12 +335,12 @@ def test_fila_acreditada_con_un_duplicado_perdido_lo_reembolsa_avisa_y_cierra(mp
     fila.refresh_from_db()
     assert reembolsos == ["888"]
     assert len(avisos) == 1 and "888" in avisos[0] and "DUPLICADO" in avisos[0]
-    assert fila.mp_revisado_at == AHORA and fila.vencido_at is None and fila.payment_intent == str(PAGO)
+    assert fila.mp_revisado_at == AHORA and fila.vencido_at is None and fila.pago_id == str(PAGO)
     assert mp.buscados == [fila.checkout_id]
 
 
 def test_fila_acreditada_sin_duplicados_se_cierra_sin_avisos(mp, make_account, avisos, reembolsos):
-    fila = _fila(account=make_account(), acreditado_at=VIEJA, payment_intent=str(PAGO))
+    fila = _fila(account=make_account(), acreditado_at=VIEJA, pago_id=str(PAGO))
     mp.pagos[str(PAGO)] = _pago(fila)
     mp.busquedas[fila.checkout_id] = [_pago(fila)]
 
@@ -454,7 +454,7 @@ def test_fila_acreditada_con_carta_no_reprocesa_el_pago_que_la_acredito(mp, make
     cuenta = make_account()
     fila = _fila(
         account=cuenta, sujeto=sujeto_natal(make_chart(account=cuenta)),
-        acreditado_at=VIEJA, payment_intent=str(PAGO),
+        acreditado_at=VIEJA, pago_id=str(PAGO),
     )
     mp.pagos[str(PAGO)] = _pago(fila)
     mp.busquedas[fila.checkout_id] = [_pago(fila)]

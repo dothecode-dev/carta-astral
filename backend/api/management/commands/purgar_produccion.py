@@ -66,7 +66,7 @@ from api.models import (
 MODELOS_A_BORRAR = (
     ("CuponUso", CuponUso),
     # Después de CuponUso, que lo referencia. Cuelga de Account con SET_NULL:
-    # sin nombrarlo sobrevive sin dueño, con su `payment_intent`.
+    # sin nombrarlo sobrevive sin dueño, con su `pago_id`.
     ("PasarelaCheckout", PasarelaCheckout),
     ("InterpretationSection", InterpretationSection),
     ("Movimiento", Movimiento),

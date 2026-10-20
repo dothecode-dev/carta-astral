@@ -272,7 +272,7 @@ def test_reembolso_de_una_compra_anonima(client, entregar_anonima, anonima, sin_
 
     entregar_anonima(con_mail("r@mail.com"))
     anonima.refresh_from_db()
-    assert anonima.payment_intent == PI_ANONIMA
+    assert anonima.pago_id == PI_ANONIMA
 
     refund = {
         "id": "re_anonima", "object": "refund", "amount": 2900, "currency": "usd",

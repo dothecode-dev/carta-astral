@@ -35,7 +35,7 @@ def vinculo(account):
 @pytest.fixture
 def fila(vinculo):
     return PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=vinculo.account, codigo_producto="informe_vinculo",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=vinculo.account, codigo_producto="informe_vinculo",
         sujeto=vinculo, locale="es", precio_centavos=900,
     )
 

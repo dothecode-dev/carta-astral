@@ -59,7 +59,7 @@ def test_sin_sesion_no_se_puede_consultar(client):
 def test_un_checkout_de_otra_cuenta_es_404(account_client, make_account):
     """Mismo criterio que una carta ajena: para quien mira, no existe."""
     PasarelaCheckout.objects.create(
-        checkout_id="cs_ajeno", account=make_account(), codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_ajeno", account=make_account(), codigo_producto="informe_natal",
     )
 
     assert account_client.get("/api/checkout/cs_ajeno/").status_code == 404
@@ -73,7 +73,7 @@ def test_mientras_el_webhook_no_llega_la_compra_esta_pendiente(account_client, m
     """El caso de la carrera: la persona volvió antes que el webhook."""
     carta = make_chart(account=account_client.account)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account_client.account,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=account_client.account,
         codigo_producto="informe_natal", sujeto=sujeto_natal(carta),
     )
 
@@ -85,7 +85,7 @@ def test_acreditada_y_con_carta_manda_a_la_carta(account_client, make_chart, acr
     informe ya se está escribiendo (lo arrancó el propio webhook)."""
     carta = make_chart(account=account_client.account)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account_client.account,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=account_client.account,
         codigo_producto="informe_natal", sujeto=sujeto_natal(carta),
     )
 
@@ -104,7 +104,7 @@ def test_un_pack_manda_a_la_cuenta(account_client, make_chart, acreditar):
 
     carta = make_chart(account=account_client.account)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_5", account=account_client.account,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_5", account=account_client.account,
         codigo_producto="pack_5_natal", sujeto=sujeto_natal(carta),
     )
 
@@ -118,7 +118,7 @@ def test_un_pack_manda_a_la_cuenta(account_client, make_chart, acreditar):
 
 def test_una_compra_suelta_sin_carta_manda_a_la_cuenta(account_client, acreditar):
     PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account_client.account, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=account_client.account, codigo_producto="informe_natal",
     )
 
     acreditar()
@@ -133,7 +133,7 @@ def test_una_compra_cuya_carta_se_borro_manda_a_la_cuenta(
     Mandar a `/carta/None` sería un 404 en la cara de quien pagó."""
     carta = make_chart(account=account_client.account)
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account_client.account,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=account_client.account,
         codigo_producto="informe_natal", sujeto=sujeto_natal(carta),
     )
 
@@ -151,7 +151,7 @@ def test_el_webhook_deja_marcada_la_compra_como_acreditada(account_client, acred
     compras del mismo producto en el mismo minuto no se distinguirían así.
     """
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account_client.account, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=account_client.account, codigo_producto="informe_natal",
     )
     assert fila.acreditado_at is None
 
@@ -159,14 +159,14 @@ def test_el_webhook_deja_marcada_la_compra_como_acreditada(account_client, acred
 
     fila.refresh_from_db()
     assert fila.acreditado_at is not None
-    assert fila.payment_intent == "pi_cs_1"
+    assert fila.pago_id == "pi_cs_1"
 
 
 def test_un_pago_rechazado_por_monto_no_marca_acreditado(account_client, acreditar):
     """Si el monto no coincide con el catálogo no se otorga nada, y la página
     de retorno no puede decir que la compra está lista."""
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account_client.account, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=account_client.account, codigo_producto="informe_natal",
     )
 
     acreditar(monto=100)

@@ -128,6 +128,6 @@ def test_un_checkout_sin_cupon_no_lleva_descuento():
     ser 0, no NULL, para que `monto == precio - descuento` cierre igual."""
     from api.models import PasarelaCheckout
 
-    fila = PasarelaCheckout.objects.create(checkout_id="cs_sin", codigo_producto="informe_natal")
+    fila = PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_sin", codigo_producto="informe_natal")
     assert fila.cupon is None
     assert fila.descuento_centavos == 0

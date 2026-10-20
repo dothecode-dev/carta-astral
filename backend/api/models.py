@@ -499,11 +499,11 @@ class PasarelaCheckout(models.Model):
     MERCADOPAGO = "mercadopago"
     PASARELAS = [(STRIPE, "stripe"), (MERCADOPAGO, "mercadopago")]
 
-    # Por qué pasarela se cobró. El default es Stripe: toda fila anterior a
-    # Mercado Pago, y todo código que crea la fila sin decirlo, es de Stripe.
-    pasarela = models.CharField(max_length=12, choices=PASARELAS, default=STRIPE)
+    # Por qué pasarela se cobró. Sin default a propósito: quien crea la fila
+    # tiene que decirlo, y una fila sin pasarela la rechaza el CheckConstraint.
+    pasarela = models.CharField(max_length=12, choices=PASARELAS)
     # La preferencia de Mercado Pago con la que se abrió el pago. El id del
-    # pago de MP se guarda en `payment_intent`, no en otra columna.
+    # pago de MP se guarda en `pago_id`, no en otra columna.
     mp_preferencia_id = models.CharField(max_length=100, blank=True, default="")
     # El mail de quien compra sin cuenta, el que pide NUESTRO formulario antes
     # de abrir el pago (RF8b) —no el que informe la pasarela—: con ése se
@@ -530,12 +530,12 @@ class PasarelaCheckout(models.Model):
     # Se guarda acá y no se deduce mirando movimientos por fecha: dos compras
     # del mismo producto en el mismo minuto no se distinguirían así.
     acreditado_at = models.DateTimeField(null=True, blank=True)
-    # El `PaymentIntent` de Stripe, que se completa al acreditar el pago.
+    # El id del pago en la pasarela (en Stripe el `PaymentIntent`), que se completa al acreditar el pago.
     # `refund.created` llega con `payment_intent` y `charge`, NUNCA con el id de
     # la sesión: sin guardarlo acá, un reembolso no se puede atribuir a ninguna
     # compra. No es único a propósito: mientras el webhook no acredite queda
     # vacío en todas las filas abiertas, y un índice único las haría chocar.
-    payment_intent = models.CharField(max_length=100, blank=True, default="")
+    pago_id = models.CharField(max_length=100, blank=True, default="")
     # El cupón con el que se abrió y el descuento que se esperaba, congelados
     # al abrir. El webhook valida contra ESTO, no contra lo que diga Stripe:
     # así `monto == precio - descuento` sigue comparando dos fuentes

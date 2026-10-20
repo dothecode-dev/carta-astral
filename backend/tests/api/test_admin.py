@@ -142,9 +142,9 @@ def test_una_compra_se_encuentra_por_el_numero_abreviado_de_la_web(admin_montado
     sufijo tiene que encontrar la fila, y no las demás."""
     checkout = "cs_test_a1Sh1ZbUWea0ALlpcnM7qsHid0vYGjWtPNhtxZOwIt1"
     fila = PasarelaCheckout.objects.create(
-        checkout_id=checkout, codigo_producto="informe_natal", anonimo=True,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=checkout, codigo_producto="informe_natal", anonimo=True,
     )
-    PasarelaCheckout.objects.create(checkout_id="cs_test_otra_compra", codigo_producto="informe_natal")
+    PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_test_otra_compra", codigo_producto="informe_natal")
     staff = User.objects.create_superuser("staff5", "s5@x.com", "pw-de-test-12345")
     c = Client()
     c.force_login(staff)

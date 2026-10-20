@@ -114,7 +114,7 @@ def acreditar(
     `monto_pagado` es lo que se cobró (lista menos descuento), en centavos de
     `moneda`; `external_id` es la clave de idempotencia del ledger, con el
     prefijo de la pasarela (`mp:payment:<id>`); `pago_id` queda en
-    `fila.payment_intent` para atribuir después los reembolsos.
+    `fila.pago_id` para atribuir después los reembolsos.
     """
     if not pago_id or not external_id:
         # Sin `pago_id` ningún reembolso se podría atribuir a esta compra; sin
@@ -237,7 +237,7 @@ def _ya_arrancado(fila: PasarelaCheckout, pago_id: str) -> bool:
     ve puesta es definitiva. Si no se ve, sigue el camino normal, que vuelve a
     mirarla bajo el lock en `_otorgar_y_marcar`."""
     return PasarelaCheckout.objects.filter(
-        pk=fila.pk, acreditado_at__isnull=False, payment_intent=pago_id, informe_arrancado_at__isnull=False,
+        pk=fila.pk, acreditado_at__isnull=False, pago_id=pago_id, informe_arrancado_at__isnull=False,
     ).exists()
 
 
@@ -287,19 +287,19 @@ def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) 
     with transaction.atomic():
         bloqueada = (
             PasarelaCheckout.objects.select_for_update()
-            .only("disputa_id", "acreditado_at", "payment_intent", "informe_arrancado_at").get(pk=fila.pk)
+            .only("disputa_id", "acreditado_at", "pago_id", "informe_arrancado_at").get(pk=fila.pk)
         )
         if (
-            bloqueada.acreditado_at is not None and bloqueada.payment_intent == pago_id
+            bloqueada.acreditado_at is not None and bloqueada.pago_id == pago_id
             and bloqueada.informe_arrancado_at is not None
         ):
             return False, True
-        if bloqueada.acreditado_at is not None and bloqueada.payment_intent and bloqueada.payment_intent != pago_id:
+        if bloqueada.acreditado_at is not None and bloqueada.pago_id and bloqueada.pago_id != pago_id:
             logger.error(
                 "compra %s ya acreditada por el pago %s: el pago %s es un duplicado, no se otorga",
-                fila.checkout_id, bloqueada.payment_intent, pago_id,
+                fila.checkout_id, bloqueada.pago_id, pago_id,
             )
-            raise PagoDuplicado(pago_id, acreditado_por=bloqueada.payment_intent)
+            raise PagoDuplicado(pago_id, acreditado_por=bloqueada.pago_id)
         if bloqueada.disputa_id:
             logger.error("compra %s con disputa %s: no se entrega", fila.checkout_id, bloqueada.disputa_id)
             raise CompraDisputada(bloqueada.disputa_id)
@@ -313,9 +313,9 @@ def _otorgar_y_marcar(fila, cuenta, codigo, pago_id, monto_pagado, external_id) 
         )
         # Fuera del `if aplicado`: un reintento tras un fallo tardío devuelve
         # False (ya aplicado) y la fila igual tiene que quedar marcada.
-        fila.payment_intent = pago_id
+        fila.pago_id = pago_id
         fila.acreditado_at = bloqueada.acreditado_at or timezone.now()
-        fila.save(update_fields=["payment_intent", "acreditado_at"])
+        fila.save(update_fields=["pago_id", "acreditado_at"])
     return aplicado, False
 
 
@@ -337,7 +337,7 @@ def reembolsar(
     del ledger: prefijado, no choca con los ids de Stripe ni con el del pago.
 
     `pago_id` es el pago reembolsado, y tiene que ser EL que acreditó la fila
-    (`fila.payment_intent`, Ruling 4). En MP una preferencia admite más de un
+    (`fila.pago_id`, Ruling 4). En MP una preferencia admite más de un
     pago: el duplicado que reembolsamos (`PagoDuplicado`) vuelve como
     `refunded` con la misma external_reference, y sin este chequeo revocaba el
     informe comprado con el pago legítimo.
@@ -345,7 +345,7 @@ def reembolsar(
     if not refund_id or not external_id or not pago_id:
         # Sin id no hay constancia posible: el primero se guardaría con "" y
         # todos los siguientes se darían por aplicados. Sin `pago_id`, un ""
-        # coincidiría con el `payment_intent` vacío de una fila sin acreditar.
+        # coincidiría con el `pago_id` vacío de una fila sin acreditar.
         logger.error(
             "reembolso sin id sobre %s (refund=%r, pago=%r): no se aplica", fila.checkout_id, refund_id, pago_id,
         )
@@ -370,15 +370,15 @@ def reembolsar(
         # actualiza, y dos reembolsos (o un reembolso y una disputa) pueden
         # llegar a la vez. `of=("self",)`: `account` es nullable.
         fila = PasarelaCheckout.objects.select_for_update(of=("self",)).select_related("account").get(pk=fila.pk)
-        if fila.payment_intent != pago_id:
-            # Incluye la fila sin acreditar (`payment_intent` vacío): ningún
+        if fila.pago_id != pago_id:
+            # Incluye la fila sin acreditar (`pago_id` vacío): ningún
             # pago es suyo. No se revoca ni se deja `Reembolso`. Puede ser el
             # duplicado que reembolsamos o un pago que no se pudo acreditar
             # (monto, moneda): acá no se sabe, así que no se lo llama de una
             # forma ni de la otra.
             logger.error(
                 "reembolso %s del pago %s sobre %s, acreditada por %r: no se revoca",
-                external_id, pago_id, fila.checkout_id, fila.payment_intent,
+                external_id, pago_id, fila.checkout_id, fila.pago_id,
             )
             aviso = None
             # Sin `Reembolso` no queda constancia en la base: la caché (la de
@@ -388,7 +388,7 @@ def reembolsar(
                 aviso = (
                     f"Compra {fila.checkout_id}: reembolso de un pago que no acreditó la compra. "
                     f"Reembolso {external_id} del pago {pago_id}; la compra la acreditó el pago "
-                    f"{fila.payment_intent or '(ninguno)'}. No se revocó nada."
+                    f"{fila.pago_id or '(ninguno)'}. No se revocó nada."
                 )
         elif Reembolso.objects.filter(refund_id=external_id).exists():
             logger.info("reembolso %s ya aplicado", external_id)

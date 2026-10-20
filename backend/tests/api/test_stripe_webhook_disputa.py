@@ -49,8 +49,8 @@ def compra_acreditada(make_account, make_chart, sin_hilo):
 
     cuenta = make_account(email="ana@mail.com")
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
-        precio_centavos=14900, payment_intent="pi_1", acreditado_at=timezone.now(),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
+        precio_centavos=14900, pago_id="pi_1", acreditado_at=timezone.now(),
     )
     aplicar_compra(cuenta, "informe_natal", 14900, external_id="stripe:session:cs_du", precio_centavos=14900)
     return fila
@@ -185,7 +185,7 @@ def test_disputa_antes_de_completed_marca_la_fila_y_el_pago_no_entrega(client, m
     """EC16: el PI todavía no está en la fila; se resuelve por la sesión."""
     cuenta = make_account(email="ana@mail.com")
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
         precio_centavos=14900, sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     monkeypatch.setattr(stripe_client, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
@@ -267,7 +267,7 @@ def test_una_disputa_procesada_mientras_se_acredita_no_se_entrega(client, monkey
     se pierde."""
     cuenta = make_account(email="ana@mail.com")
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
         precio_centavos=14900,
     )
     sesion = {
@@ -317,7 +317,7 @@ def test_una_compra_anonima_disputada_antes_de_completed_bloquea_el_mail_del_pag
     """EC16 sin cuenta: la fila todavía no tiene a quién; el mail sale de la
     sesión que Stripe devuelve para ese PaymentIntent."""
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_du", account=None, codigo_producto="informe_natal", moneda="brl",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=None, codigo_producto="informe_natal", moneda="brl",
         precio_centavos=14900, anonimo=True, nonce_hash="x" * 64,
         sujeto=sujeto_natal(make_chart(account=None)),
     )
@@ -396,8 +396,8 @@ def test_con_dos_disputas_del_mismo_mail_sigue_bloqueado_hasta_resolver_las_dos(
 
     cuenta = compra_acreditada.account
     PasarelaCheckout.objects.create(
-        checkout_id="cs_du2", account=cuenta, codigo_producto="informe_natal", moneda="brl",
-        precio_centavos=14900, payment_intent="pi_2", acreditado_at=timezone.now(),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du2", account=cuenta, codigo_producto="informe_natal", moneda="brl",
+        precio_centavos=14900, pago_id="pi_2", acreditado_at=timezone.now(),
     )
     aplicar_compra(cuenta, "informe_natal", 14900, external_id="stripe:session:cs_du2", precio_centavos=14900)
     pi = {"du_1": "pi_1", "du_2": "pi_2"}
@@ -446,8 +446,8 @@ def test_pack_con_reembolso_parcial_la_disputa_revoca_solo_lo_que_queda(
 
     cuenta = make_account(email="ana@mail.com")
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal", moneda="usd",
-        precio_centavos=12500, payment_intent="pi_1", acreditado_at=timezone.now(),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal", moneda="usd",
+        precio_centavos=12500, pago_id="pi_1", acreditado_at=timezone.now(),
     )
     aplicar_compra(cuenta, "pack_5_natal", 12500, external_id="stripe:session:cs_pack", precio_centavos=12500)
     # 2500 de 12500 es una unidad de cinco, como la revoca `_reembolsar`.
@@ -469,7 +469,7 @@ def test_disputa_antes_del_pago_resuelta_a_favor_el_pago_que_llega_se_entrega_y_
 ):
     cuenta = make_account(email="ana@mail.com")
     PasarelaCheckout.objects.create(
-        checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
         precio_centavos=14900, sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
@@ -512,8 +512,8 @@ def pack_acreditado(make_account):
 
     cuenta = make_account(email="ana@mail.com")
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal", moneda="usd",
-        precio_centavos=12500, payment_intent="pi_1", acreditado_at=timezone.now(),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal", moneda="usd",
+        precio_centavos=12500, pago_id="pi_1", acreditado_at=timezone.now(),
     )
     aplicar_compra(cuenta, "pack_5_natal", 12500, external_id="stripe:session:cs_pack", precio_centavos=12500)
     return fila
@@ -588,7 +588,7 @@ def test_una_disputa_en_otra_moneda_bloquea_el_mail_y_avisa_una_sola_vez(client,
 
 def test_reposicion_sin_mail_bloqueado_no_dice_que_sigue_bloqueado(client, monkeypatch, make_chart, avisos_enviados):
     PasarelaCheckout.objects.create(
-        checkout_id="cs_du", account=None, codigo_producto="informe_natal", moneda="brl",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=None, codigo_producto="informe_natal", moneda="brl",
         precio_centavos=14900, anonimo=True, nonce_hash="x" * 64,
         sujeto=sujeto_natal(make_chart(account=None)),
     )
@@ -658,8 +658,8 @@ def test_un_combo_reembolsado_a_medias_anota_el_monto_una_vez_y_avisa(client, ma
     monkeypatch.setitem(catalogo.CATALOGO, "combo_x", combo)
     cuenta = make_account(email="ana@mail.com")
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_combo", account=cuenta, codigo_producto="combo_x", moneda="usd",
-        precio_centavos=1000, payment_intent="pi_1", acreditado_at=timezone.now(),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_combo", account=cuenta, codigo_producto="combo_x", moneda="usd",
+        precio_centavos=1000, pago_id="pi_1", acreditado_at=timezone.now(),
     )
 
     _refund(client, "re_c", 400)
@@ -676,7 +676,7 @@ def test_disputa_en_otra_moneda_antes_del_pago_no_entrega_hasta_que_se_resuelve(
 ):
     cuenta = make_account(email="ana@mail.com")
     PasarelaCheckout.objects.create(
-        checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
         precio_centavos=14900, sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
@@ -714,8 +714,8 @@ def test_un_combo_reembolsado_en_dos_mitades_se_revoca_entero(client, make_accou
     monkeypatch.setitem(catalogo.CATALOGO, "combo_x", combo)
     cuenta = make_account(email="ana@mail.com")
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_combo", account=cuenta, codigo_producto="combo_x", moneda="usd",
-        precio_centavos=1000, payment_intent="pi_1", acreditado_at=timezone.now(),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_combo", account=cuenta, codigo_producto="combo_x", moneda="usd",
+        precio_centavos=1000, pago_id="pi_1", acreditado_at=timezone.now(),
     )
     aplicar_compra(cuenta, "combo_x", 1000, external_id="stripe:session:cs_combo", precio_centavos=1000)
 

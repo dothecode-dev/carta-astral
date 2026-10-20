@@ -35,7 +35,7 @@ def test_sin_sesion_no_hay_compras(client):
 
 def test_lista_las_compras_acreditadas(account_client):
     PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=account_client.account,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=account_client.account,
         codigo_producto="pack_5_natal", acreditado_at=timezone.now(),
     )
 
@@ -51,7 +51,7 @@ def test_una_compra_que_no_acredito_se_ve_como_pendiente(account_client):
     """Si pagó y el webhook todavía no llegó, la compra existe y hay que
     mostrarla: esconderla haría pensar que se perdió la plata."""
     PasarelaCheckout.objects.create(
-        checkout_id="cs_2", account=account_client.account, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_2", account=account_client.account, codigo_producto="informe_natal",
     )
 
     assert account_client.get("/api/compras/").json()["compras"][0]["acreditada"] is False
@@ -60,7 +60,7 @@ def test_una_compra_que_no_acredito_se_ve_como_pendiente(account_client):
 def test_las_compras_de_otra_cuenta_no_se_ven(account_client, make_account):
     """Mismo criterio que una carta ajena."""
     PasarelaCheckout.objects.create(
-        checkout_id="cs_ajena", account=make_account(), codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_ajena", account=make_account(), codigo_producto="informe_natal",
         acreditado_at=timezone.now(),
     )
 
@@ -71,8 +71,8 @@ def test_no_expone_el_payment_intent_ni_el_id_de_stripe(account_client):
     """La pantalla necesita qué compraste y cuándo. Los identificadores de la
     pasarela son para el soporte, no para el navegador."""
     PasarelaCheckout.objects.create(
-        checkout_id="cs_3", account=account_client.account,
-        codigo_producto="informe_natal", payment_intent="pi_secreto",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_3", account=account_client.account,
+        codigo_producto="informe_natal", pago_id="pi_secreto",
         acreditado_at=timezone.now(),
     )
 
@@ -87,7 +87,7 @@ def test_no_expone_el_payment_intent_ni_el_id_de_stripe(account_client):
 def test_vienen_de_la_mas_nueva_a_la_mas_vieja(account_client):
     for i in range(3):
         PasarelaCheckout.objects.create(
-            checkout_id=f"cs_{i}", account=account_client.account,
+            pasarela=PasarelaCheckout.STRIPE, checkout_id=f"cs_{i}", account=account_client.account,
             codigo_producto="informe_natal", acreditado_at=timezone.now(),
         )
 
@@ -109,7 +109,7 @@ def test_dice_cuanto_se_pago_y_con_que_cupon(account_client):
 
     cupon = Cupon.objects.create(codigo="PROMO30", porcentaje=30, productos=["informe_natal"], usos_maximos=5)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_c", account=account_client.account, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_c", account=account_client.account, codigo_producto="informe_natal",
         acreditado_at=timezone.now(), cupon=cupon, descuento_centavos=870,
     )
 
@@ -122,7 +122,7 @@ def test_dice_cuanto_se_pago_y_con_que_cupon(account_client):
 
 def test_una_compra_sin_cupon_paga_la_lista(account_client):
     PasarelaCheckout.objects.create(
-        checkout_id="cs_l", account=account_client.account, codigo_producto="pack_5_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_l", account=account_client.account, codigo_producto="pack_5_natal",
         acreditado_at=timezone.now(),
     )
     compra = account_client.get("/api/compras/").json()["compras"][0]
@@ -135,11 +135,11 @@ def test_un_checkout_abandonado_deja_de_verse_como_pendiente(account_client):
     import datetime as dt
 
     viejo = PasarelaCheckout.objects.create(
-        checkout_id="cs_viejo", account=account_client.account, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_viejo", account=account_client.account, codigo_producto="informe_natal",
     )
     PasarelaCheckout.objects.filter(pk=viejo.pk).update(created_at=timezone.now() - dt.timedelta(hours=25))
     PasarelaCheckout.objects.create(
-        checkout_id="cs_reciente", account=account_client.account, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_reciente", account=account_client.account, codigo_producto="informe_natal",
     )
 
     compras = account_client.get("/api/compras/").json()["compras"]
@@ -156,7 +156,7 @@ STRIPE_URL = "https://checkout.stripe.com/c/pay/cs_abierto"
 
 def _abierto(cuenta, checkout_id="cs_abierto", **campos):
     return PasarelaCheckout.objects.create(
-        checkout_id=checkout_id, account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=checkout_id, account=cuenta, codigo_producto="informe_natal",
         url=STRIPE_URL, **campos,
     )
 
@@ -210,7 +210,7 @@ def test_una_compra_vieja_muestra_lo_que_se_pago_aunque_el_precio_cambie(
     from api import catalogo
 
     PasarelaCheckout.objects.create(
-        checkout_id="cs_vieja", account=account_client.account,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_vieja", account=account_client.account,
         codigo_producto="informe_natal", acreditado_at=timezone.now(), precio_centavos=2900,
     )
     monkeypatch.setitem(
@@ -224,7 +224,7 @@ def test_una_compra_vieja_muestra_lo_que_se_pago_aunque_el_precio_cambie(
 
 def test_cada_compra_dice_su_moneda(account_client):
     PasarelaCheckout.objects.create(
-        checkout_id="cs_brl", account=account_client.account, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_brl", account=account_client.account, codigo_producto="informe_natal",
         moneda="brl", precio_centavos=14900, acreditado_at=timezone.now(),
     )
     compra = account_client.get("/api/compras/").json()["compras"][0]

@@ -72,7 +72,7 @@ def abrir(datos: dict, locale: str, moneda: str = "usd", email: str = ""):
         )
         precio, descuento = cupones.precio_y_descuento(PRODUCTO, None, moneda)
         fila = PasarelaCheckout.objects.create(
-            checkout_id=checkout_id, account=None, codigo_producto=PRODUCTO,
+            checkout_id=checkout_id, account=None, pasarela=PasarelaCheckout.STRIPE, codigo_producto=PRODUCTO,
             sujeto=sujeto, locale=locale, descuento_centavos=descuento, url=url,
             precio_centavos=precio, moneda=moneda, anonimo=True, nonce_hash=hash_token(nonce),
         )

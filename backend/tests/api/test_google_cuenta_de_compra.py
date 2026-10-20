@@ -134,7 +134,7 @@ def test_cuenta_sin_verificar_que_no_nacio_de_una_compra_no_enlaza(google, check
     cuenta = _sin_verificar_con_identidad()
     if checkout is not None:
         PasarelaCheckout.objects.create(
-            checkout_id="cs_otra", account=cuenta, codigo_producto="informe_natal",
+            pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_otra", account=cuenta, codigo_producto="informe_natal",
             acreditado_at=timezone.now(), **checkout,
         )
     viva = create_session(cuenta)
@@ -153,7 +153,7 @@ def test_sin_identidad_email_propia_no_enlaza(google):
     existe): no es la cuenta a la que entra el mail."""
     cuenta = Account.objects.create(email=MAIL, email_verified=False)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_otra", account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_otra", account=cuenta, codigo_producto="informe_natal",
         anonimo=True, cuenta_nueva=True, acreditado_at=timezone.now(),
     )
 

@@ -61,7 +61,7 @@ def _fila_de_disputa(dispute: dict) -> tuple:
     if not pi:
         # Buscar por vacío engancharía cualquier fila abierta.
         return None, None
-    fila = PasarelaCheckout.objects.filter(payment_intent=pi).first()
+    fila = PasarelaCheckout.objects.filter(pago_id=pi).first()
     if fila is not None:
         return fila, None
     sesion = sesion_por_payment_intent(pi)

@@ -5,46 +5,51 @@ de Stripe: es la fila que guarda lo que la pasarela no sabe —de quién es la
 compra, sobre qué carta y en qué idioma—, y eso no cambia si la pasarela cambia.
 """
 
+import importlib
+
 import pytest
+from django.apps import apps
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from api.models import PasarelaCheckout
 
 pytestmark = pytest.mark.django_db
 
 
-def test_el_payment_intent_arranca_vacio_y_resuelve_el_reembolso(make_account):
+def test_el_pago_id_arranca_vacio_y_resuelve_el_reembolso(make_account):
     """`refund.created` no trae el id de la sesión, sólo el `payment_intent`:
     sin guardarlo al acreditar no hay forma de saber a qué compra corresponde."""
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_test_2", account=make_account(), codigo_producto="informe_natal",
+        checkout_id="cs_test_2", pasarela=PasarelaCheckout.STRIPE, account=make_account(), codigo_producto="informe_natal",
     )
-    assert fila.payment_intent == ""
+    assert fila.pago_id == ""
 
-    fila.payment_intent = "pi_abc"
-    fila.save(update_fields=["payment_intent"])
+    fila.pago_id = "pi_abc"
+    fila.save(update_fields=["pago_id"])
 
-    assert PasarelaCheckout.objects.get(payment_intent="pi_abc").pk == fila.pk
+    assert PasarelaCheckout.objects.get(pago_id="pi_abc").pk == fila.pk
 
 
-def test_dos_compras_sin_payment_intent_conviven(make_account):
+def test_dos_compras_sin_pago_id_conviven(make_account):
     """El campo no es único: mientras el webhook no acredite queda vacío en
     todas las filas abiertas, y un índice único las haría chocar entre sí."""
     cuenta = make_account()
     PasarelaCheckout.objects.create(
-        checkout_id="cs_test_3", account=cuenta, codigo_producto="informe_natal",
+        checkout_id="cs_test_3", pasarela=PasarelaCheckout.STRIPE, account=cuenta, codigo_producto="informe_natal",
     )
     PasarelaCheckout.objects.create(
-        checkout_id="cs_test_4", account=cuenta, codigo_producto="informe_natal",
+        checkout_id="cs_test_4", pasarela=PasarelaCheckout.STRIPE, account=cuenta, codigo_producto="informe_natal",
     )
 
-    assert PasarelaCheckout.objects.filter(payment_intent="").count() == 2
+    assert PasarelaCheckout.objects.filter(pago_id="").count() == 2
 
 
 def test_la_fila_nace_en_usd_y_su_precio_de_lista_sigue_su_moneda(make_account):
     from api.models import PasarelaCheckout
 
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_x", account=make_account(), codigo_producto="informe_natal",
+        checkout_id="cs_x", pasarela=PasarelaCheckout.STRIPE, account=make_account(), codigo_producto="informe_natal",
     )
     assert fila.moneda == "usd"
     assert fila.precio_de_lista() == 2900
@@ -56,11 +61,10 @@ def test_la_fila_nace_en_usd_y_su_precio_de_lista_sigue_su_moneda(make_account):
     assert fila.precio_de_lista() == 777
 
 
-def test_filas_existentes_quedan_en_stripe(make_account):
-    """Todo código que crea la fila sin decir pasarela (y toda fila anterior a
-    Mercado Pago) es de Stripe: el default es lo que no rompe el cobro actual."""
+def test_fila_de_stripe_y_constantes_de_pasarela(make_account):
+    """Las constantes de pasarela y los campos de MP vacíos en una fila de Stripe."""
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_test_5", account=make_account(), codigo_producto="informe_natal",
+        checkout_id="cs_test_5", pasarela=PasarelaCheckout.STRIPE, account=make_account(), codigo_producto="informe_natal",
     )
 
     assert fila.pasarela == "stripe"
@@ -86,3 +90,32 @@ def test_pasarela_invalida_no_se_guarda(make_account):
 
     with pytest.raises(IntegrityError), transaction.atomic():
         fila.save()
+
+
+def test_fila_sin_pasarela_no_se_guarda(make_account):
+    """`pasarela` no tiene default: quien crea la fila lo dice, y el CheckConstraint
+    rechaza el valor vacío."""
+    with pytest.raises(IntegrityError), transaction.atomic():
+        PasarelaCheckout.objects.create(
+            checkout_id="cs_sin_pasarela", account=make_account(), codigo_producto="informe_natal",
+        )
+
+
+def test_migracion_marca_informe_arrancado_de_stripe_acreditadas(make_account):
+    migracion = importlib.import_module("api.migrations.0064_pago_id")
+    cuenta = make_account()
+    ahora = timezone.now()
+    acreditada = PasarelaCheckout.objects.create(
+        checkout_id="cs_a", account=cuenta, pasarela=PasarelaCheckout.STRIPE,
+        codigo_producto="informe_natal", acreditado_at=ahora,
+    )
+    abierta = PasarelaCheckout.objects.create(
+        checkout_id="cs_b", account=cuenta, pasarela=PasarelaCheckout.STRIPE, codigo_producto="informe_natal",
+    )
+
+    migracion.marcar_acreditadas(apps, None)
+
+    acreditada.refresh_from_db()
+    abierta.refresh_from_db()
+    assert acreditada.informe_arrancado_at == acreditada.acreditado_at
+    assert abierta.informe_arrancado_at is None

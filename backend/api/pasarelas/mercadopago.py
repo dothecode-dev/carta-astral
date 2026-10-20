@@ -319,7 +319,7 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
         return
 
     fila = PasarelaCheckout.objects.filter(
-        pasarela=PasarelaCheckout.MERCADOPAGO, payment_intent=payment_id,
+        pasarela=PasarelaCheckout.MERCADOPAGO, pago_id=payment_id,
     ).first()
     if fila is None:
         logger.error("contracargo %s sobre el pago %s sin compra: se pide reintento", chargeback_id, payment_id)
@@ -463,7 +463,7 @@ def _revisar_fila(fila: PasarelaCheckout, ahora: dt.datetime, resumen: dict[str,
     # dejaría la fila abierta para siempre. Ese caso ya se avisó y se
     # resuelve a mano con `acreditar_pago`.
     por_procesar = [
-        p for p in aprobados if not (acreditada_antes and str(p.get("id")) == fila.payment_intent)
+        p for p in aprobados if not (acreditada_antes and str(p.get("id")) == fila.pago_id)
     ]
     for pago in por_procesar:
         try:

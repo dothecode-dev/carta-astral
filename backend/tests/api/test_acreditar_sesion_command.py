@@ -32,7 +32,7 @@ def _configurado(settings, monkeypatch):
 def compra(make_account):
     cupon = Cupon.objects.create(codigo="MANUAL", porcentaje=30, productos=["informe_natal"], usos_maximos=5,
                                  stripe_promotion_code_id="promo_1")
-    return PasarelaCheckout.objects.create(checkout_id=SESSION, account=make_account(),
+    return PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=make_account(),
                                            codigo_producto="informe_natal", cupon=cupon, descuento_centavos=870)
 
 
@@ -54,7 +54,7 @@ def test_con_el_flag_acredita_con_el_descuento_congelado_y_deja_constancia(compr
 
     assert _restante(compra.account) == 1
     compra.refresh_from_db()
-    assert compra.acreditado_at is not None and compra.payment_intent == "pi_manual"
+    assert compra.acreditado_at is not None and compra.pago_id == "pi_manual"
     uso = CuponUso.objects.get(cupon=compra.cupon)
     assert (uso.descuento_centavos, uso.monto_pagado_centavos, uso.external_id) == (870, 2030, f"stripe:session:{SESSION}")
     assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION}").exists()

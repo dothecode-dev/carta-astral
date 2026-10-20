@@ -63,7 +63,7 @@ def _entregar(client, monkeypatch, precio="prod_natal", monto=2900):
 
 def _compra(cuenta, chart, codigo="informe_natal"):
     return PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto=codigo, sujeto=sujeto_natal(chart),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=cuenta, codigo_producto=codigo, sujeto=sujeto_natal(chart),
     )
 
 
@@ -147,7 +147,7 @@ def test_el_webhook_canjea_el_sujeto_del_checkout_aunque_no_tenga_carta(
     cuenta = make_account()
     s = sujeto_natal(make_chart(account=cuenta))
     PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal", sujeto=s,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal", sujeto=s,
     )
 
     assert _entregar(client, monkeypatch).status_code == 200

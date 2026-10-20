@@ -433,7 +433,7 @@ def _segunda_compra(make_chart, email):
     from api.models import PasarelaCheckout
 
     fila = PasarelaCheckout.objects.create(
-        checkout_id=SESSION_VICTIMA, account=None, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION_VICTIMA, account=None, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=None)), anonimo=True, nonce_hash=hash_token("otro-nonce"),
         precio_centavos=2900,
     )

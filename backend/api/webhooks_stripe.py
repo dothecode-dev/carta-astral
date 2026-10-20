@@ -496,9 +496,9 @@ def _otorgar_y_marcar(sesion, cuenta, fila, codigo, pagado, descuento, external_
             # está aplicado y la compra YA fue entregada. Si la marca dependiera
             # de ese True, la página de retorno diría "pendiente" para siempre
             # sobre un informe que la persona ya tiene.
-            fila.payment_intent = _payment_intent_id(sesion)
+            fila.pago_id = _payment_intent_id(sesion)
             fila.acreditado_at = fila.acreditado_at or timezone.now()
-            fila.save(update_fields=["payment_intent", "acreditado_at"])
+            fila.save(update_fields=["pago_id", "acreditado_at"])
     return aplicado
 
 
@@ -590,7 +590,7 @@ def _reembolsar(refund: dict) -> None:
         logger.error("reembolso %s sin payment_intent: no se revoca", refund_id)
         return
 
-    fila = PasarelaCheckout.objects.filter(payment_intent=payment_intent).first()
+    fila = PasarelaCheckout.objects.filter(pago_id=payment_intent).first()
     if fila is None:
         # ESTE sí se arregla reintentando: el reembolso puede llegar antes de
         # que la entrega del pago haya guardado el `payment_intent`. Es el

@@ -264,8 +264,8 @@ def test_contracargo_sobre_fila_de_stripe_con_el_mismo_id_500(client, api_mp, av
     """La fila se busca sólo entre las de MP: un `payment_intent` de Stripe
     nunca coincide, pero la búsqueda no lo deja librado a la suerte."""
     PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=make_account(email=MAIL), codigo_producto="informe_natal",
-        moneda="ars", precio_centavos=PRECIO_ARS, payment_intent=str(PAGO),
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=make_account(email=MAIL), codigo_producto="informe_natal",
+        moneda="ars", precio_centavos=PRECIO_ARS, pago_id=str(PAGO),
     )
     api_mp.contracargos[CONTRACARGO] = _contracargo()
 
@@ -508,7 +508,7 @@ def test_contracargo_de_una_compra_sin_cuenta_bloquea_el_mail_comprador(client, 
         checkout_id=CHECKOUT, account=None, codigo_producto="informe_natal",
         pasarela=PasarelaCheckout.MERCADOPAGO, moneda="ars", precio_centavos=PRECIO_ARS,
         mp_preferencia_id="pref_1", locale="es", anonimo=True, mail_comprador="Borrada@Mail.com",
-        payment_intent=str(PAGO), acreditado_at=timezone.now(),
+        pago_id=str(PAGO), acreditado_at=timezone.now(),
     )
     api_mp.contracargos[CONTRACARGO] = _contracargo()
 
@@ -537,8 +537,8 @@ def test_mail_de_disputa_prefiere_la_cuenta_y_despues_la_sesion(make_account):
     from api import disputas
 
     cuenta = make_account(email="cuenta@mail.com")
-    con_cuenta = PasarelaCheckout(checkout_id="mp_x", account=cuenta, mail_comprador="otro@mail.com")
-    sin_cuenta = PasarelaCheckout(checkout_id="mp_y", account=None, mail_comprador="otro@mail.com")
+    con_cuenta = PasarelaCheckout(pasarela=PasarelaCheckout.STRIPE, checkout_id="mp_x", account=cuenta, mail_comprador="otro@mail.com")
+    sin_cuenta = PasarelaCheckout(pasarela=PasarelaCheckout.STRIPE, checkout_id="mp_y", account=None, mail_comprador="otro@mail.com")
     sesion = {"customer_details": {"email": "pago@stripe.com"}}
 
     assert disputas._mail_de_disputa(con_cuenta, sesion) == "cuenta@mail.com"

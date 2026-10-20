@@ -57,7 +57,7 @@ def _entregar(client, monkeypatch, sesion, tipo="checkout.session.completed"):
 def compra_brl(make_account, make_chart):
     cuenta = make_account()
     return PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)), moneda="brl", precio_centavos=14900,
     )
 
@@ -100,7 +100,7 @@ def test_una_fila_abierta_en_usd_antes_del_deploy_se_acredita_igual(client, monk
     vieja llega en `usd` con ese monto."""
     cuenta = make_account()
     PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)), precio_centavos=2900,
     )
 
@@ -165,7 +165,7 @@ def test_el_uso_del_cupon_y_la_analitica_llevan_la_moneda(client, monkeypatch, m
     cuenta = make_account()
     cupon = Cupon.objects.create(codigo="TREINTA", porcentaje=30, productos=["informe_natal"], usos_maximos=5, stripe_promotion_code_id="promo_1")
     PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)), moneda="brl", precio_centavos=14900,
         cupon=cupon, descuento_centavos=4470,
     )
@@ -197,4 +197,4 @@ def test_el_medio_de_pago_llega_al_aviso(client, monkeypatch, compra_brl, sin_hi
 
     assert avisados[0]["medio"] == "pix"
     compra_brl.refresh_from_db()
-    assert compra_brl.payment_intent == "pi_brl"
+    assert compra_brl.pago_id == "pi_brl"

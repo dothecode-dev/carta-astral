@@ -192,7 +192,7 @@ def test_la_purga_borra_checkouts_y_sujetos_sin_carta(make_account, capsys):
     cuenta = make_account()
     _sembrar_cuenta_con_cartas_y_ledger(cuenta)
     PasarelaCheckout.objects.create(
-        checkout_id="cs_purga", account=cuenta, codigo_producto="informe_natal", payment_intent="pi_x",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_purga", account=cuenta, codigo_producto="informe_natal", pago_id="pi_x",
     )
     Sujeto.objects.create(producto=Sujeto.VINCULO, account=cuenta)
 

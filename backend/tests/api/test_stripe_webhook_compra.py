@@ -73,7 +73,7 @@ def _entregar(client, monkeypatch, sesion=None, tipo="checkout.session.completed
 def compra(make_account, make_chart):
     cuenta = make_account()
     return PasarelaCheckout.objects.create(
-        checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=cuenta, codigo_producto="informe_natal",
         sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
 
@@ -281,7 +281,7 @@ def test_al_acreditar_se_guardan_el_payment_intent_y_la_marca(client, monkeypatc
     _entregar(client, monkeypatch)
 
     compra.refresh_from_db()
-    assert compra.payment_intent == "pi_1"
+    assert compra.pago_id == "pi_1"
     assert compra.acreditado_at is not None
 
 
@@ -292,13 +292,13 @@ def test_el_reintento_deja_la_marca_aunque_la_compra_ya_estuviera_aplicada(
     `aplicar_compra` devuelve False, y sin esto la página de retorno diría
     "pendiente" para siempre sobre una compra ya entregada."""
     _entregar(client, monkeypatch)
-    PasarelaCheckout.objects.filter(pk=compra.pk).update(acreditado_at=None, payment_intent="")
+    PasarelaCheckout.objects.filter(pk=compra.pk).update(acreditado_at=None, pago_id="")
 
     _entregar(client, monkeypatch)
 
     compra.refresh_from_db()
     assert compra.acreditado_at is not None
-    assert compra.payment_intent == "pi_1"
+    assert compra.pago_id == "pi_1"
 
 
 def _espiar_avisos(monkeypatch, con_contexto=False):
@@ -337,7 +337,7 @@ def test_un_pack_avisa_compra_acreditada(client, monkeypatch, make_account, sett
     sería mentirle."""
     settings.STRIPE_PRODUCTOS = {"pack_5_natal": PRECIO}
     cuenta = make_account()
-    PasarelaCheckout.objects.create(checkout_id=SESSION, account=cuenta, codigo_producto="pack_5_natal")
+    PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id=SESSION, account=cuenta, codigo_producto="pack_5_natal")
     avisos = _espiar_avisos(monkeypatch)
 
     r = _entregar(client, monkeypatch, _sesion(amount_subtotal=12500, amount_total=12500))

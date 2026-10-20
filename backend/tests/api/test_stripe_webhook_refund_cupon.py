@@ -32,8 +32,8 @@ def _entregar(client, amount, pi):
 
 def _comprado(cuenta, producto, descuento, pi, porcentaje=50):
     cupon = Cupon.objects.create(codigo=f"C{pi}", porcentaje=porcentaje, productos=[producto], usos_maximos=5)
-    fila = PasarelaCheckout.objects.create(checkout_id=f"cs_{pi}", account=cuenta, codigo_producto=producto,
-                                           cupon=cupon, descuento_centavos=descuento, payment_intent=pi)
+    fila = PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id=f"cs_{pi}", account=cuenta, codigo_producto=producto,
+                                           cupon=cupon, descuento_centavos=descuento, pago_id=pi)
     from api.catalogo import producto as prod
     aplicar_compra(cuenta, producto, prod(producto).precio_en("usd") - descuento, external_id=f"stripe:session:cs_{pi}",
                    descuento_centavos=descuento)
@@ -75,7 +75,7 @@ def test_un_regalo_del_100_con_un_refund_se_revoca_entero_sin_dividir_por_cero(c
 
 def test_una_compra_sin_descuento_se_reembolsa_como_antes(client, make_account):
     cuenta = make_account()
-    PasarelaCheckout.objects.create(checkout_id="cs_d", account=cuenta, codigo_producto="pack_5_natal", payment_intent="pi_d")
+    PasarelaCheckout.objects.create(pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_d", account=cuenta, codigo_producto="pack_5_natal", pago_id="pi_d")
     aplicar_compra(cuenta, "pack_5_natal", 12500, external_id="stripe:session:cs_d")
 
     _entregar(client, 6250, "pi_d")

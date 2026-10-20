@@ -277,7 +277,7 @@ def test_aprobado_acredita(client, pagos, avisos, mails, make_account):
 
     assert r.status_code == 200
     fila.refresh_from_db()
-    assert fila.payment_intent == str(PAGO)
+    assert fila.pago_id == str(PAGO)
     assert fila.acreditado_at is not None
     assert Movimiento.objects.filter(external_id=f"mp:payment:{PAGO}", tipo="otorgamiento").count() == 1
     assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 1
@@ -409,7 +409,7 @@ def test_segundo_pago_aprobado_se_reembolsa_y_no_acredita(client, pagos, avisos,
     assert r.status_code == 200
     assert pagos.reembolsos == [(str(otro), f"mp:duplicado:{otro}")]
     fila.refresh_from_db()
-    assert fila.payment_intent == str(PAGO)
+    assert fila.pago_id == str(PAGO)
     assert _otorgados(cuenta) == 1
     assert Derecho.objects.get(account=cuenta, codigo_producto="informe_natal").cantidad_restante == 1
     assert mails == [(cuenta.pk, "compra_acreditada")]
@@ -475,7 +475,7 @@ def test_el_aviso_del_duplicado_nombra_el_pago_que_acredito_leido_bajo_el_lock(
 
     cuenta = make_account()
     vieja = _fila(cuenta)
-    PasarelaCheckout.objects.filter(pk=vieja.pk).update(payment_intent=str(PAGO), acreditado_at=timezone.now())
+    PasarelaCheckout.objects.filter(pk=vieja.pk).update(pago_id=str(PAGO), acreditado_at=timezone.now())
     otro = 184963579999
     if falla:
         pagos.fallo_reembolso = MPError("no", status=400)

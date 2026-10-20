@@ -60,8 +60,8 @@ def comprado(make_account, make_chart):
     """Una compra ya acreditada, como la deja el webhook de pago."""
     cuenta = make_account()
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_1", account=cuenta, codigo_producto="informe_natal",
-        sujeto=sujeto_natal(make_chart(account=cuenta)), payment_intent=PI,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_1", account=cuenta, codigo_producto="informe_natal",
+        sujeto=sujeto_natal(make_chart(account=cuenta)), pago_id=PI,
     )
     aplicar_compra(cuenta, "informe_natal", 2900, external_id="stripe:session:cs_1")
     return fila
@@ -114,7 +114,7 @@ def test_un_reembolso_sin_payment_intent_no_engancha_ninguna_compra(client, make
     vacío: un filtro por vacío las engancharía a todas y terminaría revocando
     la compra de cualquiera."""
     PasarelaCheckout.objects.create(
-        checkout_id="cs_abierta", account=make_account(), codigo_producto="informe_natal",
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_abierta", account=make_account(), codigo_producto="informe_natal",
     )
 
     r = _entregar(client, _refund(payment_intent=None))
@@ -169,8 +169,8 @@ PRECIO_PACK = producto("pack_5_natal").precio_en("usd")
 def pack_comprado(make_account):
     cuenta = make_account()
     fila = PasarelaCheckout.objects.create(
-        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
-        payment_intent=PI,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
+        pago_id=PI,
     )
     aplicar_compra(cuenta, "pack_5_natal", PRECIO_PACK, external_id="stripe:session:cs_pack")
     return fila
@@ -236,8 +236,8 @@ def test_el_reembolso_se_mide_contra_lo_que_se_pago_no_contra_el_precio_de_hoy(
 
     cuenta = make_account()
     PasarelaCheckout.objects.create(
-        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
-        payment_intent=PI, precio_centavos=12500,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
+        pago_id=PI, precio_centavos=12500,
     )
     aplicar_compra(cuenta, "pack_5_natal", 12500, external_id="stripe:session:cs_pack")
     monkeypatch.setitem(
@@ -274,8 +274,8 @@ def test_un_reembolso_parcial_en_reales_revoca_por_proporcion(client, make_accou
     proporción se mide contra lo congelado en la fila, en su moneda."""
     cuenta = make_account()
     PasarelaCheckout.objects.create(
-        checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
-        payment_intent=PI, moneda="brl", precio_centavos=14900,
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_pack", account=cuenta, codigo_producto="pack_5_natal",
+        pago_id=PI, moneda="brl", precio_centavos=14900,
     )
     aplicar_compra(
         cuenta, "pack_5_natal", 14900, external_id="stripe:session:cs_pack", precio_centavos=14900,
