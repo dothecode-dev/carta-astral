@@ -36,7 +36,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api import cobro, compra_anonima
-from api.models import PasarelaCheckout
+from api.models import PasarelaCheckout, Reembolso
 from api.stripe_client import (
     FirmaInvalida, codigo_de_product, obtener_sesion, sesion_por_payment_intent, verificar_firma,
 )
@@ -226,7 +226,7 @@ def _acreditar(session_id: str) -> None:
     # entrega responde 200 sin acreditar, pero la fila ya tiene el mail con el
     # que `cobro` la adjudica, y `manage.py acreditar_sesion` puede
     # resolverla. Sin mail, `cobro` levanta `CompraAnonimaSinMail` (5xx).
-    _completar_mail_si_es_anonima(fila, sesion)
+    completar_mail_si_es_anonima(fila, sesion)
 
     # El Product de la sesión dice qué cobró Stripe; la fila dice qué abrimos.
     # Los dos tienen que coincidir: elegir uno solo es entregar de más o de menos.
@@ -259,7 +259,7 @@ def _acreditar(session_id: str) -> None:
     _avisar_si_el_precio_no_lleva_el_impuesto_incluido(session_id, sesion, monto)
 
     try:
-        descuento, _cupon = _descuento_de(session_id, sesion, fila)
+        descuento = _descuento_de(session_id, sesion, fila)
     except DescuentoNoCierra:
         # Ya logueado con los tres valores. Reintentar no lo arregla: lo
         # resuelve a mano `manage.py acreditar_sesion`.
@@ -273,7 +273,7 @@ def _acreditar(session_id: str) -> None:
     # en `total_details.amount_discount`, y acá se resta el congelado.
     try:
         cobro.acreditar(
-            fila, pago_id=_payment_intent_id(sesion), monto_pagado=monto - descuento,
+            fila, pago_id=payment_intent_id(sesion), monto_pagado=monto - descuento,
             moneda=sesion.get("currency") or "", medio=_medio_de_pago(sesion),
             external_id=f"stripe:session:{session_id}",
         )
@@ -290,7 +290,7 @@ def _acreditar(session_id: str) -> None:
         )
 
 
-def _completar_mail_si_es_anonima(fila: PasarelaCheckout, sesion: dict) -> None:
+def completar_mail_si_es_anonima(fila: PasarelaCheckout, sesion: dict) -> None:
     """Una compra sin cuenta se adjudica por `fila.mail_comprador` (`cobro`).
     En Stripe el mail lo pide Checkout, no nosotros: se copia acá del pago.
 
@@ -311,8 +311,8 @@ class DescuentoNoCierra(Exception):
     """La sesión trae un descuento que no es el que congelamos al abrir."""
 
 
-def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
-    """`(descuento, cupon)` con los que se acredita, validando la sesión contra
+def _descuento_de(session_id: str, sesion: dict, fila) -> int:
+    """El descuento con el que se acredita, validando la sesión contra
     la fila congelada al abrir el checkout.
 
     La autoridad es NUESTRA fila, no Stripe: el descuento que se le pasa a
@@ -330,8 +330,8 @@ def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
     """
     reportado = (sesion.get("total_details") or {}).get("amount_discount") or 0
     promos = [d.get("promotion_code") for d in (sesion.get("discounts") or [])]
-    esperado = fila.descuento_centavos if fila is not None else 0
-    cupon = fila.cupon if fila is not None else None
+    esperado = fila.descuento_centavos
+    cupon = fila.cupon
 
     if cupon is None or esperado == 0:
         if promos or reportado:
@@ -346,7 +346,7 @@ def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
                 "No se acreditó.",
             )
             raise DescuentoNoCierra
-        return 0, None
+        return 0
 
     if not promos and reportado == 0:
         logger.warning(
@@ -355,7 +355,7 @@ def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
         )
         fila.descuento_centavos = 0
         fila.save(update_fields=["descuento_centavos"])
-        return 0, None
+        return 0
 
     if promos != [cupon.stripe_promotion_code_id] or reportado != esperado:
         logger.error(
@@ -368,10 +368,10 @@ def _descuento_de(session_id: str, sesion: dict, fila) -> tuple[int, object]:
             "No se acreditó.",
         )
         raise DescuentoNoCierra
-    return esperado, cupon
+    return esperado
 
 
-def _payment_intent_id(sesion: dict) -> str:
+def payment_intent_id(sesion: dict) -> str:
     """El PI expandido es un dict; en sesiones viejas (y en los tests) es el id."""
     pi = sesion.get("payment_intent")
     if isinstance(pi, dict):
@@ -393,20 +393,21 @@ def _medio_de_pago(sesion: dict) -> str:
     return tipos[0] if tipos else ""
 
 
-def acreditar_a_mano(fila, sesion: dict) -> bool:
+def acreditar_a_mano(fila, sesion: dict, *, aunque_disputada: bool = False) -> bool:
     """Para `manage.py acreditar_sesion`: acredita confiando en la fila
     congelada, salteando la comparación con lo que Stripe reporta. Quien lo
-    corre ya miró los dos valores; `a_mano` entrega aunque la fila tenga una
-    disputa (el comando lo pide con `--aunque-disputada`).
+    corre ya miró los dos valores. Una disputa la mira `cobro` bajo el lock,
+    no el comando sobre la fila que leyó al principio: entrega igual sólo con
+    `aunque_disputada` (el comando lo pide con `--aunque-disputada`).
 
     Devuelve lo que devuelve `cobro.acreditar`: si ESTA llamada acreditó.
     `False` es tanto un rechazo (sin id de pago, sin cuenta, monto que no
     cierra) como la repetición de una compra ya acreditada; el comando los
     distingue mirando la fila."""
     return cobro.acreditar(
-        fila, pago_id=_payment_intent_id(sesion), monto_pagado=fila.precio_de_lista() - fila.descuento_centavos,
+        fila, pago_id=payment_intent_id(sesion), monto_pagado=fila.precio_de_lista() - fila.descuento_centavos,
         moneda=fila.moneda, medio=_medio_de_pago(sesion), external_id=f"stripe:session:{fila.checkout_id}",
-        a_mano=True,
+        a_mano=aunque_disputada,
     )
 
 
@@ -452,6 +453,12 @@ def _reembolsar(refund: dict) -> None:
         # por vacío engancharía cualquier compra abierta y todavía sin
         # acreditar: revocaría la de cualquiera. Reintentar no lo arregla.
         logger.error("reembolso %s sin payment_intent: no se revoca", refund_id)
+        return
+
+    if Reembolso.objects.filter(refund_id=refund_id).exists():
+        # Constancia con el id crudo: la dejó el código de antes de la 0065,
+        # que sigue atendiendo mientras dura el deploy. Ya está aplicado.
+        logger.info("reembolso %s ya aplicado (constancia sin prefijo)", refund_id)
         return
 
     fila = PasarelaCheckout.objects.filter(pasarela=PasarelaCheckout.STRIPE, pago_id=payment_intent).first()

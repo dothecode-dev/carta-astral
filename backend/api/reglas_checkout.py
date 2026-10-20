@@ -1,4 +1,7 @@
-"""Reglas del checkout que no son de ninguna pasarela: idiomas y vencimiento."""
+"""Reglas del checkout que no son de ninguna pasarela: idiomas y vencimiento.
+
+Sin imports de pasarelas ni de `cobro`: lo usan también vistas que no cobran
+(el botón de arrepentimiento)."""
 
 import datetime as dt
 
@@ -15,3 +18,10 @@ LOCALE_POR_DEFECTO = "es"
 # Al vencer manda `checkout.session.expired`; el endpoint del dashboard tiene
 # que estar suscripto a ese evento (nada en el repo lo verifica).
 VENCIMIENTO_SESION = dt.timedelta(hours=1)
+
+
+def idioma_pedido(request) -> str:
+    """El idioma que navega la persona, por lista blanca: viene del navegador
+    y termina en una URL y en la base, así que no se guarda tal cual."""
+    pedido = request.data.get("locale") or LOCALE_POR_DEFECTO
+    return pedido if pedido in LOCALES else LOCALE_POR_DEFECTO

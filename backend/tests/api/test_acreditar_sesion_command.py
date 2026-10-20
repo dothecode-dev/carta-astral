@@ -166,3 +166,37 @@ def test_un_pago_duplicado_es_un_error_claro(compra):
         call_command("acreditar_sesion", SESSION, "--si-estoy-seguro")
 
     assert _restante(compra.account) == 0
+
+
+def test_una_disputa_que_entra_despues_del_chequeo_frena_igual(compra, monkeypatch):
+    """El comando mira la disputa sobre la fila que leyó al principio; si entra
+    mientras tanto, la tiene que frenar `cobro` bajo el lock."""
+    sesion = webhooks_stripe.obtener_sesion(SESSION)
+
+    def disputa_mientras_tanto(sid):
+        PasarelaCheckout.objects.filter(pk=compra.pk).update(disputa_id="du_tarde")
+        return sesion
+
+    monkeypatch.setattr(webhooks_stripe, "obtener_sesion", disputa_mientras_tanto)
+
+    with pytest.raises(CommandError, match="disputa"):
+        call_command("acreditar_sesion", SESSION, "--si-estoy-seguro")
+
+    assert _restante(compra.account) == 0
+
+
+def test_una_compra_sin_cuenta_cuyo_webhook_nunca_llego_toma_el_mail_de_la_sesion(anonima, sin_hilo, monkeypatch):
+    """Sin ninguna entrega del webhook la fila no tiene `mail_comprador`: el
+    comando lo toma del pago, que es de donde lo toma el webhook."""
+    from tests.api.conftest import PRECIO_ANONIMA, SESSION_ANONIMA, con_mail
+
+    monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda sid: con_mail("tarde@mail.com"))
+    from django.conf import settings
+    monkeypatch.setattr(settings, "STRIPE_PRODUCTOS", {"informe_natal": PRECIO_ANONIMA})
+    assert anonima.mail_comprador == ""
+
+    call_command("acreditar_sesion", SESSION_ANONIMA, "--si-estoy-seguro")
+
+    anonima.refresh_from_db()
+    assert anonima.account is not None and anonima.account.email == "tarde@mail.com"
+    assert anonima.acreditado_at is not None

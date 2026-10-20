@@ -259,7 +259,10 @@ def _adjudicar_si_es_anonima(fila: PasarelaCheckout) -> None:
     email = (fila.mail_comprador or "").strip()
     if not email:
         logger.error("compra sin cuenta %s pagada sin mail_comprador: no se acredita", fila.checkout_id)
-        avisar(f"Compra sin cuenta {fila.checkout_id} pagada SIN mail del comprador. No se acreditó: revisar.")
+        # La vista pide el reintento (5xx) y Stripe reintenta tres días: un
+        # aviso por compra, no uno por reintento.
+        if cache.add(f"cobro:aviso:sin_mail:{fila.checkout_id}", True, _RECORDAR_AVISO_NO_ACREDITADO):
+            avisar(f"Compra sin cuenta {fila.checkout_id} pagada SIN mail del comprador. No se acreditó: revisar.")
         raise CompraAnonimaSinMail(fila.checkout_id)
     cuenta = compra_anonima.adjudicar(fila.checkout_id, email)
     fila.refresh_from_db(fields=["account", "cuenta_nueva"])

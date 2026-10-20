@@ -319,3 +319,24 @@ def test_sin_fila_pide_reintento(client):
 
     assert r.status_code >= 500
     assert not Movimiento.objects.exists()
+
+
+def test_reembolso_guardado_con_id_crudo_durante_el_deploy_es_noop(client, comprado):
+    """Durante el deploy el contenedor viejo convive con el nuevo y sigue
+    guardando `refund_id` crudo (`re_…`) DESPUÉS de que corrió la 0065. Un
+    reenvío que llega al código nuevo no puede volver a aplicarlo."""
+    from api.canje import revocar
+    from api.models import Reembolso
+
+    # Lo que deja el código viejo: revocación, contadores de la fila y constancia cruda.
+    revocar(comprado.account, "informe_natal", 1, external_id=f"stripe:refund:{REFUND}")
+    PasarelaCheckout.objects.filter(pk=comprado.pk).update(unidades_revocadas=1, reembolsado_centavos=2900)
+    Reembolso.objects.create(refund_id=REFUND, fila=comprado, monto=2900, unidades=1)
+
+    r = _entregar(client)
+
+    assert r.status_code == 200
+    assert Reembolso.objects.count() == 1
+    assert Movimiento.objects.filter(tipo="revocacion").count() == 1
+    comprado.refresh_from_db()
+    assert comprado.reembolsado_centavos == 2900

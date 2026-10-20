@@ -9,7 +9,7 @@ from django.db.models import Sum
 
 from api import apple
 from api.identity import sub_hash
-from api.models import BirthData, Chart, Movimiento, SubTombstone, Sujeto
+from api.models import BirthData, Chart, Movimiento, PasarelaCheckout, SubTombstone, Sujeto
 
 logger = logging.getLogger(__name__)
 
@@ -134,5 +134,7 @@ def delete_account(account) -> None:
         account.sessions.all().delete()
         account.devices.update(account=None)
         account.identities.all().delete()
+        # La compra queda (constancia de la venta), sin el mail de quien se va.
+        PasarelaCheckout.objects.filter(account=account).exclude(mail_comprador="").update(mail_comprador="")
         account.delete()  # CreditTransaction.account -> SET_NULL (ledger preservado)
     _revoke_apple(apple_tokens)

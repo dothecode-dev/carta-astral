@@ -19,10 +19,10 @@ from api.chart_service import calcular, mensaje_de_datos_invalidos, validar_trat
 from api.pedido_checkout import (
     MONEDA_INVALIDA,
     MonedaInvalida,
-    idioma_pedido,
     moneda_pedida,
     respuesta_de_pasarela,
 )
+from api.reglas_checkout import idioma_pedido
 from api.identity import mail_valido
 from api.models import MailBloqueado
 

@@ -1,8 +1,7 @@
 """Lo que las vistas de checkout (con cuenta y sin cuenta) leen del pedido y
 cómo le responden a quien compra cuando la pasarela no abre el pago.
 
-Fuera de `checkout.py` porque lo comparten `compra_anonima_api.py` y
-`arrepentimiento_api.py`, y `checkout.py` tiene el techo de ~250 líneas.
+Fuera de `checkout.py` porque lo comparte `compra_anonima_api.py`, y `checkout.py` tiene el techo de ~250 líneas.
 """
 
 import logging
@@ -10,16 +9,9 @@ import logging
 from rest_framework import status
 from rest_framework.response import Response
 
-from api import apertura, catalogo, reglas_checkout
+from api import apertura, catalogo
 
 logger = logging.getLogger(__name__)
-
-
-def idioma_pedido(request) -> str:
-    """El idioma que navega la persona, por lista blanca: viene del navegador
-    y termina en una URL y en la base, así que no se guarda tal cual."""
-    pedido = request.data.get("locale") or reglas_checkout.LOCALE_POR_DEFECTO
-    return pedido if pedido in reglas_checkout.LOCALES else reglas_checkout.LOCALE_POR_DEFECTO
 
 
 class MonedaInvalida(Exception):

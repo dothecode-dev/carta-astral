@@ -23,10 +23,10 @@ from api.models import Chart, MailBloqueado, PasarelaCheckout, Sujeto
 from api.pedido_checkout import (
     MONEDA_INVALIDA,
     MonedaInvalida,
-    idioma_pedido,
     moneda_pedida,
     respuesta_de_pasarela,
 )
+from api.reglas_checkout import idioma_pedido
 from api.permissions import HasAccount
 from api.sujetos import sujeto_natal
 

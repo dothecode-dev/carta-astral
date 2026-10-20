@@ -228,3 +228,29 @@ def test_borrar_todas_las_cartas_no_borra_los_vinculos(make_account):
     delete_charts(acc)
     assert Sujeto.objects.filter(pk=s.pk).exists()
     assert Chart.todas.filter(en_sujetos__sujeto=s).count() == 2
+
+
+@pytest.mark.django_db
+def test_borrar_la_cuenta_borra_el_mail_guardado_en_sus_compras(make_account):
+    """El mail con que se compró sin cuenta queda en la fila de la compra: si la
+    cuenta se borra, ese dato personal se va con ella (política de privacidad).
+    La fila queda —es la constancia de la venta— sin el mail."""
+    from api.deletion import delete_account
+    from api.models import PasarelaCheckout
+
+    cuenta = make_account(email="se-va@mail.com")
+    fila = PasarelaCheckout.objects.create(
+        pasarela=PasarelaCheckout.MERCADOPAGO, checkout_id="mp_" + "a" * 32, account=cuenta,
+        codigo_producto="informe_natal", moneda="ars", anonimo=True, mail_comprador="se-va@mail.com",
+    )
+    ajena = PasarelaCheckout.objects.create(
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_ajena", account=make_account(email="otra@mail.com"),
+        codigo_producto="informe_natal", anonimo=True, mail_comprador="otra@mail.com",
+    )
+
+    delete_account(cuenta)
+
+    fila.refresh_from_db()
+    ajena.refresh_from_db()
+    assert fila.mail_comprador == "" and fila.account is None
+    assert ajena.mail_comprador == "otra@mail.com"

@@ -30,16 +30,20 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         session_id = opts["session_id"]
         fila = PasarelaCheckout.objects.filter(checkout_id=session_id).select_related("cupon", "account").first()
+        if fila is None:
+            raise CommandError(f"no hay ningún checkout nuestro para {session_id}")
+        sesion = webhooks_stripe.obtener_sesion(session_id)
         # Una compra sin cuenta todavía no tiene cuenta si el webhook la
-        # rechazó: `cobro` la adjudica por `mail_comprador` al acreditar.
-        sin_cuenta_adjudicable = fila is not None and fila.anonimo and bool(fila.mail_comprador)
-        if fila is None or (fila.account is None and not sin_cuenta_adjudicable):
+        # rechazó o nunca llegó: `cobro` la adjudica por `mail_comprador` al
+        # acreditar, y si el webhook no lo guardó se toma del pago, como él.
+        mail = fila.mail_comprador or ((sesion.get("customer_details") or {}).get("email") or "").strip()
+        sin_cuenta_adjudicable = fila.anonimo and bool(mail)
+        if fila.account is None and not sin_cuenta_adjudicable:
             raise CommandError(f"no hay ningún checkout nuestro con cuenta para {session_id}")
 
-        sesion = webhooks_stripe.obtener_sesion(session_id)
         total = sesion.get("total_details") or {}
         promos = [d.get("promotion_code") for d in (sesion.get("discounts") or [])]
-        quien = fila.account_id or f"(sin cuenta: se adjudica a {compra_anonima.enmascarar(fila.mail_comprador)})"
+        quien = fila.account_id or f"(sin cuenta: se adjudica a {compra_anonima.enmascarar(mail)})"
         self.stdout.write(f"cuenta {quien} · {fila.codigo_producto} · payment_status={sesion.get('payment_status')}")
         self.stdout.write(
             f"  fila:   cupón={fila.cupon.codigo if fila.cupon else '—'} "
@@ -64,8 +68,9 @@ class Command(BaseCommand):
         if sesion.get("payment_status") != "paid":
             raise CommandError("la sesión no está pagada: no se acredita")
 
+        webhooks_stripe.completar_mail_si_es_anonima(fila, sesion)
         try:
-            acreditada = webhooks_stripe.acreditar_a_mano(fila, sesion)
+            acreditada = webhooks_stripe.acreditar_a_mano(fila, sesion, aunque_disputada=opts["aunque_disputada"])
         except cobro.PagoDuplicado as exc:
             raise CommandError(
                 f"no se acreditó: la compra ya la acreditó el pago {exc.acreditado_por} y {exc.pago_id} "
@@ -81,7 +86,7 @@ class Command(BaseCommand):
         # `cobro` devuelve False también para la repetición de una compra ya
         # acreditada: eso no es un error, el comando es idempotente.
         fila.refresh_from_db(fields=["acreditado_at", "pago_id"])
-        pago_id = webhooks_stripe._payment_intent_id(sesion)
+        pago_id = webhooks_stripe.payment_intent_id(sesion)
         if fila.acreditado_at is not None and pago_id and fila.pago_id == pago_id:
             self.stdout.write(f"{session_id} ya estaba acreditada por el pago {pago_id}: no se hizo nada.")
             return

@@ -363,3 +363,18 @@ def test_la_carta_se_adjudica_por_el_sujeto_del_checkout(entregar_anonima, anoni
     assert Sujeto.objects.get(natal_de_id=carta_id).account == anonima.account
     assert _restante(anonima.account, "informe_natal") == 0
     assert len(sin_hilo) == 1
+
+
+def test_sin_mail_avisa_una_sola_vez_aunque_stripe_reintente(anonima, entregar_anonima, monkeypatch, django_cache_cleared):
+    """Stripe reintenta un 5xx durante tres días: el aviso de «pagada sin mail»
+    no puede llegar una vez por reintento."""
+    from api import cobro
+    from tests.api.conftest import sesion_anonima
+
+    avisos = []
+    monkeypatch.setattr(cobro, "avisar", avisos.append)
+
+    for _ in range(3):
+        assert entregar_anonima(sesion_anonima()).status_code >= 500
+
+    assert len([a for a in avisos if "SIN mail" in a]) == 1
