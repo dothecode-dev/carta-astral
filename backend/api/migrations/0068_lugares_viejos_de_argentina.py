@@ -3,6 +3,7 @@ zona argentina (America/Cordoba → «Cordoba», …) antes de que `lugar_de_zon
 los reconociera (20-10-2026). Suma por día; no se pierde ninguna cuenta."""
 
 from django.db import migrations
+from django.db.models import F
 
 # Copia fija de `conteo.LUGARES_VIEJOS_DE_ARGENTINA`: una migración no importa
 # código que puede cambiar.
@@ -15,8 +16,8 @@ def juntar(apps, schema_editor):
         destino, _ = ConteoProcedencia.objects.get_or_create(
             fecha=fila.fecha, tipo="lugar", valor="Argentina", defaults={"cantidad": 0},
         )
-        destino.cantidad += fila.cantidad
-        destino.save(update_fields=["cantidad"])
+        # F(): el contenedor viejo sigue sumando a esta fila durante el deploy.
+        ConteoProcedencia.objects.filter(pk=destino.pk).update(cantidad=F("cantidad") + fila.cantidad)
         fila.delete()
 
 

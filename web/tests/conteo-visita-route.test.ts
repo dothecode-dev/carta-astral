@@ -30,6 +30,13 @@ describe("POST /api/conteo/visita", () => {
     expect(JSON.parse(callApi.mock.calls[0][1].body).seccion).toBe("precios");
   });
 
+  it("un teléfono con «bot» en el nombre de la marca sí cuenta", async () => {
+    const r = await POST(pedido("Mozilla/5.0 (Linux; Android 10; CUBOT NOTE 20) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36"));
+
+    expect(r.status).toBe(204);
+    expect(callApi).toHaveBeenCalledOnce();
+  });
+
   it.each([
     "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
     "Mozilla/5.0 (Linux; Android 6.0.1) Chrome/130 Mobile Safari/537.36 (compatible; Googlebot/2.1)",

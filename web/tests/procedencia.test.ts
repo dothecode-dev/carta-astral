@@ -44,6 +44,7 @@ describe("procedencia", () => {
 
 describe("seccionDe: la parte del sitio, nunca la ruta", () => {
   it.each([
+    ["/", "inicio"],
     ["/es", "inicio"],
     ["/en/", "inicio"],
     ["/es/nueva", "nueva"],

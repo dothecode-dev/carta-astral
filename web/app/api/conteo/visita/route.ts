@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
 // Los rastreadores que ejecutan JavaScript (Googlebot, el bot de anuncios de
 // Google, Bing, navegadores sin pantalla) contarían cada página que recorren
 // como una visita. Sin user-agent tampoco es una persona con un navegador.
-const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|monitor|curl|wget|python|java\//i;
+// No alcanza con buscar «bot»: hay teléfonos que lo llevan en el nombre
+// (CUBOT). Los bots firman con «…bot/versión», «…bot;» o una URL «+http…».
+const BOT = /bot\/|bot;|bot\)|bot-|\+https?:|crawler|spider|slurp|headless|lighthouse|curl\/|wget\/|python|java\//i;
 
 export async function POST(request: Request) {
   const agente = request.headers.get("user-agent") ?? "";

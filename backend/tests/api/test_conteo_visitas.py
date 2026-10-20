@@ -66,13 +66,15 @@ def test_una_seccion_fuera_de_la_lista_no_se_cuenta(client, desde_argentina, sec
     assert not ConteoDiario.objects.exists() and not ConteoProcedencia.objects.exists()
 
 
-def test_es_publico_y_tiene_techo_por_ip():
+def test_es_publico_y_tiene_techo_por_ip(settings):
     from api.conteo_api import ConteoVisitaView
 
     assert ConteoVisitaView.authentication_classes == []
     # Su propio techo: detrás de un NAT, las páginas vistas no gastan el de
     # los pasos del teaser.
     assert ConteoVisitaView.throttle_scope == "visita"
+    # Sin la tasa en settings, ScopedRateThrottle da 500 en cada visita.
+    assert "visita" in settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
 
 
 def test_calcular_una_carta_tambien_cuenta_el_pais(client, desde_argentina):
@@ -133,3 +135,15 @@ def test_el_tablero_no_trae_mas_de_su_tope_de_dias():
     t = conteo.tablero()
 
     assert len(t["fechas"]) == conteo.DIAS_TABLERO
+    assert t["recortado"] is True
+
+
+def test_un_alias_viejo_de_argentina_escrito_tarde_se_lee_como_argentina():
+    """El contenedor viejo puede escribir «Cordoba» después de la 0068."""
+    hoy = timezone.now().date()
+    ConteoProcedencia.objects.create(fecha=hoy, tipo="lugar", valor="Argentina", cantidad=5)
+    ConteoProcedencia.objects.create(fecha=hoy, tipo="lugar", valor="Cordoba", cantidad=2)
+
+    lugares = conteo.tablero()["procedencia"]["lugar"]
+
+    assert set(lugares) == {"Argentina"} and lugares["Argentina"][-1] == 7

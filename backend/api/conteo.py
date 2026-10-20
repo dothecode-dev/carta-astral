@@ -13,7 +13,7 @@ from functools import cache
 from urllib.parse import urlsplit
 
 from django.db import DatabaseError, transaction
-from django.db.models import F
+from django.db.models import F, Min
 from django.utils import timezone
 
 from api import geo
@@ -173,8 +173,11 @@ _ARGENTINA_VIEJAS = frozenset({
     "America/Buenos_Aires", "America/Catamarca", "America/ComodRivadavia", "America/Cordoba",
     "America/Jujuy", "America/Mendoza", "America/Rosario",
 })
-# Cómo quedaron guardados esos alias antes de juntarlos (migración 0068).
-LUGARES_VIEJOS_DE_ARGENTINA = ("Catamarca", "ComodRivadavia", "Cordoba", "Jujuy", "Mendoza", "Rosario")
+# Cómo quedaron guardados esos alias antes de juntarlos (migración 0068): la
+# ciudad de la zona, salvo Buenos Aires, que ya contaba como Argentina.
+LUGARES_VIEJOS_DE_ARGENTINA = frozenset(
+    z.rsplit("/", 1)[1] for z in _ARGENTINA_VIEJAS if z != "America/Buenos_Aires"
+)
 
 
 @cache
@@ -267,9 +270,10 @@ def tablero() -> dict:
         ConteoDiario.objects.order_by("fecha").values_list("fecha", flat=True).first(),
         ConteoProcedencia.objects.order_by("fecha").values_list("fecha", flat=True).first(),
     ]
-    if (primera_compra := pagas.order_by("acreditado_at").first()) is not None:
-        primeras.append(primera_compra.acreditado_at.date())
-    desde = max(min([f for f in primeras if f is not None], default=hoy), hoy - datetime.timedelta(DIAS_TABLERO - 1))
+    if (primera_compra := pagas.aggregate(primera=Min("acreditado_at"))["primera"]) is not None:
+        primeras.append(primera_compra.date())
+    primera = min([f for f in primeras if f is not None], default=hoy)
+    desde = max(primera, hoy - datetime.timedelta(DIAS_TABLERO - 1))
     fechas = [desde + datetime.timedelta(days=i) for i in range((hoy - desde).days + 1)]
     indice = {f: i for i, f in enumerate(fechas)}
     n = len(fechas)
@@ -294,9 +298,16 @@ def tablero() -> dict:
 
     procedencia: dict[str, dict[str, list[int]]] = {tipo: {} for tipo, _ in ConteoProcedencia.TIPOS}
     for fila in ConteoProcedencia.objects.filter(fecha__gte=desde):
-        procedencia[fila.tipo].setdefault(fila.valor, [0] * n)[indice[fila.fecha]] = fila.cantidad
+        valor = fila.valor
+        # Un alias viejo de Argentina que el contenedor anterior escribió
+        # después de la 0068, durante el deploy: también es Argentina.
+        if fila.tipo == "lugar" and valor in LUGARES_VIEJOS_DE_ARGENTINA:
+            valor = "Argentina"
+        procedencia[fila.tipo].setdefault(valor, [0] * n)[indice[fila.fecha]] += fila.cantidad
 
     return {
         "fechas": [str(f) for f in fechas], "eventos": eventos, "ingresos": ingresos,
         "procedencia": procedencia,
+        # Si hay datos más viejos que el tope: «Todo» no es toda la historia.
+        "recortado": primera < desde,
     }

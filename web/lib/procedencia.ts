@@ -57,6 +57,8 @@ export function _reiniciarProcedencia(): void {
  *  el sitio), así `/en/notas` —que es un 404— no cuenta como notas. */
 export function seccionDe(ruta: string): string {
   const partes = ruta.split("/").filter(Boolean);
+  // `/` a secas redirige a la portada de un idioma: también es la portada.
+  if (partes.length === 0) return "inicio";
   const locale = partes[0] as Locale;
   if (!LOCALES.includes(locale)) return "otra";
   // Sin nada después del idioma, la portada.

@@ -427,7 +427,10 @@
     );
     cargarMapa()
       .then(() =>
-        despues(() =>
+        despues(() => {
+          // Si mientras bajaba el mapa se eligió otro período, este lienzo ya
+          // no está en la página: dibujarlo dejaría un gráfico huérfano.
+          if (!lienzo.isConnected) return;
           grafico(lienzo, {
             tooltip: {
               trigger: "item",
@@ -446,8 +449,8 @@
               itemStyle: { areaColor: oscuro() ? "#2b2b2b" : "#eeeeee", borderColor: oscuro() ? "#454545" : "#cccccc" },
               data: conocidos.map(([c, v]) => ({ name: nombreMapa(c), value: v, codigo: c })),
             }],
-          }),
-        ),
+          });
+        }),
       )
       .catch(() => lienzo.replaceChildren(el("p", { class: "tbNota" }, "No se pudo cargar el mapa.")));
     return seccion;
@@ -529,7 +532,11 @@
         ? etiquetaDia(D.fechas[desde], true)
         : `${etiquetaDia(D.fechas[desde], true)} → ${etiquetaDia(D.fechas[hasta], true)}`) +
       " · contado en el servidor, sin cookies";
-    if (pedido < desde) texto += ` · los datos empiezan el ${etiquetaDia(D.fechas[0], true)}`;
+    if (pedido < desde || (desde === 0 && D.recortado)) {
+      texto += D.recortado
+        ? ` · el tablero trae desde el ${etiquetaDia(D.fechas[0], true)}; lo anterior está en la tabla de abajo`
+        : ` · los datos empiezan el ${etiquetaDia(D.fechas[0], true)}`;
+    }
     raiz.replaceChildren(
       cabeza(texto),
       tarjetas(desde, hasta),
@@ -550,4 +557,9 @@
   }
 
   dibujar();
+  // El botón de tema del admin cambia `data-theme`: los gráficos lo siguen.
+  new MutationObserver(() => dibujar()).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
 })();
