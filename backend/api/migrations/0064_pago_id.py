@@ -20,10 +20,24 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameField(
-            model_name='pasarelacheckout',
-            old_name='payment_intent',
-            new_name='pago_id',
+        # Sólo de estado: la columna sigue siendo `payment_intent` (ver el
+        # comentario de `PasarelaCheckout.pago_id`). Un RENAME COLUMN acá
+        # rompería el código viejo que sigue atendiendo durante el deploy, y
+        # al que queda corriendo si el deploy falla.
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.RenameField(
+                    model_name='pasarelacheckout',
+                    old_name='payment_intent',
+                    new_name='pago_id',
+                ),
+                migrations.AlterField(
+                    model_name='pasarelacheckout',
+                    name='pago_id',
+                    field=models.CharField(blank=True, db_column='payment_intent', default='', max_length=100),
+                ),
+            ],
+            database_operations=[],
         ),
         migrations.AlterField(
             model_name='pasarelacheckout',

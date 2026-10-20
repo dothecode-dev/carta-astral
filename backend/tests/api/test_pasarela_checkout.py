@@ -112,10 +112,28 @@ def test_migracion_marca_informe_arrancado_de_stripe_acreditadas(make_account):
     abierta = PasarelaCheckout.objects.create(
         checkout_id="cs_b", account=cuenta, pasarela=PasarelaCheckout.STRIPE, codigo_producto="informe_natal",
     )
+    # Las de MP las marcó la 0062: esta migración filtra por Stripe y no las toca.
+    de_mp = PasarelaCheckout.objects.create(
+        checkout_id="mp_a", account=cuenta, pasarela=PasarelaCheckout.MERCADOPAGO,
+        codigo_producto="informe_natal", acreditado_at=ahora,
+    )
 
     migracion.marcar_acreditadas(apps, None)
 
     acreditada.refresh_from_db()
     abierta.refresh_from_db()
+    de_mp.refresh_from_db()
     assert acreditada.informe_arrancado_at == acreditada.acreditado_at
     assert abierta.informe_arrancado_at is None
+    assert de_mp.informe_arrancado_at is None
+
+
+def test_pago_id_sigue_en_la_columna_payment_intent():
+    """El rename de la 0064 es sólo de estado: el código viejo que atiende
+    durante el deploy (o el que queda si el deploy falla) lee `payment_intent`."""
+    from django.db import connection
+
+    assert PasarelaCheckout._meta.get_field("pago_id").column == "payment_intent"
+    with connection.cursor() as cursor:
+        columnas = [c.name for c in connection.introspection.get_table_description(cursor, "api_pasarelacheckout")]
+    assert "payment_intent" in columnas and "pago_id" not in columnas

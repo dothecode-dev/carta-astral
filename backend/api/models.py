@@ -535,7 +535,13 @@ class PasarelaCheckout(models.Model):
     # la sesión: sin guardarlo acá, un reembolso no se puede atribuir a ninguna
     # compra. No es único a propósito: mientras el webhook no acredite queda
     # vacío en todas las filas abiertas, y un índice único las haría chocar.
-    pago_id = models.CharField(max_length=100, blank=True, default="")
+    #
+    # La columna sigue llamándose `payment_intent` A PROPÓSITO (`db_column`):
+    # el rename de la 0064 es sólo de estado. Durante un deploy el contenedor
+    # nuevo corre `migrate` mientras el viejo sigue atendiendo, y si el deploy
+    # falla el código viejo queda contra la base migrada: renombrar la columna
+    # hacía que todo camino de cobro del código viejo diera 500.
+    pago_id = models.CharField(max_length=100, blank=True, default="", db_column="payment_intent")
     # El cupón con el que se abrió y el descuento que se esperaba, congelados
     # al abrir. El webhook valida contra ESTO, no contra lo que diga Stripe:
     # así `monto == precio - descuento` sigue comparando dos fuentes
