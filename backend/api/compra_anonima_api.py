@@ -14,19 +14,17 @@ from rest_framework.views import APIView
 
 from core.exceptions import CoreError
 
-from api import catalogo, compra_anonima, mantenimiento, stripe_client
+from api import apertura, catalogo, compra_anonima, mantenimiento
 from api.chart_service import calcular, mensaje_de_datos_invalidos, validar_trato
-from api.checkout import (
-    _MONEDA_INVALIDA,
+from api.pedido_checkout import (
+    MONEDA_INVALIDA,
     MonedaInvalida,
     idioma_pedido,
     moneda_pedida,
-    respuesta_de_mp,
-    respuesta_de_stripe,
+    respuesta_de_pasarela,
 )
 from api.identity import mail_valido
 from api.models import MailBloqueado
-from api.pasarelas import mercadopago_api
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +73,7 @@ class CheckoutAnonimoView(APIView):
         try:
             moneda = moneda_pedida(request, compra_anonima.PRODUCTO)
         except MonedaInvalida:
-            return Response(_MONEDA_INVALIDA, status=status.HTTP_400_BAD_REQUEST)
+            return Response(MONEDA_INVALIDA, status=status.HTTP_400_BAD_REQUEST)
         # En pesos el mail se pide acá: MP no devuelve el de quien paga.
         email = ""
         if catalogo.pasarela_de(moneda) == "mercadopago":
@@ -112,10 +110,8 @@ class CheckoutAnonimoView(APIView):
             # lo tenga gratis es configuración nuestra, no un pedido mal armado.
             logger.exception("checkout anónimo: el producto %r no se puede vender", compra_anonima.PRODUCTO)
             return Response(_NO_DISPONIBLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        except (stripe_client.StripeNoConfigurado, stripe_client.StripeError) as exc:
-            return respuesta_de_stripe(exc, compra_anonima.PRODUCTO)
-        except (mercadopago_api.MPNoConfigurado, mercadopago_api.MPError) as exc:
-            return respuesta_de_mp(exc, compra_anonima.PRODUCTO)
+        except apertura.ERRORES_DE_PASARELA as exc:
+            return respuesta_de_pasarela(exc, compra_anonima.PRODUCTO)
         return Response({"url": fila.url, "checkout_id": fila.checkout_id, "nonce": nonce})
 
 

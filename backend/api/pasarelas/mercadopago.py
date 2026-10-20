@@ -1,8 +1,7 @@
 """Mercado Pago en pesos: abrir el pago (la preferencia y su fila) y traducir
 lo que MP dice de un pago a los verbos de `cobro` (RF11).
 
-Mismo papel que `stripe_client.crear_checkout` más la creación de la fila de
-`PasarelaCheckout` que hoy hace la vista, porque acá el `checkout_id` lo
+Mismo papel que `pasarelas/stripe.abrir`, con una diferencia: el `checkout_id` lo
 generamos nosotros (`external_reference`) y tiene que existir antes de abrir
 la preferencia. Los errores del cliente HTTP (`MPError`, `MPNoConfigurado`)
 se propagan: los traduce la vista.
@@ -17,7 +16,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from api import cobro, cupones, devoluciones, reglas_checkout
+from api import cobro, devoluciones, reglas_checkout
 from api.conteo import contar
 from api.models import PasarelaCheckout
 from api.pasarelas import mercadopago_api
@@ -40,11 +39,11 @@ def titulo(codigo: str, locale: str) -> str:
 
 
 def abrir(
-    cuenta, codigo: str, *, sujeto, locale: str, moneda: str, mail: str = "",
-    anonimo: bool = False, nonce_hash: str = "",
+    cuenta, codigo: str, *, sujeto, locale: str, moneda: str, precio: int, descuento: int,
+    mail: str = "", anonimo: bool = False, nonce_hash: str = "",
 ) -> PasarelaCheckout:
-    # Sin cupón en pesos (fase 1): el precio es el de lista.
-    precio, descuento = cupones.precio_y_descuento(codigo, None, moneda)
+    """Abre la preferencia y guarda su fila. El precio y el descuento llegan
+    congelados por `apertura`; sin cupón en pesos (fase 1), el descuento es 0."""
     checkout_id = f"mp_{secrets.token_hex(16)}"
     destino = settings.MP_RETORNO_URL.replace("{locale}", locale).replace("{checkout_id}", checkout_id)
     ahora = timezone.now()

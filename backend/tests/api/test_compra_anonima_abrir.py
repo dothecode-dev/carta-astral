@@ -3,7 +3,7 @@
 import pytest
 from django.core.cache import cache
 
-from api import identity, mantenimiento, stripe_client
+from api import identity, mantenimiento, reglas_checkout, stripe_client
 from api.models import Chart, Cupon, PasarelaCheckout
 
 pytestmark = pytest.mark.django_db
@@ -76,7 +76,7 @@ def test_pide_la_casilla_de_terminos(client, stripe_responde):
 def test_idioma_fuera_de_la_lista_blanca_cae_al_por_defecto(client, stripe_responde):
     _post(client, {**DATOS, "locale": "../../x"})
     fila = PasarelaCheckout.objects.get()
-    assert fila.locale == stripe_client.LOCALE_POR_DEFECTO
+    assert fila.locale == reglas_checkout.LOCALE_POR_DEFECTO
 
 
 @pytest.mark.parametrize("codigo", ["PROMO30", "NOEXISTE", "REGALO"])

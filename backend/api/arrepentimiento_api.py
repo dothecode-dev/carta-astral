@@ -11,7 +11,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from api import arrepentimiento
-from api.checkout import idioma_pedido
+from api.pedido_checkout import idioma_pedido
 from api.identity import mail_valido
 
 

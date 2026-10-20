@@ -112,3 +112,13 @@ forbidden_modules = [
     "api.webhooks_mercadopago",
 ]
 allow_indirect_imports = true
+
+# Las vistas que abren un pago no saben por qué pasarela sale (R8/R9): llaman a
+# `api.apertura`, que elige por la moneda. `allow_indirect_imports` porque
+# llegan a `stripe_client` justamente por ahí (apertura → pasarelas).
+[[tool.importlinter.contracts]]
+name = "el checkout no conoce Stripe"
+type = "forbidden"
+source_modules = ["api.checkout", "api.compra_anonima_api", "api.compras_api"]
+forbidden_modules = ["api.stripe_client"]
+allow_indirect_imports = true

@@ -1,4 +1,4 @@
-"""`POST /api/checkout/`: abre una sesión de pago en Stripe.
+"""`POST /api/checkout/`: abre el pago (Stripe o Mercado Pago, según la moneda).
 
 En módulo propio y no en `api/views.py`, que ya pasó las 250 líneas que el
 CLAUDE.md marca como techo — mismo criterio que `api/webhooks.py`.
@@ -17,88 +17,20 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from api import (
-    analitica,
-    catalogo,
-    compra_service,
-    cupones,
-    mantenimiento,
-    notificaciones,
-    reglas_checkout,
-    stripe_client,
-)
+from api import analitica, apertura, catalogo, compra_service, cupones, mantenimiento, notificaciones
 from api.auth import AccountTokenAuthentication
 from api.models import Chart, MailBloqueado, PasarelaCheckout, Sujeto
-from api.pasarelas import mercadopago, mercadopago_api
+from api.pedido_checkout import (
+    MONEDA_INVALIDA,
+    MonedaInvalida,
+    idioma_pedido,
+    moneda_pedida,
+    respuesta_de_pasarela,
+)
 from api.permissions import HasAccount
 from api.sujetos import sujeto_natal
 
 logger = logging.getLogger(__name__)
-
-
-def idioma_pedido(request) -> str:
-    """El idioma que navega la persona, por lista blanca: viene del navegador
-    y termina en una URL y en la base, así que no se guarda tal cual."""
-    pedido = request.data.get("locale") or reglas_checkout.LOCALE_POR_DEFECTO
-    return pedido if pedido in reglas_checkout.LOCALES else reglas_checkout.LOCALE_POR_DEFECTO
-
-
-class MonedaInvalida(Exception):
-    """El cliente pidió una moneda que no conocemos o en la que ese producto
-    no se vende."""
-
-
-def moneda_pedida(request, codigo_producto: str) -> str:
-    """En qué moneda se cobra: la que manda el cliente (RF4), y si no manda
-    ninguna, `usd`. La IP NO decide el cobro (decisión del 18-10-2026): sólo
-    sugiere qué mostrar por `/api/moneda/`. Si decidiera, una web que muestra
-    US$ abriría un pago en reales sin que nadie lo vea.
-
-    Se normaliza —`BRL ` llega de un cliente que no es la web— y se valida
-    contra las monedas del producto: no se inventa un precio en una moneda que
-    el catálogo no tiene (EC2). Un producto desconocido no es un problema de
-    moneda: lo rechaza quien ya lo rechazaba."""
-    explicita = request.data.get("moneda")
-    pedida = str(explicita).strip().lower() if explicita else catalogo.MONEDA_BASE
-    prod = catalogo.CATALOGO.get(codigo_producto)
-    if prod is None:
-        return pedida
-    if pedida not in prod.monedas():
-        raise MonedaInvalida(pedida)
-    if not catalogo.moneda_habilitada(pedida):
-        raise MonedaInvalida(pedida)
-    return pedida
-
-
-_MONEDA_INVALIDA = {"error": "moneda inválida", "motivo": "moneda_invalida"}
-
-
-def respuesta_de_stripe(exc, codigo) -> Response:
-    """Qué le decimos a quien compra cuando `crear_checkout` falla."""
-    if isinstance(exc, stripe_client.StripeNoConfigurado):
-        # Falta la clave o el precio en Stripe: problema de configuración
-        # nuestro, no de quien compra.
-        logger.exception("checkout sin configurar para %r", codigo)
-        return Response(
-            {"error": "el cobro no está disponible"},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-    if isinstance(exc, stripe_client.CuponRechazado):
-        # Ya lo logueó `crear_checkout` con el código. Para quien compra es
-        # «se agotó»: la alternativa —abrirle el pago a precio de lista—
-        # sería cobrarle de más a alguien que creía tener descuento.
-        return Response(
-            {"error": "el cupón no sirve", "motivo": "agotado"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    logger.exception("stripe no pudo abrir el checkout de %r", codigo)
-    return Response({"error": "no pudimos abrir el pago"}, status=status.HTTP_502_BAD_GATEWAY)
-
-
-def respuesta_de_mp(exc, codigo) -> Response:
-    """Qué le decimos a quien compra cuando Mercado Pago no abre la preferencia."""
-    logger.error("mercado pago no pudo abrir el checkout de %r: %s", codigo, type(exc).__name__)
-    return Response({"error": "el cobro no está disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 class CheckoutView(APIView):
@@ -171,7 +103,7 @@ class CheckoutView(APIView):
             moneda = moneda_pedida(request, codigo)
         except MonedaInvalida as exc:
             logger.info("checkout de %r en moneda rechazada: %s", codigo, exc)
-            return Response(_MONEDA_INVALIDA, status=status.HTTP_400_BAD_REQUEST)
+            return Response(MONEDA_INVALIDA, status=status.HTTP_400_BAD_REQUEST)
 
         en_pesos = catalogo.pasarela_de(moneda) == "mercadopago"
         cupon = None
@@ -195,42 +127,19 @@ class CheckoutView(APIView):
             if cupon.porcentaje >= 100:
                 return self._canjear_gratis(request, cupon, codigo, sujeto, idioma)
 
-        if en_pesos:
-            try:
-                fila = mercadopago.abrir(
-                    request.user, codigo, sujeto=sujeto, locale=idioma, moneda=moneda,
-                    mail=request.user.email or "",
-                )
-            except (KeyError, ValueError) as exc:
-                logger.warning("checkout rechazado para %r: %s", codigo, exc)
-                return Response({"error": "producto inválido"}, status=status.HTTP_400_BAD_REQUEST)
-            except (mercadopago_api.MPNoConfigurado, mercadopago_api.MPError) as exc:
-                return respuesta_de_mp(exc, codigo)
-            return Response({"url": fila.url})
-
         try:
-            checkout_id, url = stripe_client.crear_checkout(
-                request.user, codigo, sujeto=sujeto, locale=idioma, cupon=cupon, moneda=moneda,
+            fila = apertura.abrir_checkout(
+                request.user, codigo, sujeto=sujeto, locale=idioma, moneda=moneda, cupon=cupon,
+                mail=request.user.email or "",
             )
         except (KeyError, ValueError) as exc:
             # Producto que no está en el catálogo, o gratis. Es un pedido mal
             # armado, no una falla nuestra.
             logger.warning("checkout rechazado para %r: %s", codigo, exc)
             return Response({"error": "producto inválido"}, status=status.HTTP_400_BAD_REQUEST)
-        except (stripe_client.StripeNoConfigurado, stripe_client.StripeError) as exc:
-            return respuesta_de_stripe(exc, codigo)
-
-        # Después del éxito y no antes: una fila huérfana dejaría que el webhook
-        # de otra orden resolviera contra ella. El descuento queda congelado
-        # acá, y el precio también: es contra ESTO que el webhook valida lo que
-        # Stripe cobró, aunque el catálogo cambie mientras la sesión sigue viva.
-        precio, descuento = cupones.precio_y_descuento(codigo, cupon, moneda)
-        PasarelaCheckout.objects.create(
-            checkout_id=checkout_id, account=request.user, pasarela=PasarelaCheckout.STRIPE, codigo_producto=codigo,
-            sujeto=sujeto, locale=idioma, cupon=cupon, descuento_centavos=descuento, url=url,
-            precio_centavos=precio, moneda=moneda,
-        )
-        return Response({"url": url})
+        except apertura.ERRORES_DE_PASARELA as exc:
+            return respuesta_de_pasarela(exc, codigo)
+        return Response({"url": fila.url})
 
     def _canjear_gratis(self, request, cupon, codigo, sujeto, idioma):
         """El cupón del 100 % no pasa por Stripe: se resuelve acá, en la

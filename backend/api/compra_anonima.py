@@ -12,7 +12,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from api import catalogo, codigos_acceso, cupones, notificaciones, stripe_client
+from api import apertura, codigos_acceso, notificaciones
 from api.accounts import cerrar_sesiones, resolver_cuenta
 from api.auth import create_session
 from api.chart_service import create_chart
@@ -20,7 +20,6 @@ from api.identity import hash_token, normalizar, tombstone_hmac_configurada
 from api.models import (
     Account, BirthData, Chart, CodigoAcceso, MailBloqueado, PasarelaCheckout, ProviderIdentity, Sujeto,
 )
-from api.pasarelas import mercadopago
 from api.sujetos import sujeto_natal
 from api.sso import VerifiedIdentity
 
@@ -40,12 +39,12 @@ def comprobar_disponible() -> None:
 
 
 def abrir(datos: dict, locale: str, moneda: str = "usd", email: str = ""):
-    """Crea la carta sin dueño, abre la sesión de Stripe y guarda la fila.
+    """Crea la carta sin dueño, abre el pago y guarda la fila (`apertura`).
 
     Devuelve `(fila, nonce_en_claro)`; en la base sólo queda el hash del nonce.
-    `datos` ya viene validado por la vista. La carta y la llamada a Stripe van
-    en el mismo átomo para que un fallo de Stripe no deje una carta sin dueño;
-    una sesión de Stripe huérfana (si la base falla después) vence sola a la hora.
+    `datos` ya viene validado por la vista. La carta y la apertura del pago van
+    en el mismo átomo para que un fallo de la pasarela no deje una carta sin
+    dueño; una sesión huérfana (si la base falla después) vence sola a la hora.
 
     Sin cupón, siempre al precio de lista (review 07-10): sin cuenta no se
     puede aplicar «uno por cuenta», y la adjudicación podía llevar la compra
@@ -61,20 +60,9 @@ def abrir(datos: dict, locale: str, moneda: str = "usd", email: str = ""):
     with transaction.atomic():
         carta = create_chart(datos, account=None)
         sujeto = sujeto_natal(carta)
-        if catalogo.pasarela_de(moneda) == "mercadopago":
-            fila = mercadopago.abrir(
-                None, PRODUCTO, sujeto=sujeto, locale=locale, moneda=moneda,
-                mail=normalizar(email), anonimo=True, nonce_hash=hash_token(nonce),
-            )
-            return fila, nonce
-        checkout_id, url = stripe_client.crear_checkout(
-            None, PRODUCTO, sujeto=sujeto, locale=locale, terminos=True, moneda=moneda,
-        )
-        precio, descuento = cupones.precio_y_descuento(PRODUCTO, None, moneda)
-        fila = PasarelaCheckout.objects.create(
-            checkout_id=checkout_id, account=None, pasarela=PasarelaCheckout.STRIPE, codigo_producto=PRODUCTO,
-            sujeto=sujeto, locale=locale, descuento_centavos=descuento, url=url,
-            precio_centavos=precio, moneda=moneda, anonimo=True, nonce_hash=hash_token(nonce),
+        fila = apertura.abrir_checkout(
+            None, PRODUCTO, sujeto=sujeto, locale=locale, moneda=moneda,
+            mail=normalizar(email), anonimo=True, nonce_hash=hash_token(nonce),
         )
     return fila, nonce
 
