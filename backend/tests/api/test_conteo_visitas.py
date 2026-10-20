@@ -70,7 +70,9 @@ def test_es_publico_y_tiene_techo_por_ip():
     from api.conteo_api import ConteoVisitaView
 
     assert ConteoVisitaView.authentication_classes == []
-    assert ConteoVisitaView.throttle_scope == "conteo"
+    # Su propio techo: detrás de un NAT, las páginas vistas no gastan el de
+    # los pasos del teaser.
+    assert ConteoVisitaView.throttle_scope == "visita"
 
 
 def test_calcular_una_carta_tambien_cuenta_el_pais(client, desde_argentina):
@@ -107,3 +109,27 @@ def test_el_tablero_vacio_no_rompe():
     t = conteo.tablero()
 
     assert t["fechas"] == [str(timezone.now().date())]
+
+
+def test_una_compra_disputada_no_cuenta_como_venta_ni_como_cobro():
+    """Una disputa perdida o abierta deja `disputa_id` y no toca
+    `reembolsado_centavos`: sin excluirla, el panel la mostraba cobrada."""
+    PasarelaCheckout.objects.create(
+        pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_disputada", codigo_producto="informe_natal",
+        moneda="usd", precio_centavos=1990, acreditado_at=timezone.now(), disputa_id="du_1",
+    )
+
+    t = conteo.tablero()
+
+    assert sum(t["eventos"]["compra_pagada"]) == 0
+    assert t["ingresos"] == {}
+    assert conteo.resumen()["hoy"]["compra_pagada"] == 0
+
+
+def test_el_tablero_no_trae_mas_de_su_tope_de_dias():
+    viejo = timezone.now().date() - datetime.timedelta(days=conteo.DIAS_TABLERO + 50)
+    ConteoDiario.objects.create(fecha=viejo, evento="visita", cantidad=1)
+
+    t = conteo.tablero()
+
+    assert len(t["fechas"]) == conteo.DIAS_TABLERO

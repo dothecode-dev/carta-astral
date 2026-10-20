@@ -1,10 +1,10 @@
-/* Tablero de analítica (static/admin/tablero.js). Usa las variables del admin
-   de Django, así sigue el tema claro u oscuro que elija cada uno. */
+/* Tablero de analítica (static/admin/tablero.js, con ECharts). Usa las
+   variables del admin de Django, así sigue el tema claro u oscuro. */
 
 .tablero {
-  --tb-acento: var(--primary, #4f8cff);
-  --tb-suave: var(--darkened-bg, #f4f4f4);
-  --tb-borde: var(--hairline-color, #ddd);
+  --tb-acento: #5b8ff9;
+  --tb-suave: var(--darkened-bg, #f6f7f9);
+  --tb-borde: var(--hairline-color, #e2e4e8);
   --tb-texto: var(--body-fg, #333);
   --tb-quieto: var(--body-quiet-color, #777);
   --tb-sube: #3fb950;
@@ -12,92 +12,50 @@
   color: var(--tb-texto);
   font-size: 15px;
   margin: 0 0 28px;
-  max-width: 1280px;
+  max-width: 1400px;
 }
 
 .tablero h1 { font-size: 28px; margin: 0 0 2px; padding: 0; }
-.tablero h2 { font-size: 18px; margin: 0 0 14px; padding: 0; background: none; color: var(--tb-texto); font-weight: 600; }
-.tablero h3 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
-.tablero h3 small { color: var(--tb-quieto); font-weight: 400; }
+.tablero h2 {
+  font-size: 16px; margin: 0 0 10px; padding: 0; background: none; color: var(--tb-texto); font-weight: 600;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
 .tbNota { color: var(--tb-quieto); font-size: 13px; margin: 6px 0 0; }
 
-.tbCabeza { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
-.tbPeriodo, .tbChips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.tbChips { margin-bottom: 12px; }
+.tbCabeza { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+.tbPeriodo { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
 .tbChip {
-  background: var(--tb-suave);
-  border: 1px solid var(--tb-borde);
-  border-radius: 999px;
-  color: var(--tb-texto);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 6px 14px;
+  background: transparent; border: 1px solid var(--tb-borde); border-radius: 999px; color: var(--tb-texto);
+  cursor: pointer; font-size: 13px; font-weight: 500; padding: 6px 14px; transition: all 0.15s ease;
 }
-.tbChip:hover { border-color: var(--tb-acento); }
-.tbChipOn { background: var(--tb-acento); border-color: var(--tb-acento); color: #fff; }
+.tbChip:hover { border-color: var(--tb-acento); color: var(--tb-acento); }
+.tbChipOn, .tbChipOn:hover { background: var(--tb-acento); border-color: var(--tb-acento); color: #fff; }
 .tbDesde { color: var(--tb-quieto); font-size: 13px; margin-left: 6px; }
-.tbFecha { font-size: 14px; padding: 4px 6px; }
+.tbFecha { font-size: 13px; padding: 4px 6px; }
 
-.tbTarjetas { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 18px; }
+.tbTarjetas { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 16px; }
 .tbTarjeta, .tbBloque {
-  background: var(--tb-suave);
-  border: 1px solid var(--tb-borde);
-  border-radius: 12px;
-  padding: 16px 18px;
+  background: var(--tb-suave); border: 1px solid var(--tb-borde); border-radius: 14px; padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
-.tbBloque { margin-bottom: 18px; }
-.tbTarjetaTitulo { color: var(--tb-quieto); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
-.tbTarjetaValor { font-size: 34px; font-weight: 700; line-height: 1.2; margin: 4px 0; font-variant-numeric: tabular-nums; }
-.tbDelta { font-size: 13px; color: var(--tb-quieto); }
+.tbTarjeta { display: flex; flex-direction: column; gap: 2px; }
+.tbTarjetaTitulo { color: var(--tb-quieto); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.tbTarjetaValor { font-size: 34px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.tbDelta { font-size: 12px; color: var(--tb-quieto); }
 .tbSube { color: var(--tb-sube); }
 .tbBaja { color: var(--tb-baja); }
-.tbCobrado { font-size: 13px; margin-top: 6px; color: var(--tb-quieto); }
+.tbCobrado { font-size: 13px; color: var(--tb-quieto); }
+.tbChispa { height: 46px; margin-top: 8px; }
 
-.tbPaso { display: grid; grid-template-columns: 300px 1fr 110px; gap: 14px; align-items: center; margin: 10px 0; }
-.tbPasoNombre { font-size: 14px; font-weight: 600; }
-.tbPasoNombre small { display: block; font-size: 12px; font-weight: 400; color: var(--tb-quieto); line-height: 1.35; margin-top: 2px; }
-.tbPasoBarra { position: relative; height: 30px; background: transparent; border-radius: 6px; }
-.tbPasoRelleno { height: 100%; background: var(--tb-acento); border-radius: 6px; min-width: 0; transition: width 0.3s ease; }
-.tbPasoValor { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--tb-texto); text-shadow: 0 0 4px var(--tb-suave); }
-.tbPasoPct { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.tbPasoPct small { display: block; font-size: 11px; font-weight: 400; color: var(--tb-quieto); line-height: 1.3; }
-
-.tbGraficoCaja { position: relative; }
-.tbSvg { width: 100%; height: auto; display: block; }
-.tbGuia { stroke: var(--tb-borde); stroke-width: 1; }
-.tbEje { fill: var(--tb-quieto); font-size: 12px; }
-.tbBarra { fill: var(--tb-acento); }
-.tbBarraHoy { opacity: 0.45; }
-.tbZona { fill: transparent; cursor: crosshair; }
-.tbZona:hover { fill: rgba(127, 127, 127, 0.08); }
-.tbTooltip {
-  position: absolute;
-  background: var(--body-bg, #fff);
-  border: 1px solid var(--tb-borde);
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 8px 12px;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 5;
-}
-
-.tbRankings { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.tbRanking { margin-bottom: 0; }
-.tbFila { display: grid; grid-template-columns: minmax(110px, 40%) 1fr 70px; gap: 10px; align-items: center; margin: 6px 0; font-size: 14px; }
-.tbFilaNombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tbFilaBarra { height: 10px; background: var(--tb-borde); border-radius: 5px; overflow: hidden; }
-.tbFilaRelleno { height: 100%; background: var(--tb-acento); border-radius: 5px; }
-.tbFilaValor { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-.tbFilaValor small { display: block; font-weight: 400; font-size: 11px; color: var(--tb-quieto); }
+.tbGrilla { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
+.tbAncho { grid-column: 1 / -1; }
+.tbLienzo { width: 100%; }
 
 .tableroTabla { margin-top: 8px; }
 .tableroTabla > summary { cursor: pointer; color: var(--tb-quieto, #777); margin-bottom: 10px; }
 
 @media (max-width: 760px) {
-  .tbPaso { grid-template-columns: 1fr; gap: 4px; }
   .tbTarjetaValor { font-size: 28px; }
+  .tbGrilla { grid-template-columns: 1fr; }
 }

@@ -64,6 +64,17 @@ def test_la_zona_se_reduce_a_un_lugar_legible():
     assert conteo.lugar_de_zona("America/Mexico_City") == "Mexico City"
 
 
+@pytest.mark.parametrize("zona", [
+    "America/Cordoba", "America/Jujuy", "America/Mendoza", "America/Catamarca", "America/Rosario",
+    "America/Buenos_Aires",
+])
+def test_las_zonas_viejas_de_argentina_tambien_son_argentina(zona):
+    """Los nombres viejos de las zonas argentinas (sin `Argentina/`) los
+    siguen mandando algunos navegadores: aparecían sueltos en el panel como
+    «Cordoba», «Jujuy» o «Mendoza» debajo de «Argentina» (20-10-2026)."""
+    assert conteo.lugar_de_zona(zona) == "Argentina"
+
+
 def test_una_zona_inventada_no_entra_como_lugar():
     # El valor viene del navegador: cualquiera puede mandar cualquier cosa.
     assert conteo.lugar_de_zona("<script>") == "desconocida"

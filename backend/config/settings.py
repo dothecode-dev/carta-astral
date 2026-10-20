@@ -404,6 +404,9 @@ REST_FRAMEWORK = {
         # Los pasos del teaser sin cuenta (api/conteo_api.py): público, por IP.
         # Cada carta manda unos pocos; el techo sólo frena inflar los números.
         "conteo": os.environ.get("CONTEO_RATE", "300/hour"),
+        # Cada página que se abre (api/conteo_api.py): más que los pasos del
+        # teaser, y en su propio techo para no gastarles el suyo detrás de un NAT.
+        "visita": os.environ.get("CONTEO_VISITA_RATE", "600/hour"),
         # Por cuenta. Abrir un checkout no cuesta nada acá, pero con el cupón
         # del 100 % este POST entrega un producto de pago: sin techo, es un
         # bucle. Generoso: nadie compra sesenta veces en un día.

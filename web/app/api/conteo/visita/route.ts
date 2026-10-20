@@ -9,7 +9,14 @@ import { ApiError, callApi } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+// Los rastreadores que ejecutan JavaScript (Googlebot, el bot de anuncios de
+// Google, Bing, navegadores sin pantalla) contarían cada página que recorren
+// como una visita. Sin user-agent tampoco es una persona con un navegador.
+const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|monitor|curl|wget|python|java\//i;
+
 export async function POST(request: Request) {
+  const agente = request.headers.get("user-agent") ?? "";
+  if (!agente || BOT.test(agente)) return new NextResponse(null, { status: 204 });
   let cuerpo: Record<string, unknown>;
   try {
     cuerpo = (await request.json()) as Record<string, unknown>;

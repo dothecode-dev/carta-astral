@@ -8,6 +8,8 @@
  * la búsqueda), y el servidor igual lo reduce a una lista cerrada de canales.
  */
 
+import { LOCALES, NOTES_SLUG, SKY_SLUG, SYNASTRY_SLUG, type Locale } from "./i18n";
+
 export type Procedencia = { utm_source: string; gclid: boolean; referrer: string; zona: string };
 
 let capturada: Omit<Procedencia, "zona"> | null = null;
@@ -50,29 +52,21 @@ export function _reiniciarProcedencia(): void {
 }
 
 /** La parte del sitio de una ruta, de la lista cerrada del servidor
- *  (`conteo.SECCIONES`). Nunca la ruta: la de una carta lleva su id. */
+ *  (`conteo.SECCIONES`). Nunca la ruta: la de una carta lleva su id. Las
+ *  palabras que cambian con el idioma salen de `i18n` (las mismas que sirve
+ *  el sitio), así `/en/notas` —que es un 404— no cuenta como notas. */
 export function seccionDe(ruta: string): string {
   const partes = ruta.split("/").filter(Boolean);
-  // La primera es el idioma (`/es/precios`); sin nada después, la portada.
+  const locale = partes[0] as Locale;
+  if (!LOCALES.includes(locale)) return "otra";
+  // Sin nada después del idioma, la portada.
   const primera = partes[1] ?? "";
-  const SECCIONES: Record<string, string> = {
-    "": "inicio",
-    nueva: "nueva",
-    carta: "carta",
-    ejemplo: "ejemplo",
-    sinastria: "sinastria",
-    synastry: "sinastria",
-    precios: "precios",
-    notas: "notas",
-    notes: "notas",
-    "cielo-hoy": "cielo",
-    "sky-today": "cielo",
-    "ceu-hoje": "cielo",
-    cuenta: "cuenta",
-    entrar: "entrar",
-    compra: "compra",
-    legal: "legal",
-    arrepentimiento: "arrepentimiento",
-  };
-  return SECCIONES[primera] ?? "otra";
+  if (primera === "") return "inicio";
+  if (primera === NOTES_SLUG[locale]) return "notas";
+  if (primera === SKY_SLUG[locale]) return "cielo";
+  if (primera === SYNASTRY_SLUG[locale]) return "sinastria";
+  const FIJAS = [
+    "nueva", "carta", "ejemplo", "precios", "cuenta", "entrar", "compra", "legal", "arrepentimiento",
+  ];
+  return FIJAS.includes(primera) ? primera : "otra";
 }

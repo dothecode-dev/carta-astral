@@ -34,7 +34,8 @@ class ConteoVisitaView(APIView):
     authentication_classes: list = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "conteo"
+    # Su propio techo: las páginas vistas no gastan el de los pasos del teaser.
+    throttle_scope = "visita"
 
     def post(self, request):
         pais = conteo.pais_del_pedido(request)

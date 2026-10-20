@@ -58,6 +58,12 @@ describe("seccionDe: la parte del sitio, nunca la ruta", () => {
     ["/en/synastry", "sinastria"],
     ["/es/legal/privacy", "legal"],
     ["/es/algo-que-no-existe", "otra"],
+    ["/pt/sinastria", "sinastria"],
+    // La palabra de otro idioma es un 404: no cuenta como esa sección.
+    ["/en/notas", "otra"],
+    ["/en/cielo-hoy", "otra"],
+    ["/es/synastry", "otra"],
+    ["/fr/precios", "otra"],
   ])("%s → %s", (ruta, seccion) => {
     expect(seccionDe(ruta)).toBe(seccion);
   });

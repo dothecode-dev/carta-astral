@@ -76,6 +76,15 @@ def _incrementar(modelo, **clave) -> None:
         modelo.objects.filter(pk=fila.pk).update(cantidad=F("cantidad") + 1)
 
 
+def _compras_pagas():
+    """Las compras que cuentan como venta: acreditadas, sin reembolso, sin una
+    disputa abierta o perdida (la que se gana borra `disputa_id`) y sin los
+    canjes con cupón del 100 %."""
+    return PasarelaCheckout.objects.filter(
+        acreditado_at__isnull=False, reembolsado_centavos=0, disputa_id__isnull=True,
+    ).exclude(checkout_id__startswith="cupon_")
+
+
 def resumen(dias: int = 7) -> dict:
     """Los últimos `dias` días COMPLETOS (UTC), por día y en total, y hoy aparte.
 
@@ -83,8 +92,8 @@ def resumen(dias: int = 7) -> dict:
     o ponerlo en fila con días enteros se lee como una caída.
 
     `compra_pagada` sale de los pagos acreditados (`PasarelaCheckout`), no de
-    un contador: ya está en la base. No cuentan los canjes con cupón del 100 %
-    ni las compras reembolsadas. Los contadores cuentan VECES, no personas.
+    un contador: ya está en la base. No cuentan los canjes con cupón del 100 %,
+    las compras reembolsadas ni las disputadas (`_compras_pagas`). Los contadores cuentan VECES, no personas.
     """
     hoy = timezone.now().date()
     fechas = [hoy - datetime.timedelta(days=i) for i in range(1, dias + 1)]
@@ -92,9 +101,7 @@ def resumen(dias: int = 7) -> dict:
     por_dia = {str(f): dict.fromkeys(claves, 0) for f in (hoy, *fechas)}
     for fila in ConteoDiario.objects.filter(fecha__gte=fechas[-1]):
         por_dia[str(fila.fecha)][fila.evento] = fila.cantidad
-    pagas = PasarelaCheckout.objects.filter(
-        acreditado_at__date__gte=fechas[-1], reembolsado_centavos=0,
-    ).exclude(checkout_id__startswith="cupon_")
+    pagas = _compras_pagas().filter(acreditado_at__date__gte=fechas[-1])
     for acreditado in pagas.values_list("acreditado_at", flat=True):
         dia = str(acreditado.date())
         if dia in por_dia:
@@ -160,6 +167,16 @@ def canal_de(utm_source: object, referrer: object, gclid: object = False) -> str
     return "otro_sitio"
 
 
+# Los nombres viejos de zonas argentinas, sin `Argentina/`: siguen vigentes como
+# alias y algunos navegadores los mandan (America/Cordoba, …).
+_ARGENTINA_VIEJAS = frozenset({
+    "America/Buenos_Aires", "America/Catamarca", "America/ComodRivadavia", "America/Cordoba",
+    "America/Jujuy", "America/Mendoza", "America/Rosario",
+})
+# Cómo quedaron guardados esos alias antes de juntarlos (migración 0068).
+LUGARES_VIEJOS_DE_ARGENTINA = ("Catamarca", "ComodRivadavia", "Cordoba", "Jujuy", "Mendoza", "Rosario")
+
+
 @cache
 def _zonas() -> frozenset[str]:
     return frozenset(zoneinfo.available_timezones())
@@ -169,7 +186,7 @@ def lugar_de_zona(zona: object) -> str:
     """La ciudad de referencia de una zona horaria real; las de Argentina, juntas."""
     if not isinstance(zona, str) or zona not in _zonas() or "/" not in zona:
         return "desconocida"
-    if zona.startswith("America/Argentina/") or zona == "America/Buenos_Aires":
+    if zona.startswith("America/Argentina/") or zona in _ARGENTINA_VIEJAS:
         return "Argentina"
     ciudad = zona.rsplit("/", 1)[1]
     return _CON_TILDE.get(ciudad, ciudad.replace("_", " "))
@@ -228,25 +245,31 @@ def contar_visita(seccion: object, procedencia: object, pais: str) -> bool:
     return True
 
 
-def tablero() -> dict:
-    """Todo lo contado, por día, desde el primer dato hasta hoy (incluido),
-    para el panel del admin: cada evento, las compras pagas, lo cobrado por
-    moneda y la procedencia por tipo y valor. El navegador elige el período.
+# Lo más viejo que trae el tablero: la página lleva todo en su HTML, y sin
+# tope crecería sin fin (una fila por día y por país, sección, canal…).
+DIAS_TABLERO = 400
 
-    Compras con el criterio de `resumen`: acreditadas, sin reembolso y sin
-    los canjes con cupón del 100 %.
+
+def tablero() -> dict:
+    """Todo lo contado, por día, desde el primer dato (o `DIAS_TABLERO` atrás)
+    hasta hoy, incluido, para el panel del admin: cada evento, las compras
+    pagas, lo cobrado por moneda y la procedencia por tipo y valor. El
+    navegador elige el período.
+
+    Compras con el criterio de `resumen` (`_compras_pagas`), y lo cobrado con
+    el de los reembolsos (`devoluciones.pagado`).
     """
+    from api import devoluciones
+
     hoy = timezone.now().date()
-    pagas = PasarelaCheckout.objects.filter(acreditado_at__isnull=False, reembolsado_centavos=0).exclude(
-        checkout_id__startswith="cupon_",
-    )
+    pagas = _compras_pagas()
     primeras = [
         ConteoDiario.objects.order_by("fecha").values_list("fecha", flat=True).first(),
         ConteoProcedencia.objects.order_by("fecha").values_list("fecha", flat=True).first(),
     ]
     if (primera_compra := pagas.order_by("acreditado_at").first()) is not None:
         primeras.append(primera_compra.acreditado_at.date())
-    desde = min([f for f in primeras if f is not None], default=hoy)
+    desde = max(min([f for f in primeras if f is not None], default=hoy), hoy - datetime.timedelta(DIAS_TABLERO - 1))
     fechas = [desde + datetime.timedelta(days=i) for i in range((hoy - desde).days + 1)]
     indice = {f: i for i, f in enumerate(fechas)}
     n = len(fechas)
@@ -260,7 +283,13 @@ def tablero() -> dict:
         if (i := indice.get(fila.acreditado_at.date())) is None:
             continue
         eventos["compra_pagada"][i] += 1
-        cobrado = fila.precio_de_lista() - fila.descuento_centavos
+        try:
+            cobrado = devoluciones.pagado(fila)
+        except KeyError:
+            # Una fila vieja sin precio de un producto que ya no existe: la
+            # venta se cuenta, el monto no, y el panel sigue en pie.
+            logger.warning("tablero: no se sabe cuánto se cobró en %s", fila.checkout_id)
+            continue
         ingresos.setdefault(fila.moneda, [0] * n)[i] += cobrado
 
     procedencia: dict[str, dict[str, list[int]]] = {tipo: {} for tipo, _ in ConteoProcedencia.TIPOS}
