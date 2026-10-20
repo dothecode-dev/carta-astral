@@ -15,7 +15,7 @@ regalar el producto.
 """
 from django.core.management.base import BaseCommand, CommandError
 
-from api import compra_anonima, webhooks_stripe
+from api import cobro, compra_anonima, webhooks_stripe
 from api.models import PasarelaCheckout
 
 
@@ -64,5 +64,28 @@ class Command(BaseCommand):
         if sesion.get("payment_status") != "paid":
             raise CommandError("la sesión no está pagada: no se acredita")
 
-        webhooks_stripe.acreditar_a_mano(fila, sesion)
-        self.stdout.write(self.style.SUCCESS(f"acreditada {session_id} con descuento {fila.descuento_centavos}"))
+        try:
+            acreditada = webhooks_stripe.acreditar_a_mano(fila, sesion)
+        except cobro.PagoDuplicado as exc:
+            raise CommandError(
+                f"no se acreditó: la compra ya la acreditó el pago {exc.acreditado_por} y {exc.pago_id} "
+                "es un duplicado. Reembolsalo desde el dashboard de Stripe.",
+            ) from exc
+        except cobro.CompraDisputada as exc:
+            raise CommandError(
+                f"no se acreditó: la fila tiene la disputa {exc}. Con --aunque-disputada se entrega igual.",
+            ) from exc
+        if acreditada:
+            self.stdout.write(self.style.SUCCESS(f"acreditada {session_id} con descuento {fila.descuento_centavos}"))
+            return
+        # `cobro` devuelve False también para la repetición de una compra ya
+        # acreditada: eso no es un error, el comando es idempotente.
+        fila.refresh_from_db(fields=["acreditado_at", "pago_id"])
+        pago_id = webhooks_stripe._payment_intent_id(sesion)
+        if fila.acreditado_at is not None and pago_id and fila.pago_id == pago_id:
+            self.stdout.write(f"{session_id} ya estaba acreditada por el pago {pago_id}: no se hizo nada.")
+            return
+        raise CommandError(
+            f"no se acreditó {session_id}: el cobro la rechazó (sin id de pago, sin cuenta o un monto que "
+            "no cierra). El motivo está en el log y en el aviso de Telegram.",
+        )

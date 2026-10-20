@@ -7,6 +7,7 @@ cupón, sin `acreditado_at`, sin informe arrancado.
 import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.utils import timezone
 
 from api import cobro, webhooks_stripe
 from api.models import Cupon, CuponUso, Derecho, Movimiento, PasarelaCheckout
@@ -128,3 +129,40 @@ def test_una_compra_sin_cuenta_que_el_webhook_rechazo_se_acredita_a_mano(
     assert anonima.account is not None and anonima.account.email == "manual@mail.com"
     assert anonima.acreditado_at is not None
     assert Movimiento.objects.filter(external_id=f"stripe:session:{SESSION_ANONIMA}").count() == 1
+
+
+def test_si_el_cobro_la_rechaza_es_un_error_y_no_dice_acreditada(compra, monkeypatch, capsys):
+    """`cobro.acreditar` devuelve False sin acreditar (acá, un pago sin id):
+    el comando no puede decir «acreditada»."""
+    monkeypatch.setattr(cobro, "avisar", lambda texto: None)
+    sesion = webhooks_stripe.obtener_sesion(SESSION)
+    monkeypatch.setattr(webhooks_stripe, "obtener_sesion", lambda sid: {**sesion, "payment_intent": None})
+
+    with pytest.raises(CommandError, match="no se acreditó"):
+        call_command("acreditar_sesion", SESSION, "--si-estoy-seguro")
+
+    assert "acreditada" not in capsys.readouterr().out
+    assert _restante(compra.account) == 0
+
+
+def test_una_sesion_ya_acreditada_dice_que_ya_estaba(compra, capsys):
+    call_command("acreditar_sesion", SESSION, "--si-estoy-seguro")
+    capsys.readouterr()
+
+    call_command("acreditar_sesion", SESSION, "--si-estoy-seguro")
+
+    salida = capsys.readouterr().out
+    assert "ya estaba acreditada" in salida and "pi_manual" in salida
+    assert _restante(compra.account) == 1
+
+
+def test_un_pago_duplicado_es_un_error_claro(compra):
+    """La fila ya la acreditó otro pago: no se otorga y no sale un traceback."""
+    compra.acreditado_at = timezone.now()
+    compra.pago_id = "pi_otro"
+    compra.save(update_fields=["acreditado_at", "pago_id"])
+
+    with pytest.raises(CommandError, match="pi_otro.*duplicado"):
+        call_command("acreditar_sesion", SESSION, "--si-estoy-seguro")
+
+    assert _restante(compra.account) == 0

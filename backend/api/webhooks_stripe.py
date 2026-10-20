@@ -35,7 +35,6 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-
 from api import cobro, compra_anonima
 from api.models import PasarelaCheckout
 from api.stripe_client import (
@@ -394,12 +393,17 @@ def _medio_de_pago(sesion: dict) -> str:
     return tipos[0] if tipos else ""
 
 
-def acreditar_a_mano(fila, sesion: dict) -> None:
+def acreditar_a_mano(fila, sesion: dict) -> bool:
     """Para `manage.py acreditar_sesion`: acredita confiando en la fila
     congelada, salteando la comparación con lo que Stripe reporta. Quien lo
     corre ya miró los dos valores; `a_mano` entrega aunque la fila tenga una
-    disputa (el comando lo pide con `--aunque-disputada`)."""
-    cobro.acreditar(
+    disputa (el comando lo pide con `--aunque-disputada`).
+
+    Devuelve lo que devuelve `cobro.acreditar`: si ESTA llamada acreditó.
+    `False` es tanto un rechazo (sin id de pago, sin cuenta, monto que no
+    cierra) como la repetición de una compra ya acreditada; el comando los
+    distingue mirando la fila."""
+    return cobro.acreditar(
         fila, pago_id=_payment_intent_id(sesion), monto_pagado=fila.precio_de_lista() - fila.descuento_centavos,
         moneda=fila.moneda, medio=_medio_de_pago(sesion), external_id=f"stripe:session:{fila.checkout_id}",
         a_mano=True,
