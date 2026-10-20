@@ -500,10 +500,6 @@ REVENUECAT_WEBHOOK_AUTH = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")
 # Mapa product_id (App Store / Play) → créditos que otorga. JSON en env.
 REVENUECAT_PRODUCT_CREDITS = _mapa_json("REVENUECAT_PRODUCT_CREDITS")
 
-# --- Polar (cobro en la web) -------------------------------------------------
-# El sandbox es OTRA organización: cuenta, productos y token propios. El default
-# es producción a propósito — un valor mal escrito no puede mandar los pagos
-# reales al sandbox, que no cobra.
 # Stripe es la pasarela: cobra como merchant of record (Managed Payments), se
 # ocupa del IVA en más de 80 países y avisa por webhook.
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")

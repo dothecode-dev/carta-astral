@@ -28,7 +28,7 @@ from rest_framework.views import APIView
 from api.auth import AccountTokenAuthentication
 from api.models import PasarelaCheckout
 from api.permissions import HasAccount
-from api.stripe_client import VENCIMIENTO_SESION
+from api.reglas_checkout import VENCIMIENTO_SESION
 
 # La red: un checkout sin acreditar ni vencer deja de listarse a las 24 h
 # aunque el evento de vencimiento no haya llegado.

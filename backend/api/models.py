@@ -519,7 +519,7 @@ class PasarelaCheckout(models.Model):
         related_name="checkouts",
     )
     # En qué idioma se compró, para escribir el informe en ése. El webhook no
-    # tiene otra forma de saberlo: quien paga puede cerrar la pestaña en Polar
+    # tiene otra forma de saberlo: quien paga puede cerrar la pestaña de la pasarela
     # y no volver nunca, y un default silencioso le entregaría el informe pago
     # en un idioma que no eligió.
     locale = models.CharField(max_length=5, default="es")

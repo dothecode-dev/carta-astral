@@ -1,7 +1,6 @@
 """Qué pasa después de que una compra se acredita, sea cual sea la pasarela.
 
-Existe porque los dos webhooks —Polar, que sigue vivo para los reembolsos de
-lo que entró por ahí, y Stripe— tienen que hacer exactamente lo mismo cuando
+Existe porque los dos webhooks —Stripe y Mercado Pago— tienen que hacer exactamente lo mismo cuando
 una compra suelta trae una carta atada, y duplicar cuarenta líneas de lógica de
 plata es la forma más segura de que un día se arreglen en un archivo y no en el
 otro.
@@ -9,9 +8,9 @@ otro.
 No captura errores a propósito —la única excepción es `SinDerecho` cuando la
 unidad comprada saldó una deuda de la cuenta (RF5b), y sólo si el rastro lo
 confirma: cualquier otra falta de derecho sube—: cada pasarela decide qué hacer
-con un fallo, y la decisión es distinta. Polar deshabilita el endpoint tras diez entregas
-fallidas, así que allá se loguea y se responde 2xx; Stripe reintenta tres días
-sin castigar el endpoint, así que allá conviene el 5xx.
+con un fallo, y la decisión es distinta. Polar (ya retirado) deshabilitaba el
+endpoint tras diez entregas fallidas y ahí se respondía 2xx; Stripe reintenta
+tres días sin castigar el endpoint, así que allá conviene el 5xx.
 """
 
 import logging

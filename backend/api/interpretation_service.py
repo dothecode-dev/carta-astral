@@ -739,7 +739,7 @@ def arrancar_en_hilo(interpretacion: Interpretation, account) -> None:
     """Termina en un hilo aparte un informe cuya fila ya existe.
 
     Vive acá y no en la vista porque tiene dos llamadores: el POST de la web y
-    el webhook de Polar, que arranca el informe apenas se acredita el pago.
+    el webhook de pago, que arranca el informe apenas se acredita el pago.
     Duplicar el patrón era duplicar también sus dos cuidados —cerrar la
     conexión y no morir en silencio—, y el segundo llamador se escribió
     justamente porque el primero no cubría a quien paga y cierra la pestaña.

@@ -13,10 +13,10 @@ La URL es pública, así que la firma es la única autenticación. Sin
 entregas cuando falta la configuración es la peor forma de fallar en un
 endpoint por el que se acreditan informes pagos.
 
-**La política de errores es la inversa de la de Polar**, y es a propósito.
-Polar deshabilita el endpoint tras diez entregas fallidas seguidas, así que
-allá se responde 2xx a todo y cualquier error se pierde: una compra que falla
-al acreditar no vuelve a intentarse nunca. Stripe reintenta durante tres días
+**La política de errores es la inversa de la que tenía Polar** (retirado), y es
+a propósito. Polar deshabilitaba el endpoint tras diez entregas fallidas seguidas, así que
+allá se respondía 2xx a todo y cualquier error se perdía: una compra que fallaba
+al acreditar no volvía a intentarse nunca. Stripe reintenta durante tres días
 con backoff y no deshabilita nada, entonces acá:
 
 - fallo transitorio (la API no responde, la base se cayó) → **5xx**, y la
@@ -55,7 +55,7 @@ EVENTOS_PAGO = ("checkout.session.completed", "checkout.session.async_payment_su
 # el detalle sin una llamada extra a la API.
 EVENTOS_REEMBOLSO = ("refund.created",)
 
-# La sesión venció sin pagarse (`VENCIMIENTO_SESION` en `stripe_client`), o el
+# La sesión venció sin pagarse (`VENCIMIENTO_SESION` en `reglas_checkout`), o el
 # medio de pago asincrónico falló. No mueven plata: marcan la fila para que la
 # cuenta deje de mostrar un pago que nadie hizo, y descartan la carta de una
 # compra sin cuenta (RF8). `async_payment_failed` hace falta aparte: con

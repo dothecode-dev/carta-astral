@@ -47,8 +47,8 @@ def _mail_de_disputa(fila, mail_pagador: str) -> str:
     """De quién bloquear el mail. Una compra sin cuenta disputada antes de su
     pago (EC16) todavía no tiene cuenta: el mail es el del pagador, que trae
     la pasarela. Sin eso (Mercado Pago, o una cuenta borrada después de
-    comprar), el que se pidió al abrir el checkout (Ruling 16). En las filas
-    de Stripe `mail_comprador` es "": para ellas no cambia nada."""
+    comprar), el que se pidió al abrir el checkout (Ruling 16): `mail_comprador`
+    lo guardan las filas de MP y las compras anónimas de Stripe."""
     if fila.account is not None:
         return fila.account.email or ""
     return mail_pagador or fila.mail_comprador or ""

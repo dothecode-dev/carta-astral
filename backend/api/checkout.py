@@ -24,6 +24,7 @@ from api import (
     cupones,
     mantenimiento,
     notificaciones,
+    reglas_checkout,
     stripe_client,
 )
 from api.auth import AccountTokenAuthentication
@@ -38,8 +39,8 @@ logger = logging.getLogger(__name__)
 def idioma_pedido(request) -> str:
     """El idioma que navega la persona, por lista blanca: viene del navegador
     y termina en una URL y en la base, así que no se guarda tal cual."""
-    pedido = request.data.get("locale") or stripe_client.LOCALE_POR_DEFECTO
-    return pedido if pedido in stripe_client.LOCALES else stripe_client.LOCALE_POR_DEFECTO
+    pedido = request.data.get("locale") or reglas_checkout.LOCALE_POR_DEFECTO
+    return pedido if pedido in reglas_checkout.LOCALES else reglas_checkout.LOCALE_POR_DEFECTO
 
 
 class MonedaInvalida(Exception):

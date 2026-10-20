@@ -17,7 +17,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from api import cobro, cupones, devoluciones, stripe_client
+from api import cobro, cupones, devoluciones, reglas_checkout
 from api.conteo import contar
 from api.models import PasarelaCheckout
 from api.pasarelas import mercadopago_api
@@ -65,7 +65,7 @@ def abrir(
         "auto_return": "approved",
         "expires": True,
         "expiration_date_from": ahora.isoformat(),
-        "expiration_date_to": (ahora + stripe_client.VENCIMIENTO_SESION).isoformat(),
+        "expiration_date_to": (ahora + reglas_checkout.VENCIMIENTO_SESION).isoformat(),
         # Sin efectivo ni cajero: tardan días en acreditar y la preferencia vence a la hora.
         "payment_methods": {"excluded_payment_types": [{"id": "ticket"}, {"id": "atm"}], "installments": 1},
         "metadata": metadata,
@@ -427,7 +427,7 @@ def revisar_vencidas(ahora: dt.datetime) -> dict[str, int]:
     Después, en un paso aparte, se descarta la carta de las compras sin cuenta
     cerradas como vencidas hace más de `_CONSERVAR_CARTA` (RF8).
     """
-    limite = ahora - stripe_client.VENCIMIENTO_SESION - _MARGEN_VENCIMIENTO
+    limite = ahora - reglas_checkout.VENCIMIENTO_SESION - _MARGEN_VENCIMIENTO
     candidatas = PasarelaCheckout.objects.filter(
         pasarela=PasarelaCheckout.MERCADOPAGO, mp_revisado_at__isnull=True, created_at__lt=limite,
     )

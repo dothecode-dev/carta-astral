@@ -66,7 +66,7 @@ def otorgar(account, codigo_producto, cantidad, origen, external_id="", note="")
     # el pack de 5 informes natales (otorga=(("informe_natal", 5),)) tiene que
     # dejar un derecho de informe_natal, no uno de pack_5_natal que nadie
     # consulta. El Movimiento sí guarda el producto comprado: es el rastro
-    # de auditoría de lo que entró por Polar.
+    # de auditoría de lo que entró por la pasarela.
     #
     # Se recorre porque un producto puede otorgar MÁS DE UNA cosa: un combo
     # "carta + horóscopo" deja un derecho de cada uno. Un pack sigue siendo el
@@ -159,7 +159,7 @@ def aplicar_compra(
 
     esperado = precio - descuento_centavos
     if monto_centavos != esperado:
-        # Hay dos fuentes de precio —este catálogo y el de Polar—: si divergen,
+        # Hay dos fuentes de precio —este catálogo y el de la pasarela—: si divergen,
         # todos los pagos de este producto se rechazan. Sin este error a la
         # vista, es caja cerrada en silencio.
         logger.error(

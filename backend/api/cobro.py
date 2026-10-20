@@ -5,12 +5,9 @@ pagó, en qué moneda, con qué id— y acá se decide qué derechos se otorgan 
 revocan. Lo que no puede saber de la pasarela lo fija el contrato de
 import-linter «cobro no conoce pasarelas».
 
-Stripe y Mercado Pago acreditan los dos por `acreditar` (fase 2, R1).
-**`reembolsar` todavía está duplicado** con `webhooks_stripe._reembolsar`
-(plan fase 1, R11) hasta que Stripe pase a llamarlo: un arreglo en uno de
-los dos lados hay que llevarlo al otro.
-
-Las disputas (Stripe) y los contracargos (MP) entran por `disputa_abierta` /
+Stripe y Mercado Pago acreditan por `acreditar` y reembolsan por `reembolsar`
+(fase 2, R1); no queda lógica duplicada en `webhooks_stripe`. Las disputas
+(Stripe) y los contracargos (MP) entran por `disputa_abierta` /
 `disputa_resuelta` (fase 2, R5), que delegan en `api.disputas`.
 
 Política de errores, que quien llama traduce a su respuesta HTTP:
