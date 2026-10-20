@@ -11,9 +11,7 @@ from api.models import PasarelaCheckout
 from api.pasarelas import mercadopago, mercadopago_api
 from api.pasarelas import stripe as pasarela_stripe
 
-# Las de MP salen del cliente HTTP y no de `mercadopago`: ese módulo llega
-# hasta acá por `cobro` → `compra_anonima`, y a mitad de su import todavía no
-# tiene atributos que leer.
+# Las de MP salen del cliente HTTP, que es donde se definen.
 ERRORES_STRIPE = pasarela_stripe.ERRORES
 ERRORES_MP = (mercadopago_api.MPNoConfigurado, mercadopago_api.MPError)
 #: Lo que una vista atrapa con un solo `except`: configuración o API de una pasarela.

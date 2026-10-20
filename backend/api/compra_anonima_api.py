@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from core.exceptions import CoreError
 
-from api import apertura, catalogo, compra_anonima, mantenimiento
+from api import apertura, catalogo, compra_anonima, compra_anonima_apertura, mantenimiento
 from api.chart_service import calcular, mensaje_de_datos_invalidos, validar_trato
 from api.pedido_checkout import (
     MONEDA_INVALIDA,
@@ -102,7 +102,7 @@ class CheckoutAnonimoView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            fila, nonce = compra_anonima.abrir(request.data, idioma, moneda, email)
+            fila, nonce = compra_anonima_apertura.abrir(request.data, idioma, moneda, email)
         except compra_anonima.NoDisponible:
             return Response(_NO_DISPONIBLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except (KeyError, ValueError):

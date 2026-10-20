@@ -99,18 +99,29 @@ forbidden_modules = ["cms"]
 
 # El núcleo del cobro no sabe por qué pasarela entró la plata: cada webhook
 # traduce su payload y llama a `api.cobro`, que llama a `api.disputas`. Los
-# dos quedan prohibidos de importar una pasarela DIRECTAMENTE.
-# `allow_indirect_imports` sigue porque `cobro` llega a `stripe_client` por
-# `compra_anonima` y por `canje` → `cupones` (fuera del alcance de la fase 2,
-# R5; decisión del 19-10-2026). Sin eso, el contrato no pasaría hoy.
+# dos quedan prohibidos de llegar a una pasarela, directa o INDIRECTAMENTE:
+# lo único de `compra_anonima` que abría un pago (`abrir`, por `apertura`)
+# vive en `compra_anonima_apertura`, fuera del grafo de `cobro`. Si esto
+# vuelve a fallar, el arreglo es cortar la cadena, no aflojar el contrato:
+# esa misma cadena era un ciclo de imports que rompía importar primero un
+# submódulo de Mercado Pago (tests/api/test_imports_en_frio.py).
 [[tool.importlinter.contracts]]
 name = "cobro no conoce pasarelas"
 type = "forbidden"
 source_modules = ["api.cobro", "api.disputas"]
 forbidden_modules = [
-    "stripe", "httpx", "mercadopago", "api.stripe_client", "api.pasarelas", "api.webhooks_stripe",
+    "stripe", "mercadopago", "api.stripe_client", "api.pasarelas", "api.webhooks_stripe",
     "api.webhooks_mercadopago",
 ]
+
+# `httpx` va aparte y sólo DIRECTO: `cobro` no le habla por HTTP a ninguna
+# pasarela, pero sí llega a `httpx` —legítimamente— por los avisos (Telegram),
+# la analítica (PostHog) y los mails (Resend).
+[[tool.importlinter.contracts]]
+name = "cobro no habla HTTP directo"
+type = "forbidden"
+source_modules = ["api.cobro", "api.disputas"]
+forbidden_modules = ["httpx"]
 allow_indirect_imports = true
 
 # Las vistas que abren un pago no saben por qué pasarela sale (R8/R9): llaman a
@@ -120,7 +131,7 @@ allow_indirect_imports = true
 name = "el checkout no conoce Stripe"
 type = "forbidden"
 source_modules = [
-    "api.checkout", "api.compra_anonima_api", "api.compras_api", "api.compra_anonima",
+    "api.checkout", "api.compra_anonima_api", "api.compras_api", "api.compra_anonima", "api.compra_anonima_apertura",
     "api.pasarelas.mercadopago", "api.pasarelas.mercadopago_pagos", "api.pasarelas.mercadopago_disputas",
     "api.pasarelas.mercadopago_cron",
 ]

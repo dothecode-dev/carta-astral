@@ -6,7 +6,7 @@ import logging
 
 from django.core.cache import cache
 
-from api import cobro, reglas_checkout
+from api import cobro, compra_anonima, reglas_checkout
 from api.models import PasarelaCheckout
 from api.pasarelas import mercadopago_api
 from api.pasarelas.mercadopago_pagos import _REFERENCIA_NUESTRA, FilaInexistente, procesar_pago
@@ -179,9 +179,6 @@ def _descartar_cartas(ahora: dt.datetime, resumen: dict[str, int]) -> None:
     """RF8: la carta de una compra sin cuenta que el cron cerró como vencida se
     guarda `_CONSERVAR_CARTA` por si el pago llega tarde, y después se borra.
     Ya está confirmado que no hay pago: no se vuelve a preguntar a MP."""
-    # Import local: `compra_anonima` importa este módulo.
-    from api import compra_anonima
-
     filas = PasarelaCheckout.objects.filter(
         pasarela=PasarelaCheckout.MERCADOPAGO, anonimo=True, account__isnull=True, sujeto__isnull=False,
         acreditado_at__isnull=True, mp_revisado_at__isnull=False, vencido_at__lt=ahora - _CONSERVAR_CARTA,

@@ -73,7 +73,7 @@ def con_mail(email, **cambios) -> dict:
 
 @pytest.fixture
 def anonima(make_chart):
-    """Un checkout abierto sin cuenta, como lo deja `compra_anonima.abrir`: la
+    """Un checkout abierto sin cuenta, como lo deja `compra_anonima_apertura.abrir`: la
     carta sin dueño y su sujeto natal también."""
     from api.models import PasarelaCheckout
 
