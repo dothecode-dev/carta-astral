@@ -10,6 +10,9 @@ Stripe y Mercado Pago acreditan los dos por `acreditar` (fase 2, R1).
 (plan fase 1, R11) hasta que Stripe pase a llamarlo: un arreglo en uno de
 los dos lados hay que llevarlo al otro.
 
+Las disputas (Stripe) y los contracargos (MP) entran por `disputa_abierta` /
+`disputa_resuelta` (fase 2, R5), que delegan en `api.disputas`.
+
 Política de errores, que quien llama traduce a su respuesta HTTP:
 
 - `return False` con aviso al admin: fallo DEFINITIVO —ids vacíos, moneda o
@@ -460,3 +463,29 @@ def _revocar(fila, external_id: str, monto: int) -> str | None:
             external_id, monto, base, unidades, fila.codigo_producto, tomadas,
         )
     return aviso
+
+
+def disputa_abierta(
+    fila: PasarelaCheckout, *, dispute_id: str, monto: int, moneda: str, motivo: str | None, mail_pagador: str = "",
+) -> bool:
+    """La pasarela retiró los fondos (disputa de Stripe, contracargo de MP).
+    Devuelve si esta llamada la aplicó: False es una ya registrada, y quien
+    llama decide si eso merece su propio aviso (MP lo avisa; Stripe no).
+
+    `dispute_id` es la constancia en `Disputa` y, vía `disputas.clave_ledger`,
+    la clave del ledger: `mp:chargeback:<id>` va tal cual y un `dp_…` de
+    Stripe lleva `stripe:dispute:` delante. `mail_pagador` es el mail que
+    informa la pasarela, para una compra sin cuenta (EC16)."""
+    aviso = disputas.retirar(fila.pk, dispute_id, monto, (moneda or "").lower(), motivo, mail_pagador=mail_pagador)
+    # Después del commit de `retirar`: nunca un aviso de algo que se deshizo.
+    if aviso:
+        avisar(aviso)
+    return aviso is not None
+
+
+def disputa_resuelta(fila: PasarelaCheckout, *, dispute_id: str) -> None:
+    """La pasarela devolvió los fondos de una disputa: se repone lo revocado y
+    se libera el mail si no le queda otra abierta."""
+    aviso = disputas.reponer(fila.pk, dispute_id)
+    if aviso:
+        avisar(aviso)

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from api import cobro, devoluciones, disputas, stripe_client, webhooks_stripe
+from api import cobro, devoluciones, stripe_client, webhooks_stripe
 from api.models import Derecho, MailBloqueado, Movimiento, PasarelaCheckout
 from api.sujetos import sujeto_natal
 from tests.api.stripe_firma import SECRETO, firmar
@@ -25,7 +25,6 @@ def _configurado(settings):
 @pytest.fixture
 def avisos_enviados(monkeypatch):
     enviados = []
-    monkeypatch.setattr(disputas, "avisar_admin", enviados.append)
     monkeypatch.setattr(cobro, "avisar", enviados.append)
     return enviados
 
@@ -189,7 +188,7 @@ def test_disputa_antes_de_completed_marca_la_fila_y_el_pago_no_entrega(client, m
         precio_centavos=14900, sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
     monkeypatch.setattr(stripe_client, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
-    monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
+    monkeypatch.setattr(webhooks_stripe, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
 
     _disputa(client)
     fila.refresh_from_db()
@@ -212,7 +211,7 @@ def test_disputa_antes_de_completed_marca_la_fila_y_el_pago_no_entrega(client, m
 
 def test_una_disputa_sin_compra_conocida_avisa_y_no_toca_nada(client, monkeypatch, avisos_enviados):
     """Review Focus 4."""
-    monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: None)
+    monkeypatch.setattr(webhooks_stripe, "sesion_por_payment_intent", lambda pi: None)
 
     r = _disputa(client, payment_intent="pi_ajeno")
 
@@ -322,7 +321,7 @@ def test_una_compra_anonima_disputada_antes_de_completed_bloquea_el_mail_del_pag
         sujeto=sujeto_natal(make_chart(account=None)),
     )
     monkeypatch.setattr(
-        disputas, "sesion_por_payment_intent",
+        webhooks_stripe, "sesion_por_payment_intent",
         lambda pi: {"id": "cs_du", "customer_details": {"email": " Ana@Mail.com "}},
     )
 
@@ -472,7 +471,7 @@ def test_disputa_antes_del_pago_resuelta_a_favor_el_pago_que_llega_se_entrega_y_
         pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
         precio_centavos=14900, sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
-    monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
+    monkeypatch.setattr(webhooks_stripe, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
     _disputa(client)
     _disputa(client, tipo="charge.dispute.funds_reinstated")
 
@@ -592,7 +591,7 @@ def test_reposicion_sin_mail_bloqueado_no_dice_que_sigue_bloqueado(client, monke
         precio_centavos=14900, anonimo=True, nonce_hash="x" * 64,
         sujeto=sujeto_natal(make_chart(account=None)),
     )
-    monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"})
+    monkeypatch.setattr(webhooks_stripe, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"})
     _disputa(client)
     _disputa(client, tipo="charge.dispute.funds_reinstated")
 
@@ -679,7 +678,7 @@ def test_disputa_en_otra_moneda_antes_del_pago_no_entrega_hasta_que_se_resuelve(
         pasarela=PasarelaCheckout.STRIPE, checkout_id="cs_du", account=cuenta, codigo_producto="informe_natal", moneda="brl",
         precio_centavos=14900, sujeto=sujeto_natal(make_chart(account=cuenta)),
     )
-    monkeypatch.setattr(disputas, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
+    monkeypatch.setattr(webhooks_stripe, "sesion_por_payment_intent", lambda pi: {"id": "cs_du"} if pi == "pi_1" else None)
     _disputa(client, currency="usd")
 
     sesion = {
@@ -755,3 +754,40 @@ def test_la_reposicion_dice_que_lo_revocado_paso_a_un_reembolso(client, compra_a
     resuelta = [a for a in avisos_enviados if "resuelta a favor" in a]
     assert resuelta and "reembolso" in resuelta[0] and "no había revocado nada" not in resuelta[0]
     assert _restante(compra_acreditada.account) == 0
+
+
+# --- fase 2 (R5): las claves del ledger de Stripe no cambian ------------------------------
+
+
+def test_las_claves_del_ledger_de_una_disputa_de_stripe_no_cambian(client, compra_acreditada, avisos_enviados):
+    _disputa(client, id="dp_1")
+    _disputa(client, tipo="charge.dispute.funds_reinstated", id="dp_1")
+
+    claves = set(Movimiento.objects.filter(account=compra_acreditada.account).values_list("external_id", flat=True))
+    assert {"stripe:dispute:dp_1", "stripe:dispute:dp_1:reinstated"} <= claves
+
+
+def test_reinstated_de_disputa_vieja_repone(client, compra_acreditada, avisos_enviados):
+    """Review Focus 4: una disputa retirada ANTES de la fase 2 —su revocación
+    quedó en el ledger como `stripe:dispute:dp_1`— se repone igual cuando
+    Stripe devuelve los fondos después del deploy."""
+    from api.canje import revocar
+    from api.models import Disputa
+
+    cuenta = compra_acreditada.account
+    assert revocar(cuenta, "informe_natal", 1, external_id="stripe:dispute:dp_1")
+    devoluciones.registrar(compra_acreditada, 1, 14900)
+    Disputa.objects.create(
+        dispute_id="dp_1", fila=compra_acreditada, email="ana@mail.com", revocado_codigo="informe_natal",
+        revocado_cantidad=1, revocado_entera=True, unidades_revocadas=1, monto_anotado=14900,
+    )
+    PasarelaCheckout.objects.filter(pk=compra_acreditada.pk).update(disputa_id="dp_1")
+    MailBloqueado.bloquear("ana@mail.com", motivo="disputa", dispute_id="dp_1")
+    assert _restante(cuenta) == 0
+
+    assert _disputa(client, tipo="charge.dispute.funds_reinstated", id="dp_1").status_code == 200
+
+    assert _restante(cuenta) == 1
+    assert Movimiento.objects.filter(external_id="stripe:dispute:dp_1:reinstated").count() == 1
+    assert not MailBloqueado.bloqueado("ana@mail.com")
+    assert Disputa.objects.get(dispute_id="dp_1").estado == Disputa.RESUELTA

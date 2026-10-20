@@ -465,7 +465,7 @@ def test_contracargo_por_exactamente_lo_pagado_revoca(client, api_mp, avisos, ac
 
 
 def test_contracargo_en_otra_moneda_registra_bloquea_y_no_revoca(client, api_mp, avisos, acreditada):
-    """La guarda de moneda de `disputas._retirar` recibe la moneda del
+    """La guarda de moneda de `disputas.retirar` recibe la moneda del
     contracargo, no "ars" fijo: en otra moneda no se comparan montos."""
     api_mp.contracargos[CONTRACARGO] = {**_contracargo(), "currency": "USD"}
 
@@ -496,6 +496,17 @@ def test_contracargo_sin_moneda_valida_avisa_y_no_revoca(client, api_mp, avisos,
     assert len(avisos) == 1 and "a mano" in avisos[0]
 
 
+def test_contracargo_mp_ledger_sin_prefijo_stripe(client, api_mp, avisos, acreditada):
+    """La clave del ledger de un contracargo es su `dispute_id` tal cual: antes
+    de la fase 2 salía `stripe:dispute:mp:chargeback:<id>`."""
+    api_mp.contracargos[CONTRACARGO] = _contracargo()
+
+    assert _notificar_contracargo(client).status_code == 200
+
+    claves = list(Movimiento.objects.filter(tipo="revocacion").values_list("external_id", flat=True))
+    assert claves == [f"mp:chargeback:{CONTRACARGO}"]
+
+
 # --- code review E (Ruling 16): mail de una compra cuya cuenta se borró --------------------
 
 
@@ -518,29 +529,29 @@ def test_contracargo_de_una_compra_sin_cuenta_bloquea_el_mail_comprador(client, 
     assert Disputa.objects.get().email == "borrada@mail.com"
 
 
-@pytest.mark.parametrize("sesion,esperado", [
-    (None, ""),
-    ({"customer_details": {"email": "pago@stripe.com"}}, "pago@stripe.com"),
+@pytest.mark.parametrize("mail_pagador,esperado", [
+    ("", ""),
+    ("pago@stripe.com", "pago@stripe.com"),
 ])
-def test_mail_de_disputa_de_stripe_sin_cuenta_no_cambia(sesion, esperado):
+def test_mail_de_disputa_de_stripe_sin_cuenta_no_cambia(mail_pagador, esperado):
     """Ruling 16 es aditivo: una fila de Stripe tiene `mail_comprador` vacío,
-    así que sigue saliendo del pago o de ningún lado, como antes."""
+    así que sigue saliendo del pago o de ningún lado, como antes. Desde la
+    fase 2 el mail del pago lo lee el adaptador de Stripe de la sesión."""
     from api import disputas
 
     fila = PasarelaCheckout(checkout_id="cs_test_x", account=None, pasarela=PasarelaCheckout.STRIPE)
 
     assert fila.mail_comprador == ""
-    assert disputas._mail_de_disputa(fila, sesion) == esperado
+    assert disputas._mail_de_disputa(fila, mail_pagador) == esperado
 
 
-def test_mail_de_disputa_prefiere_la_cuenta_y_despues_la_sesion(make_account):
+def test_mail_de_disputa_prefiere_la_cuenta_y_despues_el_pagador(make_account):
     from api import disputas
 
     cuenta = make_account(email="cuenta@mail.com")
     con_cuenta = PasarelaCheckout(pasarela=PasarelaCheckout.STRIPE, checkout_id="mp_x", account=cuenta, mail_comprador="otro@mail.com")
     sin_cuenta = PasarelaCheckout(pasarela=PasarelaCheckout.STRIPE, checkout_id="mp_y", account=None, mail_comprador="otro@mail.com")
-    sesion = {"customer_details": {"email": "pago@stripe.com"}}
 
-    assert disputas._mail_de_disputa(con_cuenta, sesion) == "cuenta@mail.com"
-    assert disputas._mail_de_disputa(sin_cuenta, sesion) == "pago@stripe.com"
-    assert disputas._mail_de_disputa(sin_cuenta, None) == "otro@mail.com"
+    assert disputas._mail_de_disputa(con_cuenta, "pago@stripe.com") == "cuenta@mail.com"
+    assert disputas._mail_de_disputa(sin_cuenta, "pago@stripe.com") == "pago@stripe.com"
+    assert disputas._mail_de_disputa(sin_cuenta, "") == "otro@mail.com"

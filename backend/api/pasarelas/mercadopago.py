@@ -17,7 +17,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from api import cobro, cupones, devoluciones, disputas, stripe_client
+from api import cobro, cupones, devoluciones, stripe_client
 from api.conteo import contar
 from api.models import PasarelaCheckout
 from api.pasarelas import mercadopago_api
@@ -266,7 +266,7 @@ def procesar_reclamo(claim_id: str) -> None:
 
 def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
     """Un contracargo se trata como una disputa de Stripe que retira fondos:
-    revoca lo que queda, bloquea el mail y avisa (`disputas._retirar`).
+    revoca lo que queda, bloquea el mail y avisa (`cobro.disputa_abierta`).
 
     El cuerpo de la notificación no está firmado (la firma cubre el uuid de la
     query): el contracargo se lee de la API y el pago tiene que figurar en él.
@@ -340,22 +340,22 @@ def procesar_contracargo(chargeback_id: str, payment_id: str) -> None:
         return
 
     dispute_id = f"mp:chargeback:{chargeback_id}"
-    # La moneda del contracargo, no la de la fila: si no coinciden, `_retirar`
+    # La moneda del contracargo, no la de la fila: si no coinciden, `disputas`
     # registra y bloquea sin comparar montos ni revocar.
-    aviso = disputas._retirar(fila.pk, None, dispute_id, monto, moneda, "contracargo MP")
-    if aviso is None:
+    aplicada = cobro.disputa_abierta(
+        fila, dispute_id=dispute_id, monto=monto, moneda=moneda, motivo="contracargo MP",
+    )
+    if not aplicada:
         # D3 (spec de cobro en pesos): qué campos dicen que un contracargo se
         # resolvió a favor no se pudo medir en el sandbox, así que la
         # resolución no se automatiza. Toda notificación posterior de un
         # contracargo ya registrado —reenvío, cambio de etapa o resolución—
         # sólo avisa.
         logger.warning("contracargo %s ya registrado sobre %s: se avisa", chargeback_id, fila.checkout_id)
-        aviso = (
+        cobro.avisar(
             f"Contracargo de Mercado Pago {chargeback_id} ({fila.checkout_id}) ya registrado: llegó otra "
             f"notificación (etapa {contracargo.get('stage') or '?'}). No se cambió nada: revisar a mano en MP."
         )
-    # Después del commit de `_retirar`: nunca un aviso de algo que se deshizo.
-    cobro.avisar(aviso)
 
 
 def _forma_invalida(contracargo) -> str:

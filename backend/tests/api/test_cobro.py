@@ -661,3 +661,61 @@ def test_el_mismo_pago_dos_veces_a_la_vez_otorga_una_sola(make_account, monkeypa
     assert sorted(resultados) == [False, False, True]
     assert Movimiento.objects.filter(external_id="mp:payment:111").count() == 1
     assert len(mails) == 1
+
+
+# --- disputas (fase 2, R5) -----------------------------------------------------------------
+
+
+@pytest.fixture
+def acreditada_con_mail(acreditada):
+    Account.objects.filter(pk=acreditada.account_id).update(email="ana@mail.com")
+    return PasarelaCheckout.objects.select_related("account").get(pk=acreditada.pk)
+
+
+@pytest.mark.django_db
+def test_disputa_abierta_revoca_con_la_clave_que_trae_y_avisa_una_vez(acreditada_con_mail, avisos):
+    acreditada = acreditada_con_mail
+    aplicada = cobro.disputa_abierta(
+        acreditada, dispute_id="mp:chargeback:77", monto=PRECIO_ARS, moneda="ars", motivo="contracargo MP",
+    )
+    repetida = cobro.disputa_abierta(
+        PasarelaCheckout.objects.get(pk=acreditada.pk),
+        dispute_id="mp:chargeback:77", monto=PRECIO_ARS, moneda="ars", motivo="contracargo MP",
+    )
+
+    assert (aplicada, repetida) == (True, False)
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 0
+    assert list(Movimiento.objects.filter(tipo="revocacion").values_list("external_id", flat=True)) == [
+        "mp:chargeback:77",
+    ]
+    assert len(avisos) == 1 and "mp:chargeback:77" in avisos[0]
+    assert MailBloqueado.bloqueado("ana@mail.com")
+
+
+@pytest.mark.django_db
+def test_disputa_resuelta_repone_con_reinstated_y_avisa(acreditada_con_mail, avisos):
+    acreditada = acreditada_con_mail
+    cobro.disputa_abierta(
+        acreditada, dispute_id="mp:chargeback:77", monto=PRECIO_ARS, moneda="ars", motivo="contracargo MP",
+    )
+
+    cobro.disputa_resuelta(PasarelaCheckout.objects.get(pk=acreditada.pk), dispute_id="mp:chargeback:77")
+
+    assert Derecho.objects.get(codigo_producto="informe_natal").cantidad_restante == 1
+    assert Movimiento.objects.filter(external_id="mp:chargeback:77:reinstated").count() == 1
+    assert len(avisos) == 2 and "resuelta a favor" in avisos[1]
+    assert MailBloqueado.bloqueado("ana@mail.com") is False
+
+
+@pytest.mark.django_db
+def test_disputa_abierta_sin_cuenta_bloquea_el_mail_del_pagador(avisos):
+    """La compra sin cuenta disputada antes de su pago (EC16): el mail lo
+    trae la pasarela, no la fila."""
+    fila = _fila(None, anonimo=True, nonce_hash="x" * 64)
+
+    cobro.disputa_abierta(
+        fila, dispute_id="dp_9", monto=PRECIO_ARS, moneda="ars", motivo="fraudulent", mail_pagador="Pago@Mail.com",
+    )
+
+    assert MailBloqueado.bloqueado("pago@mail.com")
+    assert PasarelaCheckout.objects.get(pk=fila.pk).disputa_id == "dp_9"

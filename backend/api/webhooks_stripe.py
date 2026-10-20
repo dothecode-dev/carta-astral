@@ -36,10 +36,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 
-from api import cobro, compra_anonima, disputas
+from api import cobro, compra_anonima
 from api.models import PasarelaCheckout
 from api.stripe_client import (
-    FirmaInvalida, codigo_de_product, obtener_sesion, verificar_firma,
+    FirmaInvalida, codigo_de_product, obtener_sesion, sesion_por_payment_intent, verificar_firma,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,8 +64,11 @@ EVENTOS_REEMBOLSO = ("refund.created",)
 # para siempre.
 EVENTOS_VENCIMIENTO = ("checkout.session.expired", "checkout.session.async_payment_failed")
 
-# Stripe retiró los fondos por una disputa (o los devolvió): ver `api/disputas.py`.
-EVENTOS_DISPUTA = disputas.EVENTOS
+# Stripe retiró los fondos por una disputa (o los devolvió): `_disputa` encuentra
+# la compra y `cobro.disputa_abierta` / `disputa_resuelta` deciden (`api/disputas.py`).
+RETIRO = "charge.dispute.funds_withdrawn"
+REPOSICION = "charge.dispute.funds_reinstated"
+EVENTOS_DISPUTA = (RETIRO, REPOSICION)
 
 
 class StripeWebhookView(APIView):
@@ -100,7 +103,7 @@ class StripeWebhookView(APIView):
             elif tipo in EVENTOS_VENCIMIENTO:
                 _vencer(objeto.get("id", ""))
             elif tipo in EVENTOS_DISPUTA:
-                disputas.procesar(objeto, tipo)
+                _disputa(objeto, tipo)
             else:
                 _reembolsar(objeto)
         except Exception:
@@ -110,6 +113,49 @@ class StripeWebhookView(APIView):
             logger.exception("entrega de stripe %s fallida: se pide reintento", tipo)
             return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(status=status.HTTP_200_OK)
+
+
+def _disputa(dispute: dict, tipo: str) -> None:
+    """Traduce una disputa de Stripe a `cobro`. Sin compra conocida avisa y
+    responde 200: ya se le preguntó a Stripe por la sesión, así que reintentar
+    no hace aparecer una compra que no está."""
+    dispute_id = dispute.get("id", "")
+    pi = dispute.get("payment_intent") or ""
+    monto = dispute.get("amount") or 0
+    moneda = (dispute.get("currency") or "").lower()
+    fila, sesion = _fila_de_disputa(pi)
+    if fila is None:
+        logger.error("disputa %s sin compra conocida (pi=%s): no se toca nada", dispute_id, pi)
+        cobro.avisar(f"Stripe disputa {dispute_id} ({tipo}) sobre {pi}: no encuentro la compra. {monto} {moneda}.")
+        return
+    if tipo == RETIRO:
+        # Una compra sin cuenta disputada antes de su `completed` (EC16)
+        # todavía no tiene cuenta: el mail a bloquear es el del pago.
+        mail_pagador = ((sesion or {}).get("customer_details") or {}).get("email") or ""
+        cobro.disputa_abierta(
+            fila, dispute_id=dispute_id, monto=monto, moneda=moneda, motivo=dispute.get("reason"),
+            mail_pagador=mail_pagador,
+        )
+    else:
+        cobro.disputa_resuelta(fila, dispute_id=dispute_id)
+
+
+def _fila_de_disputa(pi: str) -> tuple:
+    """`(fila, sesion)` de esta disputa. Primero por el pago de la fila; si la
+    disputa llegó antes que `completed` (EC16) la fila todavía no lo tiene, y
+    se pregunta a Stripe de qué sesión es. `sesion` es None cuando alcanzó con
+    la fila."""
+    if not pi:
+        # Buscar por vacío engancharía cualquier fila abierta.
+        return None, None
+    fila = PasarelaCheckout.objects.filter(pasarela=PasarelaCheckout.STRIPE, pago_id=pi).first()
+    if fila is not None:
+        return fila, None
+    sesion = sesion_por_payment_intent(pi)
+    if sesion is None:
+        return None, None
+    fila = PasarelaCheckout.objects.filter(pasarela=PasarelaCheckout.STRIPE, checkout_id=sesion.get("id", "")).first()
+    return fila, sesion
 
 
 def _vencer(session_id: str) -> None:
