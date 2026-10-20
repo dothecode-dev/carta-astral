@@ -84,8 +84,16 @@ def test_es_publico_y_tiene_techo_por_ip(settings):
 
 
 def test_los_eventos_del_teaser_entran_en_el_resumen_del_informe_diario():
-    """`resumen` y `serie` recorren `conteo.EVENTOS`: un evento nuevo aparece
-    solo en el informe y en el panel, sin tocar cada lector."""
+    """`resumen` y `serie` recorren `conteo.EVENTOS`: un evento nuevo llega
+    solo a sus datos. El informe diario los nombra uno por uno; el panel del
+    admin, recién con su rediseño."""
     for evento in conteo.EVENTOS_TEASER:
         assert evento in conteo.EVENTOS
     assert "teaser_clic_ars" in conteo.resumen()["total"]
+
+
+def test_los_pasos_y_las_monedas_salen_del_modelo():
+    assert set(conteo.PASOS_TEASER) == {
+        "datos_abiertos", "cierre_visto", "clic_arriba", "clic_cierre", "mail_enviado", "volver",
+    }
+    assert set(conteo.MONEDAS_CLIC) == {"usd", "brl", "ars"}

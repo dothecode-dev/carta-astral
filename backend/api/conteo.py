@@ -25,8 +25,14 @@ EVENTOS_TEASER = tuple(e for e in EVENTOS if e.startswith("teaser_"))
 
 # Lo que el navegador puede pedir que se cuente, y nada más: no puede inventar
 # contadores ni sumarle a los que cuenta el servidor solo (`carta_calculada`).
-PASOS_TEASER = ("datos_abiertos", "cierre_visto", "clic_arriba", "clic_cierre", "mail_enviado", "volver")
-MONEDAS_CLIC = ("usd", "brl", "ars")
+# Sale de `ConteoDiario.EVENTOS`, la única lista: un paso nuevo es una línea
+# ahí (y su migración). `teaser_clic_<moneda>` no es un paso: lo suma un clic.
+_POSICIONES_CLIC = ("clic_arriba", "clic_cierre")
+_SIN_PREFIJO = tuple(e.removeprefix("teaser_") for e in EVENTOS_TEASER)
+MONEDAS_CLIC = tuple(
+    p.removeprefix("clic_") for p in _SIN_PREFIJO if p.startswith("clic_") and p not in _POSICIONES_CLIC
+)
+PASOS_TEASER = tuple(p for p in _SIN_PREFIJO if not p.startswith("clic_") or p in _POSICIONES_CLIC)
 
 
 def contar(evento: str) -> None:

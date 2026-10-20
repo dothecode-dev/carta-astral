@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ChartBody } from "@/components/ChartBody";
 import { DatosCarta } from "@/components/DatosCarta";
@@ -72,24 +72,27 @@ export function CartaPreview({
   const [origen, setOrigen] = useState<"arriba" | "cierre">("cierre");
   const [mailAbierto, setMailAbierto] = useState(false);
   const [mail, setMail] = useState("");
-  // Una vez por carta: volver a pasar o volver a abrir no es otra persona.
+  // Cada paso, una vez por carta: volver a apretar, a pasar o a abrir no es
+  // otra persona, y así los pasos del embudo se pueden dividir entre sí.
   const contado = useRef<Set<PasoTeaser>>(new Set());
-  const contarUnaVez = (paso: PasoTeaser) => {
+  const contarUnaVez = useCallback((paso: PasoTeaser, enMoneda?: string) => {
     if (contado.current.has(paso)) return;
     contado.current.add(paso);
-    contarPaso(paso);
-  };
+    contarPaso(paso, enMoneda);
+  }, []);
   const cierre = useRef<HTMLElement>(null);
   useEffect(() => {
     const nodo = cierre.current;
     // Sin soporte no se cuenta: contar igual inventaría lecturas.
     if (!nodo || typeof IntersectionObserver === "undefined") return;
     const observador = new IntersectionObserver((entradas) => {
-      if (entradas.some((e) => e.isIntersecting)) contarUnaVez("cierre_visto");
+      if (!entradas.some((e) => e.isIntersecting)) return;
+      contarUnaVez("cierre_visto");
+      observador.disconnect();
     });
     observador.observe(nodo);
     return () => observador.disconnect();
-  }, []);
+  }, [contarUnaVez]);
   const error = (donde: "arriba" | "cierre") =>
     errorCompra && origen === donde ? (
       <p className="compraError" role="alert">
@@ -109,7 +112,9 @@ export function CartaPreview({
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
-            contarPaso("mail_enviado", moneda);
+            // Sólo un mail con forma de mail: los intentos fallidos inflarían
+            // justo el paso que se quiere medir.
+            if (e.currentTarget.checkValidity()) contarUnaVez("mail_enviado", moneda);
             void onComprar(mail);
           }}
         >
@@ -141,7 +146,7 @@ export function CartaPreview({
         className={grande ? "btn btnPrimary btnGrande" : "btn btnPrimary"}
         disabled={comprando}
         onClick={() => {
-          contarPaso(grande ? "clic_cierre" : "clic_arriba", moneda);
+          contarUnaVez(grande ? "clic_cierre" : "clic_arriba", moneda);
           setOrigen(donde);
           if (pideMail) setMailAbierto(true);
           else void onComprar();
@@ -218,7 +223,7 @@ export function CartaPreview({
           type="button"
           className="btn btnGhost"
           onClick={() => {
-            contarPaso("volver");
+            contarUnaVez("volver");
             onVolver();
           }}
         >

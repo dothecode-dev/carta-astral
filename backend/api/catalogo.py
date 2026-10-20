@@ -101,8 +101,8 @@ _PRODUCTOS = (
     # $ 25.000 en pesos decidido el 19-10-2026 (Mercado Pago, fase 1).
     # US$ 19,90 y R$ 99,90 decididos el 20-10-2026 (antes US$ 5 y R$ 24,90).
     # El real sigue la regla del 13-10-2026 (spec cobro-brl-pix, R3): un poco
-    # bajo la paridad (≈ 5 reales por dólar) y deja margen al IOF (3,5 %), que
-    # absorbemos. Fijo: el riesgo cambiario es nuestro y lo vigila el informe
+    # bajo la paridad del día (el 20-10, 5,05 reales por dólar: R$ 99,90 ≈
+    # US$ 19,78), y el IOF (3,5 %) lo absorbemos. Fijo: el riesgo cambiario es nuestro y lo vigila el informe
     # diario.
     Producto(
         "informe_natal", {"usd": 1990, "brl": 9990, "ars": 2500000}, CONSUMIBLE, ("leer_informe",),

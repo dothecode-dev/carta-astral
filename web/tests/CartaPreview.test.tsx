@@ -404,3 +404,40 @@ describe("conteo de los pasos del teaser", () => {
     expect(props.onComprar).toHaveBeenCalledOnce();
   });
 });
+
+describe("conteo de los pasos del teaser: una vez por carta", () => {
+  function contados(fetchMock: ReturnType<typeof vi.fn>) {
+    return fetchMock.mock.calls
+      .filter(([url]) => url === "/api/conteo/teaser")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("apretar dos veces el mismo botón cuenta un clic", () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    pintar("es", { moneda: "usd" });
+    const [arriba] = screen.getAllByRole("button", { name: /US\$ 29/ });
+
+    fireEvent.click(arriba);
+    fireEvent.click(arriba);
+
+    expect(contados(fetchMock)).toEqual([{ evento: "clic_arriba", moneda: "usd" }]);
+  });
+
+  it("un mail sin forma de mail no cuenta como mail enviado", () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    pintar("es", { moneda: "ars", pideMail: true });
+    const t = getDict("es").newChart;
+    fireEvent.click(screen.getAllByRole("button", { name: /US\$ 29/ })[0]);
+
+    fireEvent.change(screen.getByLabelText(t.mailLabel), { target: { value: "juan@" } });
+    fireEvent.click(screen.getByRole("button", { name: t.mailPagar }));
+
+    expect(contados(fetchMock).map((c) => c.evento)).toEqual(["clic_arriba"]);
+  });
+});

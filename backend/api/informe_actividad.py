@@ -502,7 +502,7 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
                 f"(ARS {c.get('teaser_clic_ars', 0)}, USD {c.get('teaser_clic_usd', 0)}, "
                 f"BRL {c.get('teaser_clic_brl', 0)}) · "
                 f"dejó el mail (pesos): {c.get('teaser_mail_enviado', 0)} · "
-                f"volvió a los datos: {c.get('teaser_volver', 0)}")
+                f"volvió a corregir fecha, hora o lugar: {c.get('teaser_volver', 0)}")
 
     partes = [
         "<div style='font-family:system-ui,sans-serif;max-width:640px;line-height:1.5'>",
