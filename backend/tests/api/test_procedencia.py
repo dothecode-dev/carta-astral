@@ -97,12 +97,7 @@ def test_crear_una_carta_con_cuenta_tambien_cuenta_la_procedencia(account_client
     assert ConteoProcedencia.objects.get(tipo="canal").valor == "google"
 
 
-def test_la_serie_de_procedencia_trae_los_mas_frecuentes_y_el_resto_en_otros():
-    hoy = timezone.now().date()
-    for valor, n in (("google_ads", 9), ("directo", 3), ("google", 1), ("redes", 2)):
-        ConteoProcedencia.objects.create(fecha=hoy, tipo="canal", valor=valor, cantidad=n)
-    s = conteo.serie_procedencia("canal", dias=2, top=2)
-    assert s["fechas"][-1] == str(hoy)
-    # El resto no desaparece: así la suma cierra con el total de cartas.
-    assert [nombre for nombre, _ in s["series"]] == ["google_ads", "directo", "otros"]
-    assert s["series"][0][1] == [0, 9] and s["series"][2][1] == [0, 3]
+def test_el_panel_tiene_nombre_para_cada_seccion():
+    from api.admin import ConteoDiarioAdmin
+
+    assert set(ConteoDiarioAdmin.NOMBRES_SECCION) == set(conteo.SECCIONES)

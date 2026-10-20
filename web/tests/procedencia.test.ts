@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { _reiniciarProcedencia, capturarProcedencia, leerProcedencia } from "@/lib/procedencia";
+import { _reiniciarProcedencia, capturarProcedencia, leerProcedencia, seccionDe } from "@/lib/procedencia";
 
 // De dónde llegó la visita, guardado en memoria al entrar: sin cookies ni
 // localStorage. El servidor lo reduce a canal y lugar (backend/api/conteo.py).
@@ -39,5 +39,26 @@ describe("procedencia", () => {
   it("manda la zona horaria del navegador", () => {
     capturarProcedencia(lugar("https://astraguia.com/es"), "");
     expect(leerProcedencia().zona).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+});
+
+describe("seccionDe: la parte del sitio, nunca la ruta", () => {
+  it.each([
+    ["/es", "inicio"],
+    ["/en/", "inicio"],
+    ["/es/nueva", "nueva"],
+    ["/es/carta/4712beb7-b86c-44bb-90ca-2b576edbf553", "carta"],
+    ["/es/carta/4712beb7/lectura", "carta"],
+    ["/pt/precios", "precios"],
+    ["/es/notas/las-12-casas-astrologicas", "notas"],
+    ["/en/notes/the-12-astrological-houses", "notas"],
+    ["/es/cielo-hoy", "cielo"],
+    ["/en/sky-today", "cielo"],
+    ["/pt/ceu-hoje", "cielo"],
+    ["/en/synastry", "sinastria"],
+    ["/es/legal/privacy", "legal"],
+    ["/es/algo-que-no-existe", "otra"],
+  ])("%s → %s", (ruta, seccion) => {
+    expect(seccionDe(ruta)).toBe(seccion);
   });
 });

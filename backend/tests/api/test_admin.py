@@ -347,7 +347,11 @@ def test_el_listado_de_cartas_cuenta_lecturas_sin_crear_sujetos(admin_montado):
 
 @pytest.mark.django_db
 @sin_manifiesto
-def test_el_conteo_diario_muestra_el_grafico_arriba_de_la_tabla(admin_montado):
+def test_el_conteo_diario_muestra_el_tablero_arriba_de_la_tabla(admin_montado):
+    """El tablero (20-10-2026) lo dibuja el navegador con los datos que el
+    servidor deja en un `json_script`: período, embudo, barras y rankings."""
+    import json
+
     from django.utils import timezone
 
     ConteoDiario.objects.create(fecha=timezone.now().date(), evento="carta_calculada", cantidad=5)
@@ -357,25 +361,27 @@ def test_el_conteo_diario_muestra_el_grafico_arriba_de_la_tabla(admin_montado):
 
     cuerpo = c.get("/panel-test/api/conteodiario/").content.decode()
 
-    assert "<svg" in cuerpo and "Cartas calculadas" in cuerpo
-    assert cuerpo.index("<svg") < cuerpo.index("result_list")
+    assert 'id="tablero"' in cuerpo and "tablero.js" in cuerpo
+    assert cuerpo.index('id="tablero"') < cuerpo.index("result_list")
+    crudo = cuerpo.split('id="tablero-datos" type="application/json">', 1)[1].split("</script>", 1)[0]
+    assert json.loads(crudo)["eventos"]["carta_calculada"][-1] == 5
 
 
 @pytest.mark.django_db
 @sin_manifiesto
-def test_el_conteo_diario_muestra_canal_y_lugar(admin_montado):
+def test_el_tablero_lleva_los_datos_como_json_escapado(admin_montado):
+    """Los valores de procedencia vienen de listas cerradas, pero el panel no
+    depende de eso: `json_script` escapa `<`, así nada cierra el script."""
     from django.utils import timezone
 
     from api.models import ConteoProcedencia
 
-    hoy = timezone.now().date()
-    ConteoProcedencia.objects.create(fecha=hoy, tipo="canal", valor="google_ads", cantidad=4)
-    ConteoProcedencia.objects.create(fecha=hoy, tipo="lugar", valor="Bogotá", cantidad=2)
+    ConteoProcedencia.objects.create(fecha=timezone.now().date(), tipo="lugar", valor="</script><b>x", cantidad=1)
     staff = User.objects.create_superuser("staff10", "s10@x.com", "pw-de-test-12345")
     c = Client()
     c.force_login(staff)
 
     cuerpo = c.get("/panel-test/api/conteodiario/").content.decode()
 
-    assert "Por canal" in cuerpo and "Google Ads" in cuerpo
-    assert "Por lugar" in cuerpo and "Bogotá" in cuerpo
+    assert "</script><b>x" not in cuerpo
+    assert "\\u003C/script\\u003E\\u003Cb\\u003Ex" in cuerpo

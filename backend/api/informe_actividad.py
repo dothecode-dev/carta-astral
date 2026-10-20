@@ -491,7 +491,8 @@ def _html(cuerpo: str, datos: dict, fallas: list[str]) -> str:
     def _conteo(c: dict) -> str:
         return (f"cartas calculadas: {c.get('carta_calculada', 0)} · "
                 f"pagos abiertos: {c.get('checkout_abierto', 0)} · "
-                f"compras pagas: {c.get('compra_pagada', 0)}")
+                f"compras pagas: {c.get('compra_pagada', 0)} · "
+                f"páginas vistas: {c.get('visita', 0)}")
 
     # Lo que pasa entre la carta y el pago, sin cuenta (api/conteo_api.py).
     def _teaser(c: dict) -> str:

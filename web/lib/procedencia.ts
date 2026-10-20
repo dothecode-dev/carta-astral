@@ -48,3 +48,31 @@ export function leerProcedencia(): Procedencia {
 export function _reiniciarProcedencia(): void {
   capturada = null;
 }
+
+/** La parte del sitio de una ruta, de la lista cerrada del servidor
+ *  (`conteo.SECCIONES`). Nunca la ruta: la de una carta lleva su id. */
+export function seccionDe(ruta: string): string {
+  const partes = ruta.split("/").filter(Boolean);
+  // La primera es el idioma (`/es/precios`); sin nada después, la portada.
+  const primera = partes[1] ?? "";
+  const SECCIONES: Record<string, string> = {
+    "": "inicio",
+    nueva: "nueva",
+    carta: "carta",
+    ejemplo: "ejemplo",
+    sinastria: "sinastria",
+    synastry: "sinastria",
+    precios: "precios",
+    notas: "notas",
+    notes: "notas",
+    "cielo-hoy": "cielo",
+    "sky-today": "cielo",
+    "ceu-hoje": "cielo",
+    cuenta: "cuenta",
+    entrar: "entrar",
+    compra: "compra",
+    legal: "legal",
+    arrepentimiento: "arrepentimiento",
+  };
+  return SECCIONES[primera] ?? "otra";
+}

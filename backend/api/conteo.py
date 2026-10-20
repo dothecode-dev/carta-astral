@@ -16,7 +16,9 @@ from django.db import DatabaseError, transaction
 from django.db.models import F
 from django.utils import timezone
 
+from api import geo
 from api.models import ConteoDiario, ConteoProcedencia, PasarelaCheckout
+from config.axes_ip import ip_del_cliente
 
 logger = logging.getLogger(__name__)
 
@@ -102,28 +104,6 @@ def resumen(dias: int = 7) -> dict:
     return {"dias": dias, "total": total, "hoy": hoy_parcial, "por_dia": por_dia}
 
 
-def serie(dias: int = 90) -> dict:
-    """La historia diaria para el gráfico, del día más viejo a hoy (incluido).
-
-    Una lista por evento, alineada con `fechas`, con 0 donde no hubo nada.
-    `compra_pagada` con el mismo criterio que `resumen`.
-    """
-    hoy = timezone.now().date()
-    fechas = [hoy - datetime.timedelta(days=i) for i in range(dias - 1, -1, -1)]
-    indice = {f: i for i, f in enumerate(fechas)}
-    claves = (*EVENTOS, "compra_pagada")
-    valores = {c: [0] * dias for c in claves}
-    for fila in ConteoDiario.objects.filter(fecha__gte=fechas[0]):
-        valores[fila.evento][indice[fila.fecha]] = fila.cantidad
-    pagas = PasarelaCheckout.objects.filter(
-        acreditado_at__date__gte=fechas[0], reembolsado_centavos=0,
-    ).exclude(checkout_id__startswith="cupon_")
-    for acreditado in pagas.values_list("acreditado_at", flat=True):
-        if (i := indice.get(acreditado.date())) is not None:
-            valores["compra_pagada"][i] += 1
-    return {"fechas": [str(f) for f in fechas], **valores}
-
-
 # --- Procedencia --------------------------------------------------------------
 
 CANALES = (
@@ -195,8 +175,17 @@ def lugar_de_zona(zona: object) -> str:
     return _CON_TILDE.get(ciudad, ciudad.replace("_", " "))
 
 
-def contar_procedencia(procedencia: object) -> None:
-    """Suma uno al canal y al lugar de quien calculó una carta. Nunca rompe."""
+PAIS_DESCONOCIDO = "??"
+
+
+def pais_del_pedido(request) -> str:
+    """El país (ISO 3166-1 alfa-2) de la IP de quien pide, con la base de
+    MaxMind que decide la moneda. La IP no se guarda: sólo este código."""
+    return geo.pais_de(ip_del_cliente(request)) or PAIS_DESCONOCIDO
+
+
+def contar_procedencia(procedencia: object, pais: str | None = None) -> None:
+    """Suma uno al canal, al lugar y al país de quien calculó una carta. Nunca rompe."""
     datos = procedencia if isinstance(procedencia, dict) else {}
     canal = canal_de(datos.get("utm_source"), datos.get("referrer"), datos.get("gclid"))
     lugar = lugar_de_zona(datos.get("zona"))
@@ -205,21 +194,80 @@ def contar_procedencia(procedencia: object) -> None:
         with transaction.atomic():
             _incrementar(ConteoProcedencia, fecha=hoy, tipo="canal", valor=canal)
             _incrementar(ConteoProcedencia, fecha=hoy, tipo="lugar", valor=lugar)
+            if pais:
+                _incrementar(ConteoProcedencia, fecha=hoy, tipo="pais", valor=pais)
     except DatabaseError:
         logger.exception("conteo: no se pudo contar la procedencia")
 
 
-def serie_procedencia(tipo: str, dias: int = 90, top: int = 5) -> dict:
-    """La historia diaria de los `top` valores más frecuentes del período, y el
-    resto sumado en «otros»: así las series suman lo mismo que las cartas."""
+# Las partes del sitio, de una lista cerrada: la web traduce la ruta a una de
+# estas, y el servidor no acepta otra cosa (la ruta de una carta lleva su id).
+SECCIONES = (
+    "inicio", "nueva", "carta", "ejemplo", "sinastria", "precios", "notas", "cielo", "cuenta", "entrar",
+    "compra", "legal", "arrepentimiento", "otra",
+)
+
+
+def contar_visita(seccion: object, procedencia: object, pais: str) -> bool:
+    """Una página abierta: suma a las visitas del día, y a su país, su sección
+    y su canal. Devuelve False, sin contar nada, si la sección no es de la
+    lista. Nunca rompe."""
+    if not isinstance(seccion, str) or seccion not in SECCIONES:
+        return False
+    datos = procedencia if isinstance(procedencia, dict) else {}
+    canal = canal_de(datos.get("utm_source"), datos.get("referrer"), datos.get("gclid"))
     hoy = timezone.now().date()
-    fechas = [hoy - datetime.timedelta(days=i) for i in range(dias - 1, -1, -1)]
+    contar("visita")
+    try:
+        with transaction.atomic():
+            _incrementar(ConteoProcedencia, fecha=hoy, tipo="visita_pais", valor=pais)
+            _incrementar(ConteoProcedencia, fecha=hoy, tipo="visita_seccion", valor=seccion)
+            _incrementar(ConteoProcedencia, fecha=hoy, tipo="visita_canal", valor=canal)
+    except DatabaseError:
+        logger.exception("conteo: no se pudo contar la visita")
+    return True
+
+
+def tablero() -> dict:
+    """Todo lo contado, por día, desde el primer dato hasta hoy (incluido),
+    para el panel del admin: cada evento, las compras pagas, lo cobrado por
+    moneda y la procedencia por tipo y valor. El navegador elige el período.
+
+    Compras con el criterio de `resumen`: acreditadas, sin reembolso y sin
+    los canjes con cupón del 100 %.
+    """
+    hoy = timezone.now().date()
+    pagas = PasarelaCheckout.objects.filter(acreditado_at__isnull=False, reembolsado_centavos=0).exclude(
+        checkout_id__startswith="cupon_",
+    )
+    primeras = [
+        ConteoDiario.objects.order_by("fecha").values_list("fecha", flat=True).first(),
+        ConteoProcedencia.objects.order_by("fecha").values_list("fecha", flat=True).first(),
+    ]
+    if (primera_compra := pagas.order_by("acreditado_at").first()) is not None:
+        primeras.append(primera_compra.acreditado_at.date())
+    desde = min([f for f in primeras if f is not None], default=hoy)
+    fechas = [desde + datetime.timedelta(days=i) for i in range((hoy - desde).days + 1)]
     indice = {f: i for i, f in enumerate(fechas)}
-    valores: dict[str, list[int]] = {}
-    for fila in ConteoProcedencia.objects.filter(tipo=tipo, fecha__gte=fechas[0]):
-        valores.setdefault(fila.valor, [0] * dias)[indice[fila.fecha]] = fila.cantidad
-    ordenados = sorted(valores.items(), key=lambda kv: -sum(kv[1]))
-    series = ordenados[:top]
-    if resto := ordenados[top:]:
-        series.append(("otros", [sum(col) for col in zip(*(v for _, v in resto))]))
-    return {"fechas": [str(f) for f in fechas], "series": series}
+    n = len(fechas)
+
+    eventos = {e: [0] * n for e in (*EVENTOS, "compra_pagada")}
+    for fila in ConteoDiario.objects.filter(fecha__gte=desde):
+        eventos[fila.evento][indice[fila.fecha]] = fila.cantidad
+
+    ingresos: dict[str, list[int]] = {}
+    for fila in pagas.filter(acreditado_at__date__gte=desde):
+        if (i := indice.get(fila.acreditado_at.date())) is None:
+            continue
+        eventos["compra_pagada"][i] += 1
+        cobrado = fila.precio_de_lista() - fila.descuento_centavos
+        ingresos.setdefault(fila.moneda, [0] * n)[i] += cobrado
+
+    procedencia: dict[str, dict[str, list[int]]] = {tipo: {} for tipo, _ in ConteoProcedencia.TIPOS}
+    for fila in ConteoProcedencia.objects.filter(fecha__gte=desde):
+        procedencia[fila.tipo].setdefault(fila.valor, [0] * n)[indice[fila.fecha]] = fila.cantidad
+
+    return {
+        "fechas": [str(f) for f in fechas], "eventos": eventos, "ingresos": ingresos,
+        "procedencia": procedencia,
+    }

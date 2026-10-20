@@ -209,28 +209,16 @@ class ConteoDiarioAdmin(SoloLectura):
     ordering = ("-fecha", "evento")
     readonly_fields = list_display
 
-    DIAS_GRAFICO = 90
-
     def changelist_view(self, request, extra_context=None):
         # Acá y no arriba: el admin se importa al arrancar y `conteo` toca modelos.
-        from django.utils.safestring import mark_safe
-
         from api import conteo
-        from api.grafico_conteo import svg_lineas
 
-        datos = conteo.serie(self.DIAS_GRAFICO)
         extra_context = {
             **(extra_context or {}),
-            # El SVG sólo interpola números y fechas (api/grafico_conteo.py).
-            # Dos gráficos con su propia escala: cartas (decenas) y pagos (unidades).
-            "grafico": mark_safe(  # noqa: S308
-                svg_lineas(datos, ("carta_calculada",))
-                + svg_lineas(datos, ("checkout_abierto", "compra_pagada"))
-            ),
-            # De dónde viene quien calcula su carta: canal y lugar (zona horaria).
-            "grafico_canal": mark_safe(self._procedencia("canal", "Por canal")),  # noqa: S308
-            "grafico_lugar": mark_safe(self._procedencia("lugar", "Por lugar")),  # noqa: S308
-            "dias_grafico": self.DIAS_GRAFICO,
+            # El tablero lo dibuja el navegador (static/admin/tablero.js) con
+            # estos datos, que viajan por `json_script`: escapado, sin HTML.
+            "tablero": conteo.tablero(),
+            "nombres": {"canal": self.NOMBRES_CANAL, "seccion": self.NOMBRES_SECCION},
         }
         return super().changelist_view(request, extra_context=extra_context)
 
@@ -239,18 +227,12 @@ class ConteoDiarioAdmin(SoloLectura):
         "redes": "Redes", "email": "Email", "otro_sitio": "Otro sitio", "otra_campana": "Otra campaña",
         "directo": "Directo",
     }
-
-    def _procedencia(self, tipo: str, titulo: str) -> str:
-        from api import conteo
-        from api.grafico_conteo import PALETA, svg_series
-
-        # Un color queda para «otros», el resto sumado.
-        datos = conteo.serie_procedencia(tipo, self.DIAS_GRAFICO, top=len(PALETA) - 1)
-        series = [
-            ("Otros" if valor == "otros" else self.NOMBRES_CANAL.get(valor, valor), color, valores)
-            for (valor, valores), color in zip(datos["series"], PALETA)
-        ]
-        return svg_series(datos["fechas"], series, titulo) if series else "<p>Todavía sin datos.</p>"
+    NOMBRES_SECCION = {
+        "inicio": "Inicio", "nueva": "Nueva carta", "carta": "Una carta", "ejemplo": "Carta de ejemplo",
+        "sinastria": "Sinastría", "precios": "Precios", "notas": "Notas",
+        "cielo": "Cielo de hoy", "cuenta": "Cuenta", "entrar": "Entrar", "compra": "Vuelta del pago",
+        "legal": "Legales", "arrepentimiento": "Arrepentimiento", "otra": "Otra",
+    }
 
 
 @admin.register(PasarelaCheckout)

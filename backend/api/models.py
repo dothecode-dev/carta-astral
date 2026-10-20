@@ -940,6 +940,8 @@ class ConteoDiario(models.Model):
         ("teaser_clic_ars", "teaser_clic_ars"),
         ("teaser_mail_enviado", "teaser_mail_enviado"),
         ("teaser_volver", "teaser_volver"),
+        # Cada página que se abre en el sitio (api/conteo_api.py, 20-10-2026).
+        ("visita", "visita"),
     )
 
     fecha = models.DateField()
@@ -964,10 +966,19 @@ class ConteoProcedencia(models.Model):
     tabla no crece con lo que cualquiera quiera inventar.
     """
 
-    TIPOS = (("canal", "canal"), ("lugar", "lugar"))
+    TIPOS = (
+        # De quien calcula una carta.
+        ("canal", "canal"),
+        ("lugar", "lugar"),
+        ("pais", "pais"),
+        # De cada página que se abre (20-10-2026).
+        ("visita_pais", "visita_pais"),
+        ("visita_seccion", "visita_seccion"),
+        ("visita_canal", "visita_canal"),
+    )
 
     fecha = models.DateField()
-    tipo = models.CharField(max_length=10, choices=TIPOS)
+    tipo = models.CharField(max_length=20, choices=TIPOS)
     valor = models.CharField(max_length=64)
     cantidad = models.PositiveIntegerField(default=0)
 
