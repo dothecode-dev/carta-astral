@@ -8,12 +8,15 @@ transacción de quien llamó.
 
 import datetime
 import logging
+import re
 import zoneinfo
 from functools import cache
 from urllib.parse import urlsplit
 
+from django.conf import settings
 from django.db import DatabaseError, transaction
-from django.db.models import F, Min
+from django.db.models import F, Min, Q, Value
+from django.db.models.functions import Coalesce, Lower
 from django.utils import timezone
 
 from api import geo
@@ -49,10 +52,15 @@ def contar(evento: str) -> None:
         logger.exception("conteo: no se pudo contar %s", evento)
 
 
-def contar_teaser(paso: object, moneda: object = None) -> bool:
+def contar_teaser(paso: object, moneda: object = None, procedencia: object = None) -> bool:
     """Un paso del teaser sin cuenta. Un clic en comprar cuenta además en qué
     moneda se mostró el precio. Devuelve False, sin contar nada, si `paso` o
-    `moneda` no son de las listas cerradas."""
+    `moneda` no son de las listas cerradas.
+
+    Con `moneda` y `procedencia` el paso se cuenta también por moneda y por
+    canal (`teaser_moneda`, `teaser_canal`): sin eso, un 0 en los clics no dice
+    si es el precio, el canal o la moneda lo que espanta. Si falta uno, ese
+    desglose no se inventa."""
     if not isinstance(paso, str) or paso not in PASOS_TEASER:
         return False
     if moneda is not None and (not isinstance(moneda, str) or moneda not in MONEDAS_CLIC):
@@ -60,6 +68,16 @@ def contar_teaser(paso: object, moneda: object = None) -> bool:
     contar(f"teaser_{paso}")
     if moneda and paso.startswith("clic_"):
         contar(f"teaser_clic_{moneda}")
+    hoy = timezone.now().date()
+    try:
+        with transaction.atomic():
+            if moneda:
+                _incrementar(ConteoProcedencia, fecha=hoy, tipo="teaser_moneda", valor=f"{paso}:{moneda}")
+            if isinstance(procedencia, dict):
+                canal = canal_de(procedencia.get("utm_source"), procedencia.get("referrer"), procedencia.get("gclid"))
+                _incrementar(ConteoProcedencia, fecha=hoy, tipo="teaser_canal", valor=f"{paso}:{canal}")
+    except DatabaseError:
+        logger.exception("conteo: no se pudo desglosar el paso %s", paso)
     return True
 
 
@@ -78,11 +96,22 @@ def _incrementar(modelo, **clave) -> None:
 
 def _compras_pagas():
     """Las compras que cuentan como venta: acreditadas, sin reembolso, sin una
-    disputa abierta o perdida (la que se gana borra `disputa_id`) y sin los
-    canjes con cupón del 100 %."""
-    return PasarelaCheckout.objects.filter(
+    disputa abierta o perdida (la que se gana borra `disputa_id`), sin los
+    canjes con cupón del 100 % y sin las que hizo el dueño probando los flujos
+    (los mails de `MAILS_DE_PRUEBA`, sea el del pago o el de la cuenta): con
+    ellas en el panel, la primera venta real no se distinguía de una prueba."""
+    compras = PasarelaCheckout.objects.filter(
         acreditado_at__isnull=False, reembolsado_centavos=0, disputa_id__isnull=True,
     ).exclude(checkout_id__startswith="cupon_")
+    pruebas = [m.strip().lower() for m in settings.MAILS_DE_PRUEBA if m.strip()]
+    if not pruebas:
+        return compras
+    # `Coalesce`: sin cuenta el mail es NULL, y `NOT (NULL IN (...))` es NULL,
+    # que SQL descarta: la compra de un cliente sin cuenta desaparecería.
+    return compras.annotate(
+        _mail_pago=Lower(Coalesce("mail_comprador", Value(""))),
+        _mail_cuenta=Lower(Coalesce("account__email", Value(""))),
+    ).exclude(Q(_mail_pago__in=pruebas) | Q(_mail_cuenta__in=pruebas))
 
 
 def resumen(dias: int = 7) -> dict:
@@ -204,6 +233,28 @@ def pais_del_pedido(request) -> str:
     return geo.pais_de(ip_del_cliente(request)) or PAIS_DESCONOCIDO
 
 
+# Cuántas fuentes de campaña distintas se guardan por día: `utm_source` lo
+# escribe quien arma el link, y sin tope la tabla crecería con lo que cualquiera
+# quiera mandar. Pasado el tope, las nuevas suman a «otras».
+MAX_FUENTES_POR_DIA = 25
+_FUENTE = re.compile(r"[a-z0-9._-]{1,40}")
+
+
+def _contar_fuente(utm_source: object, canal: str, hoy: datetime.date) -> None:
+    """El nombre de la fuente de una campaña propia. Sólo si el canal es
+    `otra_campana` (Google Ads y lo orgánico ya tienen su canal). Va dentro de
+    la transacción de quien llama."""
+    if canal != "otra_campana" or not isinstance(utm_source, str):
+        return
+    fuente = utm_source.strip().lower()
+    fuente = fuente if _FUENTE.fullmatch(fuente) else "otra"
+    hoy_utm = ConteoProcedencia.objects.filter(fecha=hoy, tipo="utm")
+    if fuente not in ("otra", "otras") and not hoy_utm.filter(valor=fuente).exists():
+        if hoy_utm.exclude(valor__in=("otra", "otras")).count() >= MAX_FUENTES_POR_DIA:
+            fuente = "otras"
+    _incrementar(ConteoProcedencia, fecha=hoy, tipo="utm", valor=fuente)
+
+
 def contar_procedencia(procedencia: object, pais: str | None = None) -> None:
     """Suma uno al canal, al lugar y al país de quien calculó una carta. Nunca rompe."""
     datos = procedencia if isinstance(procedencia, dict) else {}
@@ -213,6 +264,7 @@ def contar_procedencia(procedencia: object, pais: str | None = None) -> None:
     try:
         with transaction.atomic():
             _incrementar(ConteoProcedencia, fecha=hoy, tipo="canal", valor=canal)
+            _contar_fuente(datos.get("utm_source"), canal, hoy)
             _incrementar(ConteoProcedencia, fecha=hoy, tipo="lugar", valor=lugar)
             if pais:
                 _incrementar(ConteoProcedencia, fecha=hoy, tipo="pais", valor=pais)
@@ -243,6 +295,7 @@ def contar_visita(seccion: object, procedencia: object, pais: str) -> bool:
             _incrementar(ConteoProcedencia, fecha=hoy, tipo="visita_pais", valor=pais)
             _incrementar(ConteoProcedencia, fecha=hoy, tipo="visita_seccion", valor=seccion)
             _incrementar(ConteoProcedencia, fecha=hoy, tipo="visita_canal", valor=canal)
+            _contar_fuente(datos.get("utm_source"), canal, hoy)
     except DatabaseError:
         logger.exception("conteo: no se pudo contar la visita")
     return True

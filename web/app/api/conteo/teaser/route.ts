@@ -5,7 +5,8 @@ import { ApiError, callApi } from "@/lib/session";
 // Los pasos de quien calculó su carta sin cuenta (`CartaPreview`), al contador
 // del servidor: un número por día y evento, sin cookies ni nada de quién fue
 // (backend/api/conteo_api.py). Público: no manda sesión aunque haya una. Al
-// backend viajan sólo los dos campos; la lista cerrada la valida él.
+// backend viajan sólo esos campos (paso, moneda mostrada y procedencia); las
+// listas cerradas las valida él.
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     await callApi("/api/conteo/teaser/", {
       method: "POST",
       auth: false,
-      body: JSON.stringify({ evento: cuerpo.evento, moneda: cuerpo.moneda }),
+      body: JSON.stringify({ evento: cuerpo.evento, moneda: cuerpo.moneda, procedencia: cuerpo.procedencia }),
     });
     return new NextResponse(null, { status: 204 });
   } catch (error) {

@@ -975,6 +975,11 @@ class ConteoProcedencia(models.Model):
         ("visita_pais", "visita_pais"),
         ("visita_seccion", "visita_seccion"),
         ("visita_canal", "visita_canal"),
+        # El nombre de la fuente de una campaña propia (`utm_source`), acotado,
+        # y cada paso del teaser por canal y por moneda mostrada (22-10-2026).
+        ("utm", "utm"),
+        ("teaser_canal", "teaser_canal"),
+        ("teaser_moneda", "teaser_moneda"),
     )
 
     fecha = models.DateField()

@@ -8,6 +8,7 @@ import { DatosCarta } from "@/components/DatosCarta";
 import { TeaserBloques, TeaserIndice } from "@/components/Teaser";
 import type { CartaDibujable } from "@/lib/chart";
 import type { Dict, Locale } from "@/lib/i18n";
+import { leerProcedencia } from "@/lib/procedencia";
 
 // Lo que ve quien calculó su carta sin tener cuenta. Es la carta entera —la
 // misma rueda y las mismas tablas que ve un usuario registrado— y lo que ya se
@@ -29,7 +30,9 @@ function contarPaso(evento: PasoTeaser, moneda?: string) {
     void fetch("/api/conteo/teaser", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(moneda ? { evento, moneda } : { evento }),
+      // Con la moneda mostrada y la procedencia el servidor desglosa el paso por
+      // moneda y por canal; ninguna lleva nada de quién fue.
+      body: JSON.stringify({ evento, ...(moneda ? { moneda } : {}), procedencia: leerProcedencia() }),
       keepalive: true,
     }).catch(() => {});
   } catch {
@@ -75,11 +78,14 @@ export function CartaPreview({
   // Cada paso, una vez por carta: volver a apretar, a pasar o a abrir no es
   // otra persona, y así los pasos del embudo se pueden dividir entre sí.
   const contado = useRef<Set<PasoTeaser>>(new Set());
-  const contarUnaVez = useCallback((paso: PasoTeaser, enMoneda?: string) => {
-    if (contado.current.has(paso)) return;
-    contado.current.add(paso);
-    contarPaso(paso, enMoneda);
-  }, []);
+  const contarUnaVez = useCallback(
+    (paso: PasoTeaser, enMoneda: string | undefined = moneda) => {
+      if (contado.current.has(paso)) return;
+      contado.current.add(paso);
+      contarPaso(paso, enMoneda);
+    },
+    [moneda],
+  );
   const cierre = useRef<HTMLElement>(null);
   useEffect(() => {
     const nodo = cierre.current;

@@ -561,6 +561,10 @@ VINCULO_ENABLED = os.environ.get("VINCULO_ENABLED", "0") == "1"
 # (default), nadie ve los pesos ni puede abrir un checkout en pesos. El webhook
 # de MP y el cron `vencer_checkouts` NO miran el flag: un pago que ya entró se
 # acredita igual, aunque el flag se haya apagado después de abrirlo.
+# Mails del dueño con los que prueba los flujos de pago: sus compras no cuentan
+# como ventas en el panel ni en el informe diario (`conteo._compras_pagas`).
+# Por variable de entorno y no en el código: el repo es público.
+MAILS_DE_PRUEBA = [m.strip().lower() for m in os.environ.get("MAILS_DE_PRUEBA", "").split(",") if m.strip()]
 COBRO_ARS_ENABLED = os.environ.get("COBRO_ARS_ENABLED", "0") == "1"
 MP_ACCESS_TOKEN = os.environ.get("MP_ACCESS_TOKEN", "")
 MP_WEBHOOK_SECRET = os.environ.get("MP_WEBHOOK_SECRET", "")

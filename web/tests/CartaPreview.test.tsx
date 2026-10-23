@@ -303,7 +303,12 @@ describe("conteo de los pasos del teaser", () => {
   function contados(fetchMock: ReturnType<typeof vi.fn>) {
     return fetchMock.mock.calls
       .filter(([url]) => url === "/api/conteo/teaser")
-      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+      // La procedencia viaja en cada paso y se prueba aparte.
+      .map((cuerpo) => {
+        delete cuerpo.procedencia;
+        return cuerpo;
+      });
   }
 
   function conFetch() {
@@ -357,7 +362,7 @@ describe("conteo de los pasos del teaser", () => {
 
     fireEvent.click(screen.getByRole("button", { name: getDict("es").newChart.navNew }));
 
-    expect(contados(fetchMock)).toEqual([{ evento: "volver" }]);
+    expect(contados(fetchMock)).toEqual([{ evento: "volver", moneda: "usd" }]);
   });
 
   it("abrir los datos de la carta cuenta una sola vez", () => {
@@ -370,7 +375,7 @@ describe("conteo de los pasos del teaser", () => {
       fireEvent(datos, new Event("toggle"));
     }
 
-    expect(contados(fetchMock)).toEqual([{ evento: "datos_abiertos" }]);
+    expect(contados(fetchMock)).toEqual([{ evento: "datos_abiertos", moneda: "usd" }]);
   });
 
   it("llegar al final cuenta una sola vez, aunque se vuelva a pasar", () => {
@@ -392,7 +397,7 @@ describe("conteo de los pasos del teaser", () => {
     avisar([{ isIntersecting: true }]);
     avisar([{ isIntersecting: true }]);
 
-    expect(contados(fetchMock)).toEqual([{ evento: "cierre_visto" }]);
+    expect(contados(fetchMock)).toEqual([{ evento: "cierre_visto", moneda: "usd" }]);
   });
 
   it("si contar falla, la compra sigue igual", async () => {
@@ -409,7 +414,12 @@ describe("conteo de los pasos del teaser: una vez por carta", () => {
   function contados(fetchMock: ReturnType<typeof vi.fn>) {
     return fetchMock.mock.calls
       .filter(([url]) => url === "/api/conteo/teaser")
-      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+      // La procedencia viaja en cada paso y se prueba aparte.
+      .map((cuerpo) => {
+        delete cuerpo.procedencia;
+        return cuerpo;
+      });
   }
 
   afterEach(() => {
@@ -439,5 +449,43 @@ describe("conteo de los pasos del teaser: una vez por carta", () => {
     fireEvent.click(screen.getByRole("button", { name: t.mailPagar }));
 
     expect(contados(fetchMock).map((c) => c.evento)).toEqual(["clic_arriba"]);
+  });
+});
+
+
+describe("conteo de los pasos del teaser: moneda y procedencia en cada paso", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function cuerpos(fetchMock: ReturnType<typeof vi.fn>) {
+    return fetchMock.mock.calls
+      .filter(([url]) => url === "/api/conteo/teaser")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+  }
+
+  it("cada paso manda la procedencia, para que el servidor lo separe por canal", () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    pintar("es", { moneda: "ars" });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /US\$ 29/ })[0]);
+
+    const [paso] = cuerpos(fetchMock);
+    expect(paso.procedencia).toEqual(
+      expect.objectContaining({ utm_source: expect.any(String), gclid: expect.any(Boolean), referrer: expect.any(String) }),
+    );
+  });
+
+  it("un paso que no es un clic también lleva la moneda mostrada", () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = render(<CartaPreview {...propsBase("es", { moneda: "brl" })} />);
+    const datos = container.querySelector("details.datosCarta") as HTMLDetailsElement;
+
+    datos.open = true;
+    fireEvent(datos, new Event("toggle"));
+
+    expect(cuerpos(fetchMock)).toEqual([expect.objectContaining({ evento: "datos_abiertos", moneda: "brl" })]);
   });
 });
