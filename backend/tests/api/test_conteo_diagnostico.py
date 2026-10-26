@@ -62,6 +62,25 @@ def test_una_compra_de_una_cuenta_de_prueba_tampoco_cuenta(settings, make_accoun
     assert conteo._compras_pagas().count() == 0
 
 
+def test_una_entrada_con_asterisco_compara_por_prefijo(settings, make_account):
+    settings.MAILS_DE_PRUEBA = ["yo*", "otro@ejemplo.com"]
+    _compra("mp_pago_yo", mail_comprador="Yo+prueba@ejemplo.com")
+    _compra("mp_cuenta_yo", account=make_account(email="yo@otro-dominio.com"))
+    _compra("mp_exacto", mail_comprador="otro@ejemplo.com")
+    _compra("mp_real", mail_comprador="cliente@ejemplo.com")
+    # El prefijo es del inicio del mail, no de cualquier parte.
+    _compra("mp_contiene", mail_comprador="soy.yo@ejemplo.com")
+
+    assert set(conteo._compras_pagas().values_list("checkout_id", flat=True)) == {"mp_real", "mp_contiene"}
+
+
+def test_un_asterisco_solo_no_borra_todas_las_ventas(settings):
+    settings.MAILS_DE_PRUEBA = ["*"]
+    _compra("mp_1", mail_comprador="a@ejemplo.com")
+
+    assert conteo._compras_pagas().count() == 1
+
+
 def test_sin_lista_de_prueba_todas_cuentan(settings):
     settings.MAILS_DE_PRUEBA = []
     _compra("mp_1", mail_comprador="a@ejemplo.com")

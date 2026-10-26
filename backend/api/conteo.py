@@ -111,12 +111,19 @@ def _compras_pagas():
     pruebas = [m.strip().lower() for m in settings.MAILS_DE_PRUEBA if m.strip()]
     if not pruebas:
         return compras
+    # Una entrada que termina en `*` compara por prefijo («yo*» cubre «yo+1@…»).
+    # Un `*` solo no es un prefijo: borraría todas las ventas.
+    exactos = [m for m in pruebas if not m.endswith("*")]
+    prefijos = [m[:-1] for m in pruebas if m.endswith("*") and len(m) > 1]
+    de_prueba = Q(_mail_pago__in=exactos) | Q(_mail_cuenta__in=exactos)
+    for prefijo in prefijos:
+        de_prueba |= Q(_mail_pago__startswith=prefijo) | Q(_mail_cuenta__startswith=prefijo)
     # `Coalesce`: sin cuenta el mail es NULL, y `NOT (NULL IN (...))` es NULL,
     # que SQL descarta: la compra de un cliente sin cuenta desaparecería.
     return compras.annotate(
         _mail_pago=Lower(Coalesce("mail_comprador", Value(""))),
         _mail_cuenta=Lower(Coalesce("account__email", Value(""))),
-    ).exclude(Q(_mail_pago__in=pruebas) | Q(_mail_cuenta__in=pruebas))
+    ).exclude(de_prueba)
 
 
 def resumen(dias: int = 7) -> dict:
