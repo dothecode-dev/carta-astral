@@ -506,8 +506,80 @@
     return seccion;
   }
 
+  // El embudo del teaser partido por canal o por moneda mostrada. El servidor
+  // guarda una fila por «paso:valor» (`teaser_canal`, `teaser_moneda`): sin esto,
+  // un 0 en los clics no dice si es el canal o la moneda lo que espanta.
+  function teaserPor(titulo, tipo, desde, hasta, nombre) {
+    const grupos = {};
+    for (const [clave, cantidad] of filasDe(tipo, desde, hasta)) {
+      const corte = clave.indexOf(":");
+      const paso = clave.slice(0, corte);
+      const valor = clave.slice(corte + 1);
+      (grupos[valor] = grupos[valor] || {})[paso] = cantidad;
+    }
+    const filas = Object.entries(grupos)
+      .map(([valor, p]) => ({ valor, p, clics: (p.clic_arriba || 0) + (p.clic_cierre || 0) }))
+      .sort((a, b) => (b.p.cierre_visto || 0) - (a.p.cierre_visto || 0));
+    const alto = Math.max(150, filas.length * 56 + 70);
+    const [seccion, lienzo] = bloque(titulo, alto, "tbRanking");
+    seccion.append(
+      el("p", { class: "tbNota" }, "Veces, no personas. Pasá el mouse por un grupo para ver todos los pasos y la tasa de clic."),
+    );
+    if (!filas.length) {
+      lienzo.style.height = "auto";
+      lienzo.replaceChildren(el("p", { class: "tbNota" }, "Sin datos en este período."));
+      return seccion;
+    }
+    const pasos = [
+      ["Llegó al final", (f) => f.p.cierre_visto || 0, COLORES[0]],
+      ["Apretó comprar", (f) => f.clics, COLORES[3]],
+      ["Dejó el mail", (f) => f.p.mail_enviado || 0, COLORES[2]],
+    ];
+    despues(() =>
+      grafico(lienzo, {
+        legend: { top: 0 },
+        grid: { left: 110, right: 50, top: 34, bottom: 6 },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "shadow" },
+          formatter: (ps) => {
+            const f = filas[ps[0].dataIndex];
+            const final = f.p.cierre_visto || 0;
+            return (
+              `<b>${esc(nombre(f.valor))}</b><br>` +
+              `Abrió los datos: ${fmt.format(f.p.datos_abiertos || 0)}<br>` +
+              `Llegó al final: ${fmt.format(final)}<br>` +
+              `Apretó comprar: ${fmt.format(f.clics)} (${fmt.format(f.p.clic_arriba || 0)} arriba + ${fmt.format(f.p.clic_cierre || 0)} al final) · ${pct(f.clics, final)} de los que llegaron al final<br>` +
+              `Dejó el mail: ${fmt.format(f.p.mail_enviado || 0)}<br>` +
+              `Volvió a corregir: ${fmt.format(f.p.volver || 0)}`
+            );
+          },
+        },
+        xAxis: { type: "value", show: false },
+        yAxis: {
+          type: "category", inverse: true, data: filas.map((f) => nombre(f.valor)),
+          axisTick: { show: false }, axisLine: { show: false },
+          axisLabel: { width: 100, overflow: "truncate" },
+        },
+        series: pasos.map(([nombrePaso, valor, color]) => ({
+          name: nombrePaso, type: "bar", barMaxWidth: 14, data: filas.map(valor),
+          itemStyle: { color, borderRadius: [0, 4, 4, 0] },
+          label: { show: true, position: "right", fontSize: 12, formatter: (p) => fmt.format(p.value) },
+        })),
+      }),
+    );
+    return seccion;
+  }
+
   const conBandera = (c) => `${bandera(c)} ${nombrePais(c)}`;
   const nombreDe = (grupo) => (v) => (NOMBRES[grupo] || {})[v] || v;
+  const conNota = (seccion, texto) => {
+    seccion.append(el("p", { class: "tbNota" }, texto));
+    return seccion;
+  };
+  // `otra` y `otras` no son fuentes: son los dos cubos del servidor para una
+  // `utm_source` con caracteres raros y para las que pasan el tope diario.
+  const nombreFuente = (v) => ({ otra: "Otra (nombre no válido)", otras: "Otras (pasado el tope)" })[v] || v;
 
   // --- armado -----------------------------------------------------------------
 
@@ -553,6 +625,12 @@
         ranking("Clics en comprar por país", "clic_pais", desde, hasta, conBandera),
         ranking("Cartas por canal", "canal", desde, hasta, nombreDe("canal"), "torta"),
         ranking("Cartas por lugar (zona horaria)", "lugar", desde, hasta, (v) => v),
+        conNota(
+          ranking("Fuentes de campaña (utm_source)", "utm", desde, hasta, nombreFuente),
+          "Sólo el canal «Otra campaña» (Google Ads y lo orgánico ya tienen su canal). Cuenta páginas abiertas y cartas calculadas con esa fuente: veces, no personas.",
+        ),
+        teaserPor("Teaser por canal", "teaser_canal", desde, hasta, nombreDe("canal")),
+        teaserPor("Teaser por moneda mostrada", "teaser_moneda", desde, hasta, (v) => v.toUpperCase()),
       ),
     );
   }
