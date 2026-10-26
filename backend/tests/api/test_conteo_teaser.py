@@ -99,6 +99,17 @@ def test_los_pasos_y_las_monedas_salen_del_modelo():
     assert set(conteo.MONEDAS_CLIC) == {"usd", "brl", "ars"}
 
 
+def test_toda_moneda_del_catalogo_es_una_moneda_del_teaser():
+    """La web manda la moneda mostrada en cada paso, y una que `MONEDAS_CLIC` no
+    conoce hace que el servidor rechace el paso entero. Sumar una moneda al
+    catálogo sin sumarla al teaser rompería el embudo de esa moneda, sin ruido."""
+    from api import catalogo
+
+    del_catalogo = {m for p in catalogo.CATALOGO.values() for m in p.monedas()}
+
+    assert del_catalogo <= set(conteo.MONEDAS_CLIC)
+
+
 def _paises_de_clic():
     return {f.valor: f.cantidad for f in ConteoProcedencia.objects.filter(tipo="clic_pais")}
 

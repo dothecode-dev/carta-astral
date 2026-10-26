@@ -22,10 +22,10 @@ class ConteoTeaserView(APIView):
     throttle_scope = "conteo"
 
     def post(self, request):
-        if not conteo.contar_teaser(
-            request.data.get("evento"), request.data.get("moneda"), request.data.get("procedencia"),
-            conteo.pais_del_pedido(request),
-        ):
+        evento = request.data.get("evento")
+        # El país sólo se usa en los clics: no se busca en cada paso.
+        pais = conteo.pais_del_pedido(request) if isinstance(evento, str) and evento.startswith("clic_") else None
+        if not conteo.contar_teaser(evento, request.data.get("moneda"), request.data.get("procedencia"), pais):
             return Response({"error": "evento desconocido"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)
 

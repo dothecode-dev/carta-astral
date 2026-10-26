@@ -120,7 +120,7 @@ export function CartaPreview({
             e.preventDefault();
             // Sólo un mail con forma de mail: los intentos fallidos inflarían
             // justo el paso que se quiere medir.
-            if (e.currentTarget.checkValidity()) contarUnaVez("mail_enviado", moneda);
+            if (e.currentTarget.checkValidity()) contarUnaVez("mail_enviado");
             void onComprar(mail);
           }}
         >
@@ -152,7 +152,7 @@ export function CartaPreview({
         className={grande ? "btn btnPrimary btnGrande" : "btn btnPrimary"}
         disabled={comprando}
         onClick={() => {
-          contarUnaVez(grande ? "clic_cierre" : "clic_arriba", moneda);
+          contarUnaVez(grande ? "clic_cierre" : "clic_arriba");
           setOrigen(donde);
           if (pideMail) setMailAbierto(true);
           else void onComprar();
