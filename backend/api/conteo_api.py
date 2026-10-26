@@ -24,6 +24,7 @@ class ConteoTeaserView(APIView):
     def post(self, request):
         if not conteo.contar_teaser(
             request.data.get("evento"), request.data.get("moneda"), request.data.get("procedencia"),
+            conteo.pais_del_pedido(request),
         ):
             return Response({"error": "evento desconocido"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)

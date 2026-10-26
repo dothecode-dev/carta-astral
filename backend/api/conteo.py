@@ -52,10 +52,13 @@ def contar(evento: str) -> None:
         logger.exception("conteo: no se pudo contar %s", evento)
 
 
-def contar_teaser(paso: object, moneda: object = None, procedencia: object = None) -> bool:
+def contar_teaser(
+    paso: object, moneda: object = None, procedencia: object = None, pais: str | None = None,
+) -> bool:
     """Un paso del teaser sin cuenta. Un clic en comprar cuenta además en qué
-    moneda se mostró el precio. Devuelve False, sin contar nada, si `paso` o
-    `moneda` no son de las listas cerradas.
+    moneda se mostró el precio y desde qué país se hizo (`clic_pais`; la IP no
+    se guarda). Devuelve False, sin contar nada, si `paso` o `moneda` no son de
+    las listas cerradas.
 
     Con `moneda` y `procedencia` el paso se cuenta también por moneda y por
     canal (`teaser_moneda`, `teaser_canal`): sin eso, un 0 en los clics no dice
@@ -76,6 +79,8 @@ def contar_teaser(paso: object, moneda: object = None, procedencia: object = Non
             if isinstance(procedencia, dict):
                 canal = canal_de(procedencia.get("utm_source"), procedencia.get("referrer"), procedencia.get("gclid"))
                 _incrementar(ConteoProcedencia, fecha=hoy, tipo="teaser_canal", valor=f"{paso}:{canal}")
+            if pais and paso.startswith("clic_"):
+                _incrementar(ConteoProcedencia, fecha=hoy, tipo="clic_pais", valor=pais)
     except DatabaseError:
         logger.exception("conteo: no se pudo desglosar el paso %s", paso)
     return True

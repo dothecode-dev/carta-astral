@@ -397,7 +397,7 @@
     const [seccion, lienzo] = bloque("", 440, "tbAncho");
     seccion.querySelector("h2").replaceChildren(
       "Países:",
-      ...[["visita_pais", "visitas"], ["pais", "cartas"]].map(([tipo, texto]) =>
+      ...[["visita_pais", "visitas"], ["pais", "cartas"], ["clic_pais", "clics en comprar"]].map(([tipo, texto]) =>
         el(
           "button",
           {
@@ -550,6 +550,7 @@
         ranking("Visitas por sección", "visita_seccion", desde, hasta, nombreDe("seccion"), "torta"),
         ranking("Visitas por canal", "visita_canal", desde, hasta, nombreDe("canal"), "torta"),
         ranking("Cartas por país", "pais", desde, hasta, conBandera),
+        ranking("Clics en comprar por país", "clic_pais", desde, hasta, conBandera),
         ranking("Cartas por canal", "canal", desde, hasta, nombreDe("canal"), "torta"),
         ranking("Cartas por lugar (zona horaria)", "lugar", desde, hasta, (v) => v),
       ),

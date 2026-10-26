@@ -971,6 +971,8 @@ class ConteoProcedencia(models.Model):
         ("canal", "canal"),
         ("lugar", "lugar"),
         ("pais", "pais"),
+        # Desde qué país se apretó comprar en el teaser (24-10-2026).
+        ("clic_pais", "clic_pais"),
         # De cada página que se abre (20-10-2026).
         ("visita_pais", "visita_pais"),
         ("visita_seccion", "visita_seccion"),

@@ -10,7 +10,7 @@ import pytest
 from django.utils import timezone
 
 from api import conteo
-from api.models import ConteoDiario
+from api.models import ConteoDiario, ConteoProcedencia
 
 pytestmark = pytest.mark.django_db
 
@@ -97,3 +97,32 @@ def test_los_pasos_y_las_monedas_salen_del_modelo():
         "datos_abiertos", "cierre_visto", "clic_arriba", "clic_cierre", "mail_enviado", "volver",
     }
     assert set(conteo.MONEDAS_CLIC) == {"usd", "brl", "ars"}
+
+
+def _paises_de_clic():
+    return {f.valor: f.cantidad for f in ConteoProcedencia.objects.filter(tipo="clic_pais")}
+
+
+def test_un_clic_en_comprar_cuenta_el_pais_de_quien_lo_hizo(client, monkeypatch):
+    monkeypatch.setattr(conteo.geo, "pais_de", lambda ip: "AR")
+
+    _mandar(client, evento="clic_arriba", moneda="ars")
+    _mandar(client, evento="clic_cierre", moneda="ars")
+
+    assert _paises_de_clic() == {"AR": 2}
+
+
+def test_un_clic_con_pais_desconocido_se_cuenta_como_desconocido(client, monkeypatch):
+    monkeypatch.setattr(conteo.geo, "pais_de", lambda ip: None)
+
+    _mandar(client, evento="clic_arriba", moneda="usd")
+
+    assert _paises_de_clic() == {conteo.PAIS_DESCONOCIDO: 1}
+
+
+def test_los_pasos_que_no_son_clic_no_cuentan_pais(client, monkeypatch):
+    monkeypatch.setattr(conteo.geo, "pais_de", lambda ip: "AR")
+
+    _mandar(client, evento="datos_abiertos")
+
+    assert _paises_de_clic() == {}
