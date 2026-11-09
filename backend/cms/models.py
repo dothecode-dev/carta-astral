@@ -2,6 +2,7 @@
 
 from datetime import date
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import translation
 from rest_framework.fields import Field
@@ -9,7 +10,7 @@ from wagtail.admin.panels import FieldPanel
 from wagtail.api import APIField
 from wagtail.fields import RichTextField
 from wagtail.images.api.fields import ImageRenditionField
-from wagtail.models import Page
+from wagtail.models import Locale, Page
 from wagtail.rich_text import expand_db_html
 
 from cms.forms import NotaForm
@@ -91,6 +92,26 @@ class NotePage(Page):
         FieldPanel("portada"),
         FieldPanel("cuerpo"),
     ]
+
+    def clean(self):
+        """Una nota en/pt tiene que ser traducción de una en español.
+
+        Creada con «Agregar página», nacía con `translation_key` propia y la web
+        no la declaraba en el `hreflang`: entre septiembre y noviembre de 2026
+        quedaron así ocho tandas. Corre en el formulario del admin y en todo
+        guardado de una página publicada (`Page.save` hace `full_clean` si está
+        live); el borrador que crea «Traducir» ya nace vinculado.
+        """
+        super().clean()
+        principal = Locale.get_default()
+        if self.locale_id == principal.id:
+            return
+        if self.get_translation_or_none(principal) is None:
+            raise ValidationError(
+                "Esta nota no está vinculada a una nota en español. Creala desde la "
+                "nota en español con «Traducir», no con «Agregar página»: si no, la "
+                "web no la declara como traducción y compite con la original."
+            )
 
     @property
     def portada_tarjeta(self):

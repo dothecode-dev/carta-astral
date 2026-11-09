@@ -40,19 +40,30 @@ def test_no_se_pueden_crear_dos_indices_en_el_mismo_idioma(raices):
 
 @pytest.mark.django_db
 def test_una_nota_puede_colgar_del_indice_ingles(raices):
-    """La consecuencia real del bug: sin índice inglés no hay notas inglesas."""
-    _, raiz_en = raices
-    indice_en = NoteIndexPage(title="Notes", slug="notes")
-    raiz_en.add_child(instance=indice_en)
+    """La consecuencia real del bug: sin índice inglés no hay notas inglesas.
 
-    nota = NotePage(
-        title="Sun, Moon and Ascendant",
-        slug="sun-moon-ascendant",
+    La inglesa se crea como traducción de una española: suelta, el modelo la
+    rechaza (`NotePage.clean`, tests/cms/test_traducir.py).
+    """
+    raiz_es, _ = raices
+    indice_es = NoteIndexPage(title="Notas", slug="notas")
+    raiz_es.add_child(instance=indice_es)
+    en = Locale.objects.get(language_code="en")
+    indice_es.copy_for_translation(en)
+
+    nota_es = NotePage(
+        title="Sol, Luna y Ascendente",
+        slug="sol-luna-ascendente",
         fecha="2026-07-14",
-        bajada="The three that are not the same.",
-        cuerpo="<p>The Sun is what it wants to be.</p>",
+        bajada="Los tres que no son lo mismo.",
+        cuerpo="<p>El Sol es lo que quiere ser.</p>",
         live=True,
     )
-    indice_en.add_child(instance=nota)
+    indice_es.add_child(instance=nota_es)
+    nota_en = nota_es.copy_for_translation(en)
+    nota_en.title = "Sun, Moon and Ascendant"
+    nota_en.cuerpo = "<p>The Sun is what it wants to be.</p>"
+    nota_en.live = True
+    nota_en.save()
 
     assert NotePage.objects.filter(locale__language_code="en").count() == 1

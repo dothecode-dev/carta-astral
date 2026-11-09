@@ -220,3 +220,25 @@ def test_agregar_pagina_en_espanol_sigue_andando(admin_montado, nota_es, staff_c
 
     assert resp.status_code == 302, resp.content.decode()[:500]
     assert NotePage.objects.get(slug="casa-4-raices").live is True
+
+
+@pytest.mark.django_db
+def test_una_nota_portuguesa_suelta_no_se_puede_publicar_por_codigo(nota_es):
+    """El modelo lo exige en cualquier camino, no sólo en el formulario del admin."""
+    from django.core.exceptions import ValidationError
+
+    pt = Locale.objects.get(language_code="pt")
+    raiz_pt = Site.objects.get(is_default_site=True).root_page.copy_for_translation(pt)
+    indice_pt = NoteIndexPage.objects.get(locale__language_code="es").copy_for_translation(pt)
+    assert raiz_pt and indice_pt
+    suelta = NotePage(
+        title="A casa III",
+        slug="casa-3-comunicacao",
+        fecha="2026-11-09",
+        bajada="A casa da palavra.",
+        cuerpo="<p>Como você pensa.</p>",
+        live=True,
+    )
+
+    with pytest.raises(ValidationError, match="no está vinculada"):
+        indice_pt.add_child(instance=suelta)
