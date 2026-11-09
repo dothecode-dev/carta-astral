@@ -12,6 +12,8 @@ from wagtail.images.api.fields import ImageRenditionField
 from wagtail.models import Page
 from wagtail.rich_text import expand_db_html
 
+from cms.forms import NotaForm
+
 
 class RichTextAPIField(Field):
     """Expande el formato interno de un `RichTextField` a HTML usable.
@@ -71,6 +73,8 @@ class NotePage(Page):
 
     subpage_types = []
     parent_page_types = ["cms.NoteIndexPage"]
+    # Las traducciones tienen que nacer vinculadas a la nota en español.
+    base_form_class = NotaForm
 
     # Default a hoy: una nota nueva nace con fecha, y el panel permite
     # adelantarla o atrasarla a mano (por ejemplo, para programar la nota).
