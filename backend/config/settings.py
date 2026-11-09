@@ -137,6 +137,13 @@ INSTALLED_APPS = [
     # extensiones de imagen (Tarea 7) es aparte y también sigue en pie.
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
+    # Botón «Traducir»: crea la nota en/pt con la misma `translation_key` que la
+    # española, que es lo que sostiene el `hreflang` de la web. Cargadas a mano
+    # con «Agregar página», las traducciones nacían sueltas
+    # (tests/cms/test_traducir.py). WAGTAILSIMPLETRANSLATION_SYNC_PAGE_TREE se
+    # deja apagado a propósito: prendido, borrar o despublicar la nota española
+    # arrastra también a sus traducciones.
+    "wagtail.contrib.simple_translation",
     "wagtail.embeds",
     "wagtail.sites",
     "wagtail.users",
