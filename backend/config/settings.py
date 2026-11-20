@@ -556,6 +556,13 @@ REFUND_FLAG_THRESHOLD = int(os.environ.get("REFUND_FLAG_THRESHOLD", "3"))
 APP_AUTH_ENABLED = os.environ.get("APP_AUTH_ENABLED", "0") == "1"
 IAP_WEBHOOK_ENABLED = os.environ.get("IAP_WEBHOOK_ENABLED", "0") == "1"
 
+# --- Modo vidriera ---
+# El sitio como muestra de trabajo: sin cobro, sin login y sin cuentas. Prendido,
+# toda ruta de la API que no esté en `api.vidriera.ABIERTAS` responde 404, los
+# checks de cobro no avisan y la web (que lo lee de `/api/estado/`) saca la
+# compra y el acceso. Apagado (default), nada cambia.
+MODO_VIDRIERA = os.environ.get("MODO_VIDRIERA", "0") == "1"
+
 # --- Vínculo (sinastría) ---
 # Fase 1: la vista previa pública, sin compra, para medir la demanda antes de
 # construir el cobro (spec de Vínculo, sección 10). La web no tiene flag

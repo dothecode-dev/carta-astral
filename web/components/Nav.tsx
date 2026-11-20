@@ -4,6 +4,7 @@ import { Logo } from "@/components/Logo";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { CIELO } from "@/content/cielo";
 import { LOCALES, NOTES_SLUG, SKY_SLUG, type Dict, type Locale } from "@/lib/i18n";
+import { esVidriera } from "@/lib/vidriera";
 
 export function Nav({
   locale,
@@ -28,6 +29,8 @@ export function Nav({
    *  path fijo mandaría a `/en/notas`, que no existe. */
   path?: string | ((code: Locale) => string);
 }) {
+  // Sin compra ni cuentas no hay precios que ver ni adónde entrar.
+  const vidriera = esVidriera();
   const pathPara = (code: Locale) => (typeof path === "function" ? path(code) : path);
 
   /**
@@ -68,19 +71,23 @@ export function Nav({
           <Link href={`/${locale}/${SKY_SLUG[locale]}`} {...marca(`/${SKY_SLUG[locale]}`)}>
             {CIELO[locale].nav}
           </Link>
-          <Link href={`/${locale}/precios`} {...marca("/precios")}>
-            {dict.nav.precios}
-          </Link>
+          {!vidriera && (
+            <Link href={`/${locale}/precios`} {...marca("/precios")}>
+              {dict.nav.precios}
+            </Link>
+          )}
           <Link href={`/${locale}/${NOTES_SLUG[locale]}`} {...marca(`/${NOTES_SLUG[locale]}`)}>
             {dict.nav.notes}
           </Link>
-          <Link
-            href={`/${locale}${signedIn ? "/cuenta" : "/entrar"}`}
-            {...marca(signedIn ? "/cuenta" : "/entrar")}
-            className={`navEnter${enSeccion(signedIn ? "/cuenta" : "/entrar") ? " navActual" : ""}`}
-          >
-            {signedIn ? dict.auth.account : dict.auth.navEnter}
-          </Link>
+          {!vidriera && (
+            <Link
+              href={`/${locale}${signedIn ? "/cuenta" : "/entrar"}`}
+              {...marca(signedIn ? "/cuenta" : "/entrar")}
+              className={`navEnter${enSeccion(signedIn ? "/cuenta" : "/entrar") ? " navActual" : ""}`}
+            >
+              {signedIn ? dict.auth.account : dict.auth.navEnter}
+            </Link>
+          )}
         </div>
 
         <nav className="langs" aria-label="Idioma">

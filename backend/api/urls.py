@@ -1,5 +1,7 @@
 from django.urls import path
 
+from api import vidriera
+
 from api.catalogo_api import CatalogoView
 from api.geo_api import MonedaView
 from api.arrepentimiento_api import ArrepentimientoView
@@ -91,3 +93,10 @@ urlpatterns = [
     path("auth/logout", LogoutView.as_view()),
     path("webhooks/revenuecat", RevenueCatWebhookView.as_view()),
 ]
+
+# Modo vidriera: toda ruta que no esté en `vidriera.ABIERTAS` pasa por la
+# guarda. Se hace acá, sobre la lista entera, para que una ruta nueva quede
+# cerrada sin que nadie tenga que acordarse (tests/api/test_modo_vidriera.py).
+for _patron in urlpatterns:
+    if str(_patron.pattern) not in vidriera.ABIERTAS:
+        _patron.callback = vidriera.cerrada(_patron.callback)

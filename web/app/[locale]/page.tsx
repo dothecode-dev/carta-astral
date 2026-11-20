@@ -10,6 +10,7 @@ import { monedaDelVisitante } from "@/lib/moneda";
 import { fetchNotesOrNone, formatNoteDate } from "@/lib/notes";
 import { fetchSky } from "@/lib/sky";
 import { SITE_URL } from "@/lib/config";
+import { esVidriera } from "@/lib/vidriera";
 import { Footer } from "@/components/Footer";
 import { haySesion } from "@/lib/session";
 
@@ -174,48 +175,51 @@ export default async function Home({
             </div>
           </section>
 
-          <section>
-            <div className="sectionHead">
-              <p className="eyebrow">{dict.pricing.eyebrow}</p>
-              <h2 className="display sectionTitle pricingTitle">{dict.pricing.title}</h2>
-            </div>
+          {/* En vidriera no se vende: la sección de precio no va. */}
+          {!esVidriera() && (
+            <section>
+              <div className="sectionHead">
+                <p className="eyebrow">{dict.pricing.eyebrow}</p>
+                <h2 className="display sectionTitle pricingTitle">{dict.pricing.title}</h2>
+              </div>
 
-            <p className="priceTag">
-              {precioInforme && <span className="priceAmount">{precioInforme}</span>}
-              <span className="priceLabel">{dict.pricing.priceNote}</span>
-            </p>
+              <p className="priceTag">
+                {precioInforme && <span className="priceAmount">{precioInforme}</span>}
+                <span className="priceLabel">{dict.pricing.priceNote}</span>
+              </p>
 
-            <table className="termsTable">
-              <tbody>
-                {/* Sin catálogo, la fila del precio se cae entera: una fila
-                    sin número es peor que ninguna, y uno inventado peor aún. */}
-                {dict.pricing.terms
-                  .filter((term) => precioInforme || !term.value.includes("{precio}"))
-                  .map((term) => (
-                    <tr key={term.label}>
-                      <th scope="row">{term.label}</th>
-                      <td className={term.free ? "free" : undefined}>
-                        {conPrecio(term.value, precioInforme)}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+              <table className="termsTable">
+                <tbody>
+                  {/* Sin catálogo, la fila del precio se cae entera: una fila
+                      sin número es peor que ninguna, y uno inventado peor aún. */}
+                  {dict.pricing.terms
+                    .filter((term) => precioInforme || !term.value.includes("{precio}"))
+                    .map((term) => (
+                      <tr key={term.label}>
+                        <th scope="row">{term.label}</th>
+                        <td className={term.free ? "free" : undefined}>
+                          {conPrecio(term.value, precioInforme)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
 
-            <p className="caption" style={{ marginTop: "1.25rem" }}>
-              {monedaInforme === "ars"
-                ? dict.pricing.notePesos
-                : dict.pricing.note.replace("{moneda}", dict.pricing.monedas[monedaInforme])}
-            </p>
+              <p className="caption" style={{ marginTop: "1.25rem" }}>
+                {monedaInforme === "ars"
+                  ? dict.pricing.notePesos
+                  : dict.pricing.note.replace("{moneda}", dict.pricing.monedas[monedaInforme])}
+              </p>
 
-            {/* La sección terminaba en la nota, sin un solo enlace: la tabla
-                decía cuánto sale y no había por dónde seguir. */}
-            <p className="pricingCta">
-              <Link className="btn btnGhost" href={`/${locale}/precios`}>
-                {dict.pricing.cta}
-              </Link>
-            </p>
-          </section>
+              {/* La sección terminaba en la nota, sin un solo enlace: la tabla
+                  decía cuánto sale y no había por dónde seguir. */}
+              <p className="pricingCta">
+                <Link className="btn btnGhost" href={`/${locale}/precios`}>
+                  {dict.pricing.cta}
+                </Link>
+              </p>
+            </section>
+          )}
 
           <section>
             <div className="sectionHead">

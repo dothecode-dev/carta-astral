@@ -19,6 +19,9 @@ from api.catalogo import a_la_venta
 
 @register(Tags.compatibility, "stripe")
 def productos_en_stripe(app_configs, **kwargs):
+    # En vidriera no se cobra: no hay Product que reclamar ni aviso que mandar.
+    if settings.MODO_VIDRIERA:
+        return []
     encontrados = []
     mapeo = settings.STRIPE_PRODUCTOS
     vacios = sorted(c for c, v in mapeo.items() if not v)
@@ -52,7 +55,7 @@ def mercadopago_configurado(app_configs, **kwargs):
     secreto del webhook y las dos URL (https; la de retorno con `{checkout_id}` y
     `{locale}`). Con el flag apagado, nada. Sólo
     se nombra la variable, nunca su valor. Mismo aviso por Telegram que Stripe."""
-    if not settings.COBRO_ARS_ENABLED:
+    if not settings.COBRO_ARS_ENABLED or settings.MODO_VIDRIERA:
         return []
     encontrados = []
     for nombre in ("MP_ACCESS_TOKEN", "MP_WEBHOOK_SECRET", "MP_NOTIFICACION_URL", "MP_RETORNO_URL"):

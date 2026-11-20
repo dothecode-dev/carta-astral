@@ -49,7 +49,9 @@ def test_el_estado_lo_puede_consultar_cualquiera(client):
     resp = client.get("/api/estado/")
 
     assert resp.status_code == 200
-    assert resp.json() == {"mantenimiento": False, "generando": 0, "config_faltante": False}
+    assert resp.json() == {
+        "mantenimiento": False, "generando": 0, "config_faltante": False, "vidriera": False,
+    }
 
 
 # --- El faltante de configuración se ve sin leer logs, pero sin enumerar qué -

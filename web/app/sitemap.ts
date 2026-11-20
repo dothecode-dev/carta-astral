@@ -10,6 +10,7 @@ import {
   type Locale,
 } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
+import { esVidriera } from "@/lib/vidriera";
 import { fetchNotesOrNone } from "@/lib/notes";
 import { vinculoActivo } from "@/lib/vinculo";
 
@@ -19,6 +20,11 @@ import { vinculoActivo } from "@/lib/vinculo";
 // `/nueva` entró el 04-09-2026, cuando dejó de exigir cuenta: es el calculador
 // abierto, y "calcular carta natal gratis" es la búsqueda que trae gente.
 const PATHS = ["", "/nueva", "/precios", "/ejemplo", "/legal/privacy", "/legal/terms"] as const;
+
+/** En vidriera `/precios` no existe (`proxy.ts` responde 404). */
+function rutas() {
+  return PATHS.filter((path) => !(esVidriera() && path === "/precios"));
+}
 
 function url(locale: string, path: string) {
   return `${SITE_URL}/${locale}${path}`;
@@ -101,7 +107,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     : [];
 
   const fixed = LOCALES.flatMap((locale) =>
-    PATHS.map((path) => ({
+    rutas().map((path) => ({
       url: url(locale, path),
       // Sólo se declara donde hay una fecha real: los documentos legales llevan
       // la de su última revisión. Poner la del build en todo lo demás sería

@@ -22,7 +22,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api import interpretation_service
+from api import interpretation_service, vidriera
 from api.identity import config_faltante
 from api.models import Interpretation
 from interpret.prompts import PROMPT_VERSION
@@ -92,4 +92,6 @@ class EstadoView(APIView):
             "mantenimiento": activo(),
             "generando": generando(),
             "config_faltante": bool(config_faltante()),
+            # La web no tiene flag propio: saca de acá si muestra compra y login.
+            "vidriera": vidriera.activa(),
         })

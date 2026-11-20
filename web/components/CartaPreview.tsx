@@ -9,6 +9,7 @@ import { TeaserBloques, TeaserIndice } from "@/components/Teaser";
 import type { CartaDibujable } from "@/lib/chart";
 import type { Dict, Locale } from "@/lib/i18n";
 import { leerProcedencia } from "@/lib/procedencia";
+import { esVidriera, TEXTOS_VIDRIERA } from "@/lib/vidriera";
 
 // Lo que ve quien calculó su carta sin tener cuenta. Es la carta entera —la
 // misma rueda y las mismas tablas que ve un usuario registrado— y lo que ya se
@@ -71,6 +72,8 @@ export function CartaPreview({
   moneda?: string;
 }) {
   const t = dict.newChart;
+  // En vidriera no se vende: el lugar del botón lo ocupa el informe de ejemplo.
+  const vidriera = esVidriera();
   // Cuál se apretó: el error va junto a ese, no a una pantalla de distancia.
   const [origen, setOrigen] = useState<"arriba" | "cierre">("cierre");
   const [mailAbierto, setMailAbierto] = useState(false);
@@ -174,10 +177,12 @@ export function CartaPreview({
             formulario se esconde (CSS: .formFrame:has(.previewCarta)). */}
         <h1 className="display previewTitle">{t.previewTitle}</h1>
         <p className="previewLede">{t.previewLede}</p>
-        <div className="previewCtaArriba">
-          {error("arriba")}
-          {boton(false)}
-        </div>
+        {!vidriera && (
+          <div className="previewCtaArriba">
+            {error("arriba")}
+            {boton(false)}
+          </div>
+        )}
       </header>
 
       {/* La rueda primero: es lo que vino a buscar. */}
@@ -201,8 +206,16 @@ export function CartaPreview({
           </>
         )}
         <div className="previewCta">
-          {error("cierre")}
-          {boton(true)}
+          {vidriera ? (
+            <Link className="btn btnPrimary btnGrande" href={`/${locale}/ejemplo`}>
+              {TEXTOS_VIDRIERA[locale].verEjemplo}
+            </Link>
+          ) : (
+            <>
+              {error("cierre")}
+              {boton(true)}
+            </>
+          )}
           {carta.teaser && (
             <p className="fieldNote">
               {t.informeTrae
@@ -213,13 +226,16 @@ export function CartaPreview({
                 .replace("{palabras}", carta.teaser.informe.palabras.toLocaleString(locale, { useGrouping: "always" }))}
             </p>
           )}
-          <p className="fieldNote">
-            {t.legalAntes}
-            <Link href={`/${locale}/legal/terms`}>{t.legalTerminos}</Link>
-            {t.legalY}
-            <Link href={`/${locale}/legal/privacy`}>{t.legalPrivacidad}</Link>
-            {t.legalDespues}
-          </p>
+          {vidriera && <p className="fieldNote">{TEXTOS_VIDRIERA[locale].aviso}</p>}
+          {!vidriera && (
+            <p className="fieldNote">
+              {t.legalAntes}
+              <Link href={`/${locale}/legal/terms`}>{t.legalTerminos}</Link>
+              {t.legalY}
+              <Link href={`/${locale}/legal/privacy`}>{t.legalPrivacidad}</Link>
+              {t.legalDespues}
+            </p>
+          )}
         </div>
       </section>
 

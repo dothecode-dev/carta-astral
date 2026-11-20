@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 
 import { API_URL, SITE_URL } from "@/lib/config";
 import { DEFAULT_LOCALE, LOCALES, negociarIdioma, type Locale } from "@/lib/i18n";
+import { cerradaEnVidriera, esVidriera, TEXTOS_VIDRIERA } from "@/lib/vidriera";
 
 // El cartel de mantenimiento, para desplegar sin cortar un informe por la mitad.
 //
@@ -74,8 +75,7 @@ const CARTEL: Record<Locale, { title: string; body: string }> = {
 };
 
 /** El cartel, autocontenido: sin fuentes ni CSS de la app, que pueden no estar. */
-function pagina(locale: Locale): string {
-  const { title, body } = CARTEL[locale];
+function pagina(locale: Locale, { title, body }: { title: string; body: string } = CARTEL[locale]): string {
   return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
@@ -131,6 +131,18 @@ export async function proxy(request: NextRequest) {
   // staging y el hostname interno de Docker pasan intactos. `/api` y los
   // estáticos quedan afuera por el `matcher` (no se redirigen); las páginas sí,
   // que es lo que alinea el host de la cookie.
+  // Modo vidriera: las páginas que sólo sirven para comprar o entrar no
+  // existen. 404 y no un redirect: es lo que le dice a un buscador que las
+  // saque. El cuerpo lleva el enlace al inicio dentro del texto, sin CSS propio.
+  if (esVidriera() && cerradaEnVidriera(request.nextUrl.pathname)) {
+    const locale = idiomaDe(request.nextUrl.pathname);
+    const t = TEXTOS_VIDRIERA[locale];
+    return new NextResponse(
+      pagina(locale, { title: "ASTRA", body: `${t.cerrada} <a href="/${locale}" style="color:inherit">${t.inicio}</a>` }),
+      { status: 404, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
+    );
+  }
+
   if (hostPublico(request) === HOST_WWW && new URL(SITE_URL).hostname !== HOST_WWW) {
     const { pathname, search } = request.nextUrl;
     return NextResponse.redirect(`${SITE_URL.replace(/\/+$/, "")}${pathname}${search}`, 301);

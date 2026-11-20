@@ -12,6 +12,23 @@ tocás esa superficie, sus tests encienden el flag donde configuran sus credenci
 
 Leé también `web/AGENTS.md` cuando toques la web.
 
+## Estado desde el 20-11-2026: vidriera, sin cobro
+
+ASTRA dejó de venderse y quedó como muestra de trabajo en `astra.dothecode.com`,
+en **modo vidriera**: sin compra, sin login y sin cuentas. Son dos flags que van
+prendidos juntos: `MODO_VIDRIERA=1` en el backend (toda ruta de la API que no esté
+en `api/vidriera.py::ABIERTAS` responde 404; una ruta nueva nace cerrada, y lo
+chequea `tests/api/test_modo_vidriera.py`) y `NEXT_PUBLIC_VIDRIERA=1` en la web
+(variable de build: saca botones de compra, precios y acceso, y `proxy.ts`
+responde 404 en esas páginas; `tests/vidriera.test.tsx`). Apagados, el sitio es el
+de antes: nada se borró.
+
+El servidor propio de `astraguia.com` ya no existe. **Todo lo que sigue sobre
+producción —los crons de Coolify, `make deploy`, el cartel de mantenimiento, los
+webhooks de Stripe, Resend y Mercado Pago— describe el sitio cobrando y hoy no
+corre en ningún lado.** Vale como referencia si algún día se vuelve a vender. El
+deploy de la vidriera es `git push` a `main` (auto-deploy de las dos apps).
+
 ## Este repositorio es público
 
 Está publicado bajo AGPL-3.0 y no es una elección revisable: el cálculo usa
