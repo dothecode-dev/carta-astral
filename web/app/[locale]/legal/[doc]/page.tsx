@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { LegalDocument } from "@/components/LegalDocument";
 import { Nav } from "@/components/Nav";
+import { esVidriera } from "@/lib/vidriera";
 import { LEGAL, LEGAL_CONTACT, LEGAL_DOCS, LEGAL_UPDATED, type LegalDocKey } from "@/content/legal";
 import { DEFAULT_LOCALE, LOCALES, getDict, isLocale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/config";
@@ -73,7 +74,7 @@ export default async function LegalPage({
           doc={content[doc]}
           updatedLabel={content.updatedLabel}
           updated={LEGAL_UPDATED}
-          contact={LEGAL_CONTACT}
+          contact={esVidriera() ? undefined : LEGAL_CONTACT}
         />
       </main>
 

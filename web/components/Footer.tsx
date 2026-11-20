@@ -25,7 +25,7 @@ export function Footer({ locale, dict }: { locale: Locale; dict: Dict }) {
         <nav className="footLinks">
           <Link href={`/${locale}/legal/privacy`}>{dict.foot.privacy}</Link>
           <Link href={`/${locale}/legal/terms`}>{dict.foot.terms}</Link>
-          <a href={`mailto:${LEGAL_CONTACT}`}>{dict.foot.contact}</a>
+          {!vidriera && <a href={`mailto:${LEGAL_CONTACT}`}>{dict.foot.contact}</a>}
           <ConsentLink label={dict.consent.footLink} />
           {/* Res. SCI 424/2020: acceso fácil y directo desde la página de
               inicio, sin registro. Está en el pie de TODAS las páginas. */}

@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 
 import { CartaPreview } from "@/components/CartaPreview";
 import { Footer } from "@/components/Footer";
+import { LegalDocument } from "@/components/LegalDocument";
 import { Nav } from "@/components/Nav";
 import sitemap from "@/app/sitemap";
 import { getDict } from "@/lib/i18n";
@@ -112,6 +113,8 @@ describe("modo vidriera", () => {
     const destinos = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(destinos).not.toContain("/es/arrepentimiento");
     expect(screen.queryByAltText("Data Fiscal")).toBeNull();
+    // El mail era del dominio que se dio de baja: en la muestra no hay contacto.
+    expect(destinos.some((d) => d?.startsWith("mailto:"))).toBe(false);
     expect(screen.getByText(/muestra/i)).toBeTruthy();
   });
 
@@ -136,6 +139,23 @@ describe("modo vidriera", () => {
     expect(ejemplo.length).toBeGreaterThan(0);
     // El índice del informe sigue a la vista: es lo que se está mostrando.
     expect(screen.getByText("Identidad")).toBeTruthy();
+  });
+
+  it("los legales no muestran el mail de contacto", () => {
+    const doc = { heading: "Términos", blocks: [] };
+    const { container, rerender } = render(
+      <LegalDocument doc={doc as never} updatedLabel="Actualizado" updated="2026-10-20" />,
+    );
+    expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
+    // Con contacto (el sitio vendiendo) sigue saliendo.
+    rerender(<LegalDocument doc={doc as never} updatedLabel="Actualizado" updated="2026-10-20" contact="a@b.com" />);
+    expect(container.querySelector('a[href="mailto:a@b.com"]')).not.toBeNull();
+  });
+
+  it("apagado, el pie conserva el contacto", () => {
+    render(<Footer locale="es" dict={dict} />);
+    const destinos = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(destinos.some((d) => d?.startsWith("mailto:"))).toBe(true);
   });
 
   it("el sitemap no lista precios", async () => {

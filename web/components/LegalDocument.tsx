@@ -45,7 +45,8 @@ export function LegalDocument({
   doc: LegalDoc;
   updatedLabel: string;
   updated: string;
-  contact: string;
+  /** Sin contacto (modo vidriera) el documento termina en el último bloque. */
+  contact?: string;
 }) {
   return (
     <article className="doc">
@@ -58,9 +59,11 @@ export function LegalDocument({
         <BlockView block={block} key={i} />
       ))}
 
-      <p className="docContact">
-        <a href={`mailto:${contact}`}>{contact}</a>
-      </p>
+      {contact && (
+        <p className="docContact">
+          <a href={`mailto:${contact}`}>{contact}</a>
+        </p>
+      )}
     </article>
   );
 }
