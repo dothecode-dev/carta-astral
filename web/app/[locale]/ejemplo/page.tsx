@@ -12,6 +12,7 @@ import { positionLabel } from "@/lib/ephemeris";
 import { SITE_URL } from "@/lib/config";
 import { Footer } from "@/components/Footer";
 import { haySesion } from "@/lib/session";
+import { esVidriera, TEXTOS_VIDRIERA } from "@/lib/vidriera";
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 const HOUSE_INDEX: Record<string, number> = {
@@ -168,7 +169,7 @@ export default async function SampleChartPage({
         <div className="close">
           <div className="closeCopy">
             <h2 className="closeTitle">{reading.closing.title}</h2>
-            <p className="closeNote">{reading.closing.note}</p>
+            <p className="closeNote">{esVidriera() ? TEXTOS_VIDRIERA[locale].ejemploNota : reading.closing.note}</p>
           </div>
           <Link className="btn btnPrimary" href={`/${locale}/nueva`}>
             {reading.closing.cta}

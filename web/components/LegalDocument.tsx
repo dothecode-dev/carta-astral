@@ -41,12 +41,15 @@ export function LegalDocument({
   updatedLabel,
   updated,
   contact,
+  aviso,
 }: {
   doc: LegalDoc;
   updatedLabel: string;
   updated: string;
   /** Sin contacto (modo vidriera) el documento termina en el último bloque. */
   contact?: string;
+  /** En modo vidriera: aclara que el documento describe el sitio vendiendo. */
+  aviso?: string;
 }) {
   return (
     <article className="doc">
@@ -54,6 +57,12 @@ export function LegalDocument({
       <p className="docMeta">
         {updatedLabel}: <time dateTime={updated}>{updated}</time>
       </p>
+
+      {aviso && (
+        <p className="docP" role="note">
+          <strong>{aviso}</strong>
+        </p>
+      )}
 
       {doc.blocks.map((block, i) => (
         <BlockView block={block} key={i} />

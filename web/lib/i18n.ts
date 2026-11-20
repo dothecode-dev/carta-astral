@@ -1,6 +1,9 @@
 // Diccionarios de la web. Sin librería: son tres idiomas y un puñado de claves,
 // y next-intl traería un middleware y un provider para resolver un objeto.
 
+import { esVidriera } from "@/lib/vidriera";
+import { dictDeVidriera } from "@/lib/vidrieraDict";
+
 export const LOCALES = ["es", "en", "pt"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "es";
@@ -2124,6 +2127,14 @@ const pt: Dict = {
 
 export const DICTS: Record<Locale, Dict> = { es, en, pt };
 
+const DICTS_VIDRIERA: Record<Locale, Dict> = {
+  es: dictDeVidriera(es, "es"),
+  en: dictDeVidriera(en, "en"),
+  pt: dictDeVidriera(pt, "pt"),
+};
+
+/** En modo vidriera, el diccionario sin lo que habla de cuentas ni de pagar
+ *  (`lib/vidrieraDict.ts`). */
 export function getDict(locale: Locale): Dict {
-  return DICTS[locale];
+  return (esVidriera() ? DICTS_VIDRIERA : DICTS)[locale];
 }

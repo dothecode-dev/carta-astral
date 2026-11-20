@@ -8,7 +8,7 @@ import { LegalDocument } from "@/components/LegalDocument";
 import { Nav } from "@/components/Nav";
 import sitemap from "@/app/sitemap";
 import { getDict } from "@/lib/i18n";
-import { cerradaEnVidriera, esVidriera } from "@/lib/vidriera";
+import { cerradaEnVidriera, esVidriera, TEXTOS_VIDRIERA } from "@/lib/vidriera";
 
 // Modo vidriera (NEXT_PUBLIC_VIDRIERA=1): el sitio como muestra de trabajo. No
 // se cobra, no hay cuentas: nada en pantalla ofrece comprar ni entrar, y las
@@ -156,6 +156,51 @@ describe("modo vidriera", () => {
     render(<Footer locale="es" dict={dict} />);
     const destinos = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(destinos.some((d) => d?.startsWith("mailto:"))).toBe(true);
+  });
+
+  it("el diccionario no habla de cuentas, de guardar ni de pagar en lo que queda a la vista", () => {
+    vi.stubEnv("NEXT_PUBLIC_VIDRIERA", "1");
+
+    // Lo que se lee de promesa de venta o de cuenta en cada idioma. No es una
+    // lista de palabras prohibidas en todo el sitio: es lo que estas claves
+    // decían antes y no puede volver.
+    const VENTA = {
+      es: /tu cuenta|entr[aá]s con|guard[aá]s|se paga|compr[aá]s|no cuesta/i,
+      en: /your account|sign in|you save|you pay|if you buy|costs nothing/i,
+      pt: /sua conta|entra com|você salva|se paga|se você comprar|não custa/i,
+    };
+    for (const locale of ["es", "en", "pt"] as const) {
+      const d = getDict(locale);
+      const visible = [
+        d.privacy.title,
+        ...d.privacy.points.flatMap((p) => [p.strong, p.rest]),
+        ...d.faq.items.flatMap((i) => [i.q, i.a]),
+        d.newChart.previewPrivacidad,
+        d.newChart.seoGratis,
+        d.newChart.seoGratisBody,
+        TEXTOS_VIDRIERA[locale].ejemploNota,
+      ];
+      for (const texto of visible) {
+        expect(texto, `${locale}: ${texto}`).not.toMatch(VENTA[locale]);
+      }
+      // Cuatro preguntas propias del modo después de las tres que se conservan.
+      expect(d.faq.items).toHaveLength(7);
+      expect(d.privacy.points).toHaveLength(3);
+    }
+  });
+
+  it("apagado, el diccionario es el de siempre", () => {
+    expect(getDict("es").privacy.title).toBe("Tus datos de nacimiento no salen de tu cuenta.");
+    expect(getDict("es").faq.items).toHaveLength(6);
+    expect(getDict("es").newChart.seoGratisBody).toContain("lo único que se paga");
+  });
+
+  it("los legales avisan arriba que describen el sitio cuando se vendía", () => {
+    const doc = { title: "t", heading: "Política", blocks: [{ kind: "p" as const, text: "Cuerpo." }] };
+
+    render(<LegalDocument doc={doc} updatedLabel="Actualizado" updated="2026-10-20" aviso={TEXTOS_VIDRIERA.es.legal} />);
+
+    expect(screen.getByRole("note").textContent).toContain("muestra de trabajo");
   });
 
   it("el sitemap no lista precios", async () => {
